@@ -104,6 +104,7 @@ def public(b):
         "id": str(b["_id"]), "name": b.get("name", ""), "active": b.get("active", False),
         "username": b.get("username"), "config": b.get("config"),
         "versions": len(b.get("versions", [])), "updated": b["updated"].isoformat(),
+        "thinking": b.get("thinking", ""),
     }
 
 
@@ -132,8 +133,22 @@ def quota_left(uid):
 
 
 # ───────────────────────── هوش مصنوعی ─────────────────────────
-SYSTEM_PROMPT = """You design Telegram bots as a JSON config. Output ONLY one valid JSON object, no markdown, no comments.
-Schema:
+SYSTEM_PROMPT = """You design Telegram bots as a JSON config. You think like a senior product designer, not a form-filler.
+
+Output ONLY one valid JSON object, no markdown fences, no comments. Top-level shape:
+{
+ "thinking": "...",
+ "config": { ...bot config as described below... }
+}
+
+"thinking" (string, 2-5 short sentences, written in the SAME language as the user's request, natural first-person tone — like a sharp colleague briefly narrating their plan, not a formal report):
+- Say what you understood the user wants.
+- Name the key sections/flows you decided the bot needs and briefly why.
+- If you made a judgment call or filled a gap the user didn't specify, say so.
+- If this is an update to an existing bot, mention what you're changing and why, not the whole bot again.
+- No headers, no bullet points, no markdown — just natural flowing sentences.
+
+"config" schema:
 {
  "name": "short bot name",
  "start": "<node_id shown on /start>",
@@ -147,14 +162,16 @@ Schema:
    }
  }
 }
-Rules:
+
+Design rules:
+- Think before you structure: identify the bot's real purpose, the natural user journeys through it, and the minimum set of nodes that cover them well — don't pad with filler nodes, don't skip an obviously-needed one (e.g. a shop bot without an "order" path is incomplete).
 - node_id: lowercase english letters, digits, underscore. Max 25 nodes, max 3 buttons per row, max 6 rows per node.
 - A button has either "goto" (an existing node_id) or "url" (https only).
 - If "ask" is true, the node's text asks the user something and their next message is delivered to the bot owner (use for contact, orders, feedback, support).
 - Every "goto", "start", "fallback" and command target MUST exist in nodes. Add a back/home button on non-start nodes.
 - Write all user-facing text in the same language as the user's request (default Persian). Use emojis moderately.
-- When an existing config is given, apply the user's change to it and return the FULL updated config, keeping everything else.
-- Plain text only, no Markdown/HTML formatting characters in texts."""
+- When an existing config is given, apply the user's change to it precisely and return the FULL updated config, keeping everything else intact.
+- Plain text only, no Markdown/HTML formatting characters in node texts."""
 
 ID_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 CMD_RE = re.compile(r"^[a-z0-9_]{1,30}$")
@@ -232,7 +249,11 @@ def _call_llm(user):
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
         raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
-    return sanitize(json.loads(m.group(0)))
+    raw = json.loads(m.group(0))
+    if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
+        raise ValueError("پاسخ AI فاقد بخش config بود")
+    thinking = str(raw.get("thinking") or "").strip()[:900]
+    return thinking, sanitize(raw["config"])
 
 
 def ask_llm(prompt, current=None):
@@ -282,7 +303,7 @@ def api_generate():
     if not quota_take(uid):
         return jsonify(error="سهمیه‌ی امروزت تموم شده، فردا دوباره امتحان کن"), 429
     try:
-        cfg = ask_llm(prompt, bot["config"] if bot else None)
+        thinking, cfg = ask_llm(prompt, bot["config"] if bot else None)
     except Exception as e:
         quota_refund(uid)
         log.exception("generate failed")
@@ -293,12 +314,12 @@ def api_generate():
 
     if bot:
         db.bots.update_one({"_id": bot["_id"]}, {
-            "$set": {"config": cfg, "name": cfg["name"], "updated": now()},
+            "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
             "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}})
         bot = db.bots.find_one({"_id": bot["_id"]})
     else:
-        doc = {"owner": uid, "name": cfg["name"], "config": cfg, "versions": [], "active": False,
-               "secret": secrets.token_hex(16), "created": now(), "updated": now()}
+        doc = {"owner": uid, "name": cfg["name"], "config": cfg, "thinking": thinking, "versions": [],
+               "active": False, "secret": secrets.token_hex(16), "created": now(), "updated": now()}
         doc["_id"] = db.bots.insert_one(doc).inserted_id
         bot = doc
     return jsonify(bot=public(bot), quota=quota_left(uid))
@@ -314,7 +335,7 @@ def api_undo(bot_id):
         return jsonify(error="نسخه‌ی قبلی وجود نداره"), 400
     prev = bot["versions"][-1]
     db.bots.update_one({"_id": bot["_id"]}, {
-        "$set": {"config": prev, "name": prev["name"], "updated": now()},
+        "$set": {"config": prev, "name": prev["name"], "thinking": "", "updated": now()},
         "$pop": {"versions": 1}})
     return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
 
