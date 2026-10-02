@@ -22,7 +22,7 @@ from cryptography.fernet import Fernet
 MOTHER_TOKEN = os.environ["MOTHER_TOKEN"]            # توکن ربات مادر
 MONGO_URI    = os.environ.get("MONGO_URI", "").strip()  # خالی = حافظه‌ی موقت (ذخیره نمی‌شه)
 BASE_URL     = os.environ["BASE_URL"].rstrip("/")    # مثلا https://yourapp.onrender.com
-AI_BASE_URL  = os.environ["AI_BASE_URL"].rstrip("/") # مثلا https://api.provider.com/v1
+AI_BASE_URL  = re.sub(r"/chat/completions/?$", "", os.environ["AI_BASE_URL"].strip().rstrip("/"))  # با یا بدون /chat/completions کار می‌کنه
 AI_API_KEY   = os.environ["AI_API_KEY"]
 AI_MODEL     = os.environ["AI_MODEL"]
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)  # برای رمزنگاری توکن رباتا
@@ -109,7 +109,7 @@ def public(b):
 
 # ───────────────────────── سهمیه ─────────────────────────
 def quota_key(uid):
-    return f"{uid}:{datetime.utcnow():%Y-%m-%d}"
+    return f"{uid}:{now():%Y-%m-%d}"
 
 
 def quota_take(uid):
