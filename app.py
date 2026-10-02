@@ -164,21 +164,38 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "start": "<node_id shown on /start>",
  "fallback": "<node_id shown for unknown messages>",
  "commands": {"help": "<node_id>"},
+ "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional, see below)
  "nodes": {
    "<node_id>": {
-     "text": "message text",
-     "buttons": [[{"text": "label", "goto": "<node_id>"}, {"text": "label", "url": "https://..."}]],
-     "ask": false
+     "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
+     "text": "message text (you may use {name} for the user's first name)",
+     "photo": "https://direct-image-link",                                          (optional)
+     "buttons": [[ {"text": "label", "goto": "<node_id>"},
+                   {"text": "label", "url": "https://..."},
+                   {"text": "label", "alert": "popup text shown when tapped"},
+                   {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
+     "ask": false,
+     "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
+     "done": "message shown after the user finished ask/form",                      (optional)
+     "next": "<node_id shown after finishing>"                                       (optional, default start)
    }
  }
 }
 
+What the engine can do (use these freely when they fit the request):
+- Buttons: goto a section, open a link, show a popup message (alert), copy text (e.g. card number, promo code).
+- "ask": true = the user's next message (any type) is forwarded to the bot owner. Good for support/feedback.
+- "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary. Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
+- "join": force membership: before using the bot the user must be a member of these public channels (usernames without @). Only add it if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
+- "photo": only if the user gave an image link. Never invent image URLs.
+- The engine CANNOT do: payments, databases/inventory, external APIs, scheduled messages, sending files. If the user asks for something like that, say so honestly in "thinking" and build the closest working approximation (e.g. order form that is sent to the owner instead of online payment).
+
 Design rules:
 - Think before you structure: identify the bot's real purpose, the natural user journeys, and the minimum set of nodes that cover them well. Don't pad with filler, but don't skip an obviously needed part (a shop bot needs a way to order, a business bot needs contact/support, a content bot usually needs a channel link).
 - node_id: lowercase english letters, digits, underscore. Max 25 nodes, max 3 buttons per row, max 6 rows per node.
-- A button has either "goto" (an existing node_id) or "url" (https only).
+- A button has exactly one of: "goto" (an existing node_id), "url" (https only), "alert", "copy".
 - Channel/group join button: {"text": "📢 عضویت در کانال", "url": "https://t.me/<username>"} (username without @). Use the username the user gave. If they gave none, use https://t.me/your_channel and say in "thinking" that the real channel id must be set via manual edit.
-- If "ask" is true, the node's text asks the user something and their next message is delivered to the bot owner (use for contact, orders, feedback, support). Give ask nodes a cancel/home button too.
+- Always give every node a short "title". Prefer a form ("fields") over a single "ask" when you need several pieces of info. Give ask/form nodes a cancel/home button too.
 - Every "goto", "start", "fallback" and command target MUST exist in nodes. Every node must be reachable from start; no dead ends: every non-start node has a back/home button.
 - Button labels short (max ~22 chars). Put at most 2 buttons in a row when labels are long.
 - Never invent real-world facts (prices, phone numbers, addresses, links). Use obvious placeholders such as [قیمت] or [شماره تماس] and mention it in "thinking".
@@ -244,6 +261,10 @@ def sanitize(cfg, strict=False):
                         r.append({"text": label, "goto": g})
                     else:
                         bad(f"دکمه‌ی «{label}» به بخش ناموجود وصله")
+                elif str(b.get("alert") or "").strip():
+                    r.append({"text": label, "alert": str(b["alert"]).strip()[:200]})
+                elif str(b.get("copy") or "").strip():
+                    r.append({"text": label, "copy": str(b["copy"]).strip()[:256]})
                 else:
                     u = norm_url(b.get("url"))
                     if u:
@@ -252,7 +273,30 @@ def sanitize(cfg, strict=False):
                         bad(f"لینک/آیدی دکمه‌ی «{label}» معتبر نیست (باید https:// یا @آیدی باشه)")
             if r:
                 rows.append(r)
-        nodes[nid] = {"text": text, "buttons": rows, "ask": bool(n.get("ask"))}
+        node = {"text": text, "buttons": rows, "ask": bool(n.get("ask"))}
+        title = str(n.get("title") or "").strip()[:30]
+        if title:
+            node["title"] = title
+        ph = str(n.get("photo") or "").strip()
+        if ph:
+            if ph.startswith("https://") and not re.search(r"\s", ph) and len(ph) <= 500:
+                node["photo"] = ph
+            else:
+                bad(f"آدرس عکس بخش «{nid}» معتبر نیست (باید لینک مستقیم https باشه)")
+        fl = n.get("fields")
+        fl = [str(f).strip()[:200] for f in fl if str(f).strip()][:6] if isinstance(fl, list) else []
+        if fl:
+            node["fields"], node["ask"] = fl, False
+        done = str(n.get("done") or "").strip()[:500]
+        if done:
+            node["done"] = done
+        nxt = str(n.get("next") or "")
+        if nxt:
+            if nxt in valid:
+                node["next"] = nxt
+            else:
+                bad(f"بخش بعدیِ «{nid}» وجود نداره")
+        nodes[nid] = node
 
     start = str(cfg.get("start") or "")
     if start not in nodes:
@@ -269,8 +313,21 @@ def sanitize(cfg, strict=False):
             bad(f"دستور «/{k}» معتبر نیست (فقط حروف انگلیسی کوچک/عدد/_ و غیر از start)")
             continue
         cmds[k] = str(v)
-    return {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
-            "fallback": fallback, "commands": cmds, "nodes": nodes}
+    out = {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
+           "fallback": fallback, "commands": cmds, "nodes": nodes}
+    j = cfg.get("join")
+    if isinstance(j, dict):
+        chans, raw = [], j.get("channels")
+        for c in (raw if isinstance(raw, list) else [])[:3]:
+            c = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", str(c).strip(), flags=re.I).lstrip("@")
+            if re.match(r"^[A-Za-z][A-Za-z0-9_]{4,31}$", c):
+                chans.append(c)
+            else:
+                bad(f"آیدی کانال «{c}» معتبر نیست")
+        if chans:
+            out["join"] = {"channels": chans,
+                           "text": str(j.get("text") or "برای استفاده از ربات اول باید عضو کانال بشی 👇").strip()[:500]}
+    return out
 
 
 # ───── تشخیص زبان (برای اینکه «thinking» و متن‌ها هیچ‌وقت انگلیسی نشن) ─────
@@ -407,7 +464,8 @@ def api_generate():
     if bot:
         db.bots.update_one({"_id": bot["_id"]}, {
             "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
-            "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}})
+            "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}},
+            "$unset": {"last_manual": ""}})
         bot = db.bots.find_one({"_id": bot["_id"]})
         sync_commands(bot, cfg)
     else:
@@ -449,9 +507,12 @@ def api_save_config(bot_id):
     except ValueError as e:
         return jsonify(error=str(e)), 400
     if cfg != bot["config"]:
-        db.bots.update_one({"_id": bot["_id"]}, {
-            "$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now()},
-            "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}})
+        lm = bot.get("last_manual")
+        recent = lm and (now().replace(tzinfo=None) - lm.replace(tzinfo=None)).total_seconds() < 180
+        upd = {"$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now(), "last_manual": now()}}
+        if not recent:      # ویرایش‌های پشت‌سرهم یک نسخه‌ی برگشت حساب می‌شن
+            upd["$push"] = {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}
+        db.bots.update_one({"_id": bot["_id"]}, upd)
         bot = db.bots.find_one({"_id": bot["_id"]})
         sync_commands(bot, cfg)
     return jsonify(bot=public(bot))
@@ -517,21 +578,88 @@ def api_delete(bot_id):
 
 
 # ───────────────────────── موتور اجرای کانفیگ ─────────────────────────
-def send_node(token, chat_id, cfg, node_id, bot_id):
-    node = cfg["nodes"].get(node_id) or cfg["nodes"][cfg["start"]]
+def fill(t, user):
+    u = user or {}
+    return (t.replace("{name}", u.get("first_name") or "دوست من")
+             .replace("{username}", ("@" + u["username"]) if u.get("username") else ""))
+
+
+def keyboard(node, node_id):
     kb = []
-    for row in node["buttons"]:
-        kb.append([{"text": b["text"], **({"url": b["url"]} if "url" in b
-                    else {"callback_data": f"n:{b['goto']}"})} for b in row])
-    data = {"chat_id": chat_id, "text": node["text"]}
-    if kb:
-        data["reply_markup"] = {"inline_keyboard": kb}
-    tg(token, "sendMessage", **data)
+    for ri, row in enumerate(node["buttons"]):
+        r = []
+        for ci, b in enumerate(row):
+            if "url" in b:
+                r.append({"text": b["text"], "url": b["url"]})
+            elif "goto" in b:
+                r.append({"text": b["text"], "callback_data": f"n:{b['goto']}"})
+            elif "alert" in b:
+                r.append({"text": b["text"], "callback_data": f"a:{node_id}:{ri}:{ci}"})
+            elif "copy" in b:
+                r.append({"text": b["text"], "copy_text": {"text": b["copy"]}})
+        if r:
+            kb.append(r)
+    return kb
+
+
+def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
+    """edit = پیام قبلی (callback) → اگه ممکن باشه همون پیام ویرایش می‌شه، نه اینکه پیام جدید بیاد"""
+    if node_id not in cfg["nodes"]:
+        node_id = cfg["start"]
+    node = cfg["nodes"][node_id]
+    text = fill(node["text"], user)
+    kb = keyboard(node, node_id)
+    markup = {"inline_keyboard": kb}
+    photo = node.get("photo")
+    done = False
+    if edit and not photo and not edit.get("photo"):
+        r = tg(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
+        done = bool(r.get("ok")) or "not modified" in str(r.get("description", ""))
+    if not done:
+        if edit:
+            tg(token, "deleteMessage", chat_id=chat_id, message_id=edit["message_id"])
+        if photo:
+            data = {"chat_id": chat_id, "photo": photo}
+            if len(text) <= 1000:
+                data.update(caption=text, **({"reply_markup": markup} if kb else {}))
+                done = bool(tg(token, "sendPhoto", **data).get("ok"))
+            else:
+                tg(token, "sendPhoto", **data)
+                done = False   # متن بلند جداگونه می‌ره
+        if not done:
+            tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
     sid = f"{bot_id}:{chat_id}"
-    if node.get("ask"):
-        db.states.update_one({"_id": sid}, {"$set": {"ask": True, "t": now()}}, upsert=True)
+    if node.get("fields"):
+        db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
+        tg(token, "sendMessage", chat_id=chat_id, text=fill(node["fields"][0], user))
+    elif node.get("ask"):
+        db.states.replace_one({"_id": sid}, {"_id": sid, "ask": node_id, "t": now()}, upsert=True)
     else:
         db.states.delete_one({"_id": sid})
+
+
+def finish(token, chat_id, cfg, node, bot_id, user, default_done):
+    tg(token, "sendMessage", chat_id=chat_id, text=fill(node.get("done") or default_done, user))
+    send_node(token, chat_id, cfg, node.get("next") or cfg["start"], bot_id, user)
+
+
+def gate_ok(token, cfg, uid):
+    """عضویت اجباری؛ اگه ربات ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
+    j = cfg.get("join")
+    if not j:
+        return True
+    for ch in j["channels"]:
+        r = tg(token, "getChatMember", chat_id="@" + ch, user_id=uid)
+        if r.get("ok") and r["result"].get("status") in ("left", "kicked"):
+            return False
+    return True
+
+
+def send_gate(token, chat_id, cfg):
+    j = cfg["join"]
+    kb = [[{"text": f"📢 @{c}", "url": f"https://t.me/{c}"}] for c in j["channels"]]
+    kb.append([{"text": "✅ عضو شدم", "callback_data": "chk"}])
+    tg(token, "sendMessage", chat_id=chat_id, text=j["text"], reply_markup={"inline_keyboard": kb})
 
 
 @app.post("/hook/<bot_id>")
@@ -549,38 +677,77 @@ def sub_hook(bot_id):
     try:
         cq = upd.get("callback_query")
         if cq:
+            data, user, m = cq.get("data", ""), cq.get("from", {}), cq.get("message") or {}
+            chat_id = (m.get("chat") or {}).get("id")
+            if not chat_id:
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                return "ok"
+            if not gate_ok(token, cfg, user["id"]):
+                if data == "chk":
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="هنوز عضو نشدی 🙂", show_alert=True)
+                else:
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                    send_gate(token, chat_id, cfg)
+                return "ok"
+            if data.startswith("a:"):
+                try:
+                    _, nid, ri, ci = data.split(":")
+                    b = cfg["nodes"][nid]["buttons"][int(ri)][int(ci)]
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text=b["alert"][:200], show_alert=True)
+                except Exception:
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                return "ok"
             tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
-            data = cq.get("data", "")
-            if data.startswith("n:") and data[2:] in cfg["nodes"]:
-                send_node(token, cq["message"]["chat"]["id"], cfg, data[2:], bot_id)
+            if data == "chk":
+                send_node(token, chat_id, cfg, cfg["start"], bot_id, user, edit=m)
+            elif data.startswith("n:") and data[2:] in cfg["nodes"]:
+                send_node(token, chat_id, cfg, data[2:], bot_id, user, edit=m)
             return "ok"
         msg = upd.get("message")
         if not msg or msg["chat"]["type"] != "private":
             return "ok"
-        chat_id = msg["chat"]["id"]
+        chat_id, user = msg["chat"]["id"], msg.get("from", {})
+        if not gate_ok(token, cfg, user.get("id", chat_id)):
+            send_gate(token, chat_id, cfg)
+            return "ok"
         text = (msg.get("text") or "").strip()
+        sid = f"{bot_id}:{chat_id}"
         if text.startswith("/"):
             cmd = text[1:].split()[0].split("@")[0].lower()
             if cmd == "start":
-                send_node(token, chat_id, cfg, cfg["start"], bot_id)
+                send_node(token, chat_id, cfg, cfg["start"], bot_id, user)
             elif cmd in cfg["commands"]:
-                send_node(token, chat_id, cfg, cfg["commands"][cmd], bot_id)
+                send_node(token, chat_id, cfg, cfg["commands"][cmd], bot_id, user)
             else:
-                send_node(token, chat_id, cfg, cfg["fallback"], bot_id)
+                send_node(token, chat_id, cfg, cfg["fallback"], bot_id, user)
             return "ok"
-        state = db.states.find_one({"_id": f"{bot_id}:{chat_id}"})
-        if state and state.get("ask"):
-            r = tg(token, "copyMessage", chat_id=bot["owner"], from_chat_id=chat_id,
-                   message_id=msg["message_id"])
-            u = msg["from"]
-            if r.get("ok"):
+        state = db.states.find_one({"_id": sid})
+        who = f"👤 {user.get('first_name', '')} (@{user.get('username', '-')}) — {user.get('id', '')}"
+        if state and state.get("form") in cfg["nodes"] and cfg["nodes"][state["form"]].get("fields"):
+            node = cfg["nodes"][state["form"]]
+            fields = node["fields"]
+            if not text:
+                tg(token, "sendMessage", chat_id=chat_id, text="لطفاً جوابت رو به‌صورت متن بفرست 🙏")
+                return "ok"
+            ans = (state.get("a") or []) + [text[:500]]
+            if len(ans) < len(fields):
+                db.states.update_one({"_id": sid}, {"$set": {"a": ans}})
+                tg(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], user))
+            else:
+                db.states.delete_one({"_id": sid})
+                body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
                 tg(token, "sendMessage", chat_id=bot["owner"],
-                   text=f"👤 {u.get('first_name', '')} (@{u.get('username', '-')}) — {u['id']}")
-            db.states.delete_one({"_id": f"{bot_id}:{chat_id}"})
-            tg(token, "sendMessage", chat_id=chat_id, text="✅ پیامت ارسال شد.")
-            send_node(token, chat_id, cfg, cfg["start"], bot_id)
+                   text=(f"📝 فرم جدید — {cfg['name']}\n{who}\n\n{body}")[:4000])
+                finish(token, chat_id, cfg, node, bot_id, user, "✅ اطلاعاتت ثبت شد، ممنون!")
+        elif state and state.get("ask"):
+            r = tg(token, "copyMessage", chat_id=bot["owner"], from_chat_id=chat_id, message_id=msg["message_id"])
+            if r.get("ok"):
+                tg(token, "sendMessage", chat_id=bot["owner"], text=who)
+            db.states.delete_one({"_id": sid})
+            node = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
+            finish(token, chat_id, cfg, node or {}, bot_id, user, "✅ پیامت ارسال شد.")
         else:
-            send_node(token, chat_id, cfg, cfg["fallback"], bot_id)
+            send_node(token, chat_id, cfg, cfg["fallback"], bot_id, user)
     except Exception:
         log.exception("sub_hook error")
     return "ok"

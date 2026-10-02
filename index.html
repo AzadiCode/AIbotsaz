@@ -84,29 +84,44 @@ input{direction:ltr;text-align:left}
 .hd h2{margin:0}
 button.sm{width:auto;padding:5px 11px;font-size:12.5px;border-radius:9px}
 button.x{background:transparent;color:var(--red);padding:5px 9px}
-.lbl{display:block;font-size:12.5px;color:var(--hint);margin:10px 0 4px}
+.lbl{display:block;font-size:12.5px;color:var(--hint);margin:12px 0 4px}
 input.fa,textarea.fa{direction:rtl;text-align:right}
 input[type=checkbox]{width:auto;flex:none;margin:0}
-select{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:10px 10px;outline:none;min-width:0}
-.chk{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px}
-.nid{font-size:12px;color:var(--hint);direction:ltr}
-.tag{font-size:11px;background:var(--bg2);border-radius:6px;padding:1px 7px;margin-inline-start:6px;color:var(--hint)}
-.rowbox{border:1px dashed var(--bg2);border-radius:11px;padding:8px;margin-top:8px}
-.rowbox .rh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.bt{background:var(--bg2);border-radius:10px;padding:8px;margin-bottom:6px}
-.bt input,.bt select{background:var(--bg)}
-.bt .l1{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-.bt .l2{display:flex;gap:6px}.bt .l2>*{flex:1}.bt .l2>select:first-child{flex:0 0 42%}
+select{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 10px;outline:none;min-width:0}
+.chk{display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px}
+.tag{font-size:11px;background:var(--bg2);border-radius:6px;padding:1px 8px;color:var(--hint)}
+.nd .nh{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.nd .nh b{font-size:14px;margin-inline-end:auto}
+.bubble{position:relative;background:var(--bg2);border-radius:14px;padding:10px 12px 10px 34px;white-space:pre-wrap;cursor:pointer;
+  border:1px solid transparent;transition:border-color .15s}
+.bubble:active{border-color:var(--ac)}
+.bubble .pen{position:absolute;left:10px;top:9px;font-size:13px;opacity:.55}
+.krow{display:flex;gap:6px;margin-top:6px}
+button.kb{flex:1;min-width:0;background:var(--bg2);color:var(--tx);padding:8px 6px;font-size:13.5px;border-radius:10px;
+  border:1px solid rgba(127,127,127,.2);line-height:1.5}
+button.kb:active{border-color:var(--ac)}
+button.kb small{display:block;color:var(--hint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.kb.add{flex:0 0 40px;background:transparent;color:var(--ac);border:1px dashed var(--ac);font-size:15px}
+button.kb.add.wide{display:block;width:100%;margin-top:6px;font-size:13px}
 .cmd{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-.cmd input{flex:0 0 36%}
-.bar{position:sticky;bottom:0;display:flex;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom));
-  background:linear-gradient(transparent,var(--bg2) 28%)}
+.cmd input{flex:1;min-width:0}.cmd .cmdn{flex:0 0 34%}
+.bar{display:flex;gap:8px;margin-top:16px}
 .bar button{flex:1}
+button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(229,72,77,.35)}
+.sheet{position:fixed;inset:0;z-index:50;display:none}
+.sheet.show{display:block}
+.sb{position:absolute;inset:0;background:rgba(0,0,0,.45);animation:fi .2s}
+.sp{position:absolute;bottom:0;left:0;right:0;max-height:90vh;overflow-y:auto;background:var(--bg);border-radius:20px 20px 0 0;
+  padding:16px 16px calc(18px + env(safe-area-inset-bottom));animation:up .24s ease;overscroll-behavior:contain}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+#toast{z-index:99}
 </style>
 </head>
 <body>
 <div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota"></span></div>
 <div id="app"></div>
+<div id="sheet" class="sheet"></div>
 <div id="toast"></div>
 
 <script>
@@ -139,7 +154,7 @@ async function load(){
 
 function render(){
   $("#quota").textContent = `سهمیه‌ی امروز: ${S.quota} از ${S.limit}`;
-  S.view === "list" ? renderList() : (S.edit ? renderEditor() : renderBot());
+  S.view === "list" ? renderList() : renderBot();
 }
 
 function renderList(){
@@ -150,22 +165,40 @@ function renderList(){
     </div>`).join("");
   $("#app").innerHTML = (list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">یه جمله بنویس، ربات آماده می‌شه.</span></p></div>`)
     + (S.bots.length < S.maxBots ? `<button id="new">＋ ساخت ربات جدید</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
-  document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.edit=null; S.view="bot"; render(); });
+  document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.view="bot"; render(); });
   $("#new")?.addEventListener("click", () => { S.cur = null; S.view = "bot"; render(); });
 }
 
-const btnInfo = b => {
-  if(b.goto) return "← " + esc(b.goto);
-  const m = CH_RE.exec(b.url || "");
-  return m ? "📢 @" + esc(m[1]) : "🔗";
+const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
+const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
+const cp = o => JSON.parse(JSON.stringify(o));
+
+const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g," ").slice(0,24) || id) : "؟"; };
+const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : CH_RE.test(b.url||"") ? "channel" : "url";
+const btnInfo = (cfg, b) => {
+  const k = kindOf(b);
+  return k==="goto" ? "← "+esc(titleOf(cfg,b.goto)) : k==="channel" ? "📢 @"+esc(CH_RE.exec(b.url)[1])
+    : k==="alert" ? "💬 پیام پاپ‌آپ" : k==="copy" ? "📋 کپی متن" : "🔗 "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
 };
-function nodesHtml(cfg){
-  return Object.entries(cfg.nodes).map(([id,n]) => `
-    <div class="node">
-      <div class="id">${esc(id)}${id===cfg.start?" · start":""}${n.ask?" · ask":""}</div>
-      <div class="tx">${esc(n.text)}</div>
-      <div class="btns">${n.buttons.flat().map(b=>`<span class="btn">${esc(b.text)} ${btnInfo(b)}</span>`).join("")}</div>
-    </div>`).join("");
+
+function nodeCard(cfg, id){
+  const n = cfg.nodes[id], tags = [];
+  if(id===cfg.start) tags.push("شروع");
+  if(id===cfg.fallback) tags.push("پیام ناشناس");
+  if(n.fields) tags.push("فرم");
+  else if(n.ask) tags.push("دریافت پیام");
+  if(n.photo) tags.push("🖼 عکس");
+  const kb = n.buttons.map((row,r) => `<div class="krow">${row.map((b,c) =>
+      `<button class="kb" data-sa="btn" data-n="${id}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg,b)}</small></button>`).join("")}
+      ${row.length<3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}">＋</button>` : ""}</div>`).join("");
+  return `
+    <div class="card nd">
+      <div class="nh"><b>${esc(titleOf(cfg,id))}</b>${tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+      <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen">✏️</span></div>
+      ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map(esc).join(" ← ")}</div>` : ""}
+      ${kb}
+      ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">＋ دکمه‌ی جدید</button>` : ""}
+    </div>`;
 }
 
 function renderBot(){
@@ -181,7 +214,10 @@ function renderBot(){
   let body = "";
   if(b){
     body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">✨</span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
-    body += `<div class="card"><div class="hd"><h2>پیش‌نمایش ربات</h2><button class="sm ghost" id="edit">✏️ ویرایش دستی</button></div>${nodesHtml(b.config)}</div>`;
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot">⚙️ تنظیمات ربات</button></div>
+             <p class="muted" style="margin:0 2px 10px">روی هر متن یا دکمه بزن تا همون‌جا ویرایشش کنی.</p>`;
+    body += Object.keys(b.config.nodes).map(id => nodeCard(b.config, id)).join("");
+    body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">＋ بخش جدید</button>`;
     if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">↩ برگشت به نسخه‌ی قبلی</button>`;
     body += b.active
       ? `<div class="card"><h2>🟢 فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
@@ -189,9 +225,8 @@ function renderBot(){
     body += `<button class="danger" id="del">حذف ربات</button>`;
   }
   $("#app").innerHTML = `<button class="back" id="back">← بازگشت</button>${prompt}${body}`;
-  $("#back").onclick = () => { S.view="list"; S.cur=null; S.edit=null; load(); };
+  $("#back").onclick = () => { S.view="list"; S.cur=null; closeSheet(); load(); };
   $("#gen").onclick = generate;
-  $("#edit")?.addEventListener("click", startEdit);
   $("#undo")?.addEventListener("click", undo);
   $("#act")?.addEventListener("click", activate);
   $("#off")?.addEventListener("click", () => act("deactivate", "ربات غیرفعال شد"));
@@ -218,6 +253,7 @@ const PHASES = ["دارم درخواستت رو می‌خونم…","ببینم 
   "بخش‌ها و دکمه‌ها رو می‌چینم…","متن‌ها رو می‌نویسم…","یه بررسی نهایی می‌کنم…"];
 function startLive(){
   const box = $("#live"); if(!box) return;
+  $("#think")?.classList.remove("show");
   box.innerHTML = `<div class="live"><div class="orb"></div><div class="lt"><b>در حال فکر کردن<i>.</i><i>.</i><i>.</i></b><span class="ph" id="ph">${PHASES[0]}</span></div></div>`;
   box.scrollIntoView({behavior:"smooth",block:"center"});
   let i = 0; clearInterval(startLive.t);
@@ -229,165 +265,238 @@ function startLive(){
 }
 function stopLive(){ clearInterval(startLive.t); const box = $("#live"); if(box) box.innerHTML = ""; }
 
-/* ───────── ویرایش دستی ───────── */
-const cp = o => JSON.parse(JSON.stringify(o));
-const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
-const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
-
-function startEdit(){
-  const c = cp(S.cur.config);
-  for(const n of Object.values(c.nodes)){
-    n.buttons = (n.buttons||[]).map(row => row.map(b => {
-      if(b.goto) return {text:b.text, kind:"goto", goto:b.goto, val:""};
-      const m = CH_RE.exec(b.url||"");
-      return m ? {text:b.text, kind:"channel", goto:"", val:"@"+m[1]} : {text:b.text, kind:"url", goto:"", val:b.url||""};
-    }));
-  }
-  c.cmds = Object.entries(c.commands||{}); delete c.commands;
-  S.edit = c; S.dirty = false; renderEditor(); scrollTo(0,0);
+/* ───────── ویرایشگر سریع (شیت پایین صفحه) ───────── */
+let D = null;   // پیش‌نویس فرم باز
+async function commit(fn, msg="ذخیره شد ✅"){
+  const cfg = cp(S.cur.config); fn(cfg);
+  const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: cfg});
+  S.cur = d.bot; closeSheet(); renderBot(); toast(msg);
+  tg?.HapticFeedback?.notificationOccurred("success");
 }
-
-function buildCfg(){
-  const c = S.edit, nodes = {}, commands = {};
-  for(const [id,n] of Object.entries(c.nodes)){
-    nodes[id] = { text:n.text.trim(), ask:!!n.ask,
-      buttons:n.buttons.map(row => row.map(b => b.kind==="goto" ? {text:b.text.trim(), goto:b.goto} : {text:b.text.trim(), url:b.val.trim()})) };
-  }
-  c.cmds.forEach(([k,v]) => { k = k.trim().replace(/^\//,"").toLowerCase(); if(k) commands[k] = v; });
-  return { name:c.name.trim() || "ربات من", start:c.start, fallback:c.fallback, commands, nodes };
+function closeSheet(){ $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function showSheet(html){
+  const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
+  sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp">${html}</div>`;
+  sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
 }
+const nodeOpts = (cfg, cur, extra="") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i===cur?" selected":""}>${esc(titleOf(cfg,i))}</option>`).join("");
+const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="close">✕</button></div>`;
 
-function renderEditor(){
-  const c = S.edit, ids = Object.keys(c.nodes);
-  const title = id => `${id} · ${(c.nodes[id].text||"").replace(/\s+/g," ").slice(0,22)}`;
-  const sel = (cur, attrs) => `<select ${attrs}>${ids.map(i=>`<option value="${esc(i)}"${i===cur?" selected":""}>${esc(title(i))}</option>`).join("")}</select>`;
-
-  const nodesH = ids.map(id => {
-    const n = c.nodes[id];
-    const rows = n.buttons.map((row,r) => `
-      <div class="rowbox">
-        <div class="rh"><span class="muted">ردیف ${r+1}</span>${row.length<3?`<button class="sm ghost" data-a="addbtn" data-n="${id}" data-r="${r}">＋ دکمه کنار این</button>`:""}</div>
-        ${row.map((b,i) => { const at = `data-n="${id}" data-r="${r}" data-b="${i}"`; return `
-          <div class="bt">
-            <div class="l1">
-              <input class="fa" data-f="btext" ${at} value="${esc(b.text)}" placeholder="متن دکمه" maxlength="40">
-              <button class="sm x" data-a="delbtn" ${at}>✕</button>
-            </div>
-            <div class="l2">
-              <select data-f="bkind" ${at}>
-                <option value="goto"${b.kind==="goto"?" selected":""}>↩ رفتن به بخش</option>
-                <option value="channel"${b.kind==="channel"?" selected":""}>📢 کانال/گروه</option>
-                <option value="url"${b.kind==="url"?" selected":""}>🔗 لینک</option>
-              </select>
-              ${b.kind==="goto" ? sel(b.goto, `data-f="bgoto" ${at}`)
-                : `<input data-f="bval" ${at} value="${esc(b.val)}" placeholder="${b.kind==="channel"?"@channel_id":"https://..."}" autocomplete="off">`}
-            </div>
-          </div>`; }).join("")}
-      </div>`).join("");
-    return `
-      <div class="card" id="node-${id}">
-        <div class="hd"><div><b class="nid">${esc(id)}</b>${id===c.start?'<span class="tag">شروع</span>':""}${id===c.fallback?'<span class="tag">ناشناس</span>':""}</div>
-          ${id===c.start||id===c.fallback?"":`<button class="sm x" data-a="delnode" data-n="${id}">🗑 حذف بخش</button>`}</div>
-        <span class="lbl">متن پیام</span>
-        <textarea class="fa" data-f="ntext" data-n="${id}" maxlength="3500">${esc(n.text)}</textarea>
-        <label class="chk"><input type="checkbox" data-f="ask" data-n="${id}"${n.ask?" checked":""}> پیام بعدی کاربر برای من (صاحب ربات) ارسال بشه</label>
-        <span class="lbl">دکمه‌ها</span>
-        ${rows || '<p class="muted">دکمه‌ای نداره.</p>'}
-        ${n.buttons.length<6?`<button class="sm ghost" style="margin-top:8px" data-a="addrow" data-n="${id}">＋ ردیف دکمه‌ی جدید</button>`:""}
-      </div>`;
-  }).join("");
-
-  const cmdsH = c.cmds.map(([k,v],i) => `
-    <div class="cmd"><span>/</span><input data-f="cmdname" data-i="${i}" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off">
-      ${sel(v, `data-f="cmdnode" data-i="${i}"`)}<button class="sm x" data-a="delcmd" data-i="${i}">✕</button></div>`).join("");
-
-  $("#app").innerHTML = `
-    <button class="back" id="back">← انصراف و بازگشت</button>
-    <div class="card"><h2>✏️ ویرایش دستی</h2><p class="muted">همه‌چی قابل تغییره: متن‌ها، دکمه‌ها، آیدی کانال، لینک‌ها. ویرایش دستی سهمیه‌ی روزانه مصرف نمی‌کنه.</p>
-      <span class="lbl">نام ربات</span><input class="fa" data-f="name" value="${esc(c.name)}" maxlength="50">
-      <span class="lbl">بخشی که با /start نشون داده می‌شه</span>${sel(c.start, 'data-f="start"')}
-      <span class="lbl">بخشی که برای پیام‌های نامفهوم نشون داده می‌شه</span>${sel(c.fallback, 'data-f="fallback"')}
-    </div>
-    <div class="card"><div class="hd"><h2>دستورها (مثل /help)</h2><button class="sm ghost" data-a="addcmd">＋ دستور</button></div>
-      ${cmdsH || '<p class="muted">دستور اضافه‌ای نداری.</p>'}</div>
-    ${nodesH}
-    ${ids.length<25?'<button class="ghost" data-a="addnode" style="margin-bottom:12px">＋ بخش جدید</button>':""}
-    <div class="bar"><button id="save">💾 ذخیره تغییرات</button><button class="ghost" id="cancel">انصراف</button></div>`;
-  $("#back").onclick = $("#cancel").onclick = cancelEdit;
-  $("#save").onclick = saveEdit;
+/* ── بخش (کارت) ── */
+function openNode(id){
+  const cfg = S.cur.config, n = cfg.nodes[id];
+  S.sheet = {kind:"node", id};
+  D = { title:n.title||"", text:n.text, photo:n.photo||"", done:n.done||"", next:n.next||"",
+        fields:n.fields ? cp(n.fields) : [""], mode:n.fields ? "form" : n.ask ? "ask" : "show",
+        start:id===cfg.start, fb:id===cfg.fallback };
+  renderSheet();
 }
-
-function rerenderEditor(scrollToId){
-  const y = scrollY; renderEditor();
-  if(scrollToId){ document.getElementById("node-"+scrollToId)?.scrollIntoView({behavior:"smooth",block:"center"}); } else scrollTo(0,y);
+function nodeSheet(){
+  const cfg = S.cur.config, id = S.sheet.id, d = D;
+  return head("ویرایش بخش") + `
+    <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
+    <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
+    <p class="muted">برای اسم کاربر بنویس <b dir="ltr">{name}</b></p>
+    <span class="lbl">عکس (اختیاری — لینک مستقیم عکس)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">
+    <span class="lbl">این بخش چی کار کنه؟</span>
+    <select id="f-mode" data-sh="mode">
+      <option value="show"${d.mode==="show"?" selected":""}>فقط پیام و دکمه‌ها رو نشون بده</option>
+      <option value="ask"${d.mode==="ask"?" selected":""}>یه پیام از کاربر بگیر و برای من بفرست</option>
+      <option value="form"${d.mode==="form"?" selected":""}>فرم چندمرحله‌ای (چند سؤال پشت‌سرهم)</option>
+    </select>
+    ${d.mode==="form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
+      ${d.fields.map((f,i)=>`<div class="cmd"><input class="fa fld" value="${esc(f)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">✕</button></div>`).join("")}
+      ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld">＋ سؤال</button>` : ""}` : ""}
+    ${d.mode!=="show" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="✅ ثبت شد، ممنون!">
+      <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>` : ""}
+    <label class="chk"><input type="checkbox" id="f-start"${d.start?" checked disabled":""}> صفحه‌ی شروع (/start)</label>
+    <label class="chk"><input type="checkbox" id="f-fb"${d.fb?" checked disabled":""}> جواب پیام‌های نامفهوم کاربر</label>
+    <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف بخش</button>`}</div>`;
 }
-function cancelEdit(){
-  const go = ok => { if(!ok) return; S.edit = null; S.dirty = false; renderBot(); };
-  if(!S.dirty) return go(true);
-  tg?.showConfirm ? tg.showConfirm("تغییرات ذخیره نشده از بین می‌رن. ادامه می‌دی؟", go) : go(confirm("تغییرات ذخیره نشده از بین می‌رن. ادامه می‌دی؟"));
+function readNode(){
+  const g = s => $(s)?.value ?? null;
+  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
+  D.mode = g("#f-mode") ?? D.mode;
+  if(document.querySelector(".fld")) D.fields = [...document.querySelectorAll(".fld")].map(i => i.value);
+  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
+  if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
+  if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
 }
-function saveEdit(){
-  busy($("#save"), async () => {
-    const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: buildCfg()});
-    S.cur = d.bot; S.edit = null; S.dirty = false; render(); toast("تغییرات ذخیره شد ✅");
-    tg?.HapticFeedback?.notificationOccurred("success");
+function saveNode(){
+  const id = S.sheet.id;
+  if(!D.text.trim()) return toast("متن پیام نباید خالی باشه");
+  if(D.mode==="form" && !D.fields.some(f=>f.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    const n = cfg.nodes[id];
+    for(const k of ["title","photo","ask","fields","done","next"]) delete n[k];
+    n.text = D.text.trim();
+    if(D.title.trim()) n.title = D.title.trim();
+    if(D.photo.trim()) n.photo = D.photo.trim();
+    if(D.mode==="ask") n.ask = true;
+    if(D.mode==="form") n.fields = D.fields.map(f=>f.trim()).filter(Boolean);
+    if(D.mode!=="show"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    if(D.start) cfg.start = id;
+    if(D.fb) cfg.fallback = id;
+  }));
+}
+function delNode(){
+  const id = S.sheet.id;
+  const go = ok => ok && busy($('[data-sh="del"]'), () => commit(cfg => {
+    delete cfg.nodes[id];
+    for(const n of Object.values(cfg.nodes)){
+      n.buttons = n.buttons.map(r => r.filter(b => b.goto !== id)).filter(r => r.length);
+      if(n.next === id) delete n.next;
+    }
+    for(const k of Object.keys(cfg.commands||{})) if(cfg.commands[k] === id) delete cfg.commands[k];
+  }, "بخش حذف شد"));
+  const q = "این بخش و دکمه‌هایی که بهش وصلن حذف بشن؟";
+  tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
+}
+function addNode(){
+  const cfg = S.cur.config, ids = Object.keys(cfg.nodes);
+  if(ids.length >= 25) return toast("حداکثر ۲۵ بخش");
+  let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
+  const id = "page_"+k;
+  busy($('[data-sa="addnode"]'), async () => {
+    await commit(c => { c.nodes[id] = {title:"بخش جدید", text:"متن این بخش رو بنویس", ask:false,
+      buttons:[[{text:"🏠 منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
+    openNode(id);
   });
 }
-const newBtn = c => ({text:"دکمه‌ی جدید", kind:"goto", goto:c.start, val:""});
 
-document.addEventListener("input", e => {
-  if(!S.edit) return;
-  const t = e.target, f = t.dataset.f; if(!f) return;
-  const c = S.edit, n = c.nodes[t.dataset.n], bt = n && t.dataset.r !== undefined ? n.buttons[+t.dataset.r]?.[+t.dataset.b] : null;
-  if(f==="name") c.name = t.value;
-  else if(f==="ntext") n.text = t.value;
-  else if(f==="btext") bt.text = t.value;
-  else if(f==="bval") bt.val = t.value;
-  else if(f==="cmdname") c.cmds[+t.dataset.i][0] = t.value;
-  else return;
-  S.dirty = true;
+/* ── دکمه ── */
+function openBtn(nid, r, c){
+  const cfg = S.cur.config;
+  S.sheet = {kind:"btn", n:nid, r, c};
+  if(c === null) D = {text:"دکمه‌ی جدید", kind:"goto", goto:cfg.start, val:""};
+  else {
+    const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
+    D = {text:b.text, kind:k, goto:b.goto||cfg.start,
+         val: k==="channel" ? "@"+CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || ""};
+  }
+  renderSheet();
+}
+const KINDS = [["goto","↩ رفتن به یه بخش"],["channel","📢 کانال / گروه"],["url","🔗 لینک"],["alert","💬 پیام پاپ‌آپ"],["copy","📋 کپی کردن متن"]];
+function btnSheet(){
+  const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
+  const val = {
+    goto: `<span class="lbl">کدوم بخش باز بشه؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
+    channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
+    url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
+    alert: `<span class="lbl">متنی که کاربر توی پاپ‌آپ می‌بینه</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea>`,
+    copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`
+  }[d.kind];
+  return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
+    <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
+    <span class="lbl">با لمس دکمه چی بشه؟</span>
+    <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l])=>`<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
+    ${val}
+    <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف دکمه</button>`}</div>`;
+}
+function readBtn(){
+  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
+  if($("#b-goto")) D.goto = $("#b-goto").value;
+  if($("#b-val")) D.val = $("#b-val").value;
+}
+function saveBtn(){
+  const {n:nid, r, c} = S.sheet, d = D;
+  if(!d.text.trim()) return toast("متن دکمه رو بنویس");
+  if(d.kind!=="goto" && !d.val.trim()) return toast("مقصد دکمه رو وارد کن");
+  const btn = {text:d.text.trim()};
+  if(d.kind==="goto") btn.goto = d.goto;
+  else if(d.kind==="alert") btn.alert = d.val.trim();
+  else if(d.kind==="copy") btn.copy = d.val.trim();
+  else btn.url = d.val.trim();
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    const rows = cfg.nodes[nid].buttons;
+    if(c !== null) rows[r][c] = btn;
+    else if(r !== null && rows[r]) rows[r].push(btn);
+    else rows.push([btn]);
+  }));
+}
+function delBtn(){
+  const {n:nid, r, c} = S.sheet;
+  busy($('[data-sh="del"]'), () => commit(cfg => {
+    const rows = cfg.nodes[nid].buttons; rows[r].splice(c,1); if(!rows[r].length) rows.splice(r,1);
+  }, "دکمه حذف شد"));
+}
+
+/* ── تنظیمات کلی ربات ── */
+function openBot(){
+  const cfg = S.cur.config;
+  S.sheet = {kind:"bot"};
+  D = { name:cfg.name, channels:(cfg.join?.channels||[]).map(c=>"@"+c).join(" "), jtext:cfg.join?.text||"",
+        cmds:Object.entries(cfg.commands||{}) };
+  renderSheet();
+}
+function botSheet(){
+  const cfg = S.cur.config, d = D;
+  return head("⚙️ تنظیمات ربات") + `
+    <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
+    <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
+    <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
+    <p class="muted">تا ۳ کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه تا بتونه عضویت رو چک کنه. خالی = غیرفعال.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی 👇">${esc(d.jtext)}</textarea>
+    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length<10?`<button class="sm ghost" data-sh="addcmd">＋ دستور</button>`:""}</div>
+    ${d.cmds.map(([k,v],i)=>`<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
+    <div class="bar"><button data-sh="save">ذخیره</button></div>`;
+}
+function readBot(){
+  D.name = $("#s-name")?.value ?? D.name; D.channels = $("#s-chs")?.value ?? D.channels; D.jtext = $("#s-jtext")?.value ?? D.jtext;
+  const ns = [...document.querySelectorAll(".cmdn")], vs = [...document.querySelectorAll(".cmdv")];
+  if(ns.length || document.querySelector("#s-name")) D.cmds = ns.map((n,i) => [n.value, vs[i].value]);
+}
+function saveBot(){
+  const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    cfg.name = d.name.trim() || "ربات من";
+    if(chs.length) cfg.join = {channels:chs, text:d.jtext.trim()}; else delete cfg.join;
+    cfg.commands = {};
+    d.cmds.forEach(([k,v]) => { k = k.trim().replace(/^\//,"").toLowerCase(); if(k) cfg.commands[k] = v; });
+  }));
+}
+
+/* ── هماهنگی شیت‌ها ── */
+function renderSheet(){
+  showSheet({node:nodeSheet, btn:btnSheet, bot:botSheet}[S.sheet.kind]());
+}
+function readSheet(){ ({node:readNode, btn:readBtn, bot:readBot}[S.sheet.kind])(); }
+
+function shAction(a, ds){
+  if(!S.sheet) return;
+  const prev = D.kind;
+  readSheet();
+  if(a==="save") return {node:saveNode, btn:saveBtn, bot:saveBot}[S.sheet.kind]();
+  if(a==="del") return S.sheet.kind==="node" ? delNode() : delBtn();
+  if(a==="bkind"){
+    const k = D.kind, wasText = prev==="channel"||prev==="url";
+    if(k==="channel"){ const m = CH_RE.exec(D.val) || NAME_RE.exec(D.val); D.val = m ? "@"+m[1] : ""; }
+    else if(k==="url"){ D.val = NAME_RE.test(D.val) ? "https://t.me/"+D.val.replace("@","") : (wasText ? D.val : ""); }
+    else if(k!=="goto" && prev!==k) D.val = "";
+  }
+  else if(a==="addfld") D.fields.push("");
+  else if(a==="delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push("");
+  else if(a==="addcmd") D.cmds.push(["help", S.cur.config.start]);
+  else if(a==="delcmd") D.cmds.splice(+ds.i, 1);
+  renderSheet();
+}
+
+document.addEventListener("click", e => {
+  const x = e.target.closest("[data-x],[data-sa],[data-sh]"); if(!x || x.tagName==="SELECT") return;
+  const ds = x.dataset;
+  if(ds.x) return closeSheet();
+  if(ds.sh) return shAction(ds.sh, ds);
+  const r = ds.r !== undefined ? +ds.r : null;
+  if(ds.sa==="node") openNode(ds.n);
+  else if(ds.sa==="btn") openBtn(ds.n, r, +ds.c);
+  else if(ds.sa==="newbtn") openBtn(ds.n, r, null);
+  else if(ds.sa==="newrow") openBtn(ds.n, null, null);
+  else if(ds.sa==="bot") openBot();
+  else if(ds.sa==="addnode") addNode();
 });
 document.addEventListener("change", e => {
-  if(!S.edit) return;
-  const t = e.target, f = t.dataset.f; if(!f) return;
-  const c = S.edit, n = c.nodes[t.dataset.n], bt = n && t.dataset.r !== undefined ? n.buttons[+t.dataset.r]?.[+t.dataset.b] : null;
-  S.dirty = true;
-  if(f==="start"||f==="fallback") c[f] = t.value;
-  else if(f==="cmdnode") c.cmds[+t.dataset.i][1] = t.value;
-  else if(f==="ask") n.ask = t.checked;
-  else if(f==="bgoto") bt.goto = t.value;
-  else if(f==="bkind"){
-    const k = t.value;
-    if(k==="goto") bt.goto = bt.goto || c.start;
-    else if(k==="channel"){ const m = CH_RE.exec(bt.val) || NAME_RE.exec(bt.val); bt.val = m ? "@"+m[1] : ""; }
-    else if(NAME_RE.test(bt.val)) bt.val = "https://t.me/" + bt.val.replace("@","");
-    bt.kind = k; rerenderEditor();
-  }
-});
-document.addEventListener("click", e => {
-  if(!S.edit) return;
-  const el = e.target.closest("[data-a]"); if(!el) return;
-  const c = S.edit, a = el.dataset.a, id = el.dataset.n, r = +el.dataset.r, i = +el.dataset.i, bi = +el.dataset.b;
-  S.dirty = true;
-  if(a==="addnode"){
-    if(Object.keys(c.nodes).length >= 25) return toast("حداکثر ۲۵ بخش");
-    let k = Object.keys(c.nodes).length + 1; while(c.nodes["page_"+k]) k++;
-    c.nodes["page_"+k] = {text:"متن این بخش رو بنویس", ask:false, buttons:[[{text:"🏠 منوی اصلی", kind:"goto", goto:c.start, val:""}]]};
-    return rerenderEditor("page_"+k);
-  }
-  if(a==="delnode"){
-    delete c.nodes[id];
-    for(const n of Object.values(c.nodes)) n.buttons = n.buttons.map(row => row.filter(b => !(b.kind==="goto" && b.goto===id))).filter(row => row.length);
-    c.cmds = c.cmds.filter(([,v]) => v !== id);
-    toast("بخش و دکمه‌های وصل به اون حذف شد");
-  }
-  else if(a==="addrow"){ if(c.nodes[id].buttons.length < 6) c.nodes[id].buttons.push([newBtn(c)]); }
-  else if(a==="addbtn"){ const row = c.nodes[id].buttons[r]; if(row.length < 3) row.push(newBtn(c)); }
-  else if(a==="delbtn"){ const bs = c.nodes[id].buttons; bs[r].splice(bi,1); if(!bs[r].length) bs.splice(r,1); }
-  else if(a==="addcmd"){ if(c.cmds.length < 10) c.cmds.push(["help", c.start]); else return toast("حداکثر ۱۰ دستور"); }
-  else if(a==="delcmd"){ c.cmds.splice(i,1); }
-  else return;
-  rerenderEditor();
+  const a = e.target.dataset.sh;
+  if(a==="mode" || a==="bkind") shAction(a, e.target.dataset);
 });
 
 async function busy(btn, fn){
