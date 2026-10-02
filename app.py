@@ -20,7 +20,7 @@ from cryptography.fernet import Fernet
 
 # ───────────────────────── تنظیمات (Environment) ─────────────────────────
 MOTHER_TOKEN = os.environ["MOTHER_TOKEN"]            # توکن ربات مادر
-MONGO_URI    = os.environ["MONGO_URI"]
+MONGO_URI    = os.environ.get("MONGO_URI", "").strip()  # خالی = حافظه‌ی موقت (ذخیره نمی‌شه)
 BASE_URL     = os.environ["BASE_URL"].rstrip("/")    # مثلا https://yourapp.onrender.com
 AI_BASE_URL  = os.environ["AI_BASE_URL"].rstrip("/") # مثلا https://api.provider.com/v1
 AI_API_KEY   = os.environ["AI_API_KEY"]
@@ -35,7 +35,12 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("aibot")
 
 app = Flask(__name__)
-db = MongoClient(MONGO_URI, serverSelectionTimeoutMS=8000).get_default_database("aibot")
+if MONGO_URI:
+    db = MongoClient(MONGO_URI, serverSelectionTimeoutMS=8000).get_database("aibot")
+else:
+    import mongomock
+    db = mongomock.MongoClient().get_database("aibot")
+    log.warning("MONGO_URI تنظیم نشده؛ از حافظه‌ی موقت استفاده می‌شه و با هر ری‌استارت همه‌چی پاک می‌شه")
 db.bots.create_index("owner")
 db.bots.create_index("token_hash", unique=True, sparse=True)
 
