@@ -165,25 +165,27 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "fallback": "<node_id shown for unknown messages>",
  "commands": {"help": "<node_id>"},
  "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional, see below)
- "nodes": {
-   "<node_id>": {
-     "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
-     "text": "message text (you may use {name} for the user's first name)",
-     "photo": "https://direct-image-link",                                          (optional)
-     "buttons": [[ {"text": "label", "goto": "<node_id>"},
-                   {"text": "label", "url": "https://..."},
-                   {"text": "label", "alert": "popup text shown when tapped"},
-                   {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
-     "ask": false,
-     "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
-     "done": "message shown after the user finished ask/form",                      (optional)
-     "next": "<node_id shown after finishing>"                                       (optional, default start)
-   }
- }
+"nodes": {
+    "<node_id>": {
+      "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
+      "text": "message text (you may use {name} for the user's first name)",
+      "photo": "https://direct-image-link",                                          (optional)
+      "keyboard_type": "inline",                                                    (optional, "inline" or "reply")
+      "buttons": [[ {"text": "label", "goto": "<node_id>"},
+                    {"text": "label", "url": "https://..."},
+                    {"text": "label", "alert": "popup text shown when tapped"},
+                    {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
+      "ask": false,
+      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
+      "done": "message shown after the user finished ask/form",                      (optional)
+      "next": "<node_id shown after finishing>"                                       (optional, default start)
+    }
+  }
 }
 
 What the engine can do (use these freely when they fit the request):
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (e.g. card number, promo code).
+- "keyboard_type": "inline" (default) = buttons appear below the message (inline keyboard). "reply" = buttons appear below the chat input as a persistent keyboard (reply keyboard). Reply keyboards only support simple text buttons (no goto, url, alert, copy); tapping sends the button text as a message.
 - "ask": true = the user's next message (any type) is forwarded to the bot owner. Good for support/feedback.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary. Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership: before using the bot the user must be a member of these public channels (usernames without @). Only add it if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
@@ -277,6 +279,10 @@ def sanitize(cfg, strict=False):
         title = str(n.get("title") or "").strip()[:30]
         if title:
             node["title"] = title
+        kb_type = str(n.get("keyboard_type") or "inline").strip().lower()
+        if kb_type not in ("inline", "reply"):
+            kb_type = "inline"
+        node["keyboard_type"] = kb_type
         ph = str(n.get("photo") or "").strip()
         if ph:
             if ph.startswith("https://") and not re.search(r"\s", ph) and len(ph) <= 500:
@@ -597,9 +603,22 @@ def keyboard(node, node_id):
                 r.append({"text": b["text"], "callback_data": f"a:{node_id}:{ri}:{ci}"})
             elif "copy" in b:
                 r.append({"text": b["text"], "copy_text": {"text": b["copy"]}})
+            else:
+                r.append({"text": b["text"]})
         if r:
             kb.append(r)
     return kb
+
+
+def keyboard_markup(node, node_id):
+    """Return the appropriate keyboard markup based on node's keyboard_type."""
+    kb = keyboard(node, node_id)
+    if node.get("keyboard_type") == "reply":
+        # Reply keyboard (below chat input)
+        return {"keyboard": kb, "resize_keyboard": True, "one_time_keyboard": False}
+    else:
+        # Inline keyboard (below message)
+        return {"inline_keyboard": kb}
 
 
 def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
@@ -608,8 +627,7 @@ def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
         node_id = cfg["start"]
     node = cfg["nodes"][node_id]
     text = fill(node["text"], user)
-    kb = keyboard(node, node_id)
-    markup = {"inline_keyboard": kb}
+    markup = keyboard_markup(node, node_id)
     photo = node.get("photo")
     done = False
     if edit and not photo and not edit.get("photo"):

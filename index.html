@@ -174,11 +174,11 @@ const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
 const cp = o => JSON.parse(JSON.stringify(o));
 
 const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g," ").slice(0,24) || id) : "؟"; };
-const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : CH_RE.test(b.url||"") ? "channel" : "url";
+const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.url !== undefined ? (CH_RE.test(b.url||"") ? "channel" : "url") : "text";
 const btnInfo = (cfg, b) => {
   const k = kindOf(b);
   return k==="goto" ? "← "+esc(titleOf(cfg,b.goto)) : k==="channel" ? "📢 @"+esc(CH_RE.exec(b.url)[1])
-    : k==="alert" ? "💬 پیام پاپ‌آپ" : k==="copy" ? "📋 کپی متن" : "🔗 "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
+    : k==="alert" ? "💬 پیام پاپ‌آپ" : k==="copy" ? "📋 کپی متن" : k==="text" ? "📝 متن ساده" : "🔗 "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
 };
 
 function nodeCard(cfg, id){
@@ -188,16 +188,24 @@ function nodeCard(cfg, id){
   if(n.fields) tags.push("فرم");
   else if(n.ask) tags.push("دریافت پیام");
   if(n.photo) tags.push("🖼 عکس");
+  const kbType = n.keyboard_type === "reply" ? "ریپلای" : "اینلاین";
   const kb = n.buttons.map((row,r) => `<div class="krow">${row.map((b,c) =>
       `<button class="kb" data-sa="btn" data-n="${id}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg,b)}</small></button>`).join("")}
       ${row.length<3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}">＋</button>` : ""}</div>`).join("");
   return `
-    <div class="card nd">
-      <div class="nh"><b>${esc(titleOf(cfg,id))}</b>${tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+    <div class="card nd" data-node="${id}">
+      <div class="nh" data-sa="toggle" data-n="${id}" style="cursor:pointer">
+        <b>${esc(titleOf(cfg,id))}</b>
+        ${tags.map(t=>`<span class="tag">${t}</span>`).join("")}
+        <span class="tag" style="margin-right:auto">${kbType}</span>
+        <span class="pen" style="margin-right:8px">▼</span>
+      </div>
       <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen">✏️</span></div>
-      ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map(esc).join(" ← ")}</div>` : ""}
-      ${kb}
-      ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">＋ دکمه‌ی جدید</button>` : ""}
+      <div class="node-body" style="display:none">
+        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map(esc).join(" ← ")}</div>` : ""}
+        ${kb}
+        ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">＋ دکمه‌ی جدید</button>` : ""}
+      </div>
     </div>`;
 }
 
@@ -288,6 +296,7 @@ function openNode(id){
   S.sheet = {kind:"node", id};
   D = { title:n.title||"", text:n.text, photo:n.photo||"", done:n.done||"", next:n.next||"",
         fields:n.fields ? cp(n.fields) : [""], mode:n.fields ? "form" : n.ask ? "ask" : "show",
+        keyboard_type: n.keyboard_type || "inline",
         start:id===cfg.start, fb:id===cfg.fallback };
   renderSheet();
 }
@@ -298,6 +307,12 @@ function nodeSheet(){
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
     <p class="muted">برای اسم کاربر بنویس <b dir="ltr">{name}</b></p>
     <span class="lbl">عکس (اختیاری — لینک مستقیم عکس)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">
+    <span class="lbl">نوع کیبورد</span>
+    <select id="f-kbtype" data-sh="kbtype">
+      <option value="inline"${d.keyboard_type==="inline"?" selected":""}>اینلاین (زیر پیام، شیشه‌ای)</option>
+      <option value="reply"${d.keyboard_type==="reply"?" selected":""}>ریپلای (زیر صفحه چت، ثابت)</option>
+    </select>
+    <p class="muted">ریپلای فقط دکمه‌های متنی ساده رو پشتیبانی می‌کنه (بدون لینک، پاپ‌آپ، کپی، رفتن به بخش)</p>
     <span class="lbl">این بخش چی کار کنه؟</span>
     <select id="f-mode" data-sh="mode">
       <option value="show"${d.mode==="show"?" selected":""}>فقط پیام و دکمه‌ها رو نشون بده</option>
@@ -316,6 +331,7 @@ function nodeSheet(){
 function readNode(){
   const g = s => $(s)?.value ?? null;
   D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
+  D.keyboard_type = g("#f-kbtype") ?? D.keyboard_type;
   D.mode = g("#f-mode") ?? D.mode;
   if(document.querySelector(".fld")) D.fields = [...document.querySelectorAll(".fld")].map(i => i.value);
   if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
@@ -328,10 +344,11 @@ function saveNode(){
   if(D.mode==="form" && !D.fields.some(f=>f.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id];
-    for(const k of ["title","photo","ask","fields","done","next"]) delete n[k];
+    for(const k of ["title","photo","ask","fields","done","next","keyboard_type"]) delete n[k];
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
     if(D.photo.trim()) n.photo = D.photo.trim();
+    n.keyboard_type = D.keyboard_type;
     if(D.mode==="ask") n.ask = true;
     if(D.mode==="form") n.fields = D.fields.map(f=>f.trim()).filter(Boolean);
     if(D.mode!=="show"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
@@ -358,7 +375,7 @@ function addNode(){
   let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
   const id = "page_"+k;
   busy($('[data-sa="addnode"]'), async () => {
-    await commit(c => { c.nodes[id] = {title:"بخش جدید", text:"متن این بخش رو بنویس", ask:false,
+    await commit(c => { c.nodes[id] = {title:"بخش جدید", text:"متن این بخش رو بنویس", ask:false, keyboard_type: "inline",
       buttons:[[{text:"🏠 منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
     openNode(id);
   });
@@ -368,7 +385,9 @@ function addNode(){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind:"btn", n:nid, r, c};
-  if(c === null) D = {text:"دکمه‌ی جدید", kind:"goto", goto:cfg.start, val:""};
+  const node = cfg.nodes[nid];
+  const isReply = node.keyboard_type === "reply";
+  if(c === null) D = {text:"دکمه‌ی جدید", kind: isReply ? "text" : "goto", goto:cfg.start, val:""};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
     D = {text:b.text, kind:k, goto:b.goto||cfg.start,
@@ -376,17 +395,23 @@ function openBtn(nid, r, c){
   }
   renderSheet();
 }
-const KINDS = [["goto","↩ رفتن به یه بخش"],["channel","📢 کانال / گروه"],["url","🔗 لینک"],["alert","💬 پیام پاپ‌آپ"],["copy","📋 کپی کردن متن"]];
+const KINDS_INLINE = [["goto","↩ رفتن به یه بخش"],["channel","📢 کانال / گروه"],["url","🔗 لینک"],["alert","💬 پیام پاپ‌آپ"],["copy","📋 کپی کردن متن"]];
+const KINDS_REPLY = [["text","📝 متن ساده (فقط متن می‌فرسته)"]];
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
+  const node = cfg.nodes[S.sheet.n];
+  const isReply = node.keyboard_type === "reply";
+  const KINDS = isReply ? KINDS_REPLY : KINDS_INLINE;
   const val = {
     goto: `<span class="lbl">کدوم بخش باز بشه؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
     channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
     url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
     alert: `<span class="lbl">متنی که کاربر توی پاپ‌آپ می‌بینه</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea>`,
-    copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`
+    copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`,
+    text: ``
   }[d.kind];
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
+    ${isReply ? `<p class="muted" style="margin-bottom:8px">⚠️ این بخش از کیبورد ریپلای استفاده می‌کنه. فقط دکمه‌های متنی ساده کار می‌کنن (بدون لینک، پاپ‌آپ، کپی، رفتن به بخش).</p>` : ""}
     <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
     <span class="lbl">با لمس دکمه چی بشه؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l])=>`<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
@@ -401,11 +426,17 @@ function readBtn(){
 function saveBtn(){
   const {n:nid, r, c} = S.sheet, d = D;
   if(!d.text.trim()) return toast("متن دکمه رو بنویس");
-  if(d.kind!=="goto" && !d.val.trim()) return toast("مقصد دکمه رو وارد کن");
+  const node = S.cur.config.nodes[nid];
+  const isReply = node.keyboard_type === "reply";
+  if(isReply && d.kind !== "text") d.kind = "text";
+  if(!isReply && d.kind!=="goto" && !d.val.trim()) return toast("مقصد دکمه رو وارد کن");
   const btn = {text:d.text.trim()};
   if(d.kind==="goto") btn.goto = d.goto;
   else if(d.kind==="alert") btn.alert = d.val.trim();
   else if(d.kind==="copy") btn.copy = d.val.trim();
+  else if(d.kind==="text") {
+    // simple text button for reply keyboard - no extra fields
+  }
   else btn.url = d.val.trim();
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const rows = cfg.nodes[nid].buttons;
@@ -478,6 +509,9 @@ function shAction(a, ds){
   else if(a==="delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push("");
   else if(a==="addcmd") D.cmds.push(["help", S.cur.config.start]);
   else if(a==="delcmd") D.cmds.splice(+ds.i, 1);
+  else if(a==="kbtype") {
+    // No special handling needed, value is read in readSheet
+  }
   renderSheet();
 }
 
@@ -493,10 +527,22 @@ document.addEventListener("click", e => {
   else if(ds.sa==="newrow") openBtn(ds.n, null, null);
   else if(ds.sa==="bot") openBot();
   else if(ds.sa==="addnode") addNode();
+  else if(ds.sa==="toggle") {
+    const card = x.closest(".card.nd");
+    const body = card.querySelector(".node-body");
+    const icon = x.querySelector(".pen");
+    if(body.style.display === "none") {
+      body.style.display = "block";
+      icon.textContent = "▲";
+    } else {
+      body.style.display = "none";
+      icon.textContent = "▼";
+    }
+  }
 });
 document.addEventListener("change", e => {
   const a = e.target.dataset.sh;
-  if(a==="mode" || a==="bkind") shAction(a, e.target.dataset);
+  if(a==="mode" || a==="bkind" || a==="kbtype") shAction(a, e.target.dataset);
 });
 
 async function busy(btn, fn){
