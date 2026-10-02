@@ -28,6 +28,7 @@ AI_MODEL     = os.environ["AI_MODEL"]
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)  # برای رمزنگاری توکن رباتا
 DAILY_LIMIT  = int(os.environ.get("DAILY_LIMIT", "5"))     # تعداد ساخت/ارتقا در روز برای هر کاربر
 MAX_BOTS     = int(os.environ.get("MAX_BOTS", "3"))        # سقف ربات هر کاربر
+DEBUG        = os.environ.get("DEBUG", "") == "1"   # علت دقیق خطا رو توی مینی‌اپ نشون می‌ده
 MAX_PROMPT   = 1200
 MAX_VERSIONS = 5
 
@@ -213,10 +214,7 @@ def sanitize(cfg):
             "fallback": fallback, "commands": cmds, "nodes": nodes}
 
 
-def ask_llm(prompt, current=None):
-    user = prompt
-    if current:
-        user = f"Current config:\n{json.dumps(current, ensure_ascii=False)}\n\nChange request:\n{prompt}"
+def _call_llm(user):
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
@@ -224,12 +222,28 @@ def ask_llm(prompt, current=None):
               "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                            {"role": "user", "content": user}]},
         timeout=90)
-    r.raise_for_status()
-    txt = r.json()["choices"][0]["message"]["content"]
+    if r.status_code >= 400:
+        raise RuntimeError(f"AI HTTP {r.status_code}: {r.text[:300]}")
+    try:
+        txt = r.json()["choices"][0]["message"]["content"] or ""
+    except Exception:
+        raise RuntimeError(f"AI پاسخ غیرمنتظره داد: {r.text[:300]}")
+    txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S)
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
-        raise ValueError("پاسخ هوش مصنوعی JSON نبود")
+        raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
     return sanitize(json.loads(m.group(0)))
+
+
+def ask_llm(prompt, current=None):
+    user = prompt
+    if current:
+        user = f"Current config:\n{json.dumps(current, ensure_ascii=False)}\n\nChange request:\n{prompt}"
+    try:
+        return _call_llm(user)
+    except (ValueError, KeyError, TypeError):   # خروجی خراب → یک بار دیگه
+        log.warning("bad AI output, retrying once", exc_info=True)
+        return _call_llm(user)
 
 
 # ───────────────────────── API مینی‌اپ ─────────────────────────
@@ -271,8 +285,11 @@ def api_generate():
         cfg = ask_llm(prompt, bot["config"] if bot else None)
     except Exception as e:
         quota_refund(uid)
-        log.warning("generate failed: %s", e)
-        return jsonify(error="ساخت ربات ناموفق بود، دوباره امتحان کن یا توضیح رو ساده‌تر بنویس"), 502
+        log.exception("generate failed")
+        msg = "ساخت ربات ناموفق بود، دوباره امتحان کن یا توضیح رو ساده‌تر بنویس"
+        if DEBUG:
+            msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
+        return jsonify(error=msg), 502
 
     if bot:
         db.bots.update_one({"_id": bot["_id"]}, {

@@ -64,6 +64,8 @@ input{direction:ltr;text-align:left}
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
+// خالی = همون دامنه‌ای که این صفحه ازش لود شده (حالت پیش‌فرض). فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
+const API_BASE = "";
 let S = { bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false };
 
 const $ = s => document.querySelector(s);
@@ -72,7 +74,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2800); }
 
 async function api(path, method="GET", body){
-  const r = await fetch(path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body?JSON.stringify(body):undefined });
+  const r = await fetch(API_BASE + path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body?JSON.stringify(body):undefined });
   const d = await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(d.error || "خطا در ارتباط با سرور");
   return d;
