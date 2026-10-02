@@ -57,9 +57,51 @@ input{direction:ltr;text-align:left}
   border:1px solid rgba(47,124,246,.16);border-radius:12px;padding:10px 12px;margin:-2px 0 12px;
   font-size:12.5px;line-height:1.65;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
   transition:opacity .35s ease,max-height .35s ease,margin .35s ease,padding .35s ease}
-.think.show{opacity:1;max-height:220px;margin:0 0 12px}
+.think.show{opacity:1;max-height:700px;margin:0 0 12px}
 .think .ic{flex:none;font-size:14px;line-height:1.5}
 .think .tt{color:var(--hint)}
+
+/* ── انیمیشن «در حال فکر کردن» ── */
+.live{display:flex;align-items:center;gap:12px;background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px;
+  border:1px solid rgba(47,124,246,.18);position:relative;overflow:hidden;animation:pop .3s ease}
+.live::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(47,124,246,.09) 50%,transparent 70%);
+  transform:translateX(-100%);animation:sh 2s ease-in-out infinite}
+.orb{width:36px;height:36px;border-radius:50%;flex:none;position:relative;
+  background:conic-gradient(from 0deg,var(--ac),#9b6bff,#34c3ff,var(--ac));animation:s 1.3s linear infinite}
+.orb::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--bg)}
+.live .lt b{display:block;font-size:14px}
+.live .lt b i{display:inline-block;font-style:normal;animation:bn 1.2s infinite}
+.live .lt b i:nth-child(2){animation-delay:.15s}.live .lt b i:nth-child(3){animation-delay:.3s}
+.live .ph{font-size:12.5px;color:var(--hint);transition:opacity .3s}
+.live .ph.out{opacity:0}
+@keyframes sh{to{transform:translateX(100%)}}
+@keyframes bn{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.orb{animation-duration:3s}.live::after,.live .lt b i{animation:none}}
+
+/* ── ویرایشگر ── */
+.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.hd h2{margin:0}
+button.sm{width:auto;padding:5px 11px;font-size:12.5px;border-radius:9px}
+button.x{background:transparent;color:var(--red);padding:5px 9px}
+.lbl{display:block;font-size:12.5px;color:var(--hint);margin:10px 0 4px}
+input.fa,textarea.fa{direction:rtl;text-align:right}
+input[type=checkbox]{width:auto;flex:none;margin:0}
+select{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:10px 10px;outline:none;min-width:0}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px}
+.nid{font-size:12px;color:var(--hint);direction:ltr}
+.tag{font-size:11px;background:var(--bg2);border-radius:6px;padding:1px 7px;margin-inline-start:6px;color:var(--hint)}
+.rowbox{border:1px dashed var(--bg2);border-radius:11px;padding:8px;margin-top:8px}
+.rowbox .rh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.bt{background:var(--bg2);border-radius:10px;padding:8px;margin-bottom:6px}
+.bt input,.bt select{background:var(--bg)}
+.bt .l1{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.bt .l2{display:flex;gap:6px}.bt .l2>*{flex:1}.bt .l2>select:first-child{flex:0 0 42%}
+.cmd{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.cmd input{flex:0 0 36%}
+.bar{position:sticky;bottom:0;display:flex;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(transparent,var(--bg2) 28%)}
+.bar button{flex:1}
 </style>
 </head>
 <body>
@@ -73,7 +115,7 @@ tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
 // خالی = همون دامنه‌ای که این صفحه ازش لود شده (حالت پیش‌فرض). فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
 const API_BASE = "";
-let S = { bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false };
+let S = { bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -97,7 +139,7 @@ async function load(){
 
 function render(){
   $("#quota").textContent = `سهمیه‌ی امروز: ${S.quota} از ${S.limit}`;
-  S.view === "list" ? renderList() : renderBot();
+  S.view === "list" ? renderList() : (S.edit ? renderEditor() : renderBot());
 }
 
 function renderList(){
@@ -108,16 +150,21 @@ function renderList(){
     </div>`).join("");
   $("#app").innerHTML = (list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">یه جمله بنویس، ربات آماده می‌شه.</span></p></div>`)
     + (S.bots.length < S.maxBots ? `<button id="new">＋ ساخت ربات جدید</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
-  document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.view="bot"; render(); });
+  document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.edit=null; S.view="bot"; render(); });
   $("#new")?.addEventListener("click", () => { S.cur = null; S.view = "bot"; render(); });
 }
 
+const btnInfo = b => {
+  if(b.goto) return "← " + esc(b.goto);
+  const m = CH_RE.exec(b.url || "");
+  return m ? "📢 @" + esc(m[1]) : "🔗";
+};
 function nodesHtml(cfg){
   return Object.entries(cfg.nodes).map(([id,n]) => `
     <div class="node">
       <div class="id">${esc(id)}${id===cfg.start?" · start":""}${n.ask?" · ask":""}</div>
       <div class="tx">${esc(n.text)}</div>
-      <div class="btns">${n.buttons.flat().map(b=>`<span class="btn">${esc(b.text)} ${b.url?"🔗":"←"+esc(b.goto)}</span>`).join("")}</div>
+      <div class="btns">${n.buttons.flat().map(b=>`<span class="btn">${esc(b.text)} ${btnInfo(b)}</span>`).join("")}</div>
     </div>`).join("");
 }
 
@@ -129,11 +176,12 @@ function renderBot(){
       <textarea id="prompt" maxlength="1200" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
       <div style="height:10px"></div>
       <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
-    </div>`;
+    </div>
+    <div id="live"></div>`;
   let body = "";
   if(b){
-    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">✨</span><span class="tt">${esc(b.thinking||"")}</span></div>`;
-    body += `<div class="card"><h2>پیش‌نمایش ربات</h2>${nodesHtml(b.config)}</div>`;
+    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">✨</span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
+    body += `<div class="card"><div class="hd"><h2>پیش‌نمایش ربات</h2><button class="sm ghost" id="edit">✏️ ویرایش دستی</button></div>${nodesHtml(b.config)}</div>`;
     if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">↩ برگشت به نسخه‌ی قبلی</button>`;
     body += b.active
       ? `<div class="card"><h2>🟢 فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
@@ -141,13 +189,206 @@ function renderBot(){
     body += `<button class="danger" id="del">حذف ربات</button>`;
   }
   $("#app").innerHTML = `<button class="back" id="back">← بازگشت</button>${prompt}${body}`;
-  $("#back").onclick = () => { S.view="list"; S.cur=null; load(); };
+  $("#back").onclick = () => { S.view="list"; S.cur=null; S.edit=null; load(); };
   $("#gen").onclick = generate;
+  $("#edit")?.addEventListener("click", startEdit);
   $("#undo")?.addEventListener("click", undo);
   $("#act")?.addEventListener("click", activate);
   $("#off")?.addEventListener("click", () => act("deactivate", "ربات غیرفعال شد"));
   $("#del")?.addEventListener("click", remove);
+  if(S.fresh && b?.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+  S.fresh = false;
 }
+
+/* ───────── تایپ تدریجی توضیح هوش مصنوعی ───────── */
+function typeText(el, text){
+  const id = ++typeText.id;
+  if(matchMedia("(prefers-reduced-motion:reduce)").matches){ el.textContent = text; return; }
+  let i = 0; el.textContent = "";
+  (function step(){
+    if(id !== typeText.id || !el.isConnected) return;
+    i = Math.min(text.length, i + 2); el.textContent = text.slice(0, i);
+    if(i < text.length) setTimeout(step, 16);
+  })();
+}
+typeText.id = 0;
+
+/* ───────── انیمیشن «در حال فکر کردن» ───────── */
+const PHASES = ["دارم درخواستت رو می‌خونم…","ببینم ربات واقعاً به چی نیاز داره…","مسیر کاربرها رو طراحی می‌کنم…",
+  "بخش‌ها و دکمه‌ها رو می‌چینم…","متن‌ها رو می‌نویسم…","یه بررسی نهایی می‌کنم…"];
+function startLive(){
+  const box = $("#live"); if(!box) return;
+  box.innerHTML = `<div class="live"><div class="orb"></div><div class="lt"><b>در حال فکر کردن<i>.</i><i>.</i><i>.</i></b><span class="ph" id="ph">${PHASES[0]}</span></div></div>`;
+  box.scrollIntoView({behavior:"smooth",block:"center"});
+  let i = 0; clearInterval(startLive.t);
+  startLive.t = setInterval(() => {
+    const ph = $("#ph"); if(!ph) return clearInterval(startLive.t);
+    ph.classList.add("out");
+    setTimeout(() => { i = Math.min(i + 1, PHASES.length - 1); ph.textContent = PHASES[i]; ph.classList.remove("out"); }, 300);
+  }, 2600);
+}
+function stopLive(){ clearInterval(startLive.t); const box = $("#live"); if(box) box.innerHTML = ""; }
+
+/* ───────── ویرایش دستی ───────── */
+const cp = o => JSON.parse(JSON.stringify(o));
+const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
+const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
+
+function startEdit(){
+  const c = cp(S.cur.config);
+  for(const n of Object.values(c.nodes)){
+    n.buttons = (n.buttons||[]).map(row => row.map(b => {
+      if(b.goto) return {text:b.text, kind:"goto", goto:b.goto, val:""};
+      const m = CH_RE.exec(b.url||"");
+      return m ? {text:b.text, kind:"channel", goto:"", val:"@"+m[1]} : {text:b.text, kind:"url", goto:"", val:b.url||""};
+    }));
+  }
+  c.cmds = Object.entries(c.commands||{}); delete c.commands;
+  S.edit = c; S.dirty = false; renderEditor(); scrollTo(0,0);
+}
+
+function buildCfg(){
+  const c = S.edit, nodes = {}, commands = {};
+  for(const [id,n] of Object.entries(c.nodes)){
+    nodes[id] = { text:n.text.trim(), ask:!!n.ask,
+      buttons:n.buttons.map(row => row.map(b => b.kind==="goto" ? {text:b.text.trim(), goto:b.goto} : {text:b.text.trim(), url:b.val.trim()})) };
+  }
+  c.cmds.forEach(([k,v]) => { k = k.trim().replace(/^\//,"").toLowerCase(); if(k) commands[k] = v; });
+  return { name:c.name.trim() || "ربات من", start:c.start, fallback:c.fallback, commands, nodes };
+}
+
+function renderEditor(){
+  const c = S.edit, ids = Object.keys(c.nodes);
+  const title = id => `${id} · ${(c.nodes[id].text||"").replace(/\s+/g," ").slice(0,22)}`;
+  const sel = (cur, attrs) => `<select ${attrs}>${ids.map(i=>`<option value="${esc(i)}"${i===cur?" selected":""}>${esc(title(i))}</option>`).join("")}</select>`;
+
+  const nodesH = ids.map(id => {
+    const n = c.nodes[id];
+    const rows = n.buttons.map((row,r) => `
+      <div class="rowbox">
+        <div class="rh"><span class="muted">ردیف ${r+1}</span>${row.length<3?`<button class="sm ghost" data-a="addbtn" data-n="${id}" data-r="${r}">＋ دکمه کنار این</button>`:""}</div>
+        ${row.map((b,i) => { const at = `data-n="${id}" data-r="${r}" data-b="${i}"`; return `
+          <div class="bt">
+            <div class="l1">
+              <input class="fa" data-f="btext" ${at} value="${esc(b.text)}" placeholder="متن دکمه" maxlength="40">
+              <button class="sm x" data-a="delbtn" ${at}>✕</button>
+            </div>
+            <div class="l2">
+              <select data-f="bkind" ${at}>
+                <option value="goto"${b.kind==="goto"?" selected":""}>↩ رفتن به بخش</option>
+                <option value="channel"${b.kind==="channel"?" selected":""}>📢 کانال/گروه</option>
+                <option value="url"${b.kind==="url"?" selected":""}>🔗 لینک</option>
+              </select>
+              ${b.kind==="goto" ? sel(b.goto, `data-f="bgoto" ${at}`)
+                : `<input data-f="bval" ${at} value="${esc(b.val)}" placeholder="${b.kind==="channel"?"@channel_id":"https://..."}" autocomplete="off">`}
+            </div>
+          </div>`; }).join("")}
+      </div>`).join("");
+    return `
+      <div class="card" id="node-${id}">
+        <div class="hd"><div><b class="nid">${esc(id)}</b>${id===c.start?'<span class="tag">شروع</span>':""}${id===c.fallback?'<span class="tag">ناشناس</span>':""}</div>
+          ${id===c.start||id===c.fallback?"":`<button class="sm x" data-a="delnode" data-n="${id}">🗑 حذف بخش</button>`}</div>
+        <span class="lbl">متن پیام</span>
+        <textarea class="fa" data-f="ntext" data-n="${id}" maxlength="3500">${esc(n.text)}</textarea>
+        <label class="chk"><input type="checkbox" data-f="ask" data-n="${id}"${n.ask?" checked":""}> پیام بعدی کاربر برای من (صاحب ربات) ارسال بشه</label>
+        <span class="lbl">دکمه‌ها</span>
+        ${rows || '<p class="muted">دکمه‌ای نداره.</p>'}
+        ${n.buttons.length<6?`<button class="sm ghost" style="margin-top:8px" data-a="addrow" data-n="${id}">＋ ردیف دکمه‌ی جدید</button>`:""}
+      </div>`;
+  }).join("");
+
+  const cmdsH = c.cmds.map(([k,v],i) => `
+    <div class="cmd"><span>/</span><input data-f="cmdname" data-i="${i}" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off">
+      ${sel(v, `data-f="cmdnode" data-i="${i}"`)}<button class="sm x" data-a="delcmd" data-i="${i}">✕</button></div>`).join("");
+
+  $("#app").innerHTML = `
+    <button class="back" id="back">← انصراف و بازگشت</button>
+    <div class="card"><h2>✏️ ویرایش دستی</h2><p class="muted">همه‌چی قابل تغییره: متن‌ها، دکمه‌ها، آیدی کانال، لینک‌ها. ویرایش دستی سهمیه‌ی روزانه مصرف نمی‌کنه.</p>
+      <span class="lbl">نام ربات</span><input class="fa" data-f="name" value="${esc(c.name)}" maxlength="50">
+      <span class="lbl">بخشی که با /start نشون داده می‌شه</span>${sel(c.start, 'data-f="start"')}
+      <span class="lbl">بخشی که برای پیام‌های نامفهوم نشون داده می‌شه</span>${sel(c.fallback, 'data-f="fallback"')}
+    </div>
+    <div class="card"><div class="hd"><h2>دستورها (مثل /help)</h2><button class="sm ghost" data-a="addcmd">＋ دستور</button></div>
+      ${cmdsH || '<p class="muted">دستور اضافه‌ای نداری.</p>'}</div>
+    ${nodesH}
+    ${ids.length<25?'<button class="ghost" data-a="addnode" style="margin-bottom:12px">＋ بخش جدید</button>':""}
+    <div class="bar"><button id="save">💾 ذخیره تغییرات</button><button class="ghost" id="cancel">انصراف</button></div>`;
+  $("#back").onclick = $("#cancel").onclick = cancelEdit;
+  $("#save").onclick = saveEdit;
+}
+
+function rerenderEditor(scrollToId){
+  const y = scrollY; renderEditor();
+  if(scrollToId){ document.getElementById("node-"+scrollToId)?.scrollIntoView({behavior:"smooth",block:"center"}); } else scrollTo(0,y);
+}
+function cancelEdit(){
+  const go = ok => { if(!ok) return; S.edit = null; S.dirty = false; renderBot(); };
+  if(!S.dirty) return go(true);
+  tg?.showConfirm ? tg.showConfirm("تغییرات ذخیره نشده از بین می‌رن. ادامه می‌دی؟", go) : go(confirm("تغییرات ذخیره نشده از بین می‌رن. ادامه می‌دی؟"));
+}
+function saveEdit(){
+  busy($("#save"), async () => {
+    const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: buildCfg()});
+    S.cur = d.bot; S.edit = null; S.dirty = false; render(); toast("تغییرات ذخیره شد ✅");
+    tg?.HapticFeedback?.notificationOccurred("success");
+  });
+}
+const newBtn = c => ({text:"دکمه‌ی جدید", kind:"goto", goto:c.start, val:""});
+
+document.addEventListener("input", e => {
+  if(!S.edit) return;
+  const t = e.target, f = t.dataset.f; if(!f) return;
+  const c = S.edit, n = c.nodes[t.dataset.n], bt = n && t.dataset.r !== undefined ? n.buttons[+t.dataset.r]?.[+t.dataset.b] : null;
+  if(f==="name") c.name = t.value;
+  else if(f==="ntext") n.text = t.value;
+  else if(f==="btext") bt.text = t.value;
+  else if(f==="bval") bt.val = t.value;
+  else if(f==="cmdname") c.cmds[+t.dataset.i][0] = t.value;
+  else return;
+  S.dirty = true;
+});
+document.addEventListener("change", e => {
+  if(!S.edit) return;
+  const t = e.target, f = t.dataset.f; if(!f) return;
+  const c = S.edit, n = c.nodes[t.dataset.n], bt = n && t.dataset.r !== undefined ? n.buttons[+t.dataset.r]?.[+t.dataset.b] : null;
+  S.dirty = true;
+  if(f==="start"||f==="fallback") c[f] = t.value;
+  else if(f==="cmdnode") c.cmds[+t.dataset.i][1] = t.value;
+  else if(f==="ask") n.ask = t.checked;
+  else if(f==="bgoto") bt.goto = t.value;
+  else if(f==="bkind"){
+    const k = t.value;
+    if(k==="goto") bt.goto = bt.goto || c.start;
+    else if(k==="channel"){ const m = CH_RE.exec(bt.val) || NAME_RE.exec(bt.val); bt.val = m ? "@"+m[1] : ""; }
+    else if(NAME_RE.test(bt.val)) bt.val = "https://t.me/" + bt.val.replace("@","");
+    bt.kind = k; rerenderEditor();
+  }
+});
+document.addEventListener("click", e => {
+  if(!S.edit) return;
+  const el = e.target.closest("[data-a]"); if(!el) return;
+  const c = S.edit, a = el.dataset.a, id = el.dataset.n, r = +el.dataset.r, i = +el.dataset.i, bi = +el.dataset.b;
+  S.dirty = true;
+  if(a==="addnode"){
+    if(Object.keys(c.nodes).length >= 25) return toast("حداکثر ۲۵ بخش");
+    let k = Object.keys(c.nodes).length + 1; while(c.nodes["page_"+k]) k++;
+    c.nodes["page_"+k] = {text:"متن این بخش رو بنویس", ask:false, buttons:[[{text:"🏠 منوی اصلی", kind:"goto", goto:c.start, val:""}]]};
+    return rerenderEditor("page_"+k);
+  }
+  if(a==="delnode"){
+    delete c.nodes[id];
+    for(const n of Object.values(c.nodes)) n.buttons = n.buttons.map(row => row.filter(b => !(b.kind==="goto" && b.goto===id))).filter(row => row.length);
+    c.cmds = c.cmds.filter(([,v]) => v !== id);
+    toast("بخش و دکمه‌های وصل به اون حذف شد");
+  }
+  else if(a==="addrow"){ if(c.nodes[id].buttons.length < 6) c.nodes[id].buttons.push([newBtn(c)]); }
+  else if(a==="addbtn"){ const row = c.nodes[id].buttons[r]; if(row.length < 3) row.push(newBtn(c)); }
+  else if(a==="delbtn"){ const bs = c.nodes[id].buttons; bs[r].splice(bi,1); if(!bs[r].length) bs.splice(r,1); }
+  else if(a==="addcmd"){ if(c.cmds.length < 10) c.cmds.push(["help", c.start]); else return toast("حداکثر ۱۰ دستور"); }
+  else if(a==="delcmd"){ c.cmds.splice(i,1); }
+  else return;
+  rerenderEditor();
+});
 
 async function busy(btn, fn){
   if(S.busy) return; S.busy = true;
@@ -157,12 +398,17 @@ async function busy(btn, fn){
 }
 
 function generate(){
-  const btn = $("#gen"), p = $("#prompt").value.trim();
+  const btn = $("#gen"), ta = $("#prompt"), p = ta.value.trim();
   if(p.length < 5) return toast("توضیح بیشتری بنویس");
   busy(btn, async () => {
-    const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
-    S.cur = d.bot; S.quota = d.quota; render(); toast(S.cur.active ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅");
-    tg?.HapticFeedback?.notificationOccurred("success");
+    ta.readOnly = true; startLive();
+    try{
+      const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
+      const wasActive = S.cur?.active;
+      S.cur = d.bot; S.quota = d.quota; S.fresh = true; stopLive(); render();
+      toast(wasActive ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅");
+      tg?.HapticFeedback?.notificationOccurred("success");
+    } finally { stopLive(); ta.readOnly = false; }
   });
 }
 function undo(){ busy($("#undo"), async () => { const d = await api(`/api/bots/${S.cur.id}/undo`,"POST"); S.cur = d.bot; render(); toast("برگشت داده شد"); }); }

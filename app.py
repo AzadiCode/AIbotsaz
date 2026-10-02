@@ -31,6 +31,7 @@ MAX_BOTS     = int(os.environ.get("MAX_BOTS", "3"))        # سقف ربات ه�
 DEBUG        = os.environ.get("DEBUG", "") == "1"   # علت دقیق خطا رو توی مینی‌اپ نشون می‌ده
 MAX_PROMPT   = 1200
 MAX_VERSIONS = 5
+MAX_NODES    = 25
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("aibot")
@@ -108,6 +109,13 @@ def public(b):
     }
 
 
+def sync_commands(bot, cfg):
+    """منوی دستورهای ربات فرزند رو با کانفیگ هم‌گام می‌کنه (فقط اگه فعاله)"""
+    if bot.get("active") and bot.get("token_enc"):
+        tg(dec(bot["token_enc"]), "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
+            {"command": c, "description": c} for c in cfg["commands"]])
+
+
 # ───────────────────────── سهمیه ─────────────────────────
 def quota_key(uid):
     return f"{uid}:{now():%Y-%m-%d}"
@@ -135,18 +143,20 @@ def quota_left(uid):
 # ───────────────────────── هوش مصنوعی ─────────────────────────
 SYSTEM_PROMPT = """You design Telegram bots as a JSON config. You think like a senior product designer, not a form-filler.
 
+LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural Persian (فارسی) and NEVER English, even though this prompt, the JSON keys and the node_ids are English.
+
 Output ONLY one valid JSON object, no markdown fences, no comments. Top-level shape:
 {
  "thinking": "...",
  "config": { ...bot config as described below... }
 }
 
-"thinking" (string, 2-5 short sentences, written in the SAME language as the user's request, natural first-person tone — like a sharp colleague briefly narrating their plan, not a formal report):
+"thinking" (string, 2-5 short sentences, in the OUTPUT LANGUAGE, natural first-person tone, like a sharp colleague briefly narrating their plan, not a formal report):
 - Say what you understood the user wants.
 - Name the key sections/flows you decided the bot needs and briefly why.
-- If you made a judgment call or filled a gap the user didn't specify, say so.
-- If this is an update to an existing bot, mention what you're changing and why, not the whole bot again.
-- No headers, no bullet points, no markdown — just natural flowing sentences.
+- If you made a judgment call, filled a gap, or used a placeholder (price, phone, channel id, link), say so and tell them they can edit it with the manual edit button.
+- If this is an update to an existing bot, mention only what you're changing and why, not the whole bot again.
+- No headers, no bullet points, no markdown, just natural flowing sentences.
 
 "config" schema:
 {
@@ -164,78 +174,129 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 }
 
 Design rules:
-- Think before you structure: identify the bot's real purpose, the natural user journeys through it, and the minimum set of nodes that cover them well — don't pad with filler nodes, don't skip an obviously-needed one (e.g. a shop bot without an "order" path is incomplete).
+- Think before you structure: identify the bot's real purpose, the natural user journeys, and the minimum set of nodes that cover them well. Don't pad with filler, but don't skip an obviously needed part (a shop bot needs a way to order, a business bot needs contact/support, a content bot usually needs a channel link).
 - node_id: lowercase english letters, digits, underscore. Max 25 nodes, max 3 buttons per row, max 6 rows per node.
 - A button has either "goto" (an existing node_id) or "url" (https only).
-- If "ask" is true, the node's text asks the user something and their next message is delivered to the bot owner (use for contact, orders, feedback, support).
-- Every "goto", "start", "fallback" and command target MUST exist in nodes. Add a back/home button on non-start nodes.
-- Write all user-facing text in the same language as the user's request (default Persian). Use emojis moderately.
-- When an existing config is given, apply the user's change to it precisely and return the FULL updated config, keeping everything else intact.
+- Channel/group join button: {"text": "📢 عضویت در کانال", "url": "https://t.me/<username>"} (username without @). Use the username the user gave. If they gave none, use https://t.me/your_channel and say in "thinking" that the real channel id must be set via manual edit.
+- If "ask" is true, the node's text asks the user something and their next message is delivered to the bot owner (use for contact, orders, feedback, support). Give ask nodes a cancel/home button too.
+- Every "goto", "start", "fallback" and command target MUST exist in nodes. Every node must be reachable from start; no dead ends: every non-start node has a back/home button.
+- Button labels short (max ~22 chars). Put at most 2 buttons in a row when labels are long.
+- Never invent real-world facts (prices, phone numbers, addresses, links). Use obvious placeholders such as [قیمت] or [شماره تماس] and mention it in "thinking".
+- Write all user-facing text in the OUTPUT LANGUAGE. Use emojis moderately.
+- When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text and button exactly as it was (the user may have edited them by hand).
 - Plain text only, no Markdown/HTML formatting characters in node texts."""
 
 ID_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 CMD_RE = re.compile(r"^[a-z0-9_]{1,30}$")
+TG_NAME_RE = re.compile(r"^@?[A-Za-z][A-Za-z0-9_]{4,31}$")
 
 
-def sanitize(cfg):
+def norm_url(v):
+    """@channel / t.me/x / https://... → https URL معتبر (یا None)"""
+    v = str(v or "").strip()
+    if TG_NAME_RE.match(v):
+        return "https://t.me/" + v.lstrip("@")
+    if re.match(r"^(t\.me|telegram\.me)/", v, re.I):
+        v = "https://" + v
+    if v.startswith("https://") and len(v) > 12 and not re.search(r"\s", v):
+        return v[:500]
+    return None
+
+
+def sanitize(cfg, strict=False):
+    """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه."""
     if not isinstance(cfg, dict) or not isinstance(cfg.get("nodes"), dict):
         raise ValueError("ساختار خروجی معتبر نیست")
     nodes_in = cfg["nodes"]
-    if not (1 <= len(nodes_in) <= 25):
-        raise ValueError("تعداد بخش‌ها نامعتبر است")
-    nodes = {}
+    if not (1 <= len(nodes_in) <= MAX_NODES):
+        raise ValueError(f"تعداد بخش‌ها باید بین ۱ تا {MAX_NODES} باشه")
+
+    def bad(msg):
+        if strict:
+            raise ValueError(msg)
+
+    valid = {}
     for nid, n in nodes_in.items():
-        if not ID_RE.match(str(nid)) or not isinstance(n, dict):
-            raise ValueError("شناسه‌ی بخش نامعتبر است")
+        nid = str(nid)
+        if not ID_RE.match(nid) or not isinstance(n, dict):
+            bad("شناسه‌ی یکی از بخش‌ها نامعتبره"); continue
         text = str(n.get("text", "")).strip()[:3500]
         if not text:
-            raise ValueError(f"بخش {nid} متن ندارد")
+            bad(f"بخش «{nid}» متن نداره"); continue
+        valid[nid] = (n, text)
+    if not valid:
+        raise ValueError("هیچ بخش معتبری وجود نداره")
+
+    nodes = {}
+    for nid, (n, text) in valid.items():
         rows = []
         for row in (n.get("buttons") or [])[:6]:
             r = []
             for b in (row if isinstance(row, list) else [row])[:3]:
-                if not isinstance(b, dict) or not str(b.get("text", "")).strip():
+                if not isinstance(b, dict):
                     continue
-                btn = {"text": str(b["text"]).strip()[:40]}
-                if b.get("goto"):
-                    btn["goto"] = str(b["goto"])
-                elif str(b.get("url", "")).startswith("https://"):
-                    btn["url"] = str(b["url"])[:500]
+                label = str(b.get("text", "")).strip()[:40]
+                if not label:
+                    bad(f"بخش «{nid}» یه دکمه‌ی بدون متن داره"); continue
+                g = str(b.get("goto") or "")
+                if g:
+                    if g in valid:
+                        r.append({"text": label, "goto": g})
+                    else:
+                        bad(f"دکمه‌ی «{label}» به بخش ناموجود وصله")
                 else:
-                    continue
-                r.append(btn)
+                    u = norm_url(b.get("url"))
+                    if u:
+                        r.append({"text": label, "url": u})
+                    else:
+                        bad(f"لینک/آیدی دکمه‌ی «{label}» معتبر نیست (باید https:// یا @آیدی باشه)")
             if r:
                 rows.append(r)
         nodes[nid] = {"text": text, "buttons": rows, "ask": bool(n.get("ask"))}
 
-    def ref(x):
-        x = str(x or "")
-        if x not in nodes:
-            raise ValueError(f"ارجاع به بخش ناموجود: {x}")
-        return x
-
-    for n in nodes.values():
-        for row in n["buttons"]:
-            for b in row:
-                if "goto" in b:
-                    ref(b["goto"])
-    start = ref(cfg.get("start"))
+    start = str(cfg.get("start") or "")
+    if start not in nodes:
+        bad("بخش شروع معتبر نیست")
+        start = next(iter(nodes))
     fallback = str(cfg.get("fallback") or start)
-    fallback = fallback if fallback in nodes else start
+    if fallback not in nodes:
+        bad("بخش پیام‌های ناشناس معتبر نیست")
+        fallback = start
     cmds = {}
     for k, v in (cfg.get("commands") or {}).items():
         k = str(k).lstrip("/").lower()
-        if CMD_RE.match(k) and str(v) in nodes and k != "start":
-            cmds[k] = str(v)
-    return {"name": str(cfg.get("name") or "ربات من")[:50], "start": start,
+        if not CMD_RE.match(k) or k == "start" or str(v) not in nodes:
+            bad(f"دستور «/{k}» معتبر نیست (فقط حروف انگلیسی کوچک/عدد/_ و غیر از start)")
+            continue
+        cmds[k] = str(v)
+    return {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
             "fallback": fallback, "commands": cmds, "nodes": nodes}
 
 
-def _call_llm(user):
+# ───── تشخیص زبان (برای اینکه «thinking» و متن‌ها هیچ‌وقت انگلیسی نشن) ─────
+def _count(s):
+    return len(re.findall(r"[\u0600-\u06FF]", s)), len(re.findall(r"[A-Za-z]", s))
+
+
+def detect_lang(s):
+    fa, la = _count(s)
+    return "fa" if fa >= la else "other"
+
+
+class ThinkLang(ValueError):
+    def __init__(self, cfg):
+        super().__init__("thinking language mismatch")
+        self.cfg = cfg
+
+
+FALLBACK_THINKING = "ربات رو طبق توضیحت طراحی کردم. اگه متن، دکمه یا آیدی کانال چیزی نیاز به تغییر داشت، از «ویرایش دستی» درستش کن."
+
+
+def _call_llm(user, lang, final):
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
-        json={"model": AI_MODEL, "max_tokens": 3500, "temperature": 0.4,
+        json={"model": AI_MODEL, "max_tokens": 4000, "temperature": 0.4,
               "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                            {"role": "user", "content": user}]},
         timeout=90)
@@ -252,19 +313,50 @@ def _call_llm(user):
     raw = json.loads(m.group(0))
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
         raise ValueError("پاسخ AI فاقد بخش config بود")
+    cfg = sanitize(raw["config"])
     thinking = str(raw.get("thinking") or "").strip()[:900]
-    return thinking, sanitize(raw["config"])
+    if lang == "fa":
+        fa, la = _count(thinking)
+        if not thinking or la > fa:            # توضیح انگلیسی/خالی شده
+            if not final:
+                raise ThinkLang(cfg)
+            thinking = FALLBACK_THINKING
+    return thinking, cfg
+
+
+def build_user(prompt, current, lang, hard):
+    if lang == "fa":
+        note = "OUTPUT LANGUAGE: Persian (فارسی). The \"thinking\" field and all node texts/button labels MUST be written in Persian. Do not write them in English."
+    else:
+        note = "OUTPUT LANGUAGE: the same language as the user's request below (\"thinking\" included)."
+    if hard:
+        note += " (Your previous answer used the wrong language for \"thinking\". Fix that now.)"
+    parts = [note]
+    if current:
+        parts.append("Current config:\n" + json.dumps(current, ensure_ascii=False))
+        parts.append("Change request:\n" + prompt)
+    else:
+        parts.append("Bot request:\n" + prompt)
+    parts.append("Reminder: reply with the JSON object only; " +
+                 ("\"thinking\" in Persian." if lang == "fa" else "\"thinking\" in the request's language."))
+    return "\n\n".join(parts)
 
 
 def ask_llm(prompt, current=None):
-    user = prompt
-    if current:
-        user = f"Current config:\n{json.dumps(current, ensure_ascii=False)}\n\nChange request:\n{prompt}"
-    try:
-        return _call_llm(user)
-    except (ValueError, KeyError, TypeError):   # خروجی خراب → یک بار دیگه
-        log.warning("bad AI output, retrying once", exc_info=True)
-        return _call_llm(user)
+    lang = detect_lang(prompt)
+    saved, last = None, None
+    for attempt in (0, 1):
+        try:
+            return _call_llm(build_user(prompt, current, lang, hard=attempt > 0), lang, final=attempt == 1)
+        except ThinkLang as e:
+            saved, last = e.cfg, e
+            log.warning("thinking in wrong language, retrying")
+        except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
+            last = e
+            log.warning("bad AI output, retrying once", exc_info=True)
+    if saved:                       # کانفیگ سالم بود، فقط توضیح زبانش اشتباه بود
+        return FALLBACK_THINKING, saved
+    raise last
 
 
 # ───────────────────────── API مینی‌اپ ─────────────────────────
@@ -317,6 +409,7 @@ def api_generate():
             "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
             "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}})
         bot = db.bots.find_one({"_id": bot["_id"]})
+        sync_commands(bot, cfg)
     else:
         doc = {"owner": uid, "name": cfg["name"], "config": cfg, "thinking": thinking, "versions": [],
                "active": False, "secret": secrets.token_hex(16), "created": now(), "updated": now()}
@@ -337,7 +430,31 @@ def api_undo(bot_id):
     db.bots.update_one({"_id": bot["_id"]}, {
         "$set": {"config": prev, "name": prev["name"], "thinking": "", "updated": now()},
         "$pop": {"versions": 1}})
-    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
+    bot = db.bots.find_one({"_id": bot["_id"]})
+    sync_commands(bot, bot["config"])
+    return jsonify(bot=public(bot))
+
+
+@app.put("/api/bots/<bot_id>/config")
+def api_save_config(bot_id):
+    """ذخیره‌ی ویرایش دستی (بدون مصرف سهمیه)"""
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    try:
+        cfg = sanitize((request.get_json(silent=True) or {}).get("config"), strict=True)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    if cfg != bot["config"]:
+        db.bots.update_one({"_id": bot["_id"]}, {
+            "$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now()},
+            "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}})
+        bot = db.bots.find_one({"_id": bot["_id"]})
+        sync_commands(bot, cfg)
+    return jsonify(bot=public(bot))
 
 
 @app.post("/api/bots/<bot_id>/activate")
