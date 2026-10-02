@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>رباتساز هوشمند</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:var(--tg-theme-bg-color,#fff);
+  --bg2:var(--tg-theme-secondary-bg-color,#f1f3f5);
+  --tx:var(--tg-theme-text-color,#111);
+  --hint:var(--tg-theme-hint-color,#7a828a);
+  --ac:var(--tg-theme-button-color,#2f7cf6);
+  --act:var(--tg-theme-button-text-color,#fff);
+  --red:#e5484d; --green:#2fa36b;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:Tahoma,"Vazirmatn",system-ui,sans-serif;background:var(--bg2);color:var(--tx);
+  font-size:15px;line-height:1.7;padding:0 14px calc(24px + env(safe-area-inset-bottom))}
+.top{display:flex;align-items:center;justify-content:space-between;padding:16px 2px 12px}
+.top h1{font-size:18px;font-weight:700}
+.chip{font-size:12px;background:var(--bg);color:var(--hint);padding:3px 11px;border-radius:99px}
+.card{background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{font-size:14px;margin-bottom:8px}
+.muted{color:var(--hint);font-size:13px}
+button{font:inherit;border:0;border-radius:11px;padding:11px 16px;cursor:pointer;background:var(--ac);color:var(--act);width:100%}
+button.ghost{background:var(--bg2);color:var(--tx)}
+button.danger{background:transparent;color:var(--red)}
+button:disabled{opacity:.5}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+textarea,input{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 12px;outline:none;resize:none}
+textarea{min-height:110px}
+input{direction:ltr;text-align:left}
+.bot{display:flex;align-items:center;gap:10px;cursor:pointer}
+.bot b{display:block}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--hint);flex:none}
+.dot.on{background:var(--green)}
+.back{background:none;color:var(--ac);width:auto;padding:8px 2px;margin-bottom:2px}
+.node{border-top:1px solid var(--bg2);padding:10px 0}
+.node:first-of-type{border-top:0}
+.node .id{font-size:12px;color:var(--hint);direction:ltr;text-align:right}
+.node .tx{white-space:pre-wrap;margin:2px 0 6px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font-size:12.5px;background:var(--bg2);border-radius:8px;padding:3px 10px}
+.empty{text-align:center;padding:26px 8px}
+.empty p{margin-bottom:14px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 18px;
+  border-radius:11px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center}
+#toast.show{opacity:1}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-left:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
+</style>
+</head>
+<body>
+<div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota"></span></div>
+<div id="app"></div>
+<div id="toast"></div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+tg?.ready(); tg?.expand();
+const INIT = tg?.initData || "";
+let S = { bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2800); }
+
+async function api(path, method="GET", body){
+  const r = await fetch(path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body?JSON.stringify(body):undefined });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error || "خطا در ارتباط با سرور");
+  return d;
+}
+
+async function load(){
+  try{
+    const d = await api("/api/me");
+    S.bots = d.bots; S.quota = d.quota; S.limit = d.limit; S.maxBots = d.max_bots;
+  }catch(e){ $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`; return; }
+  render();
+}
+
+function render(){
+  $("#quota").textContent = `سهمیه‌ی امروز: ${S.quota} از ${S.limit}`;
+  S.view === "list" ? renderList() : renderBot();
+}
+
+function renderList(){
+  const list = S.bots.map(b => `
+    <div class="card bot" data-id="${b.id}">
+      <span class="dot ${b.active?"on":""}"></span>
+      <div><b>${esc(b.name)}</b><span class="muted">${b.active ? "@"+esc(b.username) : "هنوز فعال نشده"}</span></div>
+    </div>`).join("");
+  $("#app").innerHTML = (list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">یه جمله بنویس، ربات آماده می‌شه.</span></p></div>`)
+    + (S.bots.length < S.maxBots ? `<button id="new">＋ ساخت ربات جدید</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
+  document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.view="bot"; render(); });
+  $("#new")?.addEventListener("click", () => { S.cur = null; S.view = "bot"; render(); });
+}
+
+function nodesHtml(cfg){
+  return Object.entries(cfg.nodes).map(([id,n]) => `
+    <div class="node">
+      <div class="id">${esc(id)}${id===cfg.start?" · start":""}${n.ask?" · ask":""}</div>
+      <div class="tx">${esc(n.text)}</div>
+      <div class="btns">${n.buttons.flat().map(b=>`<span class="btn">${esc(b.text)} ${b.url?"🔗":"←"+esc(b.goto)}</span>`).join("")}</div>
+    </div>`).join("");
+}
+
+function renderBot(){
+  const b = S.cur;
+  const prompt = `
+    <div class="card">
+      <h2>${b ? "چی رو تغییر بدم؟" : "چه رباتی می‌خوای؟"}</h2>
+      <textarea id="prompt" maxlength="1200" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
+      <div style="height:10px"></div>
+      <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
+    </div>`;
+  let body = "";
+  if(b){
+    body += `<div class="card"><h2>پیش‌نمایش ربات</h2>${nodesHtml(b.config)}</div>`;
+    if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">↩ برگشت به نسخه‌ی قبلی</button>`;
+    body += b.active
+      ? `<div class="card"><h2>🟢 فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
+      : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act">فعال کن</button></div>`;
+    body += `<button class="danger" id="del">حذف ربات</button>`;
+  }
+  $("#app").innerHTML = `<button class="back" id="back">← بازگشت</button>${prompt}${body}`;
+  $("#back").onclick = () => { S.view="list"; S.cur=null; load(); };
+  $("#gen").onclick = generate;
+  $("#undo")?.addEventListener("click", undo);
+  $("#act")?.addEventListener("click", activate);
+  $("#off")?.addEventListener("click", () => act("deactivate", "ربات غیرفعال شد"));
+  $("#del")?.addEventListener("click", remove);
+}
+
+async function busy(btn, fn){
+  if(S.busy) return; S.busy = true;
+  const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = old + '<span class="spin"></span>';
+  try{ await fn(); }catch(e){ toast(e.message); }
+  S.busy = false; if(btn.isConnected){ btn.disabled = false; btn.innerHTML = old; }
+}
+
+function generate(){
+  const btn = $("#gen"), p = $("#prompt").value.trim();
+  if(p.length < 5) return toast("توضیح بیشتری بنویس");
+  busy(btn, async () => {
+    const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
+    S.cur = d.bot; S.quota = d.quota; render(); toast(S.cur.active ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅");
+    tg?.HapticFeedback?.notificationOccurred("success");
+  });
+}
+function undo(){ busy($("#undo"), async () => { const d = await api(`/api/bots/${S.cur.id}/undo`,"POST"); S.cur = d.bot; render(); toast("برگشت داده شد"); }); }
+function activate(){
+  const t = $("#token").value.trim(); if(!t) return toast("توکن رو وارد کن");
+  busy($("#act"), async () => { const d = await api(`/api/bots/${S.cur.id}/activate`,"POST",{token:t}); S.cur = d.bot; render(); toast("ربات فعال شد 🎉"); });
+}
+function act(action, msg){ busy($("#off"), async () => { const d = await api(`/api/bots/${S.cur.id}/${action}`,"POST"); S.cur = d.bot; render(); toast(msg); }); }
+function remove(){
+  const go = async ok => { if(!ok) return; await api(`/api/bots/${S.cur.id}`,"DELETE"); S.view="list"; S.cur=null; load(); toast("حذف شد"); };
+  tg?.showConfirm ? tg.showConfirm("این ربات برای همیشه حذف بشه؟", go) : go(confirm("حذف بشه؟"));
+}
+
+load();
+</script>
+</body>
+</html>
