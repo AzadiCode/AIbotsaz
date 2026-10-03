@@ -46,6 +46,9 @@ input{direction:ltr;text-align:left}
 .btn{font-size:12.5px;background:var(--bg2);border-radius:8px;padding:3px 10px}
 .empty{text-align:center;padding:26px 8px}
 .empty p{margin-bottom:14px}
+.loading-spinner{width:32px;height:32px;border:3px solid rgba(47,124,246,.15);border-top-color:var(--ac);border-radius:50%;margin:0 auto 12px;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.loading-spinner{animation-duration:2s}}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 18px;
   border-radius:11px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center}
 #toast.show{opacity:1}
@@ -149,7 +152,7 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 </head>
 <body>
 <div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota"></span></div>
-<div id="app"></div>
+<div id="app"><div class="card empty"><div class="loading-spinner"></div><p>در حال بارگذاری…</p></div></div>
 <div id="sheet" class="sheet"></div>
 <div id="toast"></div>
 
@@ -247,7 +250,11 @@ async function load(){
   try{
     const d = await api("/api/me");
     S.bots = d.bots; S.quota = d.quota; S.limit = d.limit; S.maxBots = d.max_bots;
-  }catch(e){ $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`; return; }
+  }catch(e){
+    console.error("Load failed:", e);
+    $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`;
+    return;
+  }
   render();
 }
 
