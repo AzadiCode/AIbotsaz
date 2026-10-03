@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>رباتساز هوشمند</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300..900&family=Orbitron:wght@500..900&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
@@ -16,32 +13,24 @@
   --hint:var(--tg-theme-hint-color,#7a828a);
   --ac:var(--tg-theme-button-color,#2f7cf6);
   --act:var(--tg-theme-button-text-color,#fff);
-  --acc2:#8b5cf6;
-  --red:#e5484d; --green:#2fa36b; --amber:#e8a33d;
+  --red:#e5484d; --green:#2fa36b;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:"Vazirmatn",Tahoma,system-ui,sans-serif;background:var(--bg2);color:var(--tx);
+body{font-family:Tahoma,"Vazirmatn",system-ui,sans-serif;background:var(--bg2);color:var(--tx);
   font-size:15px;line-height:1.7;padding:0 14px calc(var(--dockh,84px) + 18px)}
-.num{font-family:"Orbitron",ui-monospace,monospace;font-weight:700;font-style:normal;
-  letter-spacing:.03em;direction:ltr;display:inline-block;font-variant-numeric:tabular-nums}
 .top{display:flex;align-items:center;justify-content:space-between;padding:16px 2px 12px}
-.top .brand{display:flex;align-items:center;gap:9px}
-.top .brand svg{width:26px;height:26px;flex:none}
-.top h1{font-size:17px;font-weight:800;letter-spacing:-.2px}
-.chip{font-size:12.5px;width:auto;background:linear-gradient(135deg,rgba(47,124,246,.12),rgba(139,92,246,.12));
-  color:var(--tx);padding:5px 13px;border-radius:99px;border:1px solid rgba(47,124,246,.2);cursor:pointer;
-  display:flex;align-items:center;gap:6px}
-.chip .num{color:var(--ac);font-size:13.5px}
-.card{background:var(--bg);border-radius:16px;padding:14px;margin-bottom:12px}
-.card h2{font-size:14.5px;margin-bottom:8px}
+.top h1{font-size:18px;font-weight:700}
+.chip{font-size:12px;background:var(--bg);color:var(--hint);padding:3px 11px;border-radius:99px}
+.card{background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{font-size:14px;margin-bottom:8px}
 .muted{color:var(--hint);font-size:13px}
-button{font:inherit;border:0;border-radius:12px;padding:11px 16px;cursor:pointer;background:var(--ac);color:var(--act);width:100%}
+button{font:inherit;border:0;border-radius:11px;padding:11px 16px;cursor:pointer;background:var(--ac);color:var(--act);width:100%}
 button.ghost{background:var(--bg2);color:var(--tx)}
 button.danger{background:transparent;color:var(--red)}
 button:disabled{opacity:.5}
 .row{display:flex;gap:8px}
 .row>*{flex:1}
-textarea,input,select{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 12px;outline:none;resize:none}
+textarea,input{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 12px;outline:none;resize:none}
 textarea{min-height:110px}
 input{direction:ltr;text-align:left}
 .bot{display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -58,27 +47,27 @@ input{direction:ltr;text-align:left}
 .empty{text-align:center;padding:26px 8px}
 .empty p{margin-bottom:14px}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 18px;
-  border-radius:11px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center;z-index:99}
+  border-radius:11px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center}
 #toast.show{opacity:1}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;
   border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-left:6px}
 @keyframes s{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
-.think{display:flex;gap:8px;background:linear-gradient(135deg,rgba(47,124,246,.09),rgba(139,92,246,.05));
-  border:1px solid rgba(47,124,246,.16);border-radius:12px;padding:8px 11px;margin:-2px 0 12px;
-  font-size:12.5px;line-height:1.7;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
+.think{display:flex;gap:8px;background:linear-gradient(135deg,rgba(47,124,246,.09),rgba(47,124,246,.03));
+  border:1px solid rgba(47,124,246,.16);border-radius:11px;padding:8px 11px;margin:-2px 0 12px;
+  font-size:12px;line-height:1.6;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
   transition:opacity .35s ease,max-height .35s ease,margin .35s ease,padding .35s ease}
 .think.show{opacity:1;max-height:700px;margin:0 0 12px}
-.think .ic{flex:none;width:16px;height:16px;color:var(--ac);margin-top:3px}
-.think .tt{color:var(--tx)}
+.think .ic{flex:none;font-size:14px;line-height:1.5}
+.think .tt{color:var(--hint)}
 
 /* ── انیمیشن «در حال فکر کردن» ── */
-.live{display:flex;align-items:center;gap:12px;background:var(--bg);border-radius:16px;padding:14px;margin-bottom:12px;
+.live{display:flex;align-items:center;gap:12px;background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px;
   border:1px solid rgba(47,124,246,.18);position:relative;overflow:hidden;animation:pop .3s ease}
 .live::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(47,124,246,.09) 50%,transparent 70%);
   transform:translateX(-100%);animation:sh 2s ease-in-out infinite}
 .orb{width:36px;height:36px;border-radius:50%;flex:none;position:relative;
-  background:conic-gradient(from 0deg,var(--ac),var(--acc2),#34c3ff,var(--ac));animation:s 1.3s linear infinite}
+  background:conic-gradient(from 0deg,var(--ac),#9b6bff,#34c3ff,var(--ac));animation:s 1.3s linear infinite}
 .orb::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--bg)}
 .live .lt b{display:block;font-size:14px}
 .live .lt b i{display:inline-block;font-style:normal;animation:bn 1.2s infinite}
@@ -98,13 +87,13 @@ button.x{background:transparent;color:var(--red);padding:5px 9px}
 .lbl{display:block;font-size:12.5px;color:var(--hint);margin:12px 0 4px}
 input.fa,textarea.fa{direction:rtl;text-align:right}
 input[type=checkbox]{width:auto;flex:none;margin:0}
-select{min-width:0}
+select{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 10px;outline:none;min-width:0}
 .chk{display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px}
 .tag{font-size:11px;background:var(--bg2);border-radius:6px;padding:1px 8px;color:var(--hint)}
 .bubble{position:relative;background:var(--bg2);border-radius:14px;padding:10px 12px 10px 34px;white-space:pre-wrap;cursor:pointer;
   border:1px solid transparent;transition:border-color .15s}
 .bubble:active{border-color:var(--ac)}
-.bubble .pen{position:absolute;left:10px;top:9px;width:14px;height:14px;opacity:.55}
+.bubble .pen{position:absolute;left:10px;top:9px;font-size:13px;opacity:.55}
 .krow{display:flex;gap:6px;margin-top:6px}
 button.kb{flex:1;min-width:0;background:var(--bg2);color:var(--tx);padding:8px 6px;font-size:13.5px;border-radius:10px;
   border:1px solid rgba(127,127,127,.2);line-height:1.5}
@@ -119,11 +108,12 @@ button.kb.add.wide{display:block;width:100%;margin-top:6px;font-size:13px}
 button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(229,72,77,.35)}
 .sheet{position:fixed;inset:0;z-index:50;display:none}
 .sheet.show{display:block}
-.sb{position:fixed;inset:0;background:rgba(0,0,0,.45);animation:fi .2s}
-.sp{position:fixed;bottom:0;left:0;right:0;max-height:90vh;overflow-y:auto;background:var(--bg);border-radius:20px 20px 0 0;
+.sb{position:absolute;inset:0;background:rgba(0,0,0,.45);animation:fi .2s}
+.sp{position:absolute;bottom:0;left:0;right:0;max-height:90vh;overflow-y:auto;background:var(--bg);border-radius:20px 20px 0 0;
   padding:16px 16px calc(18px + env(safe-area-inset-bottom));animation:up .24s ease;overscroll-behavior:contain}
 @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 @keyframes fi{from{opacity:0}to{opacity:1}}
+#toast{z-index:99}
 
 /* ═════════ کارت‌های کشویی ═════════ */
 .card.nd{padding:0;overflow:hidden}
@@ -155,7 +145,7 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 
 /* انتخاب نوع دکمه‌ها */
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px;background:transparent;color:var(--hint);
+.seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 6px 6px;background:transparent;color:var(--hint);
   border:1px solid rgba(127,127,127,.26);border-radius:10px;line-height:1.4;transition:border-color .18s,background .18s,color .18s}
 .seg button svg{width:38px;height:28px;margin-bottom:1px}
 .seg button b{color:var(--tx);font-weight:600;font-size:12px}
@@ -163,26 +153,26 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 .seg button.on{border-color:var(--ac);color:var(--ac);background:rgba(47,124,246,.06)}
 
 /* ═════════ انیمیشن ساخت ═════════ */
-.build{position:relative;background:var(--bg);border-radius:16px;padding:11px 13px 12px;margin-bottom:10px;overflow:hidden;
+.build{position:relative;background:var(--bg);border-radius:14px;padding:11px 13px 12px;margin-bottom:10px;overflow:hidden;
   border:1px solid rgba(47,124,246,.2);animation:pop .35s ease}
 .build .bh{display:flex;align-items:center;gap:10px}
 .build .bt{flex:1;min-width:0}
 .build .bt b{display:block;font-size:13px;line-height:1.4}
 .build .ph{display:block;font-size:11.5px;color:var(--hint);transition:opacity .3s,transform .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .build .ph.out{opacity:0;transform:translateY(3px)}
-.build .clk{font-size:11px;color:var(--hint);font-family:"Orbitron",monospace;font-weight:600;direction:ltr;
-  background:var(--bg2);border-radius:99px;padding:2px 9px}
+.build .clk{font-size:11px;color:var(--hint);direction:ltr;font-variant-numeric:tabular-nums;letter-spacing:.04em;
+  background:var(--bg2);border-radius:99px;padding:1px 8px}
 .core{width:34px;height:34px;flex:none;overflow:visible}
 .core .glow{fill:var(--ac);opacity:.16;animation:glow 2.4s ease-in-out infinite;transform-origin:50% 50%}
 .core .r1{fill:none;stroke:var(--ac);stroke-opacity:.4;stroke-width:1;stroke-dasharray:1.5 4.5;transform-origin:50% 50%;animation:s 16s linear infinite}
 .core .arc{fill:none;stroke:url(#gA);stroke-width:2.2;stroke-linecap:round;transform-origin:50% 50%;animation:s 2.6s cubic-bezier(.5,0,.5,1) infinite}
 .core .arc2{fill:none;stroke:#34c3ff;stroke-opacity:.7;stroke-width:1.4;stroke-linecap:round;transform-origin:50% 50%;animation:s 4.2s linear infinite reverse}
-.core .orb1{fill:var(--acc2);transform-origin:50% 50%;animation:s 5s linear infinite}
+.core .orb1{fill:#9b6bff;transform-origin:50% 50%;animation:s 5s linear infinite}
 .core .cpu{fill:url(#gA);transform-origin:50% 50%;animation:chip 3.6s ease-in-out infinite}
 .core .eye{fill:var(--bg)}
 @keyframes glow{50%{transform:scale(1.5);opacity:.05}}
 @keyframes chip{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(90deg) scale(.86)}}
-.bp{position:relative;display:flex;align-items:flex-start;gap:10px;margin:9px 0;padding:8px 10px;border-radius:10px;background:var(--bg2);overflow:hidden}
+.bp{position:relative;display:flex;align-items:flex-start;gap:10px;margin:9px 0 9px;padding:8px 10px;border-radius:10px;background:var(--bg2);overflow:hidden}
 .bp::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(127,127,127,.25) 1px,transparent 0);
   background-size:13px 13px;-webkit-mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%);mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%)}
 .bp .msg{position:relative;flex:0 0 52%;background:var(--bg);border-radius:9px 9px 9px 3px;padding:7px 8px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
@@ -208,7 +198,7 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 .st.cur i{border-color:var(--ac);animation:ping 1.6s ease-out infinite}
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(47,124,246,.45)}100%{box-shadow:0 0 0 8px rgba(47,124,246,0)}}
 .build .prog{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(127,127,127,.14);overflow:hidden}
-.build .prog::after{content:"";position:absolute;left:0;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,var(--ac),var(--acc2),transparent);
+.build .prog::after{content:"";position:absolute;left:0;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,var(--ac),#9b6bff,transparent);
   animation:slide 1.7s ease-in-out infinite}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(270%)}}
 @media (prefers-reduced-motion:reduce){
@@ -223,17 +213,17 @@ body.dock-closed{--dockh:calc(30px + env(safe-area-inset-bottom))}
   transition:transform .42s cubic-bezier(.3,.9,.25,1)}
 .dock.closed{transform:translateY(100%)}
 .dock.hide{transform:translateY(calc(100% + 40px))}
-.dock .tab{position:fixed;left:50%;bottom:100%;width:76px;height:24px;margin:0 0 0 -38px;padding:0;border-radius:15px 15px 0 0;
+.dock .tab{position:absolute;left:50%;bottom:100%;width:76px;height:24px;margin:0 0 0 -38px;padding:0;border-radius:15px 15px 0 0;
   background:var(--bg);color:var(--hint);display:grid;place-items:center;box-shadow:0 -5px 14px rgba(0,0,0,.08)}
 .dock .tab::before,.dock .tab::after{content:"";position:absolute;bottom:0;width:12px;height:12px}
-.dock .tab::before{right:100%;border-bottom-right-radius:12px;box-shadow:6px 0 0 6px var(--bg)}
-.dock .tab::after{left:100%;border-bottom-left-radius:12px;box-shadow:-6px 0 0 6px var(--bg)}
+.dock .tab::before{right:100%;border-bottom-right-radius:12px;box-shadow:6px 6px 0 6px var(--bg)}
+.dock .tab::after{left:100%;border-bottom-left-radius:12px;box-shadow:-6px 6px 0 6px var(--bg)}
 .dock .tab svg{width:20px;height:20px;transition:transform .4s cubic-bezier(.3,.9,.25,1)}
 .dock.closed .tab svg{transform:rotate(180deg)}
 .dock .tab i{position:absolute;top:5px;width:22px;height:3px;border-radius:2px;background:currentColor;opacity:.28}
-.dpanel{display:flex;justify-content:center;gap:4px;padding:10px 10px calc(10px + env(safe-area-inset-bottom));
+.dpanel{display:flex;justify-content:center;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
   background:var(--bg);box-shadow:0 -6px 22px rgba(0,0,0,.09)}
-.dock .dn{width:auto;flex:1;max-width:130px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 8px 6px;
+.dock .dn{width:auto;flex:1;max-width:150px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 10px 6px;
   background:transparent;color:var(--hint);font-size:11.5px;border-radius:14px;transition:color .2s,background .2s}
 .dock .dn svg{width:22px;height:22px}
 .dock .dn.on{color:var(--ac);background:rgba(47,124,246,.1)}
@@ -241,114 +231,42 @@ body.dock-closed{--dockh:calc(30px + env(safe-area-inset-bottom))}
 .dock button:focus-visible,.nd .nh:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 #toast{bottom:calc(var(--dockh) + 12px);transition:opacity .2s,bottom .42s}
 
-/* ═════════ حساب و کیف پول ═════════ */
-.pf{position:relative;overflow:hidden;text-align:center;padding:22px 16px 16px;animation:pop .3s ease}
+/* ═════════ پروفایل ═════════ */
+.pf{position:relative;overflow:hidden;text-align:center;padding:24px 16px 18px;animation:pop .3s ease}
 .pf::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(127,127,127,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(127,127,127,.12) 1px,transparent 1px);
   background-size:18px 18px;-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 10%,transparent 70%);mask-image:radial-gradient(ellipse at 50% 30%,#000 10%,transparent 70%)}
 .pf>*{position:relative}
-.av{position:relative;width:76px;height:76px;margin:0 auto 10px}
-.av .ring{position:absolute;inset:-6px;border-radius:50%;background:conic-gradient(from 0deg,var(--ac),var(--acc2),#34c3ff,var(--ac));
+.av{position:relative;width:84px;height:84px;margin:0 auto 12px}
+.av .ring{position:absolute;inset:-6px;border-radius:50%;background:conic-gradient(from 0deg,var(--ac),#9b6bff,#34c3ff,var(--ac));
   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));
   animation:s 14s linear infinite}
-.av .img{position:absolute;inset:0;border-radius:50%;background:var(--bg2);display:grid;place-items:center;font-size:30px;font-weight:700;color:var(--ac);overflow:hidden}
+.av .img{position:absolute;inset:0;border-radius:50%;background:var(--bg2);display:grid;place-items:center;font-size:32px;font-weight:700;color:var(--ac);overflow:hidden}
 .av .img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.pf h2{font-size:17px;margin:0}
+.pf h2{font-size:18px;margin:0}
 .pf .un{direction:ltr;display:inline-block;margin-top:2px}
-
-.wcard{position:relative;overflow:hidden;background:linear-gradient(135deg,#1d2b53 0%,#2f3f8f 55%,#6d3ff0 100%);
-  border-radius:18px;padding:18px 16px 16px;color:#fff;margin-bottom:12px;animation:pop .3s ease}
-.wcard::after{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.14) 1px,transparent 0);
-  background-size:16px 16px;-webkit-mask-image:radial-gradient(ellipse at 80% 10%,#000 0%,transparent 65%);mask-image:radial-gradient(ellipse at 80% 10%,#000 0%,transparent 65%)}
-.wcard>*{position:relative}
-.wcard .wl{font-size:12px;opacity:.75;letter-spacing:.04em}
-.wcard .bal{font-size:40px;font-weight:800;line-height:1.35;margin:2px 0 4px;text-shadow:0 2px 18px rgba(0,0,0,.35)}
-.wcard .bal small{font-size:15px;font-weight:500;opacity:.7;margin-right:6px}
-.wcard .wrow{display:flex;gap:8px;margin-top:12px}
-.wcard .wrow button{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);font-size:13.5px;padding:9px 10px}
-.wcard .wrow button.claim{background:#fff;color:#3a2a9c;font-weight:700;border:0}
-.wcard .wrow button:disabled{opacity:.45}
-.wcard .streak{display:flex;gap:5px;justify-content:center;margin-top:11px}
-.wcard .streak i{width:16px;height:5px;border-radius:3px;background:rgba(255,255,255,.22)}
-.wcard .streak i.on{background:#ffd66b;box-shadow:0 0 8px rgba(255,214,107,.55)}
-.wcard .sw{display:flex;justify-content:space-between;font-size:11.5px;opacity:.7;margin-top:7px}
-
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.stat{background:var(--bg);border-radius:16px;padding:12px 14px}
+.stat{background:var(--bg);border-radius:14px;padding:12px 14px}
 .stat .k{font-size:12px;color:var(--hint)}
-.stat .v{font-size:23px;font-weight:800;line-height:1.4}
-.stat .v small{font-size:12.5px;font-weight:400;color:var(--hint)}
+.stat .v{font-size:24px;font-weight:700;line-height:1.4;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;font-weight:400;color:var(--hint)}
 .pips{display:flex;gap:4px;margin-top:6px}
 .pips i{flex:1;height:5px;border-radius:3px;background:rgba(127,127,127,.22)}
-.pips i.on{background:linear-gradient(90deg,var(--ac),var(--acc2))}
+.pips i.on{background:linear-gradient(90deg,var(--ac),#9b6bff)}
 .quota{display:flex;align-items:center;gap:14px;grid-column:1/-1}
-.quota svg{width:60px;height:60px;flex:none;transform:rotate(-90deg)}
+.quota svg{width:64px;height:64px;flex:none;transform:rotate(-90deg)}
 .quota circle{fill:none;stroke-width:5;stroke-linecap:round}
 .quota .tr{stroke:rgba(127,127,127,.2)}
 .quota .fg{stroke:url(#gQ);transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)}
 .quota .qv{font-size:13.5px;line-height:1.7}
-.quota .qv b{font-size:19px}
+.quota .qv b{font-size:20px;font-variant-numeric:tabular-nums}
 .kv{padding:4px 14px}
 .kv div{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--bg2);font-size:13.5px}
 .kv div:first-child{border-top:0}
 .kv span{color:var(--hint)}
 .kv b{font-weight:500}
-.kv .cpy{cursor:pointer;direction:ltr;display:inline-flex;align-items:center;gap:6px}
+.kv .cpy{cursor:pointer;direction:ltr;display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
 .kv .cpy svg{width:14px;height:14px;color:var(--hint)}
-
-/* بسته‌های خرید */
-.pack{display:flex;align-items:center;gap:12px;background:var(--bg2);border-radius:13px;padding:11px 12px;margin-bottom:8px;
-  border:1px solid transparent;transition:border-color .2s}
-.pack.best{border-color:rgba(139,92,246,.5);background:linear-gradient(135deg,rgba(47,124,246,.07),rgba(139,92,246,.09))}
-.pack .pi{flex:1;min-width:0}
-.pack .pi b{display:block;font-size:15px}
-.pack .pi b .num{font-size:17px;color:var(--ac)}
-.pack .pi small{color:var(--hint);font-size:12px}
-.pack .badge{font-size:10px;background:var(--acc2);color:#fff;border-radius:6px;padding:1px 7px;margin-right:6px;vertical-align:2px}
-.pack button{width:auto;flex:none;padding:8px 15px;font-size:13px;background:linear-gradient(135deg,var(--ac),var(--acc2));color:#fff}
-.tx-log{max-height:250px;overflow-y:auto}
-.tx-log div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--bg2);font-size:13px}
-.tx-log div:first-child{border-top:0}
-.tx-log .d{font-weight:700}
-.tx-log .d.pos{color:var(--green)}
-.tx-log .d.neg{color:var(--red)}
-.tx-log span{color:var(--hint);font-size:12px}
-
-/* ═════════ کتابخانه‌ی رسانه ═════════ */
-.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:9px}
-.mcard{background:var(--bg);border-radius:14px;overflow:hidden;position:relative;animation:riseIn .4s backwards}
-.mcard .th{height:86px;background:var(--bg2);display:grid;place-items:center;overflow:hidden;position:relative}
-.mcard .th img,.mcard .th video{width:100%;height:100%;object-fit:cover}
-.mcard .th svg{width:30px;height:30px;color:var(--hint)}
-.mcard .mn{padding:7px 9px 9px}
-.mcard .mn b{display:block;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mcard .mn small{font-size:10.5px;color:var(--hint)}
-.mcard .del{position:absolute;top:5px;left:5px;width:24px;height:24px;padding:0;border-radius:50%;background:rgba(0,0,0,.5);
-  color:#fff;font-size:13px;display:grid;place-items:center;opacity:0;transition:opacity .2s}
-.mcard:hover .del,.mcard:active .del{opacity:1}
-.mpreview{margin-top:8px;background:var(--bg2);border-radius:11px;padding:8px;display:flex;align-items:center;gap:9px;overflow:hidden}
-.mpreview img,.mpreview video{max-height:110px;max-width:120px;border-radius:8px}
-.mpreview audio{width:100%;height:34px}
-.mpreview .mpi{flex:1;min-width:0}
-.mpreview .mpi b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mpreview .mpi small{font-size:11.5px;color:var(--hint)}
-.upzone{border:1.5px dashed rgba(47,124,246,.45);border-radius:14px;padding:18px 12px;text-align:center;background:rgba(47,124,246,.04)}
-.upzone b{display:block;font-size:14px;margin-bottom:3px}
-.upzone small{color:var(--hint);font-size:12px}
-.upzone button{width:auto;margin-top:10px;padding:8px 20px}
-.prog{height:5px;border-radius:4px;background:rgba(127,127,127,.2);overflow:hidden;margin-top:8px}
-.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--acc2));transition:width .2s}
-
-/* آمار ربات */
-.bstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.bstats .bs{background:var(--bg);border-radius:13px;padding:9px 10px;text-align:center}
-.bstats .bs b{display:block;font-size:18px;line-height:1.5}
-.bstats .bs span{font-size:11px;color:var(--hint)}
-.spark{display:flex;align-items:flex-end;gap:4px;height:34px;margin-top:8px}
-.spark i{flex:1;background:linear-gradient(180deg,var(--ac),rgba(47,124,246,.3));border-radius:3px 3px 0 0;min-height:3px}
-.costhint{font-size:12px;color:var(--hint);margin-top:7px;display:flex;justify-content:space-between}
-.costhint b{color:var(--ac)}
-
-/* ویرایشگر متغیر و شرط */
+/* ═════════ ویرایشگر متغیر و شرط ═════════ */
 .cmd select{flex:1;min-width:0}
 details.adv{margin-top:14px;border:1px solid rgba(127,127,127,.22);border-radius:12px;padding:0 12px}
 details.adv>summary{cursor:pointer;padding:10px 0;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center}
@@ -365,68 +283,52 @@ details.adv .box{padding:0 0 12px}
 .rl .lbl{margin:6px 0 3px}
 .kvr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--bg2);font-size:12.5px}
 .kvr:first-of-type{border-top:0}
-.kvr code{font-family:ui-monospace,Menlo,monospace;color:var(--ac);font-size:12px;direction:ltr}
+.kvr code{font-family:ui-monospace,Menlo,monospace;color:var(--ac);font-size:12px}
 .kvr span{color:var(--hint)}
-
-/* پیشنهادهای نمونه */
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
-.chips button{width:auto;font-size:12px;padding:5px 11px;background:var(--bg2);color:var(--tx);border:1px solid rgba(127,127,127,.25);border-radius:99px}
-.chips button:active{border-color:var(--ac);color:var(--ac)}
-@media (prefers-reduced-motion:reduce){.rise,.mcard{animation:none!important}}
+.wal{text-align:center}.wal .k{font-size:12px;color:var(--hint)}
+.wal .big{font-size:34px;font-weight:800;line-height:1.5;font-variant-numeric:tabular-nums}
+.tplg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+button.tpl{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:right;background:var(--bg);color:var(--tx);padding:12px;border-radius:14px}
+button.tpl span{font-size:22px}button.tpl b{font-size:13.5px}button.tpl small{font-size:11.5px;color:var(--hint);line-height:1.5}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sub{border-top:1px solid var(--bg2);padding:10px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+.sub:first-child{border-top:0}.sub small{display:block;color:var(--hint);font-size:11.5px}
+.pos{color:var(--green)}.neg{color:var(--red)}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ac)"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
-    <linearGradient id="gQ" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ac)"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
-    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/></symbol>
-    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></symbol>
-    <symbol id="i-media" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M4 17l4.5-4.5 3.5 3.5 3-2.5L20 17"/></symbol>
-    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
-    <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2.1 2.1 0 0 0-3-3L5 16z"/></symbol>
-    <symbol id="i-spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.6L19.5 9l-5.7 1.4L12 16l-1.8-5.6L4.5 9l5.7-1.4z"/><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></symbol>
-    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10.5 13.5M21 3l-7 18-3.5-7.5L3 10z"/></symbol>
-    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></symbol>
-    <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2" fill="currentColor"/></symbol>
-  </defs>
-</svg>
-<div class="top">
-  <div class="brand"><svg style="color:var(--ac)"><use href="#i-bot"/></svg><h1>رباتساز هوشمند</h1></div>
-  <button class="chip" id="tokchip" aria-label="کیف پول توکن"><svg width="14" height="14" style="color:var(--ac)"><use href="#i-wallet"/></svg>توکن <span class="num" id="tokv">0</span></button>
-</div>
+<div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota" style="cursor:pointer"></span></div>
 <div id="app"></div>
 <div id="sheet" class="sheet"></div>
 <div id="toast"></div>
 <nav class="dock" id="dock" aria-label="ناوبری اصلی">
   <button class="tab" id="dockTab" aria-label="باز و بسته کردن نوار پایین" aria-expanded="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10l6 6 6-6"/></svg>
-    <i></i>
   </button>
   <div class="dpanel">
-    <button class="dn" data-d="bots"><svg><use href="#i-bot"/></svg><span>ربات‌ها</span></button>
-    <button class="dn" data-d="media"><svg><use href="#i-media"/></svg><span>رسانه‌ها</span></button>
-    <button class="dn" data-d="profile"><svg><use href="#i-user"/></svg><span>حساب</span></button>
+    <button class="dn" data-d="bots">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/></svg>
+      <span>ربات‌ها</span>
+    </button>
+    <button class="dn" data-d="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></svg>
+      <span>پروفایل</span>
+    </button>
   </div>
 </nav>
-<input type="file" id="globalFile" hidden>
+
 <script>
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
-const API_BASE = "";   // خالی = همون دامنه‌ای که صفحه ازش لود شده
-let S = { open:new Set(), bots:[], quota:0, limit:0, maxBots:5, view:"list", cur:null, busy:false, sheet:null, dirty:false,
-  fresh:false, tokens:0, costs:{generate:8,media:1,ai:1,broadcast:15}, daily:{can:false,streak:0,next:2},
-  ref:{link:"",count:0,earned:0}, log:[], pay:{enabled:false,packs:[],support:""}, media:null };
+// خالی = همون دامنه‌ای که این صفحه ازش لود شده (حالت پیش‌فرض). فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
+const API_BASE = "";
+let S = { open: new Set(), joined: null, bots: [], bal: 0, costs: {min:5, typical:11}, ref: null, daily: null, isAdmin: false, templates: [], maxBots: 10, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fa = n => String(Number(n || 0));                       // ارقام لاتین
-const grp = n => Number(n || 0).toLocaleString("en-US");
-const ic = (n, cls="") => `<svg class="${cls}" style="width:16px;height:16px;vertical-align:-3px"><use href="#i-${n}"/></svg>`;
 
-function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),3000); }
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2800); }
 
 async function api(path, method="GET", body){
   const r = await fetch(API_BASE + path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body?JSON.stringify(body):undefined });
@@ -438,21 +340,17 @@ async function api(path, method="GET", body){
 async function load(){
   try{
     const d = await api("/api/me");
-    S.bots = d.bots; S.quota = d.quota; S.limit = d.limit; S.maxBots = d.max_bots; S.joined = d.joined;
-    S.tokens = d.tokens; S.costs = d.costs || S.costs; S.daily = d.daily || S.daily;
-    S.ref = d.ref || S.ref; S.log = d.wallet_log || []; S.pay = d.pay || S.pay;
-    ensureMedia();   // برای پیش‌نمایش رسانه‌ها توی کارت بخش‌ها
+    S.bots = d.bots; S.bal = d.bal; S.costs = d.costs; S.ref = d.ref; S.daily = d.daily; S.isAdmin = d.is_admin; S.templates = d.templates || []; S.maxBots = d.max_bots; S.joined = d.joined;
   }catch(e){ $("#dock").hidden = true; $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`; return; }
   render();
 }
 
 function render(){
-  $("#tokv").textContent = grp(S.tokens);
-  S.view === "list" ? renderList() : S.view === "media" ? renderMedia() : S.view === "profile" ? renderProfile() : renderBot();
+  $("#quota").textContent = `🪙 ${fa(S.bal)} توکن`; $("#quota").onclick = () => go("profile");
+  S.view === "list" ? renderList() : S.view === "profile" ? renderProfile() : renderBot();
   syncDock();
 }
 
-/* ───────── لیست ربات‌ها ───────── */
 function renderList(){
   const list = S.bots.map(b => `
     <div class="card bot" data-id="${b.id}">
@@ -460,7 +358,7 @@ function renderList(){
       <div><b>${esc(b.name)}</b><span class="muted">${b.active ? "@"+esc(b.username) : "هنوز فعال نشده"}</span></div>
     </div>`).join("");
   $("#app").innerHTML = (list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">یه جمله بنویس، ربات آماده می‌شه.</span></p></div>`)
-    + (S.bots.length < S.maxBots ? `<button id="new">＋ ساخت ربات جدید</button>` : `<p class="muted" style="text-align:center">به سقف ${fa(S.maxBots)} ربات رسیدی</p>`);
+    + (S.bots.length < S.maxBots ? `<button id="new">＋ ساخت ربات جدید</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
   document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.view="bot"; S.open = new Set(); render(); });
   $("#new")?.addEventListener("click", () => { S.cur = null; S.view = "bot"; S.open = new Set(); render(); });
 }
@@ -468,18 +366,18 @@ function renderList(){
 const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
 const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
 const cp = o => JSON.parse(JSON.stringify(o));
-const MKIND_LBL = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"صوت", voice:"صوتی", sticker:"استیکر", document:"فایل"};
 
 const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g," ").slice(0,24) || id) : "؟"; };
 const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : CH_RE.test(b.url||"") ? "channel" : "url";
 const btnInfo0 = (cfg, b) => {
   const k = kindOf(b);
-  return k==="goto" ? "→ "+esc(titleOf(cfg,b.goto)) : k==="channel" ? "@"+esc(CH_RE.exec(b.url)[1])
-    : k==="alert" ? "پیام پاپ‌آپ" : k==="copy" ? "کپی متن" : "لینک "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
+  return k==="goto" ? "← "+esc(titleOf(cfg,b.goto)) : k==="channel" ? "📢 @"+esc(CH_RE.exec(b.url)[1])
+    : k==="alert" ? "💬 پیام پاپ‌آپ" : k==="copy" ? "📋 کپی متن" : "🔗 "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
 };
-const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " · شرطی" : "") + (b.do?.length ? " · اکشن" : "");
+const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " · 👁 شرطی" : "") + (b.do?.length ? " · ⚡" : "");
 
-const CHEV = '<svg class="chev"><use href="#i-chev"/></svg>';
+const fa = n => Number(n || 0).toLocaleString("fa-IR");
+const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
 function nodeCard(cfg, id, i = 0, rise = false){
   const n = cfg.nodes[id], tags = [], isRk = n.kb === "reply";
@@ -487,17 +385,15 @@ function nodeCard(cfg, id, i = 0, rise = false){
   if(id===cfg.fallback) tags.push("پیام ناشناس");
   if(n.fields) tags.push("فرم");
   else if(n.ask) tags.push("دریافت پیام");
-  if(n.ai) tags.push("هوشمند");
-  if(isRk) tags.push("کیبورد چت");
-  if(n.media || n.photo) tags.push(n.media ? "رسانه: "+(MKIND_LBL[n.media_kind]||"عکس") : "عکس");
-  if(n.do?.length || n.route?.length || n.alt?.length) tags.push("منطق");
-  if(cfg.keywords?.length && id===cfg.fallback) tags.push(fa(cfg.keywords.length)+" کلیدواژه");
+  if(isRk) tags.push("⌨️ کیبورد چت");
+  if(n.media || n.photo) tags.push("📎 فایل");
+  if(n.ai) tags.push("🤖 هوش مصنوعی");
+  if(n.do?.length || n.route?.length || n.alt?.length) tags.push("🧩 منطق");
   const open = S.open.has(id), nb = n.buttons.reduce((a,r) => a + r.length, 0);
   const prev = (n.text||"").replace(/\s+/g," ").slice(0,70);
   const kb = n.buttons.map((row,r) => `<div class="krow${isRk?" rk":""}">${row.map((b,c) =>
       `<button class="kb" data-sa="btn" data-n="${id}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg,b)}</small></button>`).join("")}
       ${row.length<3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}">＋</button>` : ""}</div>`).join("");
-  const thumb = n.media ? S.media?.find?.(m=>m.id===n.media) : null;
   return `
     <div class="card nd${open?" open":""}${rise?" rise":""}" style="--i:${Math.min(i,8)}">
       <div class="nh" role="button" tabindex="0" aria-expanded="${open}" data-sa="toggle" data-n="${id}">
@@ -505,9 +401,7 @@ function nodeCard(cfg, id, i = 0, rise = false){
         <div class="nm">${tags.map(t=>`<span class="tag">${t}</span>`).join("")}<span class="tag cnt">${nb ? fa(nb)+" دکمه" : "بدون دکمه"}</span></div>
       </div>
       <div class="nbody"><div><div class="nbi">
-        <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<svg class="pen"><use href="#i-pen"/></svg></div>
-        ${n.media && thumb ? `<div class="mpreview"><span class="mpi"><b>${esc(thumb.name)}</b><small>${MKIND_LBL[n.media_kind]||""} · ${fa(Math.round((thumb.size||0)/1024))} کیلوبایت</small></span></div>` : ""}
-        ${n.ai ? `<div class="muted" style="margin-top:6px">بخش هوشمند: هر پیام متنی کاربر با هوش مصنوعی جواب داده می‌شه (هزینه‌ی هر پاسخ از توکن شما کم می‌شه).</div>` : ""}
+        <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen">✏️</span></div>
         ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map((q,i) => esc(q) + (n.save?.[i] ? ' <span class="tag" dir="ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" ← ")}</div>` : ""}
         ${isRk ? `<div class="tray">${kb}</div>` : kb}
         ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">＋ دکمه‌ی جدید</button>` : ""}
@@ -525,7 +419,7 @@ function toggleNode(id, head){
 function toggleAll(){
   const ids = Object.keys(S.cur.config.nodes), all = ids.every(i => S.open.has(i));
   S.open = all ? new Set() : new Set(ids);
-  document.querySelectorAll(".nd").forEach(el => {
+  document.querySelectorAll(".nd").forEach((el,i) => {
     el.classList.toggle("open", !all); el.querySelector(".nh").setAttribute("aria-expanded", !all);
   });
   syncAll();
@@ -535,59 +429,44 @@ function syncAll(){
   b.textContent = Object.keys(S.cur.config.nodes).every(i => S.open.has(i)) ? "بستن همه" : "باز کردن همه";
 }
 
-/* ───────── نمای ربات ───────── */
 function renderBot(){
   const b = S.cur;
   const prompt = `
     <div class="card">
       <h2>${b ? "چی رو تغییر بدم؟" : "چه رباتی می‌خوای؟"}</h2>
       <textarea id="prompt" maxlength="2000" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
-      ${b ? "" : `<div class="chips">${["فروشگاه اینترنتی","نوبت‌دهی مطب","پشتیبانی مشتریان","کوییز و امتیازدهی","منوی رستوران"].map(t=>`<button data-sa="chip" data-t="${t}">${t}</button>`).join("")}</div>`}
-      <div class="costhint"><span>هزینه‌ی هر ${b?"ارتقا":"ساخت"} با هوش مصنوعی</span><span><b class="num">${fa(S.costs.generate)}</b> توکن · موجودی <b class="num">${grp(S.tokens)}</b></span></div>
-      <div style="height:8px"></div>
+      <div style="height:10px"></div>
       <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
+      <p class="muted" style="margin-top:8px;font-size:12px">هزینه‌ی هر ساخت یا ارتقا حدود ${fa(S.costs.typical)} توکن (حداقل ${fa(S.costs.min)}) • ویرایش دستی و قالب‌ها رایگانه</p>
     </div>
     <div id="live"></div>`;
   let body = "";
+  if(!b && S.templates.length){
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">یا از قالب آماده شروع کن (رایگان)</h2></div><div class="tplg">${S.templates.map(t => `<button class="tpl" data-tpl="${t.id}"><span>${t.icon}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`;
+  }
   if(b){
-    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">${ic("spark")}</span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
-    body += `<div class="bstats" id="bstats"><div class="bs"><b class="num">…</b><span>پیام امروز</span></div><div class="bs"><b class="num">…</b><span>کاربر امروز</span></div><div class="bs"><b class="num">…</b><span>مخاطب کل</span></div></div>`;
-    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot">تنظیمات ربات</button></div>
+    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">✨</span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot">⚙️ تنظیمات ربات</button></div>
              <div class="pvhd"><span class="muted">هر بخش رو باز کن، بعد روی متن یا دکمه بزن تا ویرایشش کنی.</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
     body += Object.keys(b.config.nodes).map((id,i) => nodeCard(b.config, id, i, S.fresh)).join("");
     body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">＋ بخش جدید</button>`;
-    if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">برگشت به نسخه‌ی قبلی</button>`;
-    if(b.active) body += `<div class="card"><div class="hd"><h2 style="display:flex;align-items:center;gap:8px"><span class="dot on"></span>@${esc(b.username)}</h2></div>
-      <p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن.</p>
-      <div class="row"><button class="ghost" data-sa="bcast">ارسال انبوه</button><button class="ghost" id="off">غیرفعال کردن</button></div></div>`;
-    else body += `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act">فعال کن</button></div>`;
+    body += `<div class="card" id="stats"><span class="muted">در حال بارگذاری آمار…</span></div>`;
+    if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">↩ برگشت به نسخه‌ی قبلی</button>`;
+    body += b.active
+      ? `<div class="card"><h2>🟢 فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
+      : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act">فعال کن</button></div>`;
     body += `<button class="danger" id="del">حذف ربات</button>`;
   }
-  $("#app").innerHTML = `<button class="back" id="back">→ بازگشت</button>${prompt}${body}`;
+  $("#app").innerHTML = `<button class="back" id="back">← بازگشت</button>${prompt}${body}`;
   $("#back").onclick = () => { S.view="list"; S.cur=null; closeSheet(); load(); };
   $("#gen").onclick = generate;
   $("#undo")?.addEventListener("click", undo);
   $("#act")?.addEventListener("click", activate);
   $("#off")?.addEventListener("click", () => act("deactivate", "ربات غیرفعال شد"));
   $("#del")?.addEventListener("click", remove);
-  syncAll();
-  if(b?.active) fillStats(b.id);
+  syncAll(); if(b) loadStats();
   if(S.fresh && b?.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior:"smooth",block:"nearest"}); }
   S.fresh = false;
-}
-
-async function fillStats(id){
-  try{
-    const d = await api(`/api/bots/${id}/stats`);
-    const box = $("#bstats"); if(!box) return;
-    const mx = Math.max(1, ...d.week.map(w=>w.msgs));
-    box.innerHTML = `
-      <div class="bs"><b class="num">${fa(d.today_msgs)}</b><span>پیام امروز</span></div>
-      <div class="bs"><b class="num">${fa(d.today_users)}</b><span>کاربر امروز</span></div>
-      <div class="bs"><b class="num">${fa(d.audience)}</b><span>مخاطب کل</span></div>
-      <div class="bs" style="grid-column:1/-1;padding-bottom:6px"><span>پیام ۷ روز اخیر</span>
-        <div class="spark">${d.week.map(w=>`<i style="height:${Math.round(w.msgs/mx*100)}%" title="${w.d}: ${w.msgs}"></i>`).join("")}</div></div>`;
-  }catch(_){}
 }
 
 /* ───────── تایپ تدریجی توضیح هوش مصنوعی ───────── */
@@ -608,6 +487,7 @@ const STEPS = ["درک درخواست","طراحی مسیرها","ساخت بخ�
 const PHASES = [["دارم درخواستت رو می‌خونم…",0],["ببینم ربات واقعاً به چی نیاز داره…",0],["مسیر کاربرها رو طراحی می‌کنم…",1],
   ["بخش‌ها و دکمه‌ها رو می‌چینم…",2],["متن‌ها رو می‌نویسم…",2],["یه بررسی نهایی می‌کنم…",3]];
 const CORE = `<svg class="core" viewBox="0 0 48 48" aria-hidden="true">
+  <defs><linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ac)"/><stop offset="1" stop-color="#9b6bff"/></linearGradient></defs>
   <circle class="glow" cx="24" cy="24" r="13"/>
   <circle class="r1" cx="24" cy="24" r="22"/>
   <path class="arc" d="M24 5a19 19 0 0 1 16.5 9.5"/>
@@ -642,9 +522,10 @@ function startLive(){
 }
 function setStep(k){ document.querySelectorAll("#steps .st").forEach((el,j) => { el.classList.toggle("done", j < k); el.classList.toggle("cur", j === k); }); }
 function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); const box = $("#live"); if(box) box.innerHTML = ""; }
+
 /* ───────── ویرایشگر سریع (شیت پایین صفحه) ───────── */
-let D = null;
-async function commit(fn, msg="ذخیره شد"){
+let D = null;   // پیش‌نویس فرم باز
+async function commit(fn, msg="ذخیره شد ✅"){
   const cfg = cp(S.cur.config); fn(cfg);
   const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: cfg});
   S.cur = d.bot; closeSheet(); renderBot(); toast(msg);
@@ -659,16 +540,11 @@ function showSheet(html){
 const nodeOpts = (cfg, cur, extra="") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i===cur?" selected":""}>${esc(titleOf(cfg,i))}</option>`).join("");
 const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="close">✕</button></div>`;
 
-async function ensureMedia(force){
-  if(S.media && !force) return S.media;
-  try{ S.media = (await api("/api/media")).media; }catch(_){ S.media = S.media || []; }
-  return S.media;
-}
-
 /* ── منطق: متغیر، شرط و اکشن ── */
 const OPS = [["==","مساوی باشه با"],["!=","مساوی نباشه با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشه"],["empty","خالی باشه"],["filled","پر باشه"]];
 const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
 const APH = {set:"مقدار (می‌تونی {متغیر} بذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شه"};
+const MEDIA_TYPES = [["photo","🖼 عکس"],["video","🎬 ویدیو"],["audio","🎵 صوت"],["document","📄 فایل"],["animation","🎞 گیف"]];
 const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
   ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ ۱ یا ۰"],["is_owner","صاحب ربات؟ ۱ یا ۰"],["visits","تعداد استارت‌های کاربر"],["text","آخرین پیام کاربر"],
@@ -681,7 +557,7 @@ const newRule = l => l==="do" ? {op:"set", var:"", value:""} : l==="route" ? {c:
 const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
 
 function condHTML(c){
-  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
+  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px">🔀 شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
   const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
   return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
     <select class="c-op" data-sh="re">${OPS.map(([v,l]) => `<option value="${v}"${v===x.op?" selected":""}>${l}</option>`).join("")}</select></div>
@@ -738,34 +614,15 @@ function ruleErr(){
 }
 const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
 
-/* ── انتخاب رسانه از کتابخانه ── */
-function mediaSelectHTML(cur, id){
-  const list = S.media || [];
-  return `<select id="${id}">
-    <option value="">بدون رسانه</option>
-    ${list.map(m=>`<option value="${m.id}"${m.id===cur?" selected":""}>${esc(m.name)} (${MKIND_LBL[m.kind]||"فایل"})</option>`).join("")}
-  </select>`;
-}
-function mediaPreviewHTML(mid){
-  if(!mid) return "";
-  const m = (S.media||[]).find(x=>x.id===mid); if(!m) return "";
-  const inner = m.kind==="photo" ? `<img src="${m.url}" alt="" referrerpolicy="no-referrer">`
-    : (m.kind==="video"||m.kind==="animation") ? `<video src="${m.url}" controls muted></video>`
-    : (m.kind==="audio"||m.kind==="voice") ? `<audio src="${m.url}" controls></audio>`
-    : `<svg style="width:34px;height:34px;color:var(--hint)"><use href="#i-file"/></svg>`;
-  return `<div class="mpreview" id="mPrev">${inner}<span class="mpi"><b>${esc(m.name)}</b><small>${MKIND_LBL[m.kind]||""} · ${fa(Math.round(m.size/1024))} کیلوبایت</small>
-    <button class="sm x" data-sh="mclear" style="padding:2px 8px">حذف رسانه</button></span></div>`;
-}
-
 /* ── بخش (کارت) ── */
-async function openNode(id){
-  await ensureMedia();
+function openNode(id){
   const cfg = S.cur.config, n = cfg.nodes[id];
   S.sheet = {kind:"node", id};
-  D = { title:n.title||"", text:n.text, photo:n.photo||"", done:n.done||"", next:n.next||"",
-        media:n.media||"", mediaKind:n.media_kind||"photo", aiPrompt:n.ai_prompt||"",
+  const mm = n.media || (n.photo ? {type:"photo", url:n.photo} : null);
+  D = { title:n.title||"", text:n.text, photo:mm?.url||"", mtype:mm?.type||"photo", done:n.done||"", next:n.next||"",
+        aisys:n.ai?.system||"", aimem:n.ai?.memory ?? 3, ailim:n.ai?.limit ?? 20,
         fields:n.fields ? n.fields.map((q,i) => ({q, v:(n.save||[])[i]||"", t:(n.types||[])[i]||"text"})) : [{q:"", v:"", t:"text"}],
-        silent:!!n.silent, mode:n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb:n.kb==="reply" ? "reply" : "inline",
+        silent:!!n.silent, mode:n.ai ? "ai" : n.fields ? "form" : n.ask ? "ask" : "show", kb:n.kb==="reply" ? "reply" : "inline",
         start:id===cfg.start, fb:id===cfg.fallback,
         do:cp(n.do||[]), route:(n.route||[]).map(r => ({c:cp(r.when), goto:r.goto})), alt:(n.alt||[]).map(r => ({c:cp(r.when), text:r.text})), adv:false };
   renderSheet();
@@ -786,74 +643,71 @@ function nodeSheet(){
   return head("ویرایش بخش") + `
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
-    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی تنظیمات ربات.</p>
-    <span class="lbl">رسانه (عکس، ویدیو، صدا، استیکر یا فایل)</span>
-    <div class="cmd">${mediaSelectHTML(d.media, "f-media")}
-      <button class="sm ghost" data-sh="mup" style="flex:none">آپلود</button></div>
-    ${mediaPreviewHTML(d.media)}
-    <p class="muted" style="margin-top:6px">رسانه مثل عکسِ پیام عمل می‌کنه و متن هم زیرش/کنارش می‌شینه. از کتابخانه‌ی رسانه‌ها انتخاب کن یا فایل جدید آپلود کن (هر آپلود <b class="num">${fa(S.costs.media)}</b> توکن).</p>
-    <details class="adv ph"${d.photo && !d.media ? " open" : ""}>
-      <summary>لینک عکس (جایگزین)</summary><div class="box">
-      <input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">
-      <p class="muted" style="margin-top:6px">اگه رسانه انتخاب کردی، این لینک نادیده گرفته می‌شه.</p></div></details>
+    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی ⚙️ تنظیمات ربات.</p>
+    <span class="lbl">فایل ضمیمه (اختیاری — لینک مستقیم https)</span>
+    <div class="cmd"><select id="f-mtype">${MEDIA_TYPES.map(([v,l]) => `<option value="${v}"${v===d.mtype?" selected":""}>${l}</option>`).join("")}</select><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../file" autocomplete="off"></div>
     <span class="lbl">این بخش چی کار کنه؟</span>
     <select id="f-mode" data-sh="mode">
       <option value="show"${d.mode==="show"?" selected":""}>فقط پیام و دکمه‌ها رو نشون بده</option>
       <option value="ask"${d.mode==="ask"?" selected":""}>یه پیام از کاربر بگیر و برای من بفرست</option>
       <option value="form"${d.mode==="form"?" selected":""}>فرم چندمرحله‌ای (چند سؤال پشت‌سرهم)</option>
-      <option value="ai"${d.mode==="ai"?" selected":""}>بخش هوشمند (گفتگو با هوش مصنوعی)</option>
+      <option value="ai"${d.mode==="ai"?" selected":""}>🤖 گفتگوی هوشمند با هوش مصنوعی (مصرف توکن)</option>
     </select>
-    ${d.mode==="show" ? kbPicker(d.kb) : d.mode==="ai" ? `<p class="muted" style="margin-top:10px">هر متنی که کاربر توی این بخش بفرسته با هوش مصنوعی جواب داده می‌شه؛ دکمه‌ها زیر هر جواب می‌مونن و با لمسشون از بخش خارج می‌شه. هر پاسخ <b class="num">${fa(S.costs.ai)}</b> توکن از موجودی شما کم می‌شه.</p>` : `<p class="muted" style="margin-top:10px">کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
-    ${d.mode==="ai" ? `<span class="lbl">شخصیت و قواعد پاسخ‌گویی</span>
-      <textarea class="fa" id="f-aip" maxlength="800" placeholder="مثلاً: تو یه مشاور فروشگاه لوازم خانگی هستی؛ جواب‌های کوتاه و مؤدبانه بده، قیمت قطعی نده، همیشه فارسی جواب بده">${esc(d.aiPrompt)}</textarea>` : ""}
+    ${d.mode==="show" ? kbPicker(d.kb) : `<p class="muted" style="margin-top:10px">⌨️ کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
     ${d.mode==="form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
       ${d.fields.map((f,i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">✕</button></div>
         <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
         <select class="ft">${TYPES.map(([v,l]) => `<option value="${v}"${v===f.t?" selected":""}>${l}</option>`).join("")}</select></div></div>`).join("")}
       ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld">＋ سؤال</button>` : ""}
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent?" checked":""}> نتیجه‌ی فرم برای من فرستاده نشه</label>` : ""}
-    ${d.mode!=="show" && d.mode!=="ai" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
+    ${d.mode==="ai" ? `<span class="lbl">دستورالعمل هوش مصنوعی (نقش، لحن، اطلاعات کسب‌وکار)</span>
+      <textarea class="fa" id="f-aisys" maxlength="1500" placeholder="مثلاً: تو دستیار فروشگاه موبایل هستی. مؤدب و کوتاه جواب بده…">${esc(d.aisys)}</textarea>
+      <div class="cmd" style="align-items:flex-end"><div style="flex:1"><span class="lbl">حافظه‌ی گفتگو</span><select id="f-aimem">${[0,1,2,3,4,5,6].map(i => `<option value="${i}"${i===+d.aimem?" selected":""}>${i} پیام قبلی</option>`).join("")}</select></div>
+      <div style="flex:1"><span class="lbl">سقف پیام روزانه‌ی هر کاربر</span><input id="f-ailim" type="number" min="1" max="100" value="${d.ailim}"></div></div>
+      <span class="lbl">پیام وقتی توکنت تموم شده (اختیاری)</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="🙏 فعلاً در دسترس نیست">
+      <p class="muted" style="margin-top:6px">متن بالا، پیام خوش‌آمد گفتگوئه و دکمه‌های این بخش راه خروج کاربرن (حتماً یه دکمه‌ی بازگشت بذار). هر پیام کاربر حدود ۱ توکن از حساب تو مصرف می‌کنه.</p>` : ""}
+    ${d.mode==="form"||d.mode==="ask" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="✅ ثبت شد، ممنون!">
       <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>` : ""}
-    <details class="adv"${advOpen ? " open" : ""}><summary>متغیر و شرط (پیشرفته)</summary><div class="box">
+    <details class="adv"${advOpen ? " open" : ""}><summary>🧩 متغیر و شرط (پیشرفته)</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقدار ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
       ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر رو به بخش دیگه‌ای می‌فرسته (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
       ${ruleSection("متن جایگزین شرطی", "اگه شرط درست بود، به‌جای متن اصلی نشون داده می‌شه", "alt", cfg, 4)}
     </div></details>${dlist()}
     <label class="chk"><input type="checkbox" id="f-start"${d.start?" checked disabled":""}> صفحه‌ی شروع (/start)</label>
     <label class="chk"><input type="checkbox" id="f-fb"${d.fb?" checked disabled":""}> جواب پیام‌های نامفهوم کاربر</label>
-    <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del">حذف بخش</button>`}</div>`;
+    <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف بخش</button>`}</div>`;
 }
 function readNode(){
   const g = s => $(s)?.value ?? null;
-  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
+  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo; D.mtype = g("#f-mtype") ?? D.mtype; D.aisys = g("#f-aisys") ?? D.aisys;
+  if($("#f-aimem")) D.aimem = +$("#f-aimem").value; if($("#f-ailim")) D.ailim = Math.max(1, Math.min(100, +$("#f-ailim").value || 20));
   D.mode = g("#f-mode") ?? D.mode;
-  if($("#f-media")){ const v = $("#f-media").value; if(v !== D.media){ D.media = v; D.mediaKind = (S.media||[]).find(m=>m.id===v)?.kind || "photo"; } }
-  if($("#f-aip")) D.aiPrompt = $("#f-aip").value;
   const fq = [...document.querySelectorAll(".fq")];
   if(fq.length) D.fields = fq.map(r => ({q:r.querySelector(".fld").value, v:cleanVar(r.querySelector(".fv").value), t:r.querySelector(".ft").value}));
   if($("#f-silent")) D.silent = $("#f-silent").checked;
-  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
+  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next") ?? D.next; }
   if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
   if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
   for(const l of ["do","route","alt"]) readRl(l);
-  const ad = document.querySelector("details.adv:not(.ph)"); if(ad) D.adv = ad.open;
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
 }
 function saveNode(){
   const id = S.sheet.id;
   if(!D.text.trim()) return toast("متن پیام نباید خالی باشه");
   if(D.mode==="form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
+  if(D.mode==="ai" && !D.aisys.trim()) return toast("دستورالعمل هوش مصنوعی رو بنویس");
+  if(D.mode==="ai" && !S.cur.config.nodes[id].buttons.length) return toast("اول یه دکمه‌ی بازگشت به این بخش اضافه کن تا کاربر بتونه از گفتگو خارج بشه");
   if(D.mode==="show" && D.kb==="reply" && !S.cur.config.nodes[id].buttons.length) return toast("برای کیبورد زیر چت اول یه دکمه به این بخش اضافه کن");
   const err = ruleErr(); if(err) return toast(err);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id];
-    for(const k of ["title","photo","media","media_kind","ai","ai_prompt","ask","fields","save","types","silent","done","next","kb","do","route","alt"]) delete n[k];
+    for(const k of ["title","photo","media","ai","ask","fields","save","types","silent","done","next","kb","do","route","alt"]) delete n[k];
     if(D.mode==="show" && D.kb==="reply") n.kb = "reply";
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
-    if(D.media){ n.media = D.media; n.media_kind = D.mediaKind || "photo"; }
-    else if(D.photo.trim()) n.photo = D.photo.trim();
+    if(D.photo.trim()) n.media = {type:D.mtype, url:D.photo.trim()};
+    if(D.mode==="ai") n.ai = {system:D.aisys.trim(), memory:D.aimem, limit:D.ailim};
     if(D.mode==="ask") n.ask = true;
-    if(D.mode==="ai"){ n.ai = true; if(D.aiPrompt.trim()) n.ai_prompt = D.aiPrompt.trim(); }
     if(D.mode==="form"){
       const fl = D.fields.filter(f => f.q.trim());
       n.fields = fl.map(f => f.q.trim());
@@ -861,7 +715,8 @@ function saveNode(){
       if(fl.some(f => f.t !== "text")) n.types = fl.map(f => f.t);
       if(D.silent) n.silent = true;
     }
-    if(D.mode!=="show" && D.mode!=="ai"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    if(D.mode==="form" || D.mode==="ask"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    else if(D.mode==="ai" && D.done.trim()) n.done = D.done.trim();
     if(D.do.length) n.do = outActs(D.do);
     if(D.route.length) n.route = D.route.map(r => ({when:r.c, goto:r.goto}));
     if(D.alt.length) n.alt = D.alt.map(r => ({when:r.c, text:r.text.trim()}));
@@ -879,23 +734,23 @@ function delNode(){
       if(n.route){ n.route = n.route.filter(r => r.goto !== id); if(!n.route.length) delete n.route; }
     }
     for(const k of Object.keys(cfg.commands||{})) if(cfg.commands[k] === id) delete cfg.commands[k];
-    if(cfg.keywords){ cfg.keywords = cfg.keywords.filter(k => k.goto !== id); if(!cfg.keywords.length) delete cfg.keywords; }
   }, "بخش حذف شد"));
   const q = "این بخش و دکمه‌هایی که بهش وصلن حذف بشن؟";
   tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
 }
 function addNode(){
   const cfg = S.cur.config, ids = Object.keys(cfg.nodes);
-  if(ids.length >= 30) return toast("حداکثر ۳۰ بخش");
+  if(ids.length >= 40) return toast("حداکثر ۴۰ بخش");
   let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
   const id = "page_"+k;
   S.open.add(id);
   busy($('[data-sa="addnode"]'), async () => {
     await commit(c => { c.nodes[id] = {title:"بخش جدید", text:"متن این بخش رو بنویس", ask:false,
-      buttons:[[{text:"منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
+      buttons:[[{text:"🏠 منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
     openNode(id);
   });
 }
+
 /* ── دکمه ── */
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
@@ -909,7 +764,7 @@ function openBtn(nid, r, c){
   }
   renderSheet();
 }
-const KINDS = [["goto","رفتن به یه بخش"],["channel","کانال یا گروه"],["url","لینک"],["alert","پیام پاپ‌آپ"],["copy","کپی کردن متن"]];
+const KINDS = [["goto","↩ رفتن به یه بخش"],["channel","📢 کانال / گروه"],["url","🔗 لینک"],["alert","💬 پیام پاپ‌آپ"],["copy","📋 کپی کردن متن"]];
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
@@ -925,12 +780,12 @@ function btnSheet(){
     <span class="lbl">با لمس دکمه چی بشه؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l]) => `<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
     ${val}
-    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اکشن (پیشرفته)</summary><div class="box">
+    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>🧩 شرط و اکشن (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافیه", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشون دادن پیام اجرا می‌شن", "do", cfg, 6)
               : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یه بخش» و «پیام پاپ‌آپ» کار می‌کنه.</p>`}
     </div></details>${dlist()}
-    <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del">حذف دکمه</button>`}</div>`;
+    <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف دکمه</button>`}</div>`;
 }
 function readBtn(){
   D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
@@ -970,60 +825,39 @@ function openBot(){
   const cfg = S.cur.config;
   S.sheet = {kind:"bot"};
   D = { name:cfg.name, channels:(cfg.join?.channels||[]).map(c=>"@"+c).join(" "), jtext:cfg.join?.text||"",
-        cmds:Object.entries(cfg.commands||{}), vars:Object.entries(cfg.vars||{}),
-        keywords:(cfg.keywords||[]).map(k => ({k:k.k, type:k.goto?"goto":"text", target:k.goto||k.text||""})) };
+        cmds:Object.entries(cfg.commands||{}), vars:Object.entries(cfg.vars||{}) };
   renderSheet();
-}
-function kwHTML(d, cfg){
-  return `<div class="hd" style="margin-top:16px"><span class="lbl" style="margin:0">کلیدواژه‌ها (پاسخ خودکار به پیام تایپ‌شده)</span>${d.keywords.length<10?`<button class="sm ghost" data-sh="addkw">＋</button>`:""}</div>
-    <p class="muted" style="margin-bottom:6px">اگه پیام کاربر شامل این متن بود، ربات خودش جواب می‌ده یا کاربر رو به بخش می‌بره. اولویت با فرم و بخش هوشمنده، بعد کیبورد، بعد کلیدواژه و در آخر پیام ناشناس.</p>
-    ${d.keywords.map((k,i)=>`<div class="rl" data-kw="${i}">
-      <div class="cmd"><input class="kw-k" value="${esc(k.k)}" placeholder="مثلاً: قیمت" maxlength="40" autocomplete="off">
-      <select class="kw-t" data-sh="kwt" data-i="${i}"><option value="goto"${k.type==="goto"?" selected":""}>رفتن به بخش</option><option value="text"${k.type==="text"?" selected":""}>متن ثابت</option></select>
-      <button class="sm x" data-sh="delkw" data-i="${i}">✕</button></div>
-      ${k.type==="goto" ? `<select class="kw-v">${nodeOpts(cfg, k.target)}</select>` : `<textarea class="fa kw-v" maxlength="500" placeholder="متن پاسخ">${esc(k.target||"")}</textarea>`}
-    </div>`).join("") || '<p class="muted">کلیدواژه‌ای نداری.</p>'}`;
 }
 function botSheet(){
   const cfg = S.cur.config, d = D;
-  return head("تنظیمات ربات") + `
+  return head("⚙️ تنظیمات ربات") + `
     <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
     <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
-    <p class="muted">تا ۳ کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه. خالی = غیرفعال.</p>
-    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی">${esc(d.jtext)}</textarea>
+    <p class="muted">تا ۳ کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه تا بتونه عضویت رو چک کنه. خالی = غیرفعال.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی 👇">${esc(d.jtext)}</textarea>
     <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length<10?`<button class="sm ghost" data-sh="addcmd">＋ دستور</button>`:""}</div>
     ${d.cmds.map(([k,v],i)=>`<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
     <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length<20?`<button class="sm ghost" data-sh="addvar">＋ متغیر</button>`:""}</div>
     <p class="muted" style="margin-bottom:6px">هر کاربر مقدار مخصوص خودش رو داره (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع رو بنویس.</p>
     ${d.vars.map(([k,v],i)=>`<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
-    ${kwHTML(d, cfg)}
-    <details class="adv"><summary>متغیرهای آماده‌ی تلگرام</summary><div class="box">
+    <details class="adv"><summary>📖 متغیرهای آماده‌ی تلگرام</summary><div class="box">
       <p class="muted" style="margin-bottom:6px">توی متن‌ها و شرط‌ها قابل استفاده‌ن؛ مثلاً <b dir="ltr">{name}</b>. اگه خالی بود می‌تونی مقدار جایگزین بذاری: <b dir="ltr">{username|بدون آیدی}</b></p>
       ${BUILTIN_HELP.map(([k,l]) => `<div class="kvr"><code dir="ltr">{${k}}</code><span>${l}</span></div>`).join("")}
     </div></details>
     <div class="bar"><button data-sh="save">ذخیره</button></div>`;
 }
-function readKw(){
-  const rows = [...document.querySelectorAll("[data-kw]")];
-  D.keywords = rows.map((r,i) => ({
-    k: r.querySelector(".kw-k").value,
-    type: r.querySelector(".kw-t").value,
-    target: (r.querySelector(".kw-v")?.value || "").trim()
-  }));
-}
 function readBot(){
   D.name = $("#s-name")?.value ?? D.name; D.channels = $("#s-chs")?.value ?? D.channels; D.jtext = $("#s-jtext")?.value ?? D.jtext;
   const ns = [...document.querySelectorAll(".cmdn")], vs = [...document.querySelectorAll(".cmdv")];
-  D.cmds = ns.map((n,i) => [n.value, vs[i].value]);
-  const vn = [...document.querySelectorAll(".vn")], vd = [...document.querySelectorAll(".vd")];
-  D.vars = vn.map((n,i) => [cleanVar(n.value), vd[i].value]);
-  readKw();
+  if(ns.length || document.querySelector("#s-name")) D.cmds = ns.map((n,i) => [n.value, vs[i].value]);
+  if(document.querySelector("#s-name")){
+    const vn = [...document.querySelectorAll(".vn")], vd = [...document.querySelectorAll(".vd")];
+    D.vars = vn.map((n,i) => [cleanVar(n.value), vd[i].value]);
+  }
 }
 function saveBot(){
   const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
-  const err = (d.keywords||[]).find(k => !k.k.trim()); if(err) return toast("متن کلیدواژه رو بنویس");
-  const err2 = (d.keywords||[]).find(k => k.type==="goto" && !k.target); if(err2) return toast("برای هر کلیدواژه یک مقصد انتخاب کن");
   busy($('[data-sh="save"]'), () => commit(cfg => {
     cfg.name = d.name.trim() || "ربات من";
     if(chs.length) cfg.join = {channels:chs, text:d.jtext.trim()}; else delete cfg.join;
@@ -1032,8 +866,6 @@ function saveBot(){
     const vars = {};
     d.vars.forEach(([k,v]) => { if(k) vars[k] = v.trim(); });
     if(Object.keys(vars).length) cfg.vars = vars; else delete cfg.vars;
-    const kws = d.keywords.filter(k => k.k.trim() && k.target).map(k => k.type==="goto" ? {k:k.k.trim(), goto:k.target} : {k:k.k.trim(), text:k.target});
-    if(kws.length) cfg.keywords = kws; else delete cfg.keywords;
   }));
 }
 
@@ -1041,14 +873,10 @@ function saveBot(){
 function renderSheet(){
   showSheet({node:nodeSheet, btn:btnSheet, bot:botSheet}[S.sheet.kind]());
 }
-function readSheet(){
-  const f = {node:readNode, btn:readBtn, bot:readBot}[S.sheet?.kind];
-  if(f) f();
-}
+function readSheet(){ ({node:readNode, btn:readBtn, bot:readBot}[S.sheet.kind])(); }
 
 function shAction(a, ds){
   if(!S.sheet) return;
-  if(S.sheet.kind === "bcast") return;   // شیت ارسال انبوه هندلر جدا داره
   const prev = D.kind;
   readSheet();
   if(a==="save") return {node:saveNode, btn:saveBtn, bot:saveBot}[S.sheet.kind]();
@@ -1066,50 +894,9 @@ function shAction(a, ds){
   else if(a==="delcmd") D.cmds.splice(+ds.i, 1);
   else if(a==="addvar") D.vars.push(["", ""]);
   else if(a==="delvar") D.vars.splice(+ds.i, 1);
-  else if(a==="addkw"){ D.keywords.push({k:"", type:"goto", target:S.cur.config.start}); }
-  else if(a==="delkw") D.keywords.splice(+ds.i, 1);
-  else if(a==="kwt" && D.keywords[+ds.i]) D.keywords[+ds.i].target = "";
-  else if(a==="mclear"){ D.media = ""; D.mediaKind = "photo"; }
-  else if(a==="mup") return uploadFromSheet();
   else if(a==="addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
   else if(a==="delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
   renderSheet();
-}
-
-/* ── آپلود رسانه ── */
-let fileCb = null;
-function pickFile(cb){ fileCb = cb; $("#globalFile").value = ""; $("#globalFile").click(); }
-$("#globalFile").addEventListener("change", e => { const f = e.target.files[0], c = fileCb; fileCb = null; if(f && c) c(f); });
-
-function uploadToServer(file){
-  const prog = $("#upProg"), bar = $("#upBar");
-  if(prog && bar){ prog.hidden = false; bar.style.width = "35%"; }
-  return new Promise((resolve, reject) => {
-    const fd = new FormData(); fd.append("file", file);
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", API_BASE + "/api/media");
-    xhr.setRequestHeader("X-Init-Data", INIT);
-    xhr.upload.onprogress = ev => { if(bar && ev.lengthComputable) bar.style.width = Math.max(15, Math.round(ev.loaded/ev.total*100)) + "%"; };
-    xhr.onload = () => {
-      let d = {}; try{ d = JSON.parse(xhr.responseText); }catch(_){}
-      if(xhr.status === 200){
-        S.tokens = d.tokens ?? S.tokens; $("#tokv").textContent = grp(S.tokens);
-        ensureMedia(true).then(() => resolve(d.media));
-      } else { if(prog) prog.hidden = true; reject(new Error(d.error || "آپلود ناموفق بود")); }
-    };
-    xhr.onerror = () => { if(prog) prog.hidden = true; reject(new Error("خطا در ارتباط با سرور")); };
-    xhr.send(fd);
-  });
-}
-function uploadFromSheet(){
-  pickFile(async file => {
-    try{
-      toast("در حال آپلود…");
-      const m = await uploadToServer(file);
-      toast("رسانه آپلود شد");
-      if(D && S.sheet?.kind === "node"){ D.media = m.id; D.mediaKind = m.kind || "photo"; renderSheet(); }
-    }catch(e){ toast(e.message); }
-  });
 }
 
 document.addEventListener("click", e => {
@@ -1126,8 +913,6 @@ document.addEventListener("click", e => {
   else if(ds.sa==="addnode") addNode();
   else if(ds.sa==="toggle") toggleNode(ds.n, x);
   else if(ds.sa==="toggleall") toggleAll();
-  else if(ds.sa==="chip"){ const ta = $("#prompt"); ta.value = ds.t; ta.focus(); }
-  else if(ds.sa==="bcast") openBroadcast();
 });
 document.addEventListener("keydown", e => {
   const h = e.target.closest?.('[data-sa="toggle"]');
@@ -1135,30 +920,26 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("change", e => {
   const a = e.target.dataset.sh;
-  if(a==="mode" || a==="bkind" || a==="re" || a==="kwt") shAction(a, e.target.dataset);
-  if(e.target.id === "f-media"){ readNode(); renderSheet(); }
+  if(a==="mode" || a==="bkind" || a==="re") shAction(a, e.target.dataset);
 });
 
 async function busy(btn, fn){
   if(S.busy) return; S.busy = true;
-  const old = btn?.innerHTML ?? ""; if(btn){ btn.disabled = true; btn.innerHTML = old + '<span class="spin"></span>'; }
-  try{ await fn(); }catch(e){ toast(e.message); if(e.status===402){ S.view="profile"; render(); } }
-  S.busy = false; if(btn?.isConnected){ btn.disabled = false; btn.innerHTML = old; }
+  const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = old + '<span class="spin"></span>';
+  try{ await fn(); }catch(e){ toast(e.message); if(e.status === 402) setTimeout(() => go("profile"), 1500); }
+  S.busy = false; if(btn.isConnected){ btn.disabled = false; btn.innerHTML = old; }
 }
 
-/* ───────── ساخت و ارتقا ───────── */
 function generate(){
   const btn = $("#gen"), ta = $("#prompt"), p = ta.value.trim();
   if(p.length < 5) return toast("توضیح بیشتری بنویس");
-  if(S.tokens < S.costs.generate){ toast(`توکنت کافی نیست (${fa(S.costs.generate)} توکن لازمه)؛ از بخش حساب شارژ کن.`); S.view="profile"; render(); return; }
   busy(btn, async () => {
     ta.readOnly = true; startLive();
     try{
       const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
       const wasActive = S.cur?.active;
-      S.cur = d.bot; S.quota = d.quota; S.tokens = d.tokens ?? S.tokens; $("#tokv").textContent = grp(S.tokens);
-      S.fresh = true; stopLive(); render();
-      toast(wasActive ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد");
+      S.cur = d.bot; S.bal = d.bal; S.fresh = true; stopLive(); render();
+      toast((wasActive ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅") + ` · ${fa(d.cost)} توکن`);
       tg?.HapticFeedback?.notificationOccurred("success");
     } finally { stopLive(); ta.readOnly = false; }
   });
@@ -1166,67 +947,62 @@ function generate(){
 function undo(){ busy($("#undo"), async () => { const d = await api(`/api/bots/${S.cur.id}/undo`,"POST"); S.cur = d.bot; render(); toast("برگشت داده شد"); }); }
 function activate(){
   const t = $("#token").value.trim(); if(!t) return toast("توکن رو وارد کن");
-  busy($("#act"), async () => { const d = await api(`/api/bots/${S.cur.id}/activate`,"POST",{token:t}); S.cur = d.bot; render(); toast("ربات فعال شد"); });
+  busy($("#act"), async () => { const d = await api(`/api/bots/${S.cur.id}/activate`,"POST",{token:t}); S.cur = d.bot; render(); toast("ربات فعال شد 🎉"); });
 }
 function act(action, msg){ busy($("#off"), async () => { const d = await api(`/api/bots/${S.cur.id}/${action}`,"POST"); S.cur = d.bot; render(); toast(msg); }); }
 function remove(){
   const go = async ok => { if(!ok) return; await api(`/api/bots/${S.cur.id}`,"DELETE"); S.view="list"; S.cur=null; load(); toast("حذف شد"); };
   tg?.showConfirm ? tg.showConfirm("این ربات برای همیشه حذف بشه؟", go) : go(confirm("حذف بشه؟"));
 }
-/* ───────── کتابخانه‌ی رسانه ───────── */
-async function renderMedia(){
-  await ensureMedia();
-  const list = S.media || [];
-  $("#app").innerHTML = `
-    <div class="hd" style="padding-top:4px"><h2>رسانه‌های من</h2><button class="sm ghost" id="upBtn">آپلود فایل</button></div>
-    <div class="upzone" id="upzone">
-      <b>عکس، ویدیو، صدا، استیکر یا فایل آپلود کن</b>
-      <small>تا در همه‌ی بخش‌های ربات‌هات استفاده کنی · هر آپلود <b class="num">${fa(S.costs.media)}</b> توکن · حداکثر <b class="num">${fa(5)}</b> مگابایت</small>
-      <button class="ghost" id="upBtn2">انتخاب فایل</button>
-      <div class="prog" id="upProg" hidden><i id="upBar"></i></div>
-    </div>
-    ${list.length ? `<div style="height:12px"></div><div class="mgrid">${list.map(m=>`
-      <div class="mcard" data-m="${m.id}">
-        <div class="th">${m.kind==="photo" ? `<img src="${m.url}" loading="lazy" alt="" referrerpolicy="no-referrer">`
-          : (m.kind==="video"||m.kind==="animation") ? `<video src="${m.url}" preload="metadata" muted></video>`
-          : `<svg><use href="#i-file"/></svg>`}</div>
-        <button class="del" data-mdel="${m.id}" aria-label="حذف">✕</button>
-        <div class="mn"><b>${esc(m.name)}</b><small>${MKIND_LBL[m.kind]||"فایل"} · ${fa(Math.round((m.size||0)/1024))} KB</small></div>
-      </div>`).join("")}</div>`
-      : `<div class="card empty" style="margin-top:12px"><p>هنوز فایلی آپلود نکردی.<br><span class="muted">رسانه‌ها یک‌بار آپلود می‌شن و توی همه‌ی ربات‌هات قابل استفاده‌ن.</span></p></div>`}`;
-  $("#upBtn")?.addEventListener("click", () => pickFile(uploadMediaHere));
-  $("#upBtn2")?.addEventListener("click", () => pickFile(uploadMediaHere));
-  document.querySelectorAll("[data-mdel]").forEach(b => b.onclick = async ev => {
-    ev.stopPropagation();
-    const ok = confirm("این فایل حذف بشه؟ از بخش‌هایی که استفاده‌ش کردن هم پاک می‌شه.");
-    if(!ok) return;
-    try{ await api(`/api/media/${b.dataset.mdel}`,"DELETE"); await ensureMedia(true); renderMedia(); toast("حذف شد"); }catch(e){ toast(e.message); }
-  });
+
+/* ───────── قالب‌ها، آمار ربات، پیام همگانی ───────── */
+function useTemplate(id, btn){
+  busy(btn, async () => { const d = await api(`/api/templates/${id}/create`, "POST"); S.cur = d.bot; S.fresh = true; S.open = new Set(); render(); toast("قالب آماده شد ✅"); });
 }
-async function uploadMediaHere(file){
+async function loadStats(){
+  const el = $("#stats"); if(!el || !S.cur) return;
   try{
-    toast("در حال آپلود…");
-    await uploadToServer(file);
-    toast("رسانه آپلود شد");
-    renderMedia();
-  }catch(e){ toast(e.message); }
+    const d = await api(`/api/bots/${S.cur.id}/stats`);
+    if(!$("#stats")) return;
+    el.innerHTML = `<h2>📊 آمار و کاربران</h2>
+      <div class="stats" style="margin:10px 0">
+        <div class="stat"><div class="k">کاربران ربات</div><div class="v">${fa(d.users)}</div></div>
+        <div class="stat"><div class="k">فعال امروز</div><div class="v">${fa(d.today)}</div></div>
+        <div class="stat"><div class="k">پاسخ فرم‌ها</div><div class="v">${fa(d.forms)}</div></div>
+        <div class="stat"><div class="k">توکنِ مصرفیِ AI ربات</div><div class="v">${fa(d.ai_tokens)}</div></div>
+      </div>
+      <div class="g2"><button class="ghost" data-ax="subs">📥 پاسخ فرم‌ها</button><button class="ghost" data-ax="bc">📣 پیام همگانی</button></div>`;
+  }catch(_){ $("#stats")?.remove(); }
+}
+const fdate = t => new Date(t).toLocaleString("fa-IR", {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+async function openSubs(){
+  S.sheet = {kind:"info"}; showSheet(head("پاسخ فرم‌ها") + `<p class="muted">در حال بارگذاری…</p>`);
+  try{
+    const d = await api(`/api/bots/${S.cur.id}/submissions`);
+    showSheet(head("پاسخ فرم‌ها") + (d.items.length ? d.items.map(r => `<div class="sub"><small>${esc(r.title)} • ${esc(r.name)}${r.un ? " @"+esc(r.un) : ""} • ${fdate(r.t)}</small>${
+      r.qa.length ? r.qa.map(([q,a]) => `${esc(q)}\n» <b>${esc(a)}</b>`).join("\n") : esc(r.text)}</div>`).join("") : `<p class="muted">هنوز پاسخی ثبت نشده.</p>`));
+  }catch(e){ closeSheet(); toast(e.message); }
+}
+function openBc(){
+  if(!S.cur.active) return toast("اول ربات رو فعال کن");
+  S.sheet = {kind:"info"};
+  showSheet(head("📣 پیام همگانی") + `<p class="muted" style="margin-bottom:8px">پیام برای همه‌ی کاربرهای ربات فرستاده می‌شه. (هر ۱۰ دقیقه یک بار)</p>
+    <textarea class="fa" id="bc-text" maxlength="3500" placeholder="متن پیام…"></textarea><div style="height:10px"></div><button data-ax="bcsend">ارسال</button>`);
+}
+function sendBc(btn){
+  const t = $("#bc-text").value.trim(); if(t.length < 2) return toast("متن پیام رو بنویس");
+  busy(btn, async () => { const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text:t}); closeSheet(); toast(`ارسال برای ${fa(d.queued)} نفر شروع شد 📣`); });
 }
 
-/* ───────── حساب و کیف پول ───────── */
+/* ───────── پروفایل کاربر ───────── */
 const pips = (n, total) => `<div class="pips">${Array.from({length: Math.max(total,1)}, (_,i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</div>`;
+const REASONS = {welcome:"هدیه‌ی ثبت‌نام", daily:"هدیه‌ی روزانه", referral_new:"هدیه‌ی ورود با لینک دعوت", referral_inviter:"پاداش دعوت دوست", coupon:"کد هدیه", admin:"تنظیم توسط ادمین", generate:"ساخت ربات", upgrade:"ارتقای ربات"};
+const reasonOf = r => r.startsWith("bot_ai") ? "مصرف هوش مصنوعیِ ربات‌هات" : (REASONS[r] || r);
 function renderProfile(){
   const u = tg?.initDataUnsafe?.user || {};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const active = S.bots.filter(b => b.active).length, C = 2 * Math.PI * 26;
-  const rem = S.limit ? Math.max(0, Math.min(1, S.quota / S.limit)) : 0;
-  const joined = S.joined ? new Date(S.joined).toLocaleDateString("fa-IR-u-nu-latn", {year:"numeric", month:"long", day:"numeric"}) : "—";
-  const cost = (n, label) => `<div><span>${label}</span><b><span class="num">${fa(n)}</span> توکن</b></div>`;
-  const packs = (S.pay.packs||[]).map((p,i)=>`
-    <div class="pack${i===1?" best":""}">
-      <div class="pi"><b><span class="num">${grp(p.tokens)}</span> توکن${i===1?'<span class="badge">بهترین ارزش</span>':""}</b>
-        <small><span class="num">${grp(p.toman)}</span> تومان${i===1?" · هر توکن ارزان‌تر":" "}</small></div>
-      <button data-buy="${p.id}">خرید</button>
-    </div>`).join("");
+  const active = S.bots.filter(b => b.active).length, r = S.ref || {}, dl = S.daily || {};
+  const joined = S.joined ? new Date(S.joined).toLocaleDateString("fa-IR", {year:"numeric", month:"long", day:"numeric"}) : "—";
   $("#app").innerHTML = `
     <div class="card pf">
       <div class="av"><span class="ring"></span>
@@ -1234,140 +1010,74 @@ function renderProfile(){
       <h2>${esc(name)}</h2>
       ${u.username ? `<span class="muted un">@${esc(u.username)}</span>` : ""}
     </div>
-    <div class="wcard">
-      <div class="wl">موجودی توکن</div>
-      <div class="bal"><span class="num">${grp(S.tokens)}</span><small>توکن</small></div>
-      <div class="wrow">
-        <button class="${S.daily.can?"claim":""}" id="claimBtn" ${S.daily.can?"":"disabled"}>${S.daily.can ? `دریافت پاداش روزانه (${fa(S.daily.next)})` : "پاداش امروز گرفته شد"}</button>
-        <button id="buyBtn">خرید توکن</button>
-      </div>
-      <div class="streak">${Array.from({length:7},(_,i)=>`<i class="${i < Math.min(S.daily.streak,7) ? "on" : ""}"></i>`).join("")}</div>
-      <div class="sw"><span>زنجیره‌ی روزانه: <span class="num">${fa(S.daily.streak)}</span> روز</span><span>ساخت امروز: <span class="num">${fa(S.limit-S.quota)}</span> از <span class="num">${fa(S.limit)}</span></span></div>
-    </div>
-    <div class="card" id="packsTop">
-      <h2>بسته‌های توکن</h2>
-      ${S.pay.enabled ? packs : `<p class="muted">پرداخت آنلاین هنوز فعال نشده.${S.pay.support ? ` برای خرید به <b dir="ltr">@${esc(S.pay.support)}</b> پیام بده.` : ""}</p>`}
-      ${S.pay.enabled && S.pay.support ? `<p class="muted" style="margin-top:4px">مشکل پرداخت؟ <b dir="ltr">@${esc(S.pay.support)}</b></p>` : ""}
+    <div class="card wal">
+      <div class="k">موجودی توکن</div><div class="big">🪙 ${fa(S.bal)}</div>
+      <p class="muted" style="margin-bottom:10px">هر ساخت یا ارتقای ربات حدود ${fa(S.costs.typical)} توکن مصرف می‌کنه. ویرایش دستی و قالب‌ها رایگانه.</p>
+      <button data-ax="daily" ${dl.available ? "" : "disabled"}>${dl.available ? `🎁 هدیه‌ی امروز (+${fa(dl.amount)} توکن)` : "هدیه‌ی امروز رو گرفتی 🌙"}</button>
     </div>
     <div class="card">
-      <h2>زیرمجموعه‌گیری</h2>
-      <p class="muted" style="margin-bottom:8px">دوستات رو دعوت کن؛ به هر دعوت موفق <b class="num">${fa(S.ref.bonus||10)}</b> توکن می‌گیری و طرف دوم هم <b class="num">${fa(S.ref.join_bonus||5)}</b> توکن هدیه می‌گیره.</p>
-      <div class="kv" style="padding:0">
-        <div><span>لینک دعوت</span><b class="cpy" id="refLink">${S.ref.link ? esc(S.ref.link.replace("https://","")) : "در دسترس نیست"}<svg><use href="#i-copy"/></svg></b></div>
-        <div><span>دعوت‌شده‌ها</span><b><span class="num">${fa(S.ref.count)}</span> نفر</b></div>
-        <div><span>درآمد از دعوت</span><b><span class="num">${grp(S.ref.earned)}</span> توکن</b></div>
+      <h2>👥 دعوت دوستان = توکن رایگان</h2>
+      <p class="muted" style="margin:6px 0 10px">دوستت با لینک تو که بیاد ${fa(r.new)} توکن می‌گیره؛ وقتی اولین رباتش رو فعال کنه، تو ${fa(r.inviter)} توکن می‌گیری (تا ${fa(r.max)} دعوت).</p>
+      <input readonly value="${esc(r.link || "")}" onclick="this.select()"><div style="height:8px"></div>
+      <div class="g2"><button class="ghost" data-ax="copyref">📋 کپی لینک</button><button data-ax="shareref">📤 اشتراک‌گذاری</button></div>
+      <div class="stats" style="margin:12px 0 0">
+        <div class="stat"><div class="k">دعوت‌شده‌ها</div><div class="v">${fa(r.joined)}</div></div>
+        <div class="stat"><div class="k">توکن درآمدی</div><div class="v">${fa(r.earned)}</div></div>
       </div>
     </div>
+    <div class="card"><h2>🎟 کد هدیه</h2><div style="height:8px"></div>
+      <div class="g2" style="grid-template-columns:1fr auto"><input id="cpn" placeholder="CODE" autocomplete="off"><button data-ax="coupon" style="width:auto">ثبت</button></div></div>
     <div class="stats">
-      <div class="stat"><div class="k">ربات‌های من</div><div class="v"><span class="num">${fa(S.bots.length)}</span> <small>از ${fa(S.maxBots)}</small></div>${pips(S.bots.length, S.maxBots)}</div>
-      <div class="stat"><div class="k">ربات‌های فعال</div><div class="v"><span class="num">${fa(active)}</span> <small>از ${fa(S.bots.length)}</small></div>${pips(active, S.bots.length || S.maxBots)}</div>
-      <div class="stat quota">
-        <svg viewBox="0 0 64 64">
-          <circle class="tr" cx="32" cy="32" r="26"/><circle class="fg" id="qring" cx="32" cy="32" r="26" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>
-        <div class="qv"><div class="k">ساخت و ارتقای امروز</div><b class="num">${fa(S.quota)}</b> <span class="muted">از ${fa(S.limit)} باقی مونده</span></div>
-      </div>
+      <div class="stat"><div class="k">ربات‌های من</div><div class="v">${fa(S.bots.length)} <small>از ${fa(S.maxBots)}</small></div></div>
+      <div class="stat"><div class="k">ربات‌های فعال</div><div class="v">${fa(active)} <small>از ${fa(S.bots.length)}</small></div></div>
     </div>
+    <div class="card" id="ledger"><h2>🧾 تاریخچه‌ی توکن</h2><p class="muted">در حال بارگذاری…</p></div>
+    ${S.isAdmin ? `<div class="card" id="admin"><h2>🛠 پنل ادمین</h2><div style="height:8px"></div>
+      <span class="lbl">افزودن/کم‌کردن توکن کاربر</span>
+      <div class="g2"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
+      <div style="height:6px"></div><button class="ghost" data-ax="agrant">اعمال</button>
+      <span class="lbl" style="margin-top:12px">ساخت کد هدیه</span>
+      <div class="g2"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
+      <div style="height:6px"></div><div class="g2"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز، اختیاری)" inputmode="numeric"></div>
+      <div style="height:6px"></div><button class="ghost" data-ax="acoupon">ساخت کد</button>
+      <div style="height:10px"></div><button class="ghost" data-ax="astats">📈 آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
     <div class="card kv">
-      <h2 style="margin-bottom:2px">هزینه‌ها</h2>
-      ${cost(S.costs.generate, "ساخت یا ارتقای ربات با هوش مصنوعی")}
-      ${cost(S.costs.media, "آپلود هر رسانه")}
-      ${cost(S.costs.ai, "هر پاسخ هوشمند داخل ربات‌هات")}
-      ${cost(S.costs.broadcast, "هر ارسال انبوه")}
-      <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}<svg><use href="#i-copy"/></svg></b>` : "<b>—</b>"}</div>
+      <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}</b>` : "<b>—</b>"}</div>
       <div><span>اولین ورود</span><b>${joined}</b></div>
-    </div>
-    ${S.log.length ? `<div class="card"><h2>آخرین تراکنش‌ها</h2><div class="tx-log">
-      ${S.log.slice(0,15).map(t=>`<div><span>${esc(t.r)}<br><span>${new Date(t.t).toLocaleDateString("fa-IR-u-nu-latn")} ${new Date(t.t).toLocaleTimeString("fa-IR-u-nu-latn",{hour:"2-digit",minute:"2-digit"})}</span></span><b class="d ${t.d>=0?"pos":"neg"}"><span class="num">${t.d>=0?"+":""}${grp(t.d)}</span></b></div>`).join("")}
-    </div></div>` : ""}`;
-  requestAnimationFrame(() => requestAnimationFrame(() => { const r = $("#qring"); if(r) r.style.strokeDashoffset = C * (1 - rem); }));
-  $("#claimBtn")?.addEventListener("click", claimDaily);
-  $("#buyBtn")?.addEventListener("click", () => $("#packsTop")?.scrollIntoView({behavior:"smooth", block:"start"}));
-  $("#refLink")?.addEventListener("click", () => {
-    if(!S.ref.link) return toast("لینک دعوت در دسترس نیست");
-    navigator.clipboard?.writeText(S.ref.link).then(()=>toast("لینک دعوت کپی شد"), ()=>toast(S.ref.link));
-  });
-  document.querySelectorAll("[data-buy]").forEach(b => b.onclick = () => buyPack(b.dataset.buy, b));
-  if(S.pay.enabled) $(".pack")?.scrollIntoView?.({block:"nearest"});
+    </div>`;
+  loadLedger();
 }
-async function claimDaily(btn){
-  busy($("#claimBtn"), async () => {
-    const d = await api("/api/daily","POST");
-    S.tokens = d.tokens; S.daily.can = false; S.daily.streak++;
-    await loadWalletBits();
-    render(); toast(`${fa(d.amount)} توکن پاداش گرفتی`);
-    tg?.HapticFeedback?.notificationOccurred("success");
-  });
-}
-async function loadWalletBits(){
-  try{ const d = await api("/api/me"); S.tokens=d.tokens; S.daily=d.daily||S.daily; S.ref=d.ref||S.ref;
-    S.log=d.wallet_log||[]; S.pay=d.pay||S.pay; S.costs=d.costs||S.costs; $("#tokv").textContent = grp(S.tokens); }catch(_){}
-}
-function buyPack(id, btn){
-  if(!S.pay.enabled){ toast("پرداخت آنلاین فعال نیست"); return; }
-  busy(btn, async () => {
-    const d = await api("/api/pay","POST",{pack:id});
-    toast("در درگاه پرداخت آماده شد؛ بعد از پرداخت برگرد اینجا");
-    const open = tg?.openLink ? (u=>tg.openLink(u)) : (u=>window.open(u,"_blank"));
-    open(d.url);
-    pollOrder(d.order);
-  });
-}
-function pollOrder(oid){
-  let n = 0;
-  clearInterval(pollOrder.t);
-  toast("منتظر تأیید پرداخت…");
-  pollOrder.t = setInterval(async () => {
-    n++;
-    if(n > 60){ clearInterval(pollOrder.t); return; }
-    try{
-      const d = await api(`/api/pay/${oid}`);
-      if(d.status === "paid"){
-        clearInterval(pollOrder.t);
-        await loadWalletBits(); render();
-        toast(`پرداخت انجام شد؛ ${grp(d.tokens)} توکن اضافه شد`);
-        tg?.HapticFeedback?.notificationOccurred("success");
-      } else if(d.status === "fail"){ clearInterval(pollOrder.t); toast("پرداخت ناموفق بود"); }
-    }catch(_){}
-  }, 3000);
-}
-
-/* ───────── ارسال انبوه ───────── */
-async function openBroadcast(){
-  await ensureMedia();
-  const b = S.cur; let audience = 0;
-  try{ audience = (await api(`/api/bots/${b.id}/stats`)).audience; }catch(_){}
-  S.sheet = {kind:"bcast"};
-  D = {text:"", media:""};
-  showSheet(`<div class="hd"><h2>ارسال انبوه</h2><button class="sm x" data-x="close">✕</button></div>
-    <p class="muted">این پیام برای همه‌ی <b class="num">${grp(audience)}</b> مخاطب این ربات فرستاده می‌شه. هزینه: <b class="num">${fa(S.costs.broadcast)}</b> توکن · موجودی: <b class="num">${grp(S.tokens)}</b></p>
-    <span class="lbl">متن پیام</span><textarea class="fa" id="bc-text" maxlength="4000" placeholder="مثلاً: تخفیف ویژه‌ی آخر هفته شروع شد…"></textarea>
-    <span class="lbl">رسانه (اختیاری)</span><div class="cmd">${mediaSelectHTML("", "bc-media")}</div>
-    <div class="bar"><button data-sh="bcstart">ارسال</button></div>
-    <div id="bcProg"></div>`);
+async function loadLedger(){
+  try{
+    const d = await api("/api/ledger"); const el = $("#ledger"); if(!el) return;
+    el.innerHTML = `<h2>🧾 تاریخچه‌ی توکن</h2><div style="height:6px"></div>` + (d.items.length ? `<div class="kv" style="padding:0">${d.items.map(x =>
+      `<div><span>${esc(reasonOf(x.reason))} • ${fdate(x.t)}</span><b class="${x.delta > 0 ? "pos" : "neg"}" dir="ltr">${x.delta > 0 ? "+" : ""}${fa(x.delta)}</b></div>`).join("")}</div>` : `<p class="muted">هنوز تراکنشی نداری.</p>`);
+  }catch(_){ $("#ledger")?.remove(); }
 }
 document.addEventListener("click", e => {
-  const x = e.target.closest('[data-sh="bcstart"]'); if(!x) return;
-  const b = S.cur, text = $("#bc-text").value.trim(), mref = $("#bc-media").value;
-  if(!text && !mref) return toast("متن یا رسانه‌ای انتخاب کن");
-  busy(x, async () => {
-    const d = await api(`/api/bots/${b.id}/broadcast`, "POST", {text, media: mref ? {ref:mref} : null});
-    S.tokens = d.tokens ?? S.tokens; $("#tokv").textContent = grp(S.tokens);
-    const pid = $("#bcProg");
-    pid.innerHTML = `<span class="lbl">در حال ارسال…</span><div class="prog"><i id="bcBar"></i></div><p class="muted" id="bcTxt"><span class="num">0</span> از <span class="num">${d.job.total}</span></p>`;
-    let n = 0;
-    const t = setInterval(async () => {
-      n++;
-      try{
-        const j = (await api(`/api/bots/${b.id}/job`)).job;
-        if(j){
-          $("#bcBar").style.width = Math.round((j.sent+j.fail)/Math.max(1,j.total)*100) + "%";
-          $("#bcTxt").innerHTML = `<span class="num">${j.sent}</span> ارسال شد${j.fail?` · <span class="num">${j.fail}</span> ناموفق`:""}`;
-          if(j.state !== "run"){ clearInterval(t); toast(j.state==="done" ? `ارسال تمام شد (${j.sent} پیام)` : "ارسال متوقف شد"); }
-        }
-      }catch(_){}
-      if(n > 120) clearInterval(t);
-    }, 1500);
-  });
+  const c = e.target.closest('[data-pf="copyid"]'); if(!c) return;
+  navigator.clipboard?.writeText(c.dataset.id).then(() => toast("شناسه کپی شد ✅"), () => toast(c.dataset.id));
+});
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tpl]"); if(t) return useTemplate(t.dataset.tpl, t);
+  const x = e.target.closest("[data-ax]"); if(!x) return;
+  const a = x.dataset.ax, v = id => ($(id)?.value || "").trim();
+  if(a === "subs") openSubs();
+  else if(a === "bc") openBc();
+  else if(a === "bcsend") sendBc(x);
+  else if(a === "daily") busy(x, async () => { const d = await api("/api/daily", "POST"); S.bal = d.bal; S.daily.available = false; render(); toast(`+${fa(d.got)} توکن گرفتی 🎁`); });
+  else if(a === "copyref") navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک کپی شد ✅"), () => toast(S.ref.link));
+  else if(a === "shareref"){
+    const url = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هوشمند، ربات تلگرامت رو در چند ثانیه بساز 🤖");
+    tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
+  }
+  else if(a === "coupon"){
+    if(!v("#cpn")) return toast("کد رو وارد کن");
+    busy(x, async () => { const d = await api("/api/coupon", "POST", {code: v("#cpn")}); S.bal = d.bal; render(); toast(`+${fa(d.got)} توکن اضافه شد 🎟`); });
+  }
+  else if(a === "agrant") busy(x, async () => { const d = await api("/api/admin/grant", "POST", {uid: v("#ag-uid"), amount: v("#ag-amt")}); toast(`موجودی جدید کاربر: ${fa(d.bal)}`); });
+  else if(a === "acoupon") busy(x, async () => { const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")}); toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); });
+  else if(a === "astats") busy(x, async () => { const d = await api("/api/admin/stats"); $("#astats").innerHTML = `کاربران: ${fa(d.users)} • ربات‌ها: ${fa(d.bots)} (فعال: ${fa(d.active)}) • کاربران رباتا: ${fa(d.bot_users)}<br>توکنِ در گردش: ${fa(d.circulation)} • دعوت موفق: ${fa(d.referrals)}`; });
 });
 
 /* ───────── نوار پایین ───────── */
@@ -1380,18 +1090,16 @@ function setDock(o, save = true){
   if(save) try{ localStorage.setItem("dockOpen", o ? "1" : "0"); }catch(_){}
 }
 function syncDock(){
-  document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.d === (S.view === "profile" ? "profile" : S.view === "media" ? "media" : "bots")));
+  document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.d === (S.view === "profile" ? "profile" : "bots")));
 }
 function go(where){
   if(S.busy) return toast("صبر کن کار فعلی تموم شه");
   closeSheet();
   if(where === "profile"){ if(S.view !== "profile"){ S.view = "profile"; render(); } }
-  else if(where === "media"){ if(S.view !== "media"){ S.view = "media"; render(); } }
   else if(S.view !== "list"){ S.view = "list"; S.cur = null; S.open = new Set(); load(); }
   scrollTo({top:0, behavior:"smooth"});
   tg?.HapticFeedback?.selectionChanged();
 }
-$("#tokchip").addEventListener("click", () => go("profile"));
 let py = null;
 dock.addEventListener("pointerdown", e => { py = e.clientY; });
 dock.addEventListener("pointercancel", () => { py = null; });
