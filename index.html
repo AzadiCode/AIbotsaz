@@ -54,8 +54,8 @@ input{direction:ltr;text-align:left}
 @keyframes s{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
 .think{display:flex;gap:8px;background:linear-gradient(135deg,rgba(47,124,246,.09),rgba(47,124,246,.03));
-  border:1px solid rgba(47,124,246,.16);border-radius:12px;padding:10px 12px;margin:-2px 0 12px;
-  font-size:12.5px;line-height:1.65;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
+  border:1px solid rgba(47,124,246,.16);border-radius:11px;padding:8px 11px;margin:-2px 0 12px;
+  font-size:12px;line-height:1.6;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
   transition:opacity .35s ease,max-height .35s ease,margin .35s ease,padding .35s ease}
 .think.show{opacity:1;max-height:700px;margin:0 0 12px}
 .think .ic{flex:none;font-size:14px;line-height:1.5}
@@ -144,25 +144,25 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 @keyframes riseIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 
 /* انتخاب نوع دکمه‌ها */
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.seg button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px 9px;background:var(--bg2);color:var(--hint);
-  border:1.5px solid transparent;border-radius:13px;line-height:1.45;transition:border-color .18s,background .18s,color .18s}
-.seg button svg{width:58px;height:44px;margin-bottom:2px}
-.seg button b{color:var(--tx);font-weight:600;font-size:13px}
-.seg button small{font-size:11px}
-.seg button.on{border-color:var(--ac);color:var(--ac);background:rgba(47,124,246,.07)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 6px 6px;background:transparent;color:var(--hint);
+  border:1px solid rgba(127,127,127,.26);border-radius:10px;line-height:1.4;transition:border-color .18s,background .18s,color .18s}
+.seg button svg{width:38px;height:28px;margin-bottom:1px}
+.seg button b{color:var(--tx);font-weight:600;font-size:12px}
+.seg button small{font-size:10px}
+.seg button.on{border-color:var(--ac);color:var(--ac);background:rgba(47,124,246,.06)}
 
 /* ═════════ انیمیشن ساخت ═════════ */
-.build{position:relative;background:var(--bg);border-radius:18px;padding:16px 16px 18px;margin-bottom:12px;overflow:hidden;
+.build{position:relative;background:var(--bg);border-radius:14px;padding:11px 13px 12px;margin-bottom:10px;overflow:hidden;
   border:1px solid rgba(47,124,246,.2);animation:pop .35s ease}
-.build .bh{display:flex;align-items:center;gap:12px}
+.build .bh{display:flex;align-items:center;gap:10px}
 .build .bt{flex:1;min-width:0}
-.build .bt b{display:block;font-size:14px;line-height:1.5}
-.build .ph{display:block;font-size:12.5px;color:var(--hint);transition:opacity .3s,transform .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.build .bt b{display:block;font-size:13px;line-height:1.4}
+.build .ph{display:block;font-size:11.5px;color:var(--hint);transition:opacity .3s,transform .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .build .ph.out{opacity:0;transform:translateY(3px)}
-.build .clk{font-size:12px;color:var(--hint);direction:ltr;font-variant-numeric:tabular-nums;letter-spacing:.04em;
-  background:var(--bg2);border-radius:99px;padding:2px 10px}
-.core{width:48px;height:48px;flex:none;overflow:visible}
+.build .clk{font-size:11px;color:var(--hint);direction:ltr;font-variant-numeric:tabular-nums;letter-spacing:.04em;
+  background:var(--bg2);border-radius:99px;padding:1px 8px}
+.core{width:34px;height:34px;flex:none;overflow:visible}
 .core .glow{fill:var(--ac);opacity:.16;animation:glow 2.4s ease-in-out infinite;transform-origin:50% 50%}
 .core .r1{fill:none;stroke:var(--ac);stroke-opacity:.4;stroke-width:1;stroke-dasharray:1.5 4.5;transform-origin:50% 50%;animation:s 16s linear infinite}
 .core .arc{fill:none;stroke:url(#gA);stroke-width:2.2;stroke-linecap:round;transform-origin:50% 50%;animation:s 2.6s cubic-bezier(.5,0,.5,1) infinite}
@@ -172,28 +172,28 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 .core .eye{fill:var(--bg)}
 @keyframes glow{50%{transform:scale(1.5);opacity:.05}}
 @keyframes chip{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(90deg) scale(.86)}}
-.bp{position:relative;margin:16px 0 14px;padding:14px 12px;border-radius:14px;background:var(--bg2);overflow:hidden}
+.bp{position:relative;display:flex;align-items:flex-start;gap:10px;margin:9px 0 9px;padding:8px 10px;border-radius:10px;background:var(--bg2);overflow:hidden}
 .bp::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(127,127,127,.25) 1px,transparent 0);
   background-size:13px 13px;-webkit-mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%);mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%)}
-.bp .msg{position:relative;width:78%;background:var(--bg);border-radius:12px 12px 12px 4px;padding:10px 11px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
-.bp .msg i{display:block;height:6px;border-radius:4px;background:rgba(127,127,127,.3);width:var(--w);transform-origin:100% 50%;animation:lineIn 4.8s ease-in-out infinite;animation-delay:calc(var(--k)*.18s)}
+.bp .msg{position:relative;flex:0 0 52%;background:var(--bg);border-radius:9px 9px 9px 3px;padding:7px 8px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.bp .msg i{display:block;height:4px;border-radius:3px;background:rgba(127,127,127,.3);width:var(--w);transform-origin:100% 50%;animation:lineIn 4.8s ease-in-out infinite;animation-delay:calc(var(--k)*.18s)}
 .bp .msg::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(47,124,246,.12) 50%,transparent 70%);
   transform:translateX(100%);animation:sh2 2.2s ease-in-out infinite}
-.bp .keys{position:relative;width:78%;display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
-.bp .keys b{height:24px;border-radius:8px;background:var(--bg);border:1px solid rgba(47,124,246,.35);opacity:0;
+.bp .keys{position:relative;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
+.bp .keys b{height:15px;border-radius:6px;background:var(--bg);border:1px solid rgba(47,124,246,.35);opacity:0;
   animation:keyIn 4.8s ease-in-out infinite;animation-delay:calc(.9s + var(--k)*.22s)}
 @keyframes lineIn{0%{transform:scaleX(0);opacity:0}14%{opacity:1}30%,86%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes keyIn{0%,6%{opacity:0;transform:translateY(5px) scale(.94)}20%,76%{opacity:1;transform:none}92%,100%{opacity:0}}
 @keyframes sh2{to{transform:translateX(-100%)}}
 .steps{display:flex}
-.st{position:relative;flex:1;text-align:center;font-size:11px;color:var(--hint);line-height:1.4;transition:color .3s}
-.st::before{content:"";position:absolute;top:5px;left:-50%;width:100%;height:2px;background:rgba(127,127,127,.22);transition:background .5s}
+.st{position:relative;flex:1;text-align:center;font-size:10.5px;color:var(--hint);line-height:1.4;transition:color .3s}
+.st::before{content:"";position:absolute;top:4px;left:-50%;width:100%;height:2px;background:rgba(127,127,127,.22);transition:background .5s}
 .st:last-child::before{display:none}
 .st.done::before{background:var(--ac)}
-.st i{position:relative;z-index:1;display:block;width:12px;height:12px;border-radius:50%;margin:0 auto 6px;background:var(--bg);
+.st i{position:relative;z-index:1;display:block;width:10px;height:10px;border-radius:50%;margin:0 auto 4px;background:var(--bg);
   border:2px solid rgba(127,127,127,.35);transition:background .3s,border-color .3s}
 .st.done i{background:var(--ac);border-color:var(--ac)}
-.st.done i::after{content:"";position:absolute;left:3px;top:0;width:3px;height:6px;border:solid var(--act);border-width:0 1.6px 1.6px 0;transform:rotate(40deg)}
+.st.done i::after{content:"";position:absolute;left:1.8px;top:.1px;width:2px;height:4.4px;border:solid var(--act);border-width:0 1.4px 1.4px 0;transform:rotate(40deg)}
 .st.cur{color:var(--tx)}
 .st.cur i{border-color:var(--ac);animation:ping 1.6s ease-out infinite}
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(47,124,246,.45)}100%{box-shadow:0 0 0 8px rgba(47,124,246,0)}}
@@ -266,6 +266,25 @@ body.dock-closed{--dockh:calc(30px + env(safe-area-inset-bottom))}
 .kv b{font-weight:500}
 .kv .cpy{cursor:pointer;direction:ltr;display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
 .kv .cpy svg{width:14px;height:14px;color:var(--hint)}
+/* ═════════ ویرایشگر متغیر و شرط ═════════ */
+.cmd select{flex:1;min-width:0}
+details.adv{margin-top:14px;border:1px solid rgba(127,127,127,.22);border-radius:12px;padding:0 12px}
+details.adv>summary{cursor:pointer;padding:10px 0;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::after{content:"＋";color:var(--hint)}
+details.adv[open]>summary::after{content:"－"}
+details.adv .box{padding:0 0 12px}
+.sub{font-size:12.5px;font-weight:600;margin:12px 0 6px;display:flex;justify-content:space-between;align-items:center}
+.rl{background:var(--bg2);border-radius:11px;padding:8px;margin-bottom:8px}
+.rl .cmd{margin-bottom:6px}.rl .cmd:last-child{margin-bottom:0}
+.rl input,.rl select,.rl textarea{padding:8px 9px;font-size:13px;border-radius:9px;background:var(--bg)}
+.rl textarea{min-height:64px}
+.rl>input{margin-top:0}
+.rl .lbl{margin:6px 0 3px}
+.kvr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--bg2);font-size:12.5px}
+.kvr:first-of-type{border-top:0}
+.kvr code{font-family:ui-monospace,Menlo,monospace;color:var(--ac);font-size:12px}
+.kvr span{color:var(--hint)}
 </style>
 </head>
 <body>
@@ -341,11 +360,12 @@ const cp = o => JSON.parse(JSON.stringify(o));
 
 const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g," ").slice(0,24) || id) : "؟"; };
 const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : CH_RE.test(b.url||"") ? "channel" : "url";
-const btnInfo = (cfg, b) => {
+const btnInfo0 = (cfg, b) => {
   const k = kindOf(b);
   return k==="goto" ? "← "+esc(titleOf(cfg,b.goto)) : k==="channel" ? "📢 @"+esc(CH_RE.exec(b.url)[1])
     : k==="alert" ? "💬 پیام پاپ‌آپ" : k==="copy" ? "📋 کپی متن" : "🔗 "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
 };
+const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " · 👁 شرطی" : "") + (b.do?.length ? " · ⚡" : "");
 
 const fa = n => Number(n || 0).toLocaleString("fa-IR");
 const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
@@ -358,6 +378,7 @@ function nodeCard(cfg, id, i = 0, rise = false){
   else if(n.ask) tags.push("دریافت پیام");
   if(isRk) tags.push("⌨️ کیبورد چت");
   if(n.photo) tags.push("🖼 عکس");
+  if(n.do?.length || n.route?.length || n.alt?.length) tags.push("🧩 منطق");
   const open = S.open.has(id), nb = n.buttons.reduce((a,r) => a + r.length, 0);
   const prev = (n.text||"").replace(/\s+/g," ").slice(0,70);
   const kb = n.buttons.map((row,r) => `<div class="krow${isRk?" rk":""}">${row.map((b,c) =>
@@ -371,7 +392,7 @@ function nodeCard(cfg, id, i = 0, rise = false){
       </div>
       <div class="nbody"><div><div class="nbi">
         <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen">✏️</span></div>
-        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map(esc).join(" ← ")}</div>` : ""}
+        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map((q,i) => esc(q) + (n.save?.[i] ? ' <span class="tag" dir="ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" ← ")}</div>` : ""}
         ${isRk ? `<div class="tray">${kb}</div>` : kb}
         ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">＋ دکمه‌ی جدید</button>` : ""}
       </div></div></div>
@@ -403,7 +424,7 @@ function renderBot(){
   const prompt = `
     <div class="card">
       <h2>${b ? "چی رو تغییر بدم؟" : "چه رباتی می‌خوای؟"}</h2>
-      <textarea id="prompt" maxlength="1200" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
+      <textarea id="prompt" maxlength="2000" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
       <div style="height:10px"></div>
       <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
     </div>
@@ -504,13 +525,88 @@ function showSheet(html){
 const nodeOpts = (cfg, cur, extra="") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i===cur?" selected":""}>${esc(titleOf(cfg,i))}</option>`).join("");
 const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="close">✕</button></div>`;
 
+/* ── منطق: متغیر، شرط و اکشن ── */
+const OPS = [["==","مساوی باشه با"],["!=","مساوی نباشه با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشه"],["empty","خالی باشه"],["filled","پر باشه"]];
+const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
+const APH = {set:"مقدار (می‌تونی {متغیر} بذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شه"};
+const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
+const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ ۱ یا ۰"],["is_owner","صاحب ربات؟ ۱ یا ۰"],["visits","تعداد استارت‌های کاربر"],["text","آخرین پیام کاربر"],
+  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (۰ تا ۲۳)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
+const BUILTIN = BUILTIN_HELP.map(x => x[0]);
+const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
+const simpleCond = c => !!c && typeof c.var === "string" && !c.all && !c.any && !c.not;
+const blankCond = () => ({var:"", op:"==", value:""});
+const newRule = l => l==="do" ? {op:"set", var:"", value:""} : l==="route" ? {c:blankCond(), goto:S.cur.config.start} : l==="alt" ? {c:blankCond(), text:""} : {c:blankCond()};
+const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
+
+function condHTML(c){
+  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px">🔀 شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
+  const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
+  return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
+    <select class="c-op" data-sh="re">${OPS.map(([v,l]) => `<option value="${v}"${v===x.op?" selected":""}>${l}</option>`).join("")}</select></div>
+    ${nov ? "" : `<input class="fa c-val" value="${esc(x.value || "")}" placeholder="مقدار" maxlength="100">`}`;
+}
+function ruleHTML(list, o, i, cfg){
+  const del = `<button class="sm x" data-sh="delrl" data-l="${list}" data-i="${i}">✕</button>`;
+  let inner;
+  if(list === "do"){
+    inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v,l]) => `<option value="${v}"${v===o.op?" selected":""}>${l}</option>`).join("")}</select>
+      ${o.op === "notify" ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
+      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op])}" maxlength="${o.op==="notify"?500:100}">`}`;
+  } else {
+    inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگه…"}</span>${del}</div>${condHTML(o.c)}`;
+    if(list === "route") inner += `<span class="lbl" style="margin:6px 0 3px">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
+    if(list === "alt") inner += `<textarea class="fa r-text" maxlength="3500" placeholder="متن جایگزین">${esc(o.text || "")}</textarea>`;
+  }
+  return `<div class="rl" data-list="${list}" data-i="${i}">${inner}</div>`;
+}
+function ruleSection(title, hint, list, cfg, max){
+  const arr = D[list];
+  return `<div class="sub"><span>${title}</span>${arr.length < max ? `<button class="sm ghost" data-sh="addrl" data-l="${list}">＋</button>` : ""}</div>
+    ${hint ? `<p class="muted" style="margin:-3px 0 6px">${hint}</p>` : ""}${arr.map((o,i) => ruleHTML(list, o, i, cfg)).join("")}`;
+}
+function readRl(list){
+  const rows = [...document.querySelectorAll(`.rl[data-list="${list}"]`)];
+  if(!rows.length || !D[list]) return;
+  D[list] = rows.map((r,i) => {
+    const o = {...(D[list][i] || {})}, q = s => r.querySelector(s);
+    if(q(".c-var")) o.c = {var:cleanVar(q(".c-var").value), op:q(".c-op").value, value:q(".c-val")?.value ?? ""};
+    if(q(".r-goto")) o.goto = q(".r-goto").value;
+    if(q(".r-text")) o.text = q(".r-text").value;
+    if(q(".a-op")){
+      o.op = q(".a-op").value;
+      o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
+      o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
+    }
+    return o;
+  });
+}
+function ruleErr(){
+  const empty = c => c && simpleCond(c) && !c.var;
+  for(const a of D.do || []){
+    if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلانِ اکشن «به من خبر بده» رو بنویس"; }
+    else if(!a.var) return "اسم متغیرِ اکشن رو بنویس";
+  }
+  for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، اسم متغیرِ شرط رو بنویس";
+  for(const r of D.alt || []){
+    if(empty(r.c)) return "برای متن جایگزین، اسم متغیرِ شرط رو بنویس";
+    if(!(r.text || "").trim()) return "متن جایگزین نباید خالی باشه";
+  }
+  for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط رو بنویس";
+  return null;
+}
+const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
+
 /* ── بخش (کارت) ── */
 function openNode(id){
   const cfg = S.cur.config, n = cfg.nodes[id];
   S.sheet = {kind:"node", id};
   D = { title:n.title||"", text:n.text, photo:n.photo||"", done:n.done||"", next:n.next||"",
-        fields:n.fields ? cp(n.fields) : [""], mode:n.fields ? "form" : n.ask ? "ask" : "show", kb:n.kb==="reply" ? "reply" : "inline",
-        start:id===cfg.start, fb:id===cfg.fallback };
+        fields:n.fields ? n.fields.map((q,i) => ({q, v:(n.save||[])[i]||"", t:(n.types||[])[i]||"text"})) : [{q:"", v:"", t:"text"}],
+        silent:!!n.silent, mode:n.fields ? "form" : n.ask ? "ask" : "show", kb:n.kb==="reply" ? "reply" : "inline",
+        start:id===cfg.start, fb:id===cfg.fallback,
+        do:cp(n.do||[]), route:(n.route||[]).map(r => ({c:cp(r.when), goto:r.goto})), alt:(n.alt||[]).map(r => ({c:cp(r.when), text:r.text})), adv:false };
   renderSheet();
 }
 function kbPicker(cur){
@@ -525,10 +621,11 @@ function kbPicker(cur){
 }
 function nodeSheet(){
   const cfg = S.cur.config, id = S.sheet.id, d = D;
+  const advOpen = d.adv || d.do.length || d.route.length || d.alt.length;
   return head("ویرایش بخش") + `
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
-    <p class="muted">برای اسم کاربر بنویس <b dir="ltr">{name}</b></p>
+    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی ⚙️ تنظیمات ربات.</p>
     <span class="lbl">عکس (اختیاری — لینک مستقیم عکس)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">
     <span class="lbl">این بخش چی کار کنه؟</span>
     <select id="f-mode" data-sh="mode">
@@ -538,10 +635,18 @@ function nodeSheet(){
     </select>
     ${d.mode==="show" ? kbPicker(d.kb) : `<p class="muted" style="margin-top:10px">⌨️ کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
     ${d.mode==="form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
-      ${d.fields.map((f,i)=>`<div class="cmd"><input class="fa fld" value="${esc(f)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">✕</button></div>`).join("")}
-      ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld">＋ سؤال</button>` : ""}` : ""}
+      ${d.fields.map((f,i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">✕</button></div>
+        <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
+        <select class="ft">${TYPES.map(([v,l]) => `<option value="${v}"${v===f.t?" selected":""}>${l}</option>`).join("")}</select></div></div>`).join("")}
+      ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld">＋ سؤال</button>` : ""}
+      <label class="chk"><input type="checkbox" id="f-silent"${d.silent?" checked":""}> نتیجه‌ی فرم برای من فرستاده نشه</label>` : ""}
     ${d.mode!=="show" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="✅ ثبت شد، ممنون!">
       <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>` : ""}
+    <details class="adv"${advOpen ? " open" : ""}><summary>🧩 متغیر و شرط (پیشرفته)</summary><div class="box">
+      ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقدار ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
+      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر رو به بخش دیگه‌ای می‌فرسته (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
+      ${ruleSection("متن جایگزین شرطی", "اگه شرط درست بود، به‌جای متن اصلی نشون داده می‌شه", "alt", cfg, 4)}
+    </div></details>${dlist()}
     <label class="chk"><input type="checkbox" id="f-start"${d.start?" checked disabled":""}> صفحه‌ی شروع (/start)</label>
     <label class="chk"><input type="checkbox" id="f-fb"${d.fb?" checked disabled":""}> جواب پیام‌های نامفهوم کاربر</label>
     <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف بخش</button>`}</div>`;
@@ -550,26 +655,40 @@ function readNode(){
   const g = s => $(s)?.value ?? null;
   D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
   D.mode = g("#f-mode") ?? D.mode;
-  if(document.querySelector(".fld")) D.fields = [...document.querySelectorAll(".fld")].map(i => i.value);
+  const fq = [...document.querySelectorAll(".fq")];
+  if(fq.length) D.fields = fq.map(r => ({q:r.querySelector(".fld").value, v:cleanVar(r.querySelector(".fv").value), t:r.querySelector(".ft").value}));
+  if($("#f-silent")) D.silent = $("#f-silent").checked;
   if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
   if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
   if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
+  for(const l of ["do","route","alt"]) readRl(l);
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
 }
 function saveNode(){
   const id = S.sheet.id;
   if(!D.text.trim()) return toast("متن پیام نباید خالی باشه");
-  if(D.mode==="form" && !D.fields.some(f=>f.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
+  if(D.mode==="form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
   if(D.mode==="show" && D.kb==="reply" && !S.cur.config.nodes[id].buttons.length) return toast("برای کیبورد زیر چت اول یه دکمه به این بخش اضافه کن");
+  const err = ruleErr(); if(err) return toast(err);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id];
-    for(const k of ["title","photo","ask","fields","done","next","kb"]) delete n[k];
+    for(const k of ["title","photo","ask","fields","save","types","silent","done","next","kb","do","route","alt"]) delete n[k];
     if(D.mode==="show" && D.kb==="reply") n.kb = "reply";
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
     if(D.photo.trim()) n.photo = D.photo.trim();
     if(D.mode==="ask") n.ask = true;
-    if(D.mode==="form") n.fields = D.fields.map(f=>f.trim()).filter(Boolean);
+    if(D.mode==="form"){
+      const fl = D.fields.filter(f => f.q.trim());
+      n.fields = fl.map(f => f.q.trim());
+      if(fl.some(f => f.v)) n.save = fl.map(f => f.v);
+      if(fl.some(f => f.t !== "text")) n.types = fl.map(f => f.t);
+      if(D.silent) n.silent = true;
+    }
     if(D.mode!=="show"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    if(D.do.length) n.do = outActs(D.do);
+    if(D.route.length) n.route = D.route.map(r => ({when:r.c, goto:r.goto}));
+    if(D.alt.length) n.alt = D.alt.map(r => ({when:r.c, text:r.text.trim()}));
     if(D.start) cfg.start = id;
     if(D.fb) cfg.fallback = id;
   }));
@@ -581,6 +700,7 @@ function delNode(){
     for(const n of Object.values(cfg.nodes)){
       n.buttons = n.buttons.map(r => r.filter(b => b.goto !== id)).filter(r => r.length);
       if(n.next === id) delete n.next;
+      if(n.route){ n.route = n.route.filter(r => r.goto !== id); if(!n.route.length) delete n.route; }
     }
     for(const k of Object.keys(cfg.commands||{})) if(cfg.commands[k] === id) delete cfg.commands[k];
   }, "بخش حذف شد"));
@@ -589,7 +709,7 @@ function delNode(){
 }
 function addNode(){
   const cfg = S.cur.config, ids = Object.keys(cfg.nodes);
-  if(ids.length >= 25) return toast("حداکثر ۲۵ بخش");
+  if(ids.length >= 30) return toast("حداکثر ۳۰ بخش");
   let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
   const id = "page_"+k;
   S.open.add(id);
@@ -604,11 +724,12 @@ function addNode(){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind:"btn", n:nid, r, c};
-  if(c === null) D = {text:"دکمه‌ی جدید", kind:"goto", goto:cfg.start, val:""};
+  if(c === null) D = {text:"دکمه‌ی جدید", kind:"goto", goto:cfg.start, val:"", when:[], do:[], adv:false};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
     D = {text:b.text, kind:k, goto:b.goto||cfg.start,
-         val: k==="channel" ? "@"+CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || ""};
+         val: k==="channel" ? "@"+CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || "",
+         when:b.when ? [{c:cp(b.when)}] : [], do:cp(b.do||[]), adv:false};
   }
   renderSheet();
 }
@@ -619,30 +740,41 @@ function btnSheet(){
     goto: `<span class="lbl">کدوم بخش باز بشه؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
     channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
     url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
-    alert: `<span class="lbl">متنی که کاربر توی پاپ‌آپ می‌بینه</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea>`,
+    alert: `<span class="lbl">متنی که کاربر توی پاپ‌آپ می‌بینه</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌تونی از <b dir="ltr">{coins}</b> یا هر متغیر دیگه‌ای توش استفاده کنی؛ بعد از اجرای اکشن‌ها محاسبه می‌شه.</p>`,
     copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`
   }[d.kind];
+  const canDo = d.kind === "goto" || d.kind === "alert";
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
     <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
     <span class="lbl">با لمس دکمه چی بشه؟</span>
-    <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l])=>`<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
+    <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l]) => `<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
     ${val}
+    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>🧩 شرط و اکشن (پیشرفته)</summary><div class="box">
+      ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافیه", "when", cfg, 1)}
+      ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشون دادن پیام اجرا می‌شن", "do", cfg, 6)
+              : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یه بخش» و «پیام پاپ‌آپ» کار می‌کنه.</p>`}
+    </div></details>${dlist()}
     <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف دکمه</button>`}</div>`;
 }
 function readBtn(){
   D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
   if($("#b-goto")) D.goto = $("#b-goto").value;
   if($("#b-val")) D.val = $("#b-val").value;
+  readRl("when"); readRl("do");
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
 }
 function saveBtn(){
   const {n:nid, r, c} = S.sheet, d = D;
   if(!d.text.trim()) return toast("متن دکمه رو بنویس");
   if(d.kind!=="goto" && !d.val.trim()) return toast("مقصد دکمه رو وارد کن");
+  const err = ruleErr(); if(err) return toast(err);
   const btn = {text:d.text.trim()};
   if(d.kind==="goto") btn.goto = d.goto;
   else if(d.kind==="alert") btn.alert = d.val.trim();
   else if(d.kind==="copy") btn.copy = d.val.trim();
   else btn.url = d.val.trim();
+  if(d.when.length) btn.when = d.when[0].c;
+  if(d.do.length && (d.kind==="goto" || d.kind==="alert")) btn.do = outActs(d.do);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const rows = cfg.nodes[nid].buttons;
     if(c !== null) rows[r][c] = btn;
@@ -662,7 +794,7 @@ function openBot(){
   const cfg = S.cur.config;
   S.sheet = {kind:"bot"};
   D = { name:cfg.name, channels:(cfg.join?.channels||[]).map(c=>"@"+c).join(" "), jtext:cfg.join?.text||"",
-        cmds:Object.entries(cfg.commands||{}) };
+        cmds:Object.entries(cfg.commands||{}), vars:Object.entries(cfg.vars||{}) };
   renderSheet();
 }
 function botSheet(){
@@ -675,12 +807,23 @@ function botSheet(){
     <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی 👇">${esc(d.jtext)}</textarea>
     <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length<10?`<button class="sm ghost" data-sh="addcmd">＋ دستور</button>`:""}</div>
     ${d.cmds.map(([k,v],i)=>`<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
+    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length<20?`<button class="sm ghost" data-sh="addvar">＋ متغیر</button>`:""}</div>
+    <p class="muted" style="margin-bottom:6px">هر کاربر مقدار مخصوص خودش رو داره (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع رو بنویس.</p>
+    ${d.vars.map(([k,v],i)=>`<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+    <details class="adv"><summary>📖 متغیرهای آماده‌ی تلگرام</summary><div class="box">
+      <p class="muted" style="margin-bottom:6px">توی متن‌ها و شرط‌ها قابل استفاده‌ن؛ مثلاً <b dir="ltr">{name}</b>. اگه خالی بود می‌تونی مقدار جایگزین بذاری: <b dir="ltr">{username|بدون آیدی}</b></p>
+      ${BUILTIN_HELP.map(([k,l]) => `<div class="kvr"><code dir="ltr">{${k}}</code><span>${l}</span></div>`).join("")}
+    </div></details>
     <div class="bar"><button data-sh="save">ذخیره</button></div>`;
 }
 function readBot(){
   D.name = $("#s-name")?.value ?? D.name; D.channels = $("#s-chs")?.value ?? D.channels; D.jtext = $("#s-jtext")?.value ?? D.jtext;
   const ns = [...document.querySelectorAll(".cmdn")], vs = [...document.querySelectorAll(".cmdv")];
   if(ns.length || document.querySelector("#s-name")) D.cmds = ns.map((n,i) => [n.value, vs[i].value]);
+  if(document.querySelector("#s-name")){
+    const vn = [...document.querySelectorAll(".vn")], vd = [...document.querySelectorAll(".vd")];
+    D.vars = vn.map((n,i) => [cleanVar(n.value), vd[i].value]);
+  }
 }
 function saveBot(){
   const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
@@ -689,6 +832,9 @@ function saveBot(){
     if(chs.length) cfg.join = {channels:chs, text:d.jtext.trim()}; else delete cfg.join;
     cfg.commands = {};
     d.cmds.forEach(([k,v]) => { k = k.trim().replace(/^\//,"").toLowerCase(); if(k) cfg.commands[k] = v; });
+    const vars = {};
+    d.vars.forEach(([k,v]) => { if(k) vars[k] = v.trim(); });
+    if(Object.keys(vars).length) cfg.vars = vars; else delete cfg.vars;
   }));
 }
 
@@ -711,10 +857,14 @@ function shAction(a, ds){
     else if(k!=="goto" && prev!==k) D.val = "";
   }
   else if(a==="kbt") D.kb = ds.v;
-  else if(a==="addfld") D.fields.push("");
-  else if(a==="delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push("");
+  else if(a==="addfld") D.fields.push({q:"", v:"", t:"text"});
+  else if(a==="delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push({q:"", v:"", t:"text"});
   else if(a==="addcmd") D.cmds.push(["help", S.cur.config.start]);
   else if(a==="delcmd") D.cmds.splice(+ds.i, 1);
+  else if(a==="addvar") D.vars.push(["", ""]);
+  else if(a==="delvar") D.vars.splice(+ds.i, 1);
+  else if(a==="addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
+  else if(a==="delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
   renderSheet();
 }
 
@@ -739,7 +889,7 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("change", e => {
   const a = e.target.dataset.sh;
-  if(a==="mode" || a==="bkind") shAction(a, e.target.dataset);
+  if(a==="mode" || a==="bkind" || a==="re") shAction(a, e.target.dataset);
 });
 
 async function busy(btn, fn){

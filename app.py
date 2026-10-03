@@ -6,9 +6,9 @@ Stack (مثل GramSaz): Flask + MongoDB(pymongo) + مینی‌اپ تک‌فای
 - مینی‌اپ: کاربر توضیح می‌ده چه رباتی می‌خواد، هوش مصنوعی «کانفیگ JSON» می‌سازه
 - موتور ثابت و امن (execute_node) کانفیگ رو اجرا می‌کنه؛ هیچ کد تولیدشده‌ای اجرا نمی‌شه
 """
-import os, re, json, time, hmac, hashlib, base64, secrets, logging
+import os, re, json, time, hmac, hashlib, base64, secrets, logging, math, random
 from urllib.parse import parse_qsl
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import requests
 from flask import Flask, request, jsonify, send_from_directory
@@ -28,10 +28,11 @@ AI_MODEL     = os.environ["AI_MODEL"]
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)  # برای رمزنگاری توکن رباتا
 DAILY_LIMIT  = int(os.environ.get("DAILY_LIMIT", "5"))     # تعداد ساخت/ارتقا در روز برای هر کاربر
 MAX_BOTS     = int(os.environ.get("MAX_BOTS", "3"))        # سقف ربات هر کاربر
+AI_MAX_TOKENS = int(os.environ.get("AI_MAX_TOKENS", "6000"))   # سقف طول خروجی هوش مصنوعی
 DEBUG        = os.environ.get("DEBUG", "") == "1"   # علت دقیق خطا رو توی مینی‌اپ نشون می‌ده
-MAX_PROMPT   = 1200
+MAX_PROMPT   = 2000
 MAX_VERSIONS = 5
-MAX_NODES    = 25
+MAX_NODES    = 30
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("aibot")
@@ -141,9 +142,9 @@ def quota_left(uid):
 
 
 # ───────────────────────── هوش مصنوعی ─────────────────────────
-SYSTEM_PROMPT = """You design Telegram bots as a JSON config. You think like a senior product designer, not a form-filler.
+SYSTEM_PROMPT = """You design Telegram bots as a JSON config that a fixed, safe engine executes. You think like a senior product designer AND a bot-logic engineer, not a form-filler.
 
-LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural Persian (فارسی) and NEVER English, even though this prompt, the JSON keys and the node_ids are English.
+LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural Persian (فارسی) and NEVER English, even though this prompt, the JSON keys, node_ids and variable names are English.
 
 Output ONLY one valid JSON object, no markdown fences, no comments. Top-level shape:
 {
@@ -154,6 +155,7 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 "thinking" (string, 2-5 short sentences, in the OUTPUT LANGUAGE, natural first-person tone, like a sharp colleague briefly narrating their plan, not a formal report):
 - Say what you understood the user wants.
 - Name the key sections/flows you decided the bot needs and briefly why.
+- If you used variables/conditions, say in one short sentence what they do (e.g. "امتیاز هر کاربر جداگونه شمرده می‌شه").
 - If you made a judgment call, filled a gap, or used a placeholder (price, phone, channel id, link), say so and tell them they can edit it with the manual edit button.
 - If this is an update to an existing bot, mention only what you're changing and why, not the whole bot again.
 - No headers, no bullet points, no markdown, just natural flowing sentences.
@@ -164,50 +166,110 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "start": "<node_id shown on /start>",
  "fallback": "<node_id shown for unknown messages>",
  "commands": {"help": "<node_id>"},
- "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional, see below)
+ "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional)
+ "vars": {"coins": "0", "city": ""},                                                 (optional, declare EVERY custom variable with its default value)
  "nodes": {
    "<node_id>": {
      "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
-     "text": "message text (you may use {name} for the user's first name)",
+     "text": "message text (may contain {placeholders}, see VARIABLES)",
      "photo": "https://direct-image-link",                                          (optional)
      "buttons": [[ {"text": "label", "goto": "<node_id>"},
                    {"text": "label", "url": "https://..."},
                    {"text": "label", "alert": "popup text shown when tapped"},
                    {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
      "ask": false,
-     "kb": "reply",                                                                 (optional, see below)
+     "kb": "reply",                                                                 (optional)
      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
+     "save": ["city", ""],                                                           (optional, see FORMS)
+     "types": ["text", "number"],                                                    (optional, see FORMS)
+     "silent": false,                                                                (optional, see FORMS)
      "done": "message shown after the user finished ask/form",                      (optional)
-     "next": "<node_id shown after finishing>"                                       (optional, default start)
+     "next": "<node_id shown after finishing>",                                      (optional, default start)
+     "do": [ ...actions... ],                                                        (optional, see LOGIC)
+     "route": [ {"when": <cond>, "goto": "<node_id>"} ],                             (optional, see LOGIC)
+     "alt": [ {"when": <cond>, "text": "..."} ]                                      (optional, see LOGIC)
    }
  }
 }
 
-What the engine can do (use these freely when they fit the request):
+BASIC ENGINE FEATURES
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (e.g. card number, promo code).
 - "ask": true = the user's next message (any type) is forwarded to the bot owner. Good for support/feedback.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary. Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership: before using the bot the user must be a member of these public channels (usernames without @). Only add it if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
 - "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of glass buttons under the message. Omit it (default) for normal inline buttons. Use it only if the user asks for a keyboard under the chat / a main-menu keyboard. Never use it on nodes with "ask" or "fields". Link/popup/copy buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
-- The engine CANNOT do: payments, databases/inventory, external APIs, scheduled messages, sending files. If the user asks for something like that, say so honestly in "thinking" and build the closest working approximation (e.g. order form that is sent to the owner instead of online payment).
+
+VARIABLES (this is what makes a bot feel professional)
+- Custom variables are stored PER USER (each Telegram user has their own values). Name: lowercase english letters/digits/underscore, starts with a letter, max 20 chars, max 20 variables per bot. Declare each one in config.vars with a default string ("0" for counters, "" for text). Values are strings; math and numeric comparison work when they look like numbers.
+- Use {var} in node texts, button labels, alert/copy text, form questions, "done", notify texts and condition values. {var|fallback} prints fallback when the value is empty, e.g. {city|ثبت نشده}. Every variable you put in a {placeholder} MUST be declared in config.vars (built-ins excepted).
+- Built-in read-only variables (always available in texts AND conditions):
+  {name} first name (falls back to "دوست من"), {first_name}, {last_name}, {full_name}, {username} (with @, empty if none), {id} Telegram user id, {lang} Telegram language code like fa / en, {premium} "1" if the user has Telegram Premium else "0", {is_owner} "1" if the user is the bot owner else "0", {bot_name}, {bot_username}, {text} the last text message the user sent, {param} the payload of /start (deep link t.me/bot?start=xxx), {visits} how many times this user pressed /start (1 on the first time), {date} today's Jalali date like 1405/07/11, {time} HH:MM Tehran time, {hour} 0-23 Tehran, {weekday} Persian weekday name.
+
+CONDITIONS ("cond" object)
+- {"var": "coins", "op": ">=", "value": "10"}. op is one of: == != > >= < <= contains empty filled ("empty"/"filled" take no value). "var" is a custom or built-in variable. "value" may contain {placeholders}. Numbers compare numerically, text compares case-insensitively.
+- Combine with {"all": [cond, cond]} (AND), {"any": [cond, cond]} (OR), {"not": cond}. Max 3 levels deep.
+
+ACTIONS ("action" object, max 6 per list)
+- {"op": "set", "var": "city", "value": "تهران"}            store a value (value may use {placeholders})
+- {"op": "add", "var": "coins", "value": "5"}               add a number; negative to subtract ("-3"); default 1
+- {"op": "clear", "var": "city"}                            back to the default
+- {"op": "random", "var": "dice", "value": "1-6"}           random whole number in a range
+- {"op": "notify", "value": "text"}                         sends a message to the bot owner (may use {placeholders}; the user's name and id are appended automatically)
+
+WHERE LOGIC GOES
+- node "do": [actions] runs every time a user enters the node, before anything is shown.
+- node "route": [{"when": cond, "goto": "<node_id>"}] (max 5). After "do", the FIRST rule whose condition is true sends the user to that node instead (like a switch). Use for gates, level-ups, opening hours, owner-only menus, first visit vs returning user. Because the node's own text is then skipped, still write a sensible text. Chains are followed up to 5 hops; never create loops.
+- node "alt": [{"when": cond, "text": "..."}] (max 4). The first true condition replaces the node's text (buttons stay). Use for personalised messages ("you have {coins} coins").
+- button "when": cond. The button is only shown to users for whom it is true (admin button, premium-only, hide "buy" when coins are not enough).
+- button "do": [actions]. Only on goto and alert buttons. Runs when the button is tapped, before the goto/alert. Alert text may use {placeholders} and is evaluated AFTER the actions, so a "💰 my balance" alert shows fresh numbers.
+- FORMS: "save": ["city", ""] has the same length as "fields" and stores each answer in that variable ("" = don't store). "types": ["text","number","phone","email"] (same length) validates each answer; the engine re-asks until valid and normalises digits to english. "silent": true = don't send the finished form to the owner (default: it is sent). Later questions and texts can use earlier answers, e.g. "{city} درسته؟".
+
+WHEN TO USE LOGIC
+- Use variables/conditions when they make the bot genuinely better: points/coins/loyalty, quizzes and scoring, bots that remember answers and reuse them ("{city}" in later messages), personalised greetings (first visit vs returning via {visits}), opening hours via {hour}/{weekday}, an owner-only admin menu via {is_owner}, language-aware replies via {lang}, referral/campaign tracking via {param}, premium-only perks via {premium}.
+- Do NOT add logic when a plain menu is enough. A simple request deserves a simple, clean bot.
+- Small examples of the constructs (not a full bot):
+  "vars": {"score": "0"}
+  {"text": "تهران", "goto": "q2", "do": [{"op": "add", "var": "score", "value": "1"}]}
+  {"title": "نتیجه", "text": "تموم شد!", "route": [{"when": {"var": "score", "op": ">=", "value": "3"}, "goto": "win"}]}
+  {"text": "🛠 پنل مدیر", "goto": "admin", "when": {"var": "is_owner", "op": "==", "value": "1"}}
+  {"text": "سلام {name}", "alt": [{"when": {"var": "visits", "op": ">", "value": "1"}, "text": "خوش برگشتی {name} 👋"}]}
+
+ENGINE LIMITS (be honest about them in "thinking" and build the closest working approximation)
+- CANNOT do: payments, real inventory/databases, external APIs, scheduled messages, sending files, data shared BETWEEN users (no global counters, leaderboards, or real referral counting; variables are per user).
+- Example approximation: an order form whose answers are sent to the owner instead of online payment.
 
 Design rules:
 - Think before you structure: identify the bot's real purpose, the natural user journeys, and the minimum set of nodes that cover them well. Don't pad with filler, but don't skip an obviously needed part (a shop bot needs a way to order, a business bot needs contact/support, a content bot usually needs a channel link).
-- node_id: lowercase english letters, digits, underscore. Max 25 nodes, max 3 buttons per row, max 6 rows per node.
+- node_id: lowercase english letters, digits, underscore. Max 30 nodes, max 3 buttons per row, max 6 rows per node.
 - A button has exactly one of: "goto" (an existing node_id), "url" (https only), "alert", "copy".
 - Channel/group join button: {"text": "📢 عضویت در کانال", "url": "https://t.me/<username>"} (username without @). Use the username the user gave. If they gave none, use https://t.me/your_channel and say in "thinking" that the real channel id must be set via manual edit.
 - Always give every node a short "title". Prefer a form ("fields") over a single "ask" when you need several pieces of info. Give ask/form nodes a cancel/home button too.
-- Every "goto", "start", "fallback" and command target MUST exist in nodes. Every node must be reachable from start; no dead ends: every non-start node has a back/home button.
+- Every "goto", "start", "fallback", "next", route target and command target MUST exist in nodes. Every node must be reachable from start; no dead ends: every non-start node has a back/home button (or a "next"/"route").
 - Button labels short (max ~22 chars). Put at most 2 buttons in a row when labels are long.
 - Never invent real-world facts (prices, phone numbers, addresses, links). Use obvious placeholders such as [قیمت] or [شماره تماس] and mention it in "thinking".
 - Write all user-facing text in the OUTPUT LANGUAGE. Use emojis moderately.
-- When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text and button exactly as it was (the user may have edited them by hand).
+- When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text, button, variable and rule exactly as it was (the user may have edited them by hand).
 - Plain text only, no Markdown/HTML formatting characters in node texts."""
+
 
 ID_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 CMD_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 TG_NAME_RE = re.compile(r"^@?[A-Za-z][A-Za-z0-9_]{4,31}$")
+
+# ───── متغیرها، شرط‌ها و اکشن‌ها ─────
+VAR_RE = re.compile(r"^[a-z][a-z0-9_]{0,19}$")
+PH_RE = re.compile(r"\{([a-z][a-z0-9_]{0,19})(?:\|([^{}]{0,60}))?\}")
+MAX_VARS = 20
+MAX_HOPS = 5
+# متغیرهای آماده‌ی تلگرام (فقط‌خواندنی)
+BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner",
+            "bot_name", "bot_username", "text", "param", "visits", "date", "time", "hour", "weekday")
+OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled")
+OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+ACT_OPS = ("set", "add", "clear", "random", "notify")
+F_TYPES = ("text", "number", "phone", "email")
+_DIG = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 
 def norm_url(v):
@@ -222,6 +284,94 @@ def norm_url(v):
     return None
 
 
+def to_num(s):
+    """رشته → عدد (ارقام فارسی/عربی هم قبول)؛ نامعتبر = None"""
+    try:
+        x = float(str(s).translate(_DIG).replace(",", "").replace("٫", ".").strip())
+    except (ValueError, TypeError):
+        return None
+    return x if math.isfinite(x) else None
+
+
+def fmt_num(x):
+    x = max(-1e12, min(1e12, x))
+    return str(int(x)) if x == int(x) else ("%.6f" % x).rstrip("0").rstrip(".")
+
+
+def clean_cond(c, used, nums, bad, depth=0):
+    """شرط رو پاک‌سازی می‌کنه؛ نامعتبر = None"""
+    if not isinstance(c, dict) or depth > 3:
+        bad("یکی از شرط‌ها ساختار معتبری نداره")
+        return None
+    for key in ("all", "any"):
+        if isinstance(c.get(key), list):
+            subs = [x for x in (clean_cond(s, used, nums, bad, depth + 1) for s in c[key][:6]) if x]
+            return {key: subs} if subs else None
+    if "not" in c:
+        s = clean_cond(c["not"], used, nums, bad, depth + 1)
+        return {"not": s} if s else None
+    name = str(c.get("var") or "").strip().lower()
+    op = str(c.get("op") or "==").strip()
+    op = OP_ALIASES.get(op, op)
+    if not (name in BUILTINS or VAR_RE.match(name)):
+        bad(f"نام متغیر «{name}» در شرط معتبر نیست (حروف انگلیسی کوچک، عدد و _)")
+        return None
+    if op not in OPS:
+        bad(f"عملگر شرط «{op}» معتبر نیست")
+        return None
+    if name not in BUILTINS:
+        used.add(name)
+        if op in (">", ">=", "<", "<="):
+            nums.add(name)
+    out = {"var": name, "op": op}
+    if op not in ("empty", "filled"):
+        out["value"] = str(c.get("value", ""))[:100]
+    return out
+
+
+def clean_actions(lst, used, nums, bad):
+    out = []
+    for a in (lst if isinstance(lst, list) else [])[:6]:
+        if not isinstance(a, dict):
+            continue
+        op = str(a.get("op") or "").strip().lower()
+        if op not in ACT_OPS:
+            bad(f"نوع اکشن «{op}» معتبر نیست")
+            continue
+        if op == "notify":
+            v = str(a.get("value") or "").strip()[:500]
+            if v:
+                out.append({"op": "notify", "value": v})
+            else:
+                bad("متن اعلان (notify) خالیه")
+            continue
+        name = str(a.get("var") or "").strip().lower()
+        if not VAR_RE.match(name) or name in BUILTINS:
+            bad(f"نام متغیر «{name}» برای اکشن معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
+            continue
+        item = {"op": op, "var": name}
+        if op != "clear":
+            v = str(a.get("value", "")).strip()[:100]
+            if op == "add":
+                if v == "":
+                    v = "1"
+                elif to_num(v) is None and not PH_RE.search(v):
+                    bad(f"مقدار اکشن جمع برای «{name}» باید عدد باشه")
+                    continue
+            elif op == "random":
+                m = re.fullmatch(r"(\d{1,9})\s*-\s*(\d{1,9})", v.translate(_DIG))
+                if not m or int(m.group(1)) > int(m.group(2)):
+                    bad(f"بازه‌ی عدد تصادفی «{name}» باید مثل 1-6 باشه")
+                    continue
+                v = f"{int(m.group(1))}-{int(m.group(2))}"
+            item["value"] = v
+        used.add(name)
+        if op in ("add", "random"):
+            nums.add(name)
+        out.append(item)
+    return out
+
+
 def sanitize(cfg, strict=False):
     """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه."""
     if not isinstance(cfg, dict) or not isinstance(cfg.get("nodes"), dict):
@@ -234,6 +384,7 @@ def sanitize(cfg, strict=False):
         if strict:
             raise ValueError(msg)
 
+    used, nums = set(), set()      # متغیرهایی که جایی استفاده شدن / مقدار عددی دارن
     valid = {}
     for nid, n in nodes_in.items():
         nid = str(nid)
@@ -257,22 +408,37 @@ def sanitize(cfg, strict=False):
                 label = str(b.get("text", "")).strip()[:40]
                 if not label:
                     bad(f"بخش «{nid}» یه دکمه‌ی بدون متن داره"); continue
+                it = None
                 g = str(b.get("goto") or "")
                 if g:
                     if g in valid:
-                        r.append({"text": label, "goto": g})
+                        it = {"text": label, "goto": g}
                     else:
                         bad(f"دکمه‌ی «{label}» به بخش ناموجود وصله")
                 elif str(b.get("alert") or "").strip():
-                    r.append({"text": label, "alert": str(b["alert"]).strip()[:200]})
+                    it = {"text": label, "alert": str(b["alert"]).strip()[:200]}
                 elif str(b.get("copy") or "").strip():
-                    r.append({"text": label, "copy": str(b["copy"]).strip()[:256]})
+                    it = {"text": label, "copy": str(b["copy"]).strip()[:256]}
                 else:
                     u = norm_url(b.get("url"))
                     if u:
-                        r.append({"text": label, "url": u})
+                        it = {"text": label, "url": u}
                     else:
                         bad(f"لینک/آیدی دکمه‌ی «{label}» معتبر نیست (باید https:// یا @آیدی باشه)")
+                if it is None:
+                    continue
+                if b.get("when"):
+                    w = clean_cond(b["when"], used, nums, bad)
+                    if w:
+                        it["when"] = w
+                if b.get("do"):
+                    if "goto" in it or "alert" in it:
+                        acts = clean_actions(b["do"], used, nums, bad)
+                        if acts:
+                            it["do"] = acts
+                    else:
+                        bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش» و «پیام پاپ‌آپ» کار می‌کنه (دکمه‌ی «{label}»)")
+                r.append(it)
             if r:
                 rows.append(r)
         node = {"text": text, "buttons": rows, "ask": bool(n.get("ask"))}
@@ -285,10 +451,36 @@ def sanitize(cfg, strict=False):
                 node["photo"] = ph
             else:
                 bad(f"آدرس عکس بخش «{nid}» معتبر نیست (باید لینک مستقیم https باشه)")
-        fl = n.get("fields")
-        fl = [str(f).strip()[:200] for f in fl if str(f).strip()][:6] if isinstance(fl, list) else []
-        if fl:
-            node["fields"], node["ask"] = fl, False
+
+        # فرم: سؤال‌ها + ذخیره در متغیر + نوع پاسخ
+        fl_raw = n.get("fields") if isinstance(n.get("fields"), list) else []
+        sv_raw = n.get("save") if isinstance(n.get("save"), list) else []
+        ty_raw = n.get("types") if isinstance(n.get("types"), list) else []
+        qs, svs, tys = [], [], []
+        for i, f in enumerate(fl_raw):
+            q = str(f).strip()[:200]
+            if not q or len(qs) >= 6:
+                continue
+            v = str(sv_raw[i]).strip().lower() if i < len(sv_raw) and sv_raw[i] else ""
+            if v:
+                if VAR_RE.match(v) and v not in BUILTINS:
+                    used.add(v)
+                else:
+                    bad(f"نام متغیر «{v}» برای ذخیره‌ی پاسخ معتبر نیست"); v = ""
+            t = str(ty_raw[i]).strip().lower() if i < len(ty_raw) else "text"
+            if t not in F_TYPES:
+                t = "text"
+            if t == "number" and v:
+                nums.add(v)
+            qs.append(q); svs.append(v); tys.append(t)
+        if qs:
+            node["fields"], node["ask"] = qs, False
+            if any(svs):
+                node["save"] = svs
+            if any(t != "text" for t in tys):
+                node["types"] = tys
+            if n.get("silent"):
+                node["silent"] = True
         if n.get("kb") == "reply" and rows and not node.get("fields") and not node["ask"]:
             node["kb"] = "reply"          # کیبورد زیر صفحه‌ی چت (فقط برای بخش‌های بدون ask/form)
         done = str(n.get("done") or "").strip()[:500]
@@ -300,6 +492,33 @@ def sanitize(cfg, strict=False):
                 node["next"] = nxt
             else:
                 bad(f"بخش بعدیِ «{nid}» وجود نداره")
+
+        # منطق: اکشن‌ها، هدایت شرطی، متن جایگزین
+        acts = clean_actions(n.get("do"), used, nums, bad)
+        if acts:
+            node["do"] = acts
+        route = []
+        for rule in (n.get("route") if isinstance(n.get("route"), list) else [])[:5]:
+            if not isinstance(rule, dict):
+                continue
+            w, g = clean_cond(rule.get("when"), used, nums, bad), str(rule.get("goto") or "")
+            if w and g in valid:
+                route.append({"when": w, "goto": g})
+            else:
+                bad(f"یکی از قانون‌های هدایت شرطیِ بخش «{nid}» کامل نیست")
+        if route:
+            node["route"] = route
+        alt = []
+        for rule in (n.get("alt") if isinstance(n.get("alt"), list) else [])[:4]:
+            if not isinstance(rule, dict):
+                continue
+            w, t = clean_cond(rule.get("when"), used, nums, bad), str(rule.get("text") or "").strip()[:3500]
+            if w and t:
+                alt.append({"when": w, "text": t})
+            else:
+                bad(f"یکی از متن‌های جایگزینِ بخش «{nid}» کامل نیست")
+        if alt:
+            node["alt"] = alt
         nodes[nid] = node
 
     start = str(cfg.get("start") or "")
@@ -319,6 +538,25 @@ def sanitize(cfg, strict=False):
         cmds[k] = str(v)
     out = {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
            "fallback": fallback, "commands": cmds, "nodes": nodes}
+
+    # متغیرهای اعلام‌شده (+ هر متغیری که جایی استفاده شده ولی اعلام نشده، خودکار اضافه می‌شه)
+    declared = {}
+    dv = cfg.get("vars")
+    for k, v in (dv.items() if isinstance(dv, dict) else []):
+        k = str(k).strip().lower()
+        if VAR_RE.match(k) and k not in BUILTINS:
+            declared[k] = str(v if v is not None else "")[:100]
+        else:
+            bad(f"نام متغیر «{k}» معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
+    for k in sorted(used):
+        declared.setdefault(k, "0" if k in nums else "")
+    if len(declared) > MAX_VARS:
+        if strict:
+            raise ValueError(f"حداکثر {MAX_VARS} متغیر می‌تونی داشته باشی")
+        declared = dict(list(declared.items())[:MAX_VARS])
+    if declared:
+        out["vars"] = declared
+
     j = cfg.get("join")
     if isinstance(j, dict):
         chans, raw = [], j.get("channels")
@@ -353,14 +591,63 @@ class ThinkLang(ValueError):
 FALLBACK_THINKING = "ربات رو طبق توضیحت طراحی کردم. اگه متن، دکمه یا آیدی کانال چیزی نیاز به تغییر داشت، از «ویرایش دستی» درستش کن."
 
 
+def _walk(o):
+    if isinstance(o, dict):
+        yield o
+        for v in o.values():
+            yield from _walk(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from _walk(v)
+
+
+def lint(cfg):
+    """مشکل‌های منطقی کانفیگ تمیزشده رو پیدا می‌کنه (برای اینکه AI یک بار خودش درستشون کنه)"""
+    nodes, out = cfg["nodes"], []
+    seen, stack = set(), [cfg["start"], cfg["fallback"], *cfg["commands"].values()]
+    while stack:
+        i = stack.pop()
+        if i in seen or i not in nodes:
+            continue
+        seen.add(i)
+        n = nodes[i]
+        stack += [b["goto"] for row in n["buttons"] for b in row if "goto" in b]
+        stack += [r["goto"] for r in n.get("route", [])]
+        if n.get("next"):
+            stack.append(n["next"])
+    lost = [i for i in nodes if i not in seen]
+    if lost:
+        out.append("unreachable nodes (link them from a goto button / route / next, or remove them): " + ", ".join(lost[:6]))
+    dead = [i for i, n in nodes.items() if i in seen and i != cfg["start"] and not n.get("fields") and not n.get("ask")
+            and not n.get("route") and not n.get("next") and not any("goto" in b for row in n["buttons"] for b in row)]
+    if dead:
+        out.append("dead-end nodes with no goto/back button (add a back or home button): " + ", ".join(dead[:6]))
+    reads, writes = set(), set()
+    for d in _walk(nodes):
+        for v in d.values():
+            if isinstance(v, str):
+                reads.update(m.group(1) for m in PH_RE.finditer(v))
+        op = d.get("op")
+        if op in OPS and d.get("var"):
+            reads.add(d["var"])
+        if op in ACT_OPS and op != "notify" and d.get("var"):
+            writes.add(d["var"])
+        if isinstance(d.get("save"), list):
+            writes.update(x for x in d["save"] if x)
+    unset = sorted((reads & set(cfg.get("vars", {}))) - writes)
+    if unset:
+        out.append("variables that are read but never set by any action or form 'save' (set them somewhere or remove them): " + ", ".join(unset[:6]))
+    return out
+
+
 def _call_llm(user, lang, final):
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
-        json={"model": AI_MODEL, "max_tokens": 4000, "temperature": 0.4,
+        json={"model": AI_MODEL, "max_tokens": AI_MAX_TOKENS, "temperature": 0.4,
               "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                            {"role": "user", "content": user}]},
-        timeout=90)
+        timeout=120)
     if r.status_code >= 400:
         raise RuntimeError(f"AI HTTP {r.status_code}: {r.text[:300]}")
     try:
@@ -385,13 +672,13 @@ def _call_llm(user, lang, final):
     return thinking, cfg
 
 
-def build_user(prompt, current, lang, hard):
+def build_user(prompt, current, lang, note_extra=""):
     if lang == "fa":
         note = "OUTPUT LANGUAGE: Persian (فارسی). The \"thinking\" field and all node texts/button labels MUST be written in Persian. Do not write them in English."
     else:
         note = "OUTPUT LANGUAGE: the same language as the user's request below (\"thinking\" included)."
-    if hard:
-        note += " (Your previous answer used the wrong language for \"thinking\". Fix that now.)"
+    if note_extra:
+        note += " " + note_extra
     parts = [note]
     if current:
         parts.append("Current config:\n" + json.dumps(current, ensure_ascii=False))
@@ -404,19 +691,32 @@ def build_user(prompt, current, lang, hard):
 
 
 def ask_llm(prompt, current=None):
+    """یک بار تلاش اول؛ اگه خروجی خراب بود، زبان توضیح اشتباه بود یا کانفیگ مشکل منطقی داشت، یک بار با بازخورد دوباره"""
     lang = detect_lang(prompt)
-    saved, last = None, None
+    best, last, feedback = None, None, ""
     for attempt in (0, 1):
         try:
-            return _call_llm(build_user(prompt, current, lang, hard=attempt > 0), lang, final=attempt == 1)
+            thinking, cfg = _call_llm(build_user(prompt, current, lang, feedback), lang, final=attempt == 1)
         except ThinkLang as e:
-            saved, last = e.cfg, e
+            best, last = best or (None, e.cfg), e
+            feedback = "(Your previous answer used the wrong language for \"thinking\". Fix that now.)"
             log.warning("thinking in wrong language, retrying")
+            continue
         except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
             last = e
+            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.)"
             log.warning("bad AI output, retrying once", exc_info=True)
-    if saved:                       # کانفیگ سالم بود، فقط توضیح زبانش اشتباه بود
-        return FALLBACK_THINKING, saved
+            continue
+        problems = lint(cfg)
+        if problems and attempt == 0:
+            best = (thinking, cfg)
+            feedback = "(Your previous config had logic problems, fix them and return the FULL config again: " + "; ".join(problems[:6]) + ")"
+            log.info("lint problems, retrying: %s", problems)
+            continue
+        return thinking, cfg
+    if best:                        # کانفیگ سالمِ تلاش اول رو نگه می‌داریم
+        th, cfg = best
+        return (th or FALLBACK_THINKING), cfg
     raise last
 
 
@@ -581,63 +881,245 @@ def api_delete(bot_id):
     db.bots.delete_one({"_id": bot["_id"]})
     db.states.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
     db.rk.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
+    db.uvars.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
     return jsonify(ok=True)
 
 
 # ───────────────────────── موتور اجرای کانفیگ ─────────────────────────
-def fill(t, user):
-    u = user or {}
-    return (t.replace("{name}", u.get("first_name") or "دوست من")
-             .replace("{username}", ("@" + u["username"]) if u.get("username") else ""))
+_WEEK = {5: "شنبه", 6: "یکشنبه", 0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه"}
+FORM_HINT = {"number": "فقط عدد بفرست 🔢", "phone": "یه شماره‌ی تماس معتبر بفرست، مثل 09123456789 📱",
+             "email": "یه ایمیل معتبر بفرست 📧"}
 
 
-def keyboard(node, node_id):
+def to_jalali(gy, gm, gd):
+    g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    gy2 = gy + 1 if gm > 2 else gy
+    days = 355666 + 365 * gy + (gy2 + 3) // 4 - (gy2 + 99) // 100 + (gy2 + 399) // 400 + gd + g_d_m[gm - 1]
+    jy = -1595 + 33 * (days // 12053)
+    days %= 12053
+    jy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jy += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        jm, jd = 1 + days // 31, 1 + days % 31
+    else:
+        jm, jd = 7 + (days - 186) // 30, 1 + (days - 186) % 30
+    return jy, jm, jd
+
+
+class Env:
+    """همه‌ی اطلاعات یک رویداد: ربات، کاربر و متغیرهای ذخیره‌شده‌ی همون کاربر"""
+
+    def __init__(self, bot, token, chat_id, user, text="", param=""):
+        self.bot, self.token, self.chat_id = bot, token, chat_id
+        self.cfg, self.bot_id, self.owner = bot["config"], str(bot["_id"]), bot["owner"]
+        self.user = user or {}
+        self.uid = self.user.get("id", chat_id)
+        self.text, self.param = text or "", param or ""
+        self.sid = f"{self.bot_id}:{chat_id}"
+        self._key = f"{self.bot_id}:{self.uid}"
+        doc = db.uvars.find_one({"_id": self._key}) or {}
+        self.vars = {k: str(v) for k, v in (doc.get("v") or {}).items()}
+        self.visits = int(doc.get("visits", 0))
+        self.dirty = False
+        self._now = now() + timedelta(hours=3, minutes=30)      # ساعت تهران
+
+    def builtin(self, k):
+        u = self.user
+        if k == "name":
+            return u.get("first_name") or "دوست من"
+        if k == "first_name":
+            return u.get("first_name") or ""
+        if k == "last_name":
+            return u.get("last_name") or ""
+        if k == "full_name":
+            return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x) or "دوست من"
+        if k == "username":
+            return ("@" + u["username"]) if u.get("username") else ""
+        if k == "id":
+            return str(self.uid)
+        if k == "lang":
+            return u.get("language_code") or ""
+        if k == "premium":
+            return "1" if u.get("is_premium") else "0"
+        if k == "is_owner":
+            return "1" if self.uid == self.owner else "0"
+        if k == "bot_name":
+            return self.cfg.get("name", "")
+        if k == "bot_username":
+            return ("@" + self.bot["username"]) if self.bot.get("username") else ""
+        if k == "text":
+            return self.text
+        if k == "param":
+            return self.param
+        if k == "visits":
+            return str(self.visits)
+        n = self._now
+        if k == "date":
+            jy, jm, jd = to_jalali(n.year, n.month, n.day)
+            return f"{jy}/{jm:02d}/{jd:02d}"
+        if k == "time":
+            return n.strftime("%H:%M")
+        if k == "hour":
+            return str(n.hour)
+        if k == "weekday":
+            return _WEEK[n.weekday()]
+        return ""
+
+    def get(self, k):
+        if k in BUILTINS:
+            return self.builtin(k)
+        if k in self.vars:
+            return self.vars[k]
+        return str((self.cfg.get("vars") or {}).get(k, ""))
+
+    def set(self, k, v):
+        if k in BUILTINS or not VAR_RE.match(k or "") or k not in (self.cfg.get("vars") or {}):
+            return
+        self.vars[k] = str(v)[:200]
+        self.dirty = True
+
+    def reset(self, k):
+        if self.vars.pop(k, None) is not None:
+            self.dirty = True
+
+    def save(self):
+        if self.dirty:
+            db.uvars.update_one({"_id": self._key},
+                                {"$set": {"v": self.vars, "visits": self.visits, "t": now()}}, upsert=True)
+            self.dirty = False
+
+
+def fill(t, env):
+    """{name} / {coins} / {city|پیش‌فرض} رو با مقدار جایگزین می‌کنه (اسم ناشناس دست‌نخورده می‌مونه)"""
+    declared = env.cfg.get("vars") or {}
+
+    def rep(m):
+        k = m.group(1)
+        if k in BUILTINS or k in declared:
+            v = env.get(k)
+            return v if (v != "" or m.group(2) is None) else m.group(2)
+        return m.group(0)
+    return PH_RE.sub(rep, str(t))
+
+
+def check(cond, env, depth=0):
+    """ارزیابی شرط"""
+    if not isinstance(cond, dict) or depth > 3:
+        return False
+    if "all" in cond:
+        return all(check(c, env, depth + 1) for c in cond["all"])
+    if "any" in cond:
+        return any(check(c, env, depth + 1) for c in cond["any"])
+    if "not" in cond:
+        return not check(cond["not"], env, depth + 1)
+    a, op = env.get(cond.get("var", "")), cond.get("op", "==")
+    if op == "empty":
+        return a.strip() == ""
+    if op == "filled":
+        return a.strip() != ""
+    b = fill(cond.get("value", ""), env)
+    if op == "contains":
+        return b.casefold() in a.casefold()
+    x, y = to_num(a), to_num(b)
+    if op in ("==", "!="):
+        eq = (x == y) if (x is not None and y is not None) else a.strip().casefold() == b.strip().casefold()
+        return eq if op == "==" else not eq
+    if x is None or y is None:
+        return False
+    return {">": x > y, ">=": x >= y, "<": x < y, "<=": x <= y}.get(op, False)
+
+
+def who(env):
+    u = env.user
+    return f"👤 {u.get('first_name', '')} (@{u.get('username', '-')}) — {env.uid}"
+
+
+def run_actions(acts, env):
+    for a in acts or []:
+        op, name = a.get("op"), a.get("var", "")
+        val = fill(a.get("value", ""), env)
+        if op == "set":
+            env.set(name, val)
+        elif op == "add":
+            env.set(name, fmt_num((to_num(env.get(name)) or 0) + (to_num(val) or 0)))
+        elif op == "clear":
+            env.reset(name)
+        elif op == "random":
+            m = re.fullmatch(r"(\d+)-(\d+)", val.translate(_DIG).strip())
+            if m and int(m.group(1)) <= int(m.group(2)):
+                env.set(name, str(random.randint(int(m.group(1)), int(m.group(2)))))
+        elif op == "notify" and val.strip():
+            tg(env.token, "sendMessage", chat_id=env.owner, text=f"🔔 {env.cfg.get('name', '')}\n{val}\n\n{who(env)}"[:4000])
+
+
+def visible(b, env):
+    return not b.get("when") or check(b["when"], env)
+
+
+def keyboard(node, node_id, env):
     kb = []
     for ri, row in enumerate(node["buttons"]):
         r = []
         for ci, b in enumerate(row):
+            if not visible(b, env):
+                continue
+            label = fill(b["text"], env)[:64] or "·"
             if "url" in b:
-                r.append({"text": b["text"], "url": b["url"]})
+                r.append({"text": label, "url": b["url"]})
             elif "goto" in b:
-                r.append({"text": b["text"], "callback_data": f"n:{b['goto']}"})
+                cd = f"g:{node_id}:{ri}:{ci}" if b.get("do") else f"n:{b['goto']}"
+                r.append({"text": label, "callback_data": cd})
             elif "alert" in b:
-                r.append({"text": b["text"], "callback_data": f"a:{node_id}:{ri}:{ci}"})
+                r.append({"text": label, "callback_data": f"a:{node_id}:{ri}:{ci}"})
             elif "copy" in b:
-                r.append({"text": b["text"], "copy_text": {"text": b["copy"]}})
+                r.append({"text": label, "copy_text": {"text": fill(b["copy"], env)[:256]}})
         if r:
             kb.append(r)
     return kb
 
 
-def reply_markup(node):
+def reply_markup(node, env):
     """کیبورد زیر صفحه‌ی چت (Reply Keyboard)"""
-    return {"keyboard": [[{"text": b["text"]} for b in row] for row in node["buttons"] if row],
-            "resize_keyboard": True, "is_persistent": True}
+    rows = [[{"text": fill(b["text"], env)[:64] or "·"} for b in row if visible(b, env)] for row in node["buttons"]]
+    return {"keyboard": [r for r in rows if r], "resize_keyboard": True, "is_persistent": True}
 
 
-def clear_reply_kb(token, chat_id, sid):
+def clear_reply_kb(env):
     """کیبورد قبلی زیر چت رو برمی‌داره (با یه پیام موقت که فوراً پاک می‌شه)"""
-    if not db.rk.find_one({"_id": sid}):
+    if not db.rk.find_one({"_id": env.sid}):
         return
-    r = tg(token, "sendMessage", chat_id=chat_id, text="⏳", reply_markup={"remove_keyboard": True})
+    r = tg(env.token, "sendMessage", chat_id=env.chat_id, text="⏳", reply_markup={"remove_keyboard": True})
     mid = (r.get("result") or {}).get("message_id")
     if mid:
-        tg(token, "deleteMessage", chat_id=chat_id, message_id=mid)
-    db.rk.delete_one({"_id": sid})
+        tg(env.token, "deleteMessage", chat_id=env.chat_id, message_id=mid)
+    db.rk.delete_one({"_id": env.sid})
 
 
-def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
+def send_node(env, node_id, edit=None, depth=0):
     """edit = پیام قبلی (callback) → اگه ممکن باشه همون پیام ویرایش می‌شه، نه اینکه پیام جدید بیاد"""
+    cfg, token, chat_id = env.cfg, env.token, env.chat_id
     if node_id not in cfg["nodes"]:
         node_id = cfg["start"]
     node = cfg["nodes"][node_id]
-    sid = f"{bot_id}:{chat_id}"
-    text = fill(node["text"], user)
-    kb = keyboard(node, node_id)
+    run_actions(node.get("do"), env)                       # ۱) اکشن‌های ورود
+    if depth < MAX_HOPS:                                   # ۲) هدایت شرطی
+        for rule in node.get("route", []):
+            if rule["goto"] in cfg["nodes"] and check(rule["when"], env):
+                return send_node(env, rule["goto"], edit=edit, depth=depth + 1)
+    text = node["text"]                                    # ۳) متن جایگزین شرطی
+    for alt in node.get("alt", []):
+        if check(alt["when"], env):
+            text = alt["text"]
+            break
+    text = fill(text, env)[:4000]
+    kb = keyboard(node, node_id, env)
     use_reply = node.get("kb") == "reply" and bool(kb)
     if not use_reply:
-        clear_reply_kb(token, chat_id, sid)
-    markup = reply_markup(node) if use_reply else {"inline_keyboard": kb}
+        clear_reply_kb(env)
+    markup = reply_markup(node, env) if use_reply else {"inline_keyboard": kb}
     photo = node.get("photo")
     done = False
     if edit and not use_reply and not photo and not edit.get("photo"):
@@ -656,43 +1138,60 @@ def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
                 done = False   # متن بلند جداگونه می‌ره
         if not done:
             tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
+    sid = env.sid
     if use_reply:
         db.rk.replace_one({"_id": sid}, {"_id": sid, "node": node_id, "t": now()}, upsert=True)
     if node.get("fields"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
-        tg(token, "sendMessage", chat_id=chat_id, text=fill(node["fields"][0], user))
+        tg(token, "sendMessage", chat_id=chat_id, text=fill(node["fields"][0], env))
     elif node.get("ask"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "ask": node_id, "t": now()}, upsert=True)
     else:
         db.states.delete_one({"_id": sid})
 
 
-def reply_press(token, chat_id, cfg, rk, text, bot_id, user):
+def reply_press(env, rk, text):
     """وقتی کاربر یکی از دکمه‌های کیبورد زیر چت رو می‌زنه (متن دکمه به‌صورت پیام میاد)"""
-    node = cfg["nodes"].get(rk.get("node"))
+    node = env.cfg["nodes"].get(rk.get("node"))
     if not node:
         return False
     for row in node["buttons"]:
         for b in row:
-            if b["text"] != text:
+            if not visible(b, env) or text not in (fill(b["text"], env), b["text"]):
                 continue
+            run_actions(b.get("do"), env)
             if "goto" in b:
-                send_node(token, chat_id, cfg, b["goto"], bot_id, user)
+                send_node(env, b["goto"])
             elif "alert" in b:
-                tg(token, "sendMessage", chat_id=chat_id, text=b["alert"])
+                tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(b["alert"], env))
             elif "copy" in b:
-                tg(token, "sendMessage", chat_id=chat_id, text=b["copy"],
-                   reply_markup={"inline_keyboard": [[{"text": "📋 کپی", "copy_text": {"text": b["copy"]}}]]})
+                c = fill(b["copy"], env)[:256]
+                tg(env.token, "sendMessage", chat_id=env.chat_id, text=c,
+                   reply_markup={"inline_keyboard": [[{"text": "📋 کپی", "copy_text": {"text": c}}]]})
             elif "url" in b:
-                tg(token, "sendMessage", chat_id=chat_id, text="👇",
-                   reply_markup={"inline_keyboard": [[{"text": b["text"], "url": b["url"]}]]})
+                tg(env.token, "sendMessage", chat_id=env.chat_id, text="👇",
+                   reply_markup={"inline_keyboard": [[{"text": fill(b["text"], env)[:64], "url": b["url"]}]]})
             return True
     return False
 
 
-def finish(token, chat_id, cfg, node, bot_id, user, default_done):
-    tg(token, "sendMessage", chat_id=chat_id, text=fill(node.get("done") or default_done, user))
-    send_node(token, chat_id, cfg, node.get("next") or cfg["start"], bot_id, user)
+def finish(env, node, default_done):
+    tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(node.get("done") or default_done, env))
+    send_node(env, node.get("next") or env.cfg["start"])
+
+
+def valid_answer(kind, t):
+    """اعتبارسنجی جواب فرم؛ (درست؟، مقدار تمیزشده)"""
+    t = t.strip()
+    if kind == "number":
+        n = to_num(t)
+        return (True, fmt_num(n)) if n is not None else (False, t)
+    if kind == "phone":
+        d = re.sub(r"[\s\-()]", "", t.translate(_DIG))
+        return bool(re.fullmatch(r"\+?\d{8,15}", d)), d
+    if kind == "email":
+        return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", t)), t
+    return True, t
 
 
 def gate_ok(token, cfg, uid):
@@ -726,6 +1225,7 @@ def sub_hook(bot_id):
         return "forbidden", 403
     upd = request.get_json(silent=True) or {}
     token, cfg = dec(bot["token_enc"]), bot["config"]
+    env = None
     try:
         cq = upd.get("callback_query")
         if cq:
@@ -734,6 +1234,7 @@ def sub_hook(bot_id):
             if not chat_id:
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                 return "ok"
+            env = Env(bot, token, chat_id, user)
             if not gate_ok(token, cfg, user["id"]):
                 if data == "chk":
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="هنوز عضو نشدی 🙂", show_alert=True)
@@ -741,69 +1242,100 @@ def sub_hook(bot_id):
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_gate(token, chat_id, cfg)
                 return "ok"
-            if data.startswith("a:"):
+            if data.startswith(("a:", "g:")):
                 try:
-                    _, nid, ri, ci = data.split(":")
+                    kind, nid, ri, ci = data.split(":")
                     b = cfg["nodes"][nid]["buttons"][int(ri)][int(ci)]
-                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text=b["alert"][:200], show_alert=True)
                 except Exception:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                    return "ok"
+                if not visible(b, env):
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
+                       text="این گزینه الان در دسترس نیست", show_alert=True)
+                    return "ok"
+                run_actions(b.get("do"), env)
+                if kind == "a":
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
+                       text=fill(b.get("alert", ""), env)[:200], show_alert=True)
+                else:
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                    send_node(env, b["goto"], edit=m)
                 return "ok"
             tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
             if data == "chk":
-                send_node(token, chat_id, cfg, cfg["start"], bot_id, user, edit=m)
+                send_node(env, cfg["start"], edit=m)
             elif data.startswith("n:") and data[2:] in cfg["nodes"]:
-                send_node(token, chat_id, cfg, data[2:], bot_id, user, edit=m)
+                send_node(env, data[2:], edit=m)
             return "ok"
         msg = upd.get("message")
         if not msg or msg["chat"]["type"] != "private":
             return "ok"
         chat_id, user = msg["chat"]["id"], msg.get("from", {})
+        text = (msg.get("text") or "").strip()
+        env = Env(bot, token, chat_id, user, text=text)
         if not gate_ok(token, cfg, user.get("id", chat_id)):
             send_gate(token, chat_id, cfg)
             return "ok"
-        text = (msg.get("text") or "").strip()
-        sid = f"{bot_id}:{chat_id}"
+        sid = env.sid
         if text.startswith("/"):
-            cmd = text[1:].split()[0].split("@")[0].lower()
+            parts = text[1:].split(maxsplit=1)
+            cmd = parts[0].split("@")[0].lower() if parts else ""
+            env.param = parts[1].strip()[:64] if len(parts) > 1 else ""
             if cmd == "start":
-                send_node(token, chat_id, cfg, cfg["start"], bot_id, user)
+                env.visits += 1
+                env.dirty = True
+                send_node(env, cfg["start"])
             elif cmd in cfg["commands"]:
-                send_node(token, chat_id, cfg, cfg["commands"][cmd], bot_id, user)
+                send_node(env, cfg["commands"][cmd])
             else:
-                send_node(token, chat_id, cfg, cfg["fallback"], bot_id, user)
+                send_node(env, cfg["fallback"])
             return "ok"
         state = db.states.find_one({"_id": sid})
-        who = f"👤 {user.get('first_name', '')} (@{user.get('username', '-')}) — {user.get('id', '')}"
         if state and state.get("form") in cfg["nodes"] and cfg["nodes"][state["form"]].get("fields"):
             node = cfg["nodes"][state["form"]]
             fields = node["fields"]
             if not text:
                 tg(token, "sendMessage", chat_id=chat_id, text="لطفاً جوابت رو به‌صورت متن بفرست 🙏")
                 return "ok"
-            ans = (state.get("a") or []) + [text[:500]]
+            idx = len(state.get("a") or [])
+            types = node.get("types") or []
+            ok, val = valid_answer(types[idx] if idx < len(types) else "text", text)
+            if not ok:
+                tg(token, "sendMessage", chat_id=chat_id, text=FORM_HINT.get(types[idx], "جواب معتبر نیست، دوباره بفرست 🙏"))
+                return "ok"
+            sv = node.get("save") or []
+            if idx < len(sv) and sv[idx]:
+                env.set(sv[idx], val)
+            ans = (state.get("a") or []) + [val[:500]]
             if len(ans) < len(fields):
                 db.states.update_one({"_id": sid}, {"$set": {"a": ans}})
-                tg(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], user))
+                tg(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], env))
             else:
                 db.states.delete_one({"_id": sid})
-                body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
-                tg(token, "sendMessage", chat_id=bot["owner"],
-                   text=(f"📝 فرم جدید — {cfg['name']}\n{who}\n\n{body}")[:4000])
-                finish(token, chat_id, cfg, node, bot_id, user, "✅ اطلاعاتت ثبت شد، ممنون!")
+                if not node.get("silent"):
+                    body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
+                    tg(token, "sendMessage", chat_id=bot["owner"],
+                       text=(f"📝 فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}")[:4000])
+                finish(env, node, "✅ اطلاعاتت ثبت شد، ممنون!")
         elif state and state.get("ask"):
             r = tg(token, "copyMessage", chat_id=bot["owner"], from_chat_id=chat_id, message_id=msg["message_id"])
             if r.get("ok"):
-                tg(token, "sendMessage", chat_id=bot["owner"], text=who)
+                tg(token, "sendMessage", chat_id=bot["owner"], text=who(env))
             db.states.delete_one({"_id": sid})
             node = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
-            finish(token, chat_id, cfg, node or {}, bot_id, user, "✅ پیامت ارسال شد.")
+            finish(env, node or {}, "✅ پیامت ارسال شد.")
         else:
             rk = db.rk.find_one({"_id": sid}) if text else None
-            if not (rk and reply_press(token, chat_id, cfg, rk, text, bot_id, user)):
-                send_node(token, chat_id, cfg, cfg["fallback"], bot_id, user)
+            if not (rk and reply_press(env, rk, text)):
+                send_node(env, cfg["fallback"])
     except Exception:
         log.exception("sub_hook error")
+    finally:
+        if env:
+            try:
+                env.save()
+            except Exception:
+                log.exception("saving user vars failed")
     return "ok"
 
 
