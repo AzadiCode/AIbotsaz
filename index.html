@@ -285,10 +285,19 @@ details.adv .box{padding:0 0 12px}
 .kvr:first-of-type{border-top:0}
 .kvr code{font-family:ui-monospace,Menlo,monospace;color:var(--ac);font-size:12px}
 .kvr span{color:var(--hint)}
+.wal{text-align:center}.wal .k{font-size:12px;color:var(--hint)}
+.wal .big{font-size:34px;font-weight:800;line-height:1.5;font-variant-numeric:tabular-nums}
+.tplg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+button.tpl{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:right;background:var(--bg);color:var(--tx);padding:12px;border-radius:14px}
+button.tpl span{font-size:22px}button.tpl b{font-size:13.5px}button.tpl small{font-size:11.5px;color:var(--hint);line-height:1.5}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sub{border-top:1px solid var(--bg2);padding:10px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+.sub:first-child{border-top:0}.sub small{display:block;color:var(--hint);font-size:11.5px}
+.pos{color:var(--green)}.neg{color:var(--red)}
 </style>
 </head>
 <body>
-<div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota"></span></div>
+<div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota" style="cursor:pointer"></span></div>
 <div id="app"></div>
 <div id="sheet" class="sheet"></div>
 <div id="toast"></div>
@@ -314,7 +323,7 @@ tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
 // خالی = همون دامنه‌ای که این صفحه ازش لود شده (حالت پیش‌فرض). فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
 const API_BASE = "";
-let S = { open: new Set(), joined: null, bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false };
+let S = { open: new Set(), joined: null, bots: [], bal: 0, costs: {min:5, typical:11}, ref: null, daily: null, isAdmin: false, templates: [], maxBots: 10, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -324,20 +333,20 @@ function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show")
 async function api(path, method="GET", body){
   const r = await fetch(API_BASE + path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body?JSON.stringify(body):undefined });
   const d = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(d.error || "خطا در ارتباط با سرور");
+  if(!r.ok){ const e = new Error(d.error || "خطا در ارتباط با سرور"); e.status = r.status; throw e; }
   return d;
 }
 
 async function load(){
   try{
     const d = await api("/api/me");
-    S.bots = d.bots; S.quota = d.quota; S.limit = d.limit; S.maxBots = d.max_bots; S.joined = d.joined;
+    S.bots = d.bots; S.bal = d.bal; S.costs = d.costs; S.ref = d.ref; S.daily = d.daily; S.isAdmin = d.is_admin; S.templates = d.templates || []; S.maxBots = d.max_bots; S.joined = d.joined;
   }catch(e){ $("#dock").hidden = true; $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`; return; }
   render();
 }
 
 function render(){
-  $("#quota").textContent = `سهمیه‌ی امروز: ${S.quota} از ${S.limit}`;
+  $("#quota").textContent = `🪙 ${fa(S.bal)} توکن`; $("#quota").onclick = () => go("profile");
   S.view === "list" ? renderList() : S.view === "profile" ? renderProfile() : renderBot();
   syncDock();
 }
@@ -377,7 +386,8 @@ function nodeCard(cfg, id, i = 0, rise = false){
   if(n.fields) tags.push("فرم");
   else if(n.ask) tags.push("دریافت پیام");
   if(isRk) tags.push("⌨️ کیبورد چت");
-  if(n.photo) tags.push("🖼 عکس");
+  if(n.media || n.photo) tags.push("📎 فایل");
+  if(n.ai) tags.push("🤖 هوش مصنوعی");
   if(n.do?.length || n.route?.length || n.alt?.length) tags.push("🧩 منطق");
   const open = S.open.has(id), nb = n.buttons.reduce((a,r) => a + r.length, 0);
   const prev = (n.text||"").replace(/\s+/g," ").slice(0,70);
@@ -427,15 +437,20 @@ function renderBot(){
       <textarea id="prompt" maxlength="2000" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
       <div style="height:10px"></div>
       <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
+      <p class="muted" style="margin-top:8px;font-size:12px">هزینه‌ی هر ساخت یا ارتقا حدود ${fa(S.costs.typical)} توکن (حداقل ${fa(S.costs.min)}) • ویرایش دستی و قالب‌ها رایگانه</p>
     </div>
     <div id="live"></div>`;
   let body = "";
+  if(!b && S.templates.length){
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">یا از قالب آماده شروع کن (رایگان)</h2></div><div class="tplg">${S.templates.map(t => `<button class="tpl" data-tpl="${t.id}"><span>${t.icon}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`;
+  }
   if(b){
     body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">✨</span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
     body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot">⚙️ تنظیمات ربات</button></div>
              <div class="pvhd"><span class="muted">هر بخش رو باز کن، بعد روی متن یا دکمه بزن تا ویرایشش کنی.</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
     body += Object.keys(b.config.nodes).map((id,i) => nodeCard(b.config, id, i, S.fresh)).join("");
     body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">＋ بخش جدید</button>`;
+    body += `<div class="card" id="stats"><span class="muted">در حال بارگذاری آمار…</span></div>`;
     if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">↩ برگشت به نسخه‌ی قبلی</button>`;
     body += b.active
       ? `<div class="card"><h2>🟢 فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
@@ -449,7 +464,7 @@ function renderBot(){
   $("#act")?.addEventListener("click", activate);
   $("#off")?.addEventListener("click", () => act("deactivate", "ربات غیرفعال شد"));
   $("#del")?.addEventListener("click", remove);
-  syncAll();
+  syncAll(); if(b) loadStats();
   if(S.fresh && b?.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior:"smooth",block:"nearest"}); }
   S.fresh = false;
 }
@@ -529,6 +544,7 @@ const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="clo
 const OPS = [["==","مساوی باشه با"],["!=","مساوی نباشه با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشه"],["empty","خالی باشه"],["filled","پر باشه"]];
 const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
 const APH = {set:"مقدار (می‌تونی {متغیر} بذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شه"};
+const MEDIA_TYPES = [["photo","🖼 عکس"],["video","🎬 ویدیو"],["audio","🎵 صوت"],["document","📄 فایل"],["animation","🎞 گیف"]];
 const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
   ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ ۱ یا ۰"],["is_owner","صاحب ربات؟ ۱ یا ۰"],["visits","تعداد استارت‌های کاربر"],["text","آخرین پیام کاربر"],
@@ -602,9 +618,11 @@ const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value 
 function openNode(id){
   const cfg = S.cur.config, n = cfg.nodes[id];
   S.sheet = {kind:"node", id};
-  D = { title:n.title||"", text:n.text, photo:n.photo||"", done:n.done||"", next:n.next||"",
+  const mm = n.media || (n.photo ? {type:"photo", url:n.photo} : null);
+  D = { title:n.title||"", text:n.text, photo:mm?.url||"", mtype:mm?.type||"photo", done:n.done||"", next:n.next||"",
+        aisys:n.ai?.system||"", aimem:n.ai?.memory ?? 3, ailim:n.ai?.limit ?? 20,
         fields:n.fields ? n.fields.map((q,i) => ({q, v:(n.save||[])[i]||"", t:(n.types||[])[i]||"text"})) : [{q:"", v:"", t:"text"}],
-        silent:!!n.silent, mode:n.fields ? "form" : n.ask ? "ask" : "show", kb:n.kb==="reply" ? "reply" : "inline",
+        silent:!!n.silent, mode:n.ai ? "ai" : n.fields ? "form" : n.ask ? "ask" : "show", kb:n.kb==="reply" ? "reply" : "inline",
         start:id===cfg.start, fb:id===cfg.fallback,
         do:cp(n.do||[]), route:(n.route||[]).map(r => ({c:cp(r.when), goto:r.goto})), alt:(n.alt||[]).map(r => ({c:cp(r.when), text:r.text})), adv:false };
   renderSheet();
@@ -626,12 +644,14 @@ function nodeSheet(){
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
     <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی ⚙️ تنظیمات ربات.</p>
-    <span class="lbl">عکس (اختیاری — لینک مستقیم عکس)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">
+    <span class="lbl">فایل ضمیمه (اختیاری — لینک مستقیم https)</span>
+    <div class="cmd"><select id="f-mtype">${MEDIA_TYPES.map(([v,l]) => `<option value="${v}"${v===d.mtype?" selected":""}>${l}</option>`).join("")}</select><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../file" autocomplete="off"></div>
     <span class="lbl">این بخش چی کار کنه؟</span>
     <select id="f-mode" data-sh="mode">
       <option value="show"${d.mode==="show"?" selected":""}>فقط پیام و دکمه‌ها رو نشون بده</option>
       <option value="ask"${d.mode==="ask"?" selected":""}>یه پیام از کاربر بگیر و برای من بفرست</option>
       <option value="form"${d.mode==="form"?" selected":""}>فرم چندمرحله‌ای (چند سؤال پشت‌سرهم)</option>
+      <option value="ai"${d.mode==="ai"?" selected":""}>🤖 گفتگوی هوشمند با هوش مصنوعی (مصرف توکن)</option>
     </select>
     ${d.mode==="show" ? kbPicker(d.kb) : `<p class="muted" style="margin-top:10px">⌨️ کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
     ${d.mode==="form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
@@ -640,7 +660,13 @@ function nodeSheet(){
         <select class="ft">${TYPES.map(([v,l]) => `<option value="${v}"${v===f.t?" selected":""}>${l}</option>`).join("")}</select></div></div>`).join("")}
       ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld">＋ سؤال</button>` : ""}
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent?" checked":""}> نتیجه‌ی فرم برای من فرستاده نشه</label>` : ""}
-    ${d.mode!=="show" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="✅ ثبت شد، ممنون!">
+    ${d.mode==="ai" ? `<span class="lbl">دستورالعمل هوش مصنوعی (نقش، لحن، اطلاعات کسب‌وکار)</span>
+      <textarea class="fa" id="f-aisys" maxlength="1500" placeholder="مثلاً: تو دستیار فروشگاه موبایل هستی. مؤدب و کوتاه جواب بده…">${esc(d.aisys)}</textarea>
+      <div class="cmd" style="align-items:flex-end"><div style="flex:1"><span class="lbl">حافظه‌ی گفتگو</span><select id="f-aimem">${[0,1,2,3,4,5,6].map(i => `<option value="${i}"${i===+d.aimem?" selected":""}>${i} پیام قبلی</option>`).join("")}</select></div>
+      <div style="flex:1"><span class="lbl">سقف پیام روزانه‌ی هر کاربر</span><input id="f-ailim" type="number" min="1" max="100" value="${d.ailim}"></div></div>
+      <span class="lbl">پیام وقتی توکنت تموم شده (اختیاری)</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="🙏 فعلاً در دسترس نیست">
+      <p class="muted" style="margin-top:6px">متن بالا، پیام خوش‌آمد گفتگوئه و دکمه‌های این بخش راه خروج کاربرن (حتماً یه دکمه‌ی بازگشت بذار). هر پیام کاربر حدود ۱ توکن از حساب تو مصرف می‌کنه.</p>` : ""}
+    ${d.mode==="form"||d.mode==="ask" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="✅ ثبت شد، ممنون!">
       <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>` : ""}
     <details class="adv"${advOpen ? " open" : ""}><summary>🧩 متغیر و شرط (پیشرفته)</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقدار ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
@@ -653,12 +679,13 @@ function nodeSheet(){
 }
 function readNode(){
   const g = s => $(s)?.value ?? null;
-  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
+  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo; D.mtype = g("#f-mtype") ?? D.mtype; D.aisys = g("#f-aisys") ?? D.aisys;
+  if($("#f-aimem")) D.aimem = +$("#f-aimem").value; if($("#f-ailim")) D.ailim = Math.max(1, Math.min(100, +$("#f-ailim").value || 20));
   D.mode = g("#f-mode") ?? D.mode;
   const fq = [...document.querySelectorAll(".fq")];
   if(fq.length) D.fields = fq.map(r => ({q:r.querySelector(".fld").value, v:cleanVar(r.querySelector(".fv").value), t:r.querySelector(".ft").value}));
   if($("#f-silent")) D.silent = $("#f-silent").checked;
-  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
+  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next") ?? D.next; }
   if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
   if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
   for(const l of ["do","route","alt"]) readRl(l);
@@ -668,15 +695,18 @@ function saveNode(){
   const id = S.sheet.id;
   if(!D.text.trim()) return toast("متن پیام نباید خالی باشه");
   if(D.mode==="form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
+  if(D.mode==="ai" && !D.aisys.trim()) return toast("دستورالعمل هوش مصنوعی رو بنویس");
+  if(D.mode==="ai" && !S.cur.config.nodes[id].buttons.length) return toast("اول یه دکمه‌ی بازگشت به این بخش اضافه کن تا کاربر بتونه از گفتگو خارج بشه");
   if(D.mode==="show" && D.kb==="reply" && !S.cur.config.nodes[id].buttons.length) return toast("برای کیبورد زیر چت اول یه دکمه به این بخش اضافه کن");
   const err = ruleErr(); if(err) return toast(err);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id];
-    for(const k of ["title","photo","ask","fields","save","types","silent","done","next","kb","do","route","alt"]) delete n[k];
+    for(const k of ["title","photo","media","ai","ask","fields","save","types","silent","done","next","kb","do","route","alt"]) delete n[k];
     if(D.mode==="show" && D.kb==="reply") n.kb = "reply";
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
-    if(D.photo.trim()) n.photo = D.photo.trim();
+    if(D.photo.trim()) n.media = {type:D.mtype, url:D.photo.trim()};
+    if(D.mode==="ai") n.ai = {system:D.aisys.trim(), memory:D.aimem, limit:D.ailim};
     if(D.mode==="ask") n.ask = true;
     if(D.mode==="form"){
       const fl = D.fields.filter(f => f.q.trim());
@@ -685,7 +715,8 @@ function saveNode(){
       if(fl.some(f => f.t !== "text")) n.types = fl.map(f => f.t);
       if(D.silent) n.silent = true;
     }
-    if(D.mode!=="show"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    if(D.mode==="form" || D.mode==="ask"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    else if(D.mode==="ai" && D.done.trim()) n.done = D.done.trim();
     if(D.do.length) n.do = outActs(D.do);
     if(D.route.length) n.route = D.route.map(r => ({when:r.c, goto:r.goto}));
     if(D.alt.length) n.alt = D.alt.map(r => ({when:r.c, text:r.text.trim()}));
@@ -709,7 +740,7 @@ function delNode(){
 }
 function addNode(){
   const cfg = S.cur.config, ids = Object.keys(cfg.nodes);
-  if(ids.length >= 30) return toast("حداکثر ۳۰ بخش");
+  if(ids.length >= 40) return toast("حداکثر ۴۰ بخش");
   let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
   const id = "page_"+k;
   S.open.add(id);
@@ -895,7 +926,7 @@ document.addEventListener("change", e => {
 async function busy(btn, fn){
   if(S.busy) return; S.busy = true;
   const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = old + '<span class="spin"></span>';
-  try{ await fn(); }catch(e){ toast(e.message); }
+  try{ await fn(); }catch(e){ toast(e.message); if(e.status === 402) setTimeout(() => go("profile"), 1500); }
   S.busy = false; if(btn.isConnected){ btn.disabled = false; btn.innerHTML = old; }
 }
 
@@ -907,8 +938,8 @@ function generate(){
     try{
       const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
       const wasActive = S.cur?.active;
-      S.cur = d.bot; S.quota = d.quota; S.fresh = true; stopLive(); render();
-      toast(wasActive ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅");
+      S.cur = d.bot; S.bal = d.bal; S.fresh = true; stopLive(); render();
+      toast((wasActive ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅") + ` · ${fa(d.cost)} توکن`);
       tg?.HapticFeedback?.notificationOccurred("success");
     } finally { stopLive(); ta.readOnly = false; }
   });
@@ -924,13 +955,53 @@ function remove(){
   tg?.showConfirm ? tg.showConfirm("این ربات برای همیشه حذف بشه؟", go) : go(confirm("حذف بشه؟"));
 }
 
+/* ───────── قالب‌ها، آمار ربات، پیام همگانی ───────── */
+function useTemplate(id, btn){
+  busy(btn, async () => { const d = await api(`/api/templates/${id}/create`, "POST"); S.cur = d.bot; S.fresh = true; S.open = new Set(); render(); toast("قالب آماده شد ✅"); });
+}
+async function loadStats(){
+  const el = $("#stats"); if(!el || !S.cur) return;
+  try{
+    const d = await api(`/api/bots/${S.cur.id}/stats`);
+    if(!$("#stats")) return;
+    el.innerHTML = `<h2>📊 آمار و کاربران</h2>
+      <div class="stats" style="margin:10px 0">
+        <div class="stat"><div class="k">کاربران ربات</div><div class="v">${fa(d.users)}</div></div>
+        <div class="stat"><div class="k">فعال امروز</div><div class="v">${fa(d.today)}</div></div>
+        <div class="stat"><div class="k">پاسخ فرم‌ها</div><div class="v">${fa(d.forms)}</div></div>
+        <div class="stat"><div class="k">توکنِ مصرفیِ AI ربات</div><div class="v">${fa(d.ai_tokens)}</div></div>
+      </div>
+      <div class="g2"><button class="ghost" data-ax="subs">📥 پاسخ فرم‌ها</button><button class="ghost" data-ax="bc">📣 پیام همگانی</button></div>`;
+  }catch(_){ $("#stats")?.remove(); }
+}
+const fdate = t => new Date(t).toLocaleString("fa-IR", {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+async function openSubs(){
+  S.sheet = {kind:"info"}; showSheet(head("پاسخ فرم‌ها") + `<p class="muted">در حال بارگذاری…</p>`);
+  try{
+    const d = await api(`/api/bots/${S.cur.id}/submissions`);
+    showSheet(head("پاسخ فرم‌ها") + (d.items.length ? d.items.map(r => `<div class="sub"><small>${esc(r.title)} • ${esc(r.name)}${r.un ? " @"+esc(r.un) : ""} • ${fdate(r.t)}</small>${
+      r.qa.length ? r.qa.map(([q,a]) => `${esc(q)}\n» <b>${esc(a)}</b>`).join("\n") : esc(r.text)}</div>`).join("") : `<p class="muted">هنوز پاسخی ثبت نشده.</p>`));
+  }catch(e){ closeSheet(); toast(e.message); }
+}
+function openBc(){
+  if(!S.cur.active) return toast("اول ربات رو فعال کن");
+  S.sheet = {kind:"info"};
+  showSheet(head("📣 پیام همگانی") + `<p class="muted" style="margin-bottom:8px">پیام برای همه‌ی کاربرهای ربات فرستاده می‌شه. (هر ۱۰ دقیقه یک بار)</p>
+    <textarea class="fa" id="bc-text" maxlength="3500" placeholder="متن پیام…"></textarea><div style="height:10px"></div><button data-ax="bcsend">ارسال</button>`);
+}
+function sendBc(btn){
+  const t = $("#bc-text").value.trim(); if(t.length < 2) return toast("متن پیام رو بنویس");
+  busy(btn, async () => { const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text:t}); closeSheet(); toast(`ارسال برای ${fa(d.queued)} نفر شروع شد 📣`); });
+}
+
 /* ───────── پروفایل کاربر ───────── */
 const pips = (n, total) => `<div class="pips">${Array.from({length: Math.max(total,1)}, (_,i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</div>`;
+const REASONS = {welcome:"هدیه‌ی ثبت‌نام", daily:"هدیه‌ی روزانه", referral_new:"هدیه‌ی ورود با لینک دعوت", referral_inviter:"پاداش دعوت دوست", coupon:"کد هدیه", admin:"تنظیم توسط ادمین", generate:"ساخت ربات", upgrade:"ارتقای ربات"};
+const reasonOf = r => r.startsWith("bot_ai") ? "مصرف هوش مصنوعیِ ربات‌هات" : (REASONS[r] || r);
 function renderProfile(){
   const u = tg?.initDataUnsafe?.user || {};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const active = S.bots.filter(b => b.active).length, C = 2 * Math.PI * 26;
-  const rem = S.limit ? Math.max(0, Math.min(1, S.quota / S.limit)) : 0;
+  const active = S.bots.filter(b => b.active).length, r = S.ref || {}, dl = S.daily || {};
   const joined = S.joined ? new Date(S.joined).toLocaleDateString("fa-IR", {year:"numeric", month:"long", day:"numeric"}) : "—";
   $("#app").innerHTML = `
     <div class="card pf">
@@ -939,24 +1010,74 @@ function renderProfile(){
       <h2>${esc(name)}</h2>
       ${u.username ? `<span class="muted un">@${esc(u.username)}</span>` : ""}
     </div>
-    <div class="stats">
-      <div class="stat"><div class="k">ربات‌های من</div><div class="v">${fa(S.bots.length)} <small>از ${fa(S.maxBots)}</small></div>${pips(S.bots.length, S.maxBots)}</div>
-      <div class="stat"><div class="k">ربات‌های فعال</div><div class="v">${fa(active)} <small>از ${fa(S.bots.length)}</small></div>${pips(active, S.bots.length || S.maxBots)}</div>
-      <div class="stat quota">
-        <svg viewBox="0 0 64 64"><defs><linearGradient id="gQ" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ac)"/><stop offset="1" stop-color="#9b6bff"/></linearGradient></defs>
-          <circle class="tr" cx="32" cy="32" r="26"/><circle class="fg" id="qring" cx="32" cy="32" r="26" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>
-        <div class="qv"><div class="k">سهمیه‌ی ساخت و ارتقا امروز</div><b>${fa(S.quota)}</b> <span class="muted">از ${fa(S.limit)} باقی مونده</span></div>
+    <div class="card wal">
+      <div class="k">موجودی توکن</div><div class="big">🪙 ${fa(S.bal)}</div>
+      <p class="muted" style="margin-bottom:10px">هر ساخت یا ارتقای ربات حدود ${fa(S.costs.typical)} توکن مصرف می‌کنه. ویرایش دستی و قالب‌ها رایگانه.</p>
+      <button data-ax="daily" ${dl.available ? "" : "disabled"}>${dl.available ? `🎁 هدیه‌ی امروز (+${fa(dl.amount)} توکن)` : "هدیه‌ی امروز رو گرفتی 🌙"}</button>
+    </div>
+    <div class="card">
+      <h2>👥 دعوت دوستان = توکن رایگان</h2>
+      <p class="muted" style="margin:6px 0 10px">دوستت با لینک تو که بیاد ${fa(r.new)} توکن می‌گیره؛ وقتی اولین رباتش رو فعال کنه، تو ${fa(r.inviter)} توکن می‌گیری (تا ${fa(r.max)} دعوت).</p>
+      <input readonly value="${esc(r.link || "")}" onclick="this.select()"><div style="height:8px"></div>
+      <div class="g2"><button class="ghost" data-ax="copyref">📋 کپی لینک</button><button data-ax="shareref">📤 اشتراک‌گذاری</button></div>
+      <div class="stats" style="margin:12px 0 0">
+        <div class="stat"><div class="k">دعوت‌شده‌ها</div><div class="v">${fa(r.joined)}</div></div>
+        <div class="stat"><div class="k">توکن درآمدی</div><div class="v">${fa(r.earned)}</div></div>
       </div>
     </div>
+    <div class="card"><h2>🎟 کد هدیه</h2><div style="height:8px"></div>
+      <div class="g2" style="grid-template-columns:1fr auto"><input id="cpn" placeholder="CODE" autocomplete="off"><button data-ax="coupon" style="width:auto">ثبت</button></div></div>
+    <div class="stats">
+      <div class="stat"><div class="k">ربات‌های من</div><div class="v">${fa(S.bots.length)} <small>از ${fa(S.maxBots)}</small></div></div>
+      <div class="stat"><div class="k">ربات‌های فعال</div><div class="v">${fa(active)} <small>از ${fa(S.bots.length)}</small></div></div>
+    </div>
+    <div class="card" id="ledger"><h2>🧾 تاریخچه‌ی توکن</h2><p class="muted">در حال بارگذاری…</p></div>
+    ${S.isAdmin ? `<div class="card" id="admin"><h2>🛠 پنل ادمین</h2><div style="height:8px"></div>
+      <span class="lbl">افزودن/کم‌کردن توکن کاربر</span>
+      <div class="g2"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
+      <div style="height:6px"></div><button class="ghost" data-ax="agrant">اعمال</button>
+      <span class="lbl" style="margin-top:12px">ساخت کد هدیه</span>
+      <div class="g2"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
+      <div style="height:6px"></div><div class="g2"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز، اختیاری)" inputmode="numeric"></div>
+      <div style="height:6px"></div><button class="ghost" data-ax="acoupon">ساخت کد</button>
+      <div style="height:10px"></div><button class="ghost" data-ax="astats">📈 آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
     <div class="card kv">
-      <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg></b>` : "<b>—</b>"}</div>
+      <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}</b>` : "<b>—</b>"}</div>
       <div><span>اولین ورود</span><b>${joined}</b></div>
     </div>`;
-  requestAnimationFrame(() => requestAnimationFrame(() => { const r = $("#qring"); if(r) r.style.strokeDashoffset = C * (1 - rem); }));
+  loadLedger();
+}
+async function loadLedger(){
+  try{
+    const d = await api("/api/ledger"); const el = $("#ledger"); if(!el) return;
+    el.innerHTML = `<h2>🧾 تاریخچه‌ی توکن</h2><div style="height:6px"></div>` + (d.items.length ? `<div class="kv" style="padding:0">${d.items.map(x =>
+      `<div><span>${esc(reasonOf(x.reason))} • ${fdate(x.t)}</span><b class="${x.delta > 0 ? "pos" : "neg"}" dir="ltr">${x.delta > 0 ? "+" : ""}${fa(x.delta)}</b></div>`).join("")}</div>` : `<p class="muted">هنوز تراکنشی نداری.</p>`);
+  }catch(_){ $("#ledger")?.remove(); }
 }
 document.addEventListener("click", e => {
   const c = e.target.closest('[data-pf="copyid"]'); if(!c) return;
   navigator.clipboard?.writeText(c.dataset.id).then(() => toast("شناسه کپی شد ✅"), () => toast(c.dataset.id));
+});
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tpl]"); if(t) return useTemplate(t.dataset.tpl, t);
+  const x = e.target.closest("[data-ax]"); if(!x) return;
+  const a = x.dataset.ax, v = id => ($(id)?.value || "").trim();
+  if(a === "subs") openSubs();
+  else if(a === "bc") openBc();
+  else if(a === "bcsend") sendBc(x);
+  else if(a === "daily") busy(x, async () => { const d = await api("/api/daily", "POST"); S.bal = d.bal; S.daily.available = false; render(); toast(`+${fa(d.got)} توکن گرفتی 🎁`); });
+  else if(a === "copyref") navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک کپی شد ✅"), () => toast(S.ref.link));
+  else if(a === "shareref"){
+    const url = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هوشمند، ربات تلگرامت رو در چند ثانیه بساز 🤖");
+    tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
+  }
+  else if(a === "coupon"){
+    if(!v("#cpn")) return toast("کد رو وارد کن");
+    busy(x, async () => { const d = await api("/api/coupon", "POST", {code: v("#cpn")}); S.bal = d.bal; render(); toast(`+${fa(d.got)} توکن اضافه شد 🎟`); });
+  }
+  else if(a === "agrant") busy(x, async () => { const d = await api("/api/admin/grant", "POST", {uid: v("#ag-uid"), amount: v("#ag-amt")}); toast(`موجودی جدید کاربر: ${fa(d.bal)}`); });
+  else if(a === "acoupon") busy(x, async () => { const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")}); toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); });
+  else if(a === "astats") busy(x, async () => { const d = await api("/api/admin/stats"); $("#astats").innerHTML = `کاربران: ${fa(d.users)} • ربات‌ها: ${fa(d.bots)} (فعال: ${fa(d.active)}) • کاربران رباتا: ${fa(d.bot_users)}<br>توکنِ در گردش: ${fa(d.circulation)} • دعوت موفق: ${fa(d.referrals)}`; });
 });
 
 /* ───────── نوار پایین ───────── */
