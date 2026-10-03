@@ -62,24 +62,23 @@ input{direction:ltr;text-align:left}
 .think .tt{color:var(--hint)}
 
 /* ── انیمیشن «در حال فکر کردن» ── */
-.live{background:linear-gradient(145deg,var(--bg),var(--bg2));border-radius:16px;padding:20px 18px;margin-bottom:14px;
-  border:1px solid rgba(47,124,246,.08);animation:pop .4s cubic-bezier(.16,1,.3,1);position:relative}
-.live::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ac),#9b6bff,#34c3ff);opacity:.6}
-.live-content{display:flex;align-items:center;gap:14px}
-.live-indicator{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,rgba(47,124,246,.12),rgba(155,107,255,.12));display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative}
-.live-indicator::before{content:"";position:absolute;inset:-2px;border-radius:16px;background:linear-gradient(135deg,var(--ac),#9b6bff);opacity:.15;animation:ringPulse 2.5s ease-out infinite}
-.live-indicator svg{width:22px;height:22px;color:var(--ac);animation:rotate 3s linear infinite}
+.live{background:linear-gradient(145deg,var(--bg),var(--bg2));border-radius:14px;padding:14px 16px;margin-bottom:12px;
+  border:1px solid rgba(47,124,246,.06);animation:pop .35s cubic-bezier(.16,1,.3,1);position:relative}
+.live::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ac),#9b6bff,#34c3ff);opacity:.5}
+.live-content{display:flex;align-items:center;gap:12px}
+.live-indicator{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,rgba(47,124,246,.1),rgba(155,107,255,.1));display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative}
+.live-indicator::before{content:"";position:absolute;inset:-2px;border-radius:14px;background:linear-gradient(135deg,var(--ac),#9b6bff);opacity:.12;animation:ringPulse 2.5s ease-out infinite}
+.live-indicator svg{width:20px;height:20px;color:var(--ac);animation:rotate 3s linear infinite}
 .live-text{flex:1;min-width:0}
-.live-text h4{font-size:15px;font-weight:600;color:var(--tx);margin:0 0 4px;letter-spacing:-.01em}
-.live-text p{font-size:13px;color:var(--hint);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+.live-text p{font-size:13.5px;font-weight:500;color:var(--tx);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .live-dots{display:flex;gap:3px;margin-left:auto;flex-shrink:0}
-.live-dots span{width:6px;height:6px;border-radius:50%;background:rgba(47,124,246,.25);animation:dotWave 1.4s ease-in-out infinite}
+.live-dots span{width:5px;height:5px;border-radius:50%;background:rgba(47,124,246,.22);animation:dotWave 1.4s ease-in-out infinite}
 .live-dots span:nth-child(2){animation-delay:.15s}
 .live-dots span:nth-child(3){animation-delay:.3s}
-@keyframes pop{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
-@keyframes ringPulse{0%{transform:scale(1);opacity:.15}50%{transform:scale(1.15);opacity:.05}100%{transform:scale(1);opacity:.15}}
+@keyframes pop{from{opacity:0;transform:scale(.98) translateY(4px)}to{opacity:1;transform:none}}
+@keyframes ringPulse{0%{transform:scale(1);opacity:.12}50%{transform:scale(1.12);opacity:.04}100%{transform:scale(1);opacity:.12}}
 @keyframes rotate{to{transform:rotate(360deg)}}
-@keyframes dotWave{0%,80%,100%{transform:scale(.7);opacity:.4}40%{transform:scale(1.2);opacity:1}}
+@keyframes dotWave{0%,80%,100%{transform:scale(.7);opacity:.35}40%{transform:scale(1.2);opacity:1}}
 @media (prefers-reduced-motion:reduce){.live-indicator::before,.live-indicator svg,.live-dots span{animation:none}}
 
 /* ── ویرایشگر ── */
@@ -119,6 +118,33 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 @keyframes fi{from{opacity:0}to{opacity:1}}
 #toast{z-index:99}
+
+/* ── نوار پایین (Bottom Bar) ── */
+.botbar{position:fixed;bottom:0;left:0;right:0;z-index:40;pointer-events:none}
+.botbar-handle{pointer-events:auto;width:100%;height:56px;background:linear-gradient(180deg,rgba(255,255,255,0),var(--bg) 40%);display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
+.botbar-tab{width:44px;height:44px;border-radius:14px;background:var(--bg);border:1px solid rgba(47,124,246,.12);box-shadow:0 -4px 20px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .25s cubic-bezier(.16,1,.3,1);position:relative}
+.botbar-tab::before{content:"";position:absolute;width:24px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--ac),#9b6bff);opacity:.6;transition:opacity .25s}
+.botbar-tab svg{width:22px;height:22px;color:var(--hint);transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.botbar-tab:hover{transform:translateY(-2px);box-shadow:0 -6px 24px rgba(0,0,0,.12)}
+.botbar.open .botbar-tab svg{transform:rotate(180deg)}
+.botbar-panel{pointer-events:auto;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,.12);transform:translateY(100%);opacity:0;transition:transform .35s cubic-bezier(.16,1,.3,1),opacity .25s;max-height:70vh;overflow-y:auto;padding:0 16px 0}
+.botbar.open .botbar-panel{transform:translateY(0);opacity:1}
+.botbar-content{padding:14px 0 calc(18px + env(safe-area-inset-bottom))}
+.botbar-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid rgba(127,127,127,.1);margin-bottom:10px}
+.botbar-header h3{font-size:16px;font-weight:600;color:var(--tx);margin:0}
+.botbar-close{width:32px;height:32px;border-radius:10px;background:transparent;color:var(--hint);display:flex;align-items:center;justify-content:center;border:1px solid rgba(127,127,127,.15);cursor:pointer;transition:all .2s}
+.botbar-close:hover{background:rgba(127,127,127,.08);color:var(--tx)}
+.botbar-section{margin-bottom:16px}
+.botbar-section-title{font-size:12px;color:var(--hint);text-transform:uppercase;letter-spacing:.08em;margin:0 0 10px 4px;font-weight:600}
+.botbar-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--bg2);cursor:pointer;transition:all .2s;border:1px solid transparent}
+.botbar-item:hover{background:rgba(47,124,246,.06);border-color:rgba(47,124,246,.12)}
+.botbar-item-icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,rgba(47,124,246,.12),rgba(155,107,255,.12));display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.botbar-item-icon svg{width:20px;height:20px;color:var(--ac)}
+.botbar-item-text{flex:1;min-width:0}
+.botbar-item-title{font-size:14.5px;font-weight:500;color:var(--tx);margin:0 0 2px}
+.botbar-item-desc{font-size:12px;color:var(--hint);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.botbar-divider{height:1px;background:rgba(127,127,127,.08);margin:12px 0}
+@media (prefers-reduced-motion:reduce){.botbar-tab,.botbar-panel,.botbar-item{transition:none}}
 </style>
 </head>
 <body>
@@ -127,17 +153,87 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 <div id="sheet" class="sheet"></div>
 <div id="toast"></div>
 
+<!-- Bottom Bar -->
+<div class="botbar" id="botbar">
+  <div class="botbar-handle">
+    <div class="botbar-tab" id="botbarTab" aria-label="باز کردن منو">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    </div>
+  </div>
+  <div class="botbar-panel" id="botbarPanel">
+    <div class="botbar-content">
+      <div class="botbar-header">
+        <h3>منوی کاربر</h3>
+        <button class="botbar-close" id="botbarClose" aria-label="بستن">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="botbar-section">
+        <p class="botbar-section-title">پروفایل</p>
+        <div class="botbar-item" id="profileBtn">
+          <div class="botbar-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <div class="botbar-item-text">
+            <p class="botbar-item-title">پروفایل کاربری</p>
+            <p class="botbar-item-desc">مدیریت حساب و تنظیمات</p>
+          </div>
+        </div>
+      </div>
+      <div class="botbar-divider"></div>
+      <div class="botbar-section">
+        <p class="botbar-section-title">تنظیمات</p>
+        <div class="botbar-item">
+          <div class="botbar-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+          <div class="botbar-item-text">
+            <p class="botbar-item-title">تنظیمات برنامه</p>
+            <p class="botbar-item-desc">سفارشی‌سازی تجربه</p>
+          </div>
+        </div>
+        <div class="botbar-item">
+          <div class="botbar-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <div class="botbar-item-text">
+            <p class="botbar-item-title">حریم خصوصی و امنیت</p>
+            <p class="botbar-item-desc">کنترل داده‌ها و دسترسی‌ها</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
 // خالی = همون دامنه‌ای که این صفحه ازش لود شده (حالت پیش‌فرض). فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
 const API_BASE = "";
-let S = { bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false };
+let S = { bots: [], quota: 0, limit: 0, maxBots: 3, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false, botbarOpen: false };
 
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&","<":"<",">":">",'"':""","'":"'"}[c]));
 
+/* Bottom Bar */
+function toggleBotbar(force){
+  S.botbarOpen = force !== undefined ? force : !S.botbarOpen;
+  $("#botbar").classList.toggle("open", S.botbarOpen);
+}
+function initBotbar(){
+  $("#botbarTab").addEventListener("click", () => toggleBotbar());
+  $("#botbarClose").addEventListener("click", () => toggleBotbar(false));
+  $("#botbarPanel").addEventListener("click", e => { if(e.target === $("#botbarPanel")) toggleBotbar(false); });
+  $("#profileBtn")?.addEventListener("click", () => { toggleBotbar(false); openProfile(); });
+}
+function openProfile(){
+  const u = tg?.initDataUnsafe?.user;
+  const name = u ? (u.first_name + (u.last_name ? " " + u.last_name : "")) : "کاربر";
+  const username = u?.username ? "@" + u.username : "تعیین نشده";
+  const id = u?.id ? String(u.id) : "—";
+  showSheet(`<div class="hd"><h2>پروفایل کاربری</h2><button class="sm x" data-x="close">✕</button></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 20px">
+      <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--ac),#9b6bff);display:flex;align-items:center;justify-content:center;font-size:28px;color:white;font-weight:600">${esc(name.charAt(0).toUpperCase())}</div>
+      <div style="text-align:center"><div style="font-size:17px;font-weight:600;color:var(--tx)">${esc(name)}</div><div style="font-size:13px;color:var(--hint);margin-top:2px">${esc(username)}</div><div style="font-size:11px;color:var(--hint);margin-top:6px;font-family:monospace;direction:ltr">ID: ${esc(id)}</div></div>
+    </div>
+    <div class="bar" style="margin-top:8px"><button class="ghost" data-x="close">بستن</button></div>`);
+}
 function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2800); }
 
 async function api(path, method="GET", body){
@@ -261,11 +357,11 @@ typeText.id = 0;
 
 /* ───────── انیمیشن «در حال فکر کردن» ───────── */
 const THINK_MESSAGES = [
-  "در حال درک درخواست شما…",
-  "تحلیل منطق و مسیرهای کاربر…",
-  "طراحی ساختار و دکمه‌ها…",
-  "نوشتن متن‌های بهینه…",
-  "بررسی نهایی و تکمیل…"
+  "در حال تحلیل درخواست…",
+  "طراحی منطق ربات…",
+  "سازماندهی مسیرها و دکمه‌ها…",
+  "تولید متن‌های بهینه…",
+  "بررسی نهایی…"
 ];
 function startLive(){
   const box = $("#live"); if(!box) return;
@@ -273,7 +369,7 @@ function startLive(){
   box.innerHTML = `<div class="live">
     <div class="live-content">
       <div class="live-indicator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg></div>
-      <div class="live-text"><h4>ربات‌ساز هوشمند</h4><p id="live-msg">${THINK_MESSAGES[0]}</p></div>
+      <div class="live-text"><p id="live-msg">${THINK_MESSAGES[0]}</p></div>
       <div class="live-dots"><span></span><span></span><span></span></div>
     </div>
   </div>`;
@@ -284,9 +380,9 @@ function startLive(){
     if(!msgEl) return clearInterval(startLive.t);
     i = (i + 1) % THINK_MESSAGES.length;
     msgEl.style.opacity = "0";
-    setTimeout(() => { msgEl.textContent = THINK_MESSAGES[i]; msgEl.style.opacity = "1"; }, 150);
+    setTimeout(() => { msgEl.textContent = THINK_MESSAGES[i]; msgEl.style.opacity = "1"; }, 120);
   }, 2600);
-  msgEl.style.transition = "opacity .15s ease";
+  msgEl.style.transition = "opacity .12s ease";
 }
 function stopLive(){ clearInterval(startLive.t); const box = $("#live"); if(box) box.innerHTML = ""; }
 
@@ -604,6 +700,7 @@ function remove(){
 }
 
 load();
+initBotbar();
 </script>
 </body>
 </html>
