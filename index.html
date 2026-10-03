@@ -1281,7 +1281,7 @@ function renderProfile(){
     </div></div>` : ""}`;
   requestAnimationFrame(() => requestAnimationFrame(() => { const r = $("#qring"); if(r) r.style.strokeDashoffset = C * (1 - rem); }));
   $("#claimBtn")?.addEventListener("click", claimDaily);
-  $("#buyBtn")?.addEventListener("click", () => $("#packsTop")?.scrollIntoView() || $(".pack button")?.focus());
+  $("#buyBtn")?.addEventListener("click", () => $("#packsTop")?.scrollIntoView({behavior:"smooth", block:"start"}));
   $("#refLink")?.addEventListener("click", () => {
     if(!S.ref.link) return toast("لینک دعوت در دسترس نیست");
     navigator.clipboard?.writeText(S.ref.link).then(()=>toast("لینک دعوت کپی شد"), ()=>toast(S.ref.link));
