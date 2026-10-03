@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Super BotMaker — ابر رباتساز هوشمند
-Flask + MongoDB + MiniApp
-- Token economy (توکن مصرفی برای ساخت/ارتقا با AI)
-- Referral + Daily bonus + Shop (stub)
-- Media upload (photo/video/voice/audio/document) + engine support
-- Safe fixed engine (no generated code execution)
+AI BotMaker — رباتساز هوشمند ساده
+Stack (مثل GramSaz): Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی
+- ربات مادر: فقط /start و دکمه‌ی باز کردن مینی‌اپ
+- مینی‌اپ: کاربر توضیح می‌ده چه رباتی می‌خواد، هوش مصنوعی «کانفیگ JSON» می‌سازه
+- موتور ثابت و امن (execute_node) کانفیگ رو اجرا می‌کنه؛ هیچ کد تولیدشده‌ای اجرا نمی‌شه
 """
 import os, re, json, time, hmac, hashlib, base64, secrets, logging, math, random, uuid, mimetypes
 from urllib.parse import parse_qsl
@@ -20,23 +19,23 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from cryptography.fernet import Fernet
 
-# ── Env ──
-MOTHER_TOKEN = os.environ["MOTHER_TOKEN"]
-MONGO_URI    = os.environ.get("MONGO_URI", "").strip()
-BASE_URL     = os.environ["BASE_URL"].rstrip("/")
-AI_BASE_URL  = re.sub(r"/chat/completions/?$", "", os.environ["AI_BASE_URL"].strip().rstrip("/"))
+# ───────────────────────── تنظیمات (Environment) ─────────────────────────
+MOTHER_TOKEN = os.environ["MOTHER_TOKEN"]            # توکن ربات مادر
+MONGO_URI    = os.environ.get("MONGO_URI", "").strip()  # خالی = حافظه‌ی موقت (ذخیره نمی‌شه)
+BASE_URL     = os.environ["BASE_URL"].rstrip("/")    # مثلا https://yourapp.onrender.com
+AI_BASE_URL  = re.sub(r"/chat/completions/?$", "", os.environ["AI_BASE_URL"].strip().rstrip("/"))  # با یا بدون /chat/completions کار می‌کنه
 AI_API_KEY   = os.environ["AI_API_KEY"]
 AI_MODEL     = os.environ["AI_MODEL"]
-SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)
-DAILY_LIMIT  = int(os.environ.get("DAILY_LIMIT", "20"))
-MAX_BOTS     = int(os.environ.get("MAX_BOTS", "5"))
-AI_MAX_TOKENS = int(os.environ.get("AI_MAX_TOKENS", "6000"))
-DEBUG        = os.environ.get("DEBUG", "") == "1"
+SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)  # برای رمزنگاری توکن رباتا
+DAILY_LIMIT  = int(os.environ.get("DAILY_LIMIT", "5"))     # تعداد ساخت/ارتقا در روز برای هر کاربر
+MAX_BOTS     = int(os.environ.get("MAX_BOTS", "3"))        # سقف ربات هر کاربر
+AI_MAX_TOKENS = int(os.environ.get("AI_MAX_TOKENS", "6000"))   # سقف طول خروجی هوش مصنوعی
+DEBUG        = os.environ.get("DEBUG", "") == "1"   # علت دقیق خطا رو توی مینی‌اپ نشون می‌ده
 MAX_PROMPT   = 2000
 MAX_VERSIONS = 8
 MAX_NODES    = 40
 
-# ── Token economy ──
+# ── Token economy (ابر رباتساز: هزینه‌ی توکنی هوش مصنوعی) ──
 NEW_USER_TOKENS = int(os.environ.get("NEW_USER_TOKENS", "40"))
 GENERATE_COST   = int(os.environ.get("GENERATE_COST", "12"))
 UPGRADE_COST    = int(os.environ.get("UPGRADE_COST", "8"))
@@ -45,7 +44,7 @@ DAILY_BONUS     = int(os.environ.get("DAILY_BONUS", "10"))
 MOTHER_USERNAME = os.environ.get("MOTHER_USERNAME", "").strip().lstrip("@")
 ADMIN_IDS       = {int(x) for x in os.environ.get("ADMIN_IDS", "").replace(",", " ").split() if x.strip().lstrip("-").isdigit()}
 
-# ── Media ──
+# ── Media (آپلود عکس/ویدیو/صوت/سند برای بخش‌های ربات) ──
 MEDIA_DIR = Path(os.environ.get("MEDIA_DIR", str(Path(__file__).parent / "media")))
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 MAX_MEDIA_MB = int(os.environ.get("MAX_MEDIA_MB", "20"))
@@ -54,7 +53,7 @@ ALLOWED_EXT = {"jpg","jpeg","png","webp","gif","mp4","mov","m4a","mp3","ogg","og
 MEDIA_KINDS = ("photo", "video", "animation", "voice", "audio", "document")
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("superbot")
+log = logging.getLogger("aibot")
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_MEDIA_BYTES + 1024 * 1024
@@ -63,30 +62,34 @@ if MONGO_URI:
 else:
     import mongomock
     db = mongomock.MongoClient().get_database("aibot")
-    log.warning("MONGO_URI empty — using volatile memory")
+    log.warning("MONGO_URI تنظیم نشده؛ از حافظه‌ی موقت استفاده می‌شه و با هر ری‌استارت همه‌چی پاک می‌شه")
 db.bots.create_index("owner")
 db.bots.create_index("token_hash", unique=True, sparse=True)
 
 fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest()))
 MOTHER_SECRET = hashlib.sha256(("mother" + SECRET_KEY).encode()).hexdigest()[:32]
 
-# ── Telegram helper ──
+
+# ───────────────────────── ابزارهای تلگرام ─────────────────────────
 def tg(token, method, **data):
     try:
-        r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=data, timeout=20)
+        r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=data, timeout=15)
         return r.json()
     except Exception as e:
         log.warning("tg %s failed: %s", method, e)
         return {"ok": False, "description": str(e)}
 
+
 def now():
     return datetime.now(timezone.utc)
+
 
 def enc(s):  return fernet.encrypt(s.encode()).decode()
 def dec(s):  return fernet.decrypt(s.encode()).decode()
 def thash(t): return hashlib.sha256(t.encode()).hexdigest()
 
-# ── Auth ──
+
+# ───────────────────────── احراز هویت مینی‌اپ ─────────────────────────
 def verify_init_data(init_data):
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True))
@@ -104,9 +107,11 @@ def verify_init_data(init_data):
     except Exception:
         return None
 
+
 def auth():
     u = verify_init_data(request.headers.get("X-Init-Data", ""))
     return u["id"] if u else None
+
 
 def get_bot(bot_id, owner):
     try:
@@ -114,7 +119,17 @@ def get_bot(bot_id, owner):
     except InvalidId:
         return None
 
-# ═════════ Token economy ═════════
+
+def public(b):
+    return {
+        "id": str(b["_id"]), "name": b.get("name", ""), "active": b.get("active", False),
+        "username": b.get("username"), "config": b.get("config"),
+        "versions": len(b.get("versions", [])), "updated": b["updated"].isoformat(),
+        "thinking": b.get("thinking", ""),
+    }
+
+
+# ── Token economy ──
 def get_user(uid):
     u = db.users.find_one({"_id": uid})
     if not u:
@@ -123,6 +138,7 @@ def get_user(uid):
              "referred_by": None, "referrals": 0, "daily": ""}
         db.users.insert_one(u)
     return u
+
 
 def add_tokens(uid, amount, reason=""):
     get_user(uid)
@@ -133,12 +149,11 @@ def add_tokens(uid, amount, reason=""):
     except Exception:
         pass
 
+
 def spend_tokens(uid, amount, reason=""):
-    """True if deducted."""
     r = db.users.find_one_and_update({"_id": uid, "tokens": {"$gte": amount}},
                                      {"$inc": {"tokens": -amount, "total_spent": amount}})
     if r is None:
-        # maybe user doc missing (first run) — create then retry
         get_user(uid)
         r = db.users.find_one_and_update({"_id": uid, "tokens": {"$gte": amount}},
                                          {"$inc": {"tokens": -amount, "total_spent": amount}})
@@ -149,13 +164,14 @@ def spend_tokens(uid, amount, reason=""):
         pass
     return True
 
+
 def referral_link(uid):
     if MOTHER_USERNAME:
         return f"https://t.me/{MOTHER_USERNAME}?start=r_{uid}"
     return f"r_{uid}"
 
+
 def apply_referral(new_uid, code):
-    """code may be 'r_123' or '123'. Returns message."""
     try:
         ref = int(str(code).strip().lstrip("r_").strip())
     except ValueError:
@@ -166,7 +182,6 @@ def apply_referral(new_uid, code):
     if me.get("referred_by"):
         return "already"
     if not db.users.find_one({"_id": ref}):
-        # create referrer shell so link never dies (they get bonus when they arrive)
         db.users.insert_one({"_id": ref, "tokens": NEW_USER_TOKENS, "created": now(),
                              "total_earned": NEW_USER_TOKENS, "total_spent": 0,
                              "referred_by": None, "referrals": 0, "daily": ""})
@@ -175,6 +190,7 @@ def apply_referral(new_uid, code):
     add_tokens(ref, REFERRAL_BONUS, f"referral:{new_uid}")
     add_tokens(new_uid, REFERRAL_BONUS, f"referred_by:{ref}")
     return "ok"
+
 
 def level_of(bots_count, spent):
     if bots_count >= 5 or spent >= 200:
@@ -185,81 +201,161 @@ def level_of(bots_count, spent):
         return "Maker"
     return "Starter"
 
-def public(b):
-    return {
-        "id": str(b["_id"]), "name": b.get("name", ""), "active": b.get("active", False),
-        "username": b.get("username"), "config": b.get("config"),
-        "versions": len(b.get("versions", [])), "updated": b["updated"].isoformat(),
-        "thinking": b.get("thinking", ""),
-    }
 
 def sync_commands(bot, cfg):
+    """منوی دستورهای ربات فرزند رو با کانفیگ هم‌گام می‌کنه (فقط اگه فعاله)"""
     if bot.get("active") and bot.get("token_enc"):
-        tg(dec(bot["token_enc"]), "setMyCommands", commands=[{"command": "start", "description": "Start"}] + [
+        tg(dec(bot["token_enc"]), "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
             {"command": c, "description": c} for c in cfg["commands"]])
 
-# ── Daily quota (anti-spam, alongside tokens) ──
+
+# ───────────────────────── سهمیه ─────────────────────────
 def quota_key(uid):
     return f"{uid}:{now():%Y-%m-%d}"
 
+
 def quota_take(uid):
     try:
-        db.usage.find_one_and_update({"_id": quota_key(uid), "n": {"$lt": DAILY_LIMIT}},
-                                     {"$inc": {"n": 1}}, upsert=True)
+        db.usage.find_one_and_update(
+            {"_id": quota_key(uid), "n": {"$lt": DAILY_LIMIT}},
+            {"$inc": {"n": 1}}, upsert=True)
         return True
     except DuplicateKeyError:
         return False
 
+
 def quota_refund(uid):
     db.usage.update_one({"_id": quota_key(uid)}, {"$inc": {"n": -1}})
+
 
 def quota_left(uid):
     d = db.usage.find_one({"_id": quota_key(uid)})
     return max(0, DAILY_LIMIT - (d["n"] if d else 0))
 
-# ═════════ AI ═════════
-SYSTEM_PROMPT = """You design Telegram bots as a JSON config that a fixed, safe engine executes. You think like a senior product designer AND a bot-logic engineer.
 
-LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural Persian and NEVER English, even though JSON keys, node_ids and variable names are English.
+# ───────────────────────── هوش مصنوعی ─────────────────────────
+SYSTEM_PROMPT = """You design Telegram bots as a JSON config that a fixed, safe engine executes. You think like a senior product designer AND a bot-logic engineer, not a form-filler.
+
+LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural Persian (فارسی) and NEVER English, even though this prompt, the JSON keys, node_ids and variable names are English.
 
 Output ONLY one valid JSON object, no markdown fences, no comments. Top-level shape:
-{"thinking": "...", "config": {...}}
+{
+ "thinking": "...",
+ "config": { ...bot config as described below... }
+}
 
-"thinking" (2-5 short sentences, OUTPUT LANGUAGE, first-person, sharp colleague tone):
-- What you understood, key flows and why. Mention variables/conditions in one sentence. Mention placeholders the user can edit via manual edit. If update, mention only what changed.
+"thinking" (string, 2-5 short sentences, in the OUTPUT LANGUAGE, natural first-person tone, like a sharp colleague briefly narrating their plan, not a formal report):
+- Say what you understood the user wants.
+- Name the key sections/flows you decided the bot needs and briefly why.
+- If you used variables/conditions, say in one short sentence what they do (e.g. "امتیاز هر کاربر جداگونه شمرده می‌شه").
+- If you made a judgment call, filled a gap, or used a placeholder (price, phone, channel id, link), say so and tell them they can edit it with the manual edit button.
+- If this is an update to an existing bot, mention only what you're changing and why, not the whole bot again.
+- No headers, no bullet points, no markdown, just natural flowing sentences.
 
 "config" schema:
-{"name": "short bot name", "start": "<node_id>", "fallback": "<node_id>",
+{
+ "name": "short bot name",
+ "start": "<node_id shown on /start>",
+ "fallback": "<node_id shown for unknown messages>",
  "commands": {"help": "<node_id>"},
- "join": {"channels": ["channel_username"], "text": "message asking to join"},
- "vars": {"coins": "0"},
- "nodes": {"<node_id>": {
-   "title": "short label max 30 chars, OUTPUT LANGUAGE",
-   "text": "message text (may contain {placeholders})",
-   "media": {"kind": "photo|video|animation|voice|audio|document", "url": "https://..."},
-   "buttons": [[{"text":"label","goto":"<node_id>"},{"text":"label","url":"https://..."},{"text":"label","alert":"popup"},{"text":"label","copy":"text"}]],
-   "ask": false, "kb": "reply", "fields": ["Q1?"], "save": ["city"], "types": ["text"],
-   "silent": false, "done": "thank-you", "next": "<node_id>",
-   "do": [...], "route": [{"when": cond, "goto": "<node_id>"}], "alt": [{"when": cond, "text": "..."}]}}}
+ "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional)
+ "vars": {"coins": "0", "city": ""},                                                 (optional, declare EVERY custom variable with its default value)
+ "nodes": {
+   "<node_id>": {
+     "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
+     "text": "message text (may contain {placeholders}, see VARIABLES)",
+     "photo": "https://direct-image-link",                                          (optional)
+     "buttons": [[ {"text": "label", "goto": "<node_id>"},
+                   {"text": "label", "url": "https://..."},
+                   {"text": "label", "alert": "popup text shown when tapped"},
+                   {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
+     "ask": false,
+     "kb": "reply",                                                                 (optional)
+     "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
+     "save": ["city", ""],                                                           (optional, see FORMS)
+     "types": ["text", "number"],                                                    (optional, see FORMS)
+     "silent": false,                                                                (optional, see FORMS)
+     "done": "message shown after the user finished ask/form",                      (optional)
+     "next": "<node_id shown after finishing>",                                      (optional, default start)
+     "do": [ ...actions... ],                                                        (optional, see LOGIC)
+     "route": [ {"when": <cond>, "goto": "<node_id>"} ],                             (optional, see LOGIC)
+     "alt": [ {"when": <cond>, "text": "..."} ]                                      (optional, see LOGIC)
+   }
+ }
+}
 
-Buttons: goto / url / alert / copy. ask=true forwards next message to owner. fields=multi-step form (answers sent to owner). join=forced membership (usernames without @, only if requested). kb=reply shows buttons under chat input. media: ONLY include if user gave a media link, else omit entirely. Never invent media URLs.
+BASIC ENGINE FEATURES
+- Buttons: goto a section, open a link, show a popup message (alert), copy text (e.g. card number, promo code).
+- "ask": true = the user's next message (any type) is forwarded to the bot owner. Good for support/feedback.
+- "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary. Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
+- "join": force membership: before using the bot the user must be a member of these public channels (usernames without @). Only add it if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
+- "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of glass buttons under the message. Omit it (default) for normal inline buttons. Use it only if the user asks for a keyboard under the chat / a main-menu keyboard. Never use it on nodes with "ask" or "fields". Link/popup/copy buttons still work inside it.
+- "photo": only if the user gave an image link. Never invent image URLs.
+- "media" (NEW, preferred over photo): {"kind": "photo|video|animation|voice|audio|document", "url": "https://..."} — ONLY include if the user gave a media link (the Studio may pass an uploaded /media/ file URL in the request). Never invent media URLs. photo/video/animation show with caption, voice/audio/document are sent as files.
 
-VARIABLES: per-user storage. Name: lowercase english, max 20 chars, max 20 vars, declare in vars. {var} and {var|fallback} in texts/buttons/alerts. Built-ins (read-only): {name} {first_name} {last_name} {full_name} {username} {id} {lang} {premium} {is_owner} {bot_name} {bot_username} {text} {param} {visits} {date} {time} {hour} {weekday}.
-CONDITIONS: {"var":"coins","op":">=","value":"10"}, ops == != > >= < <= contains empty filled. Combine all/any/not, max depth 3.
-ACTIONS (max 6): set/add/clear/random/notify. notify sends message to owner.
-node do runs on enter; route = first-true switch (max 5, max 5 hops, no loops); alt = first-true text replacement (max 4); button when = visibility cond; button do on goto/alert buttons.
-FORMS: save same length as fields; types text/number/phone/email; silent=true skips owner copy.
-Use logic only when genuinely better (points, quiz, memory, visits, hours, owner menu, lang, param, premium). Simple request = simple bot.
-LIMITS: NO payments, inventory, APIs, schedules, shared-between-users counters. Approximate (order form -> sent to owner).
-Design: min nodes covering real journeys; node_id lowercase; max 40 nodes, 3 btns/row, 6 rows; one action key per button; channel button url https://t.me/<username>; every node title; forms over ask for multi-info; every goto/start/fallback/next/route/command exists; every node reachable; no dead ends (back/home or next/route); short labels; placeholders like [price]; moderate emojis; preserve untouched nodes on update; plain text only."""
+VARIABLES (this is what makes a bot feel professional)
+- Custom variables are stored PER USER (each Telegram user has their own values). Name: lowercase english letters/digits/underscore, starts with a letter, max 20 chars, max 20 variables per bot. Declare each one in config.vars with a default string ("0" for counters, "" for text). Values are strings; math and numeric comparison work when they look like numbers.
+- Use {var} in node texts, button labels, alert/copy text, form questions, "done", notify texts and condition values. {var|fallback} prints fallback when the value is empty, e.g. {city|ثبت نشده}. Every variable you put in a {placeholder} MUST be declared in config.vars (built-ins excepted).
+- Built-in read-only variables (always available in texts AND conditions):
+  {name} first name (falls back to "دوست من"), {first_name}, {last_name}, {full_name}, {username} (with @, empty if none), {id} Telegram user id, {lang} Telegram language code like fa / en, {premium} "1" if the user has Telegram Premium else "0", {is_owner} "1" if the user is the bot owner else "0", {bot_name}, {bot_username}, {text} the last text message the user sent, {param} the payload of /start (deep link t.me/bot?start=xxx), {visits} how many times this user pressed /start (1 on the first time), {date} today's Jalali date like 1405/07/11, {time} HH:MM Tehran time, {hour} 0-23 Tehran, {weekday} Persian weekday name.
+
+CONDITIONS ("cond" object)
+- {"var": "coins", "op": ">=", "value": "10"}. op is one of: == != > >= < <= contains empty filled ("empty"/"filled" take no value). "var" is a custom or built-in variable. "value" may contain {placeholders}. Numbers compare numerically, text compares case-insensitively.
+- Combine with {"all": [cond, cond]} (AND), {"any": [cond, cond]} (OR), {"not": cond}. Max 3 levels deep.
+
+ACTIONS ("action" object, max 6 per list)
+- {"op": "set", "var": "city", "value": "تهران"}            store a value (value may use {placeholders})
+- {"op": "add", "var": "coins", "value": "5"}               add a number; negative to subtract ("-3"); default 1
+- {"op": "clear", "var": "city"}                            back to the default
+- {"op": "random", "var": "dice", "value": "1-6"}           random whole number in a range
+- {"op": "notify", "value": "text"}                         sends a message to the bot owner (may use {placeholders}; the user's name and id are appended automatically)
+
+WHERE LOGIC GOES
+- node "do": [actions] runs every time a user enters the node, before anything is shown.
+- node "route": [{"when": cond, "goto": "<node_id>"}] (max 5). After "do", the FIRST rule whose condition is true sends the user to that node instead (like a switch). Use for gates, level-ups, opening hours, owner-only menus, first visit vs returning user. Because the node's own text is then skipped, still write a sensible text. Chains are followed up to 5 hops; never create loops.
+- node "alt": [{"when": cond, "text": "..."}] (max 4). The first true condition replaces the node's text (buttons stay). Use for personalised messages ("you have {coins} coins").
+- button "when": cond. The button is only shown to users for whom it is true (admin button, premium-only, hide "buy" when coins are not enough).
+- button "do": [actions]. Only on goto and alert buttons. Runs when the button is tapped, before the goto/alert. Alert text may use {placeholders} and is evaluated AFTER the actions, so a "💰 my balance" alert shows fresh numbers.
+- FORMS: "save": ["city", ""] has the same length as "fields" and stores each answer in that variable ("" = don't store). "types": ["text","number","phone","email"] (same length) validates each answer; the engine re-asks until valid and normalises digits to english. "silent": true = don't send the finished form to the owner (default: it is sent). Later questions and texts can use earlier answers, e.g. "{city} درسته؟".
+
+WHEN TO USE LOGIC
+- Use variables/conditions when they make the bot genuinely better: points/coins/loyalty, quizzes and scoring, bots that remember answers and reuse them ("{city}" in later messages), personalised greetings (first visit vs returning via {visits}), opening hours via {hour}/{weekday}, an owner-only admin menu via {is_owner}, language-aware replies via {lang}, referral/campaign tracking via {param}, premium-only perks via {premium}.
+- Do NOT add logic when a plain menu is enough. A simple request deserves a simple, clean bot.
+- Small examples of the constructs (not a full bot):
+  "vars": {"score": "0"}
+  {"text": "تهران", "goto": "q2", "do": [{"op": "add", "var": "score", "value": "1"}]}
+  {"title": "نتیجه", "text": "تموم شد!", "route": [{"when": {"var": "score", "op": ">=", "value": "3"}, "goto": "win"}]}
+  {"text": "🛠 پنل مدیر", "goto": "admin", "when": {"var": "is_owner", "op": "==", "value": "1"}}
+  {"text": "سلام {name}", "alt": [{"when": {"var": "visits", "op": ">", "value": "1"}, "text": "خوش برگشتی {name} 👋"}]}
+
+ENGINE LIMITS (be honest about them in "thinking" and build the closest working approximation)
+- CANNOT do: payments, real inventory/databases, external APIs, scheduled messages, sending files, data shared BETWEEN users (no global counters, leaderboards, or real referral counting; variables are per user).
+- Example approximation: an order form whose answers are sent to the owner instead of online payment.
+
+Design rules:
+- Think before you structure: identify the bot's real purpose, the natural user journeys, and the minimum set of nodes that cover them well. Don't pad with filler, but don't skip an obviously needed part (a shop bot needs a way to order, a business bot needs contact/support, a content bot usually needs a channel link).
+- node_id: lowercase english letters, digits, underscore. Max 30 nodes, max 3 buttons per row, max 6 rows per node.
+- A button has exactly one of: "goto" (an existing node_id), "url" (https only), "alert", "copy".
+- Channel/group join button: {"text": "📢 عضویت در کانال", "url": "https://t.me/<username>"} (username without @). Use the username the user gave. If they gave none, use https://t.me/your_channel and say in "thinking" that the real channel id must be set via manual edit.
+- Always give every node a short "title". Prefer a form ("fields") over a single "ask" when you need several pieces of info. Give ask/form nodes a cancel/home button too.
+- Every "goto", "start", "fallback", "next", route target and command target MUST exist in nodes. Every node must be reachable from start; no dead ends: every non-start node has a back/home button (or a "next"/"route").
+- Button labels short (max ~22 chars). Put at most 2 buttons in a row when labels are long.
+- Never invent real-world facts (prices, phone numbers, addresses, links). Use obvious placeholders such as [قیمت] or [شماره تماس] and mention it in "thinking".
+- Write all user-facing text in the OUTPUT LANGUAGE. Use emojis moderately.
+- When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text, button, variable and rule exactly as it was (the user may have edited them by hand).
+- Plain text only, no Markdown/HTML formatting characters in node texts."""
+
 
 ID_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 CMD_RE = re.compile(r"^[a-z0-9_]{1,30}$")
 TG_NAME_RE = re.compile(r"^@?[A-Za-z][A-Za-z0-9_]{4,31}$")
+
+# ───── متغیرها، شرط‌ها و اکشن‌ها ─────
 VAR_RE = re.compile(r"^[a-z][a-z0-9_]{0,19}$")
 PH_RE = re.compile(r"\{([a-z][a-z0-9_]{0,19})(?:\|([^{}]{0,60}))?\}")
 MAX_VARS = 20
 MAX_HOPS = 5
+# متغیرهای آماده‌ی تلگرام (فقط‌خواندنی)
 BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner",
             "bot_name", "bot_username", "text", "param", "visits", "date", "time", "hour", "weekday")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled")
@@ -268,33 +364,41 @@ ACT_OPS = ("set", "add", "clear", "random", "notify")
 F_TYPES = ("text", "number", "phone", "email")
 _DIG = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
+
 def norm_url(v):
+    """@channel / t.me/x / https://... → https URL معتبر (یا None)"""
     v = str(v or "").strip()
     if TG_NAME_RE.match(v):
         return "https://t.me/" + v.lstrip("@")
     if re.match(r"^(t\.me|telegram\.me)/", v, re.I):
         v = "https://" + v
     if v.startswith("https://") and len(v) > 12 and not re.search(r"\s", v):
-        return v[:1000]
-    # allow relative /media/ urls (uploaded files) — expand to absolute
+        return v[:500]
+    # uploaded files served by the Studio itself
     if v.startswith("/media/") and len(v) < 200 and not re.search(r"\s", v):
         return (BASE_URL + v)[:1000]
     return None
 
+
 def to_num(s):
+    """رشته → عدد (ارقام فارسی/عربی هم قبول)؛ نامعتبر = None"""
     try:
         x = float(str(s).translate(_DIG).replace(",", "").replace("٫", ".").strip())
     except (ValueError, TypeError):
         return None
     return x if math.isfinite(x) else None
 
+
 def fmt_num(x):
     x = max(-1e12, min(1e12, x))
     return str(int(x)) if x == int(x) else ("%.6f" % x).rstrip("0").rstrip(".")
 
+
 def clean_cond(c, used, nums, bad, depth=0):
+    """شرط رو پاک‌سازی می‌کنه؛ نامعتبر = None"""
     if not isinstance(c, dict) or depth > 3:
-        bad("invalid condition"); return None
+        bad("یکی از شرط‌ها ساختار معتبری نداره")
+        return None
     for key in ("all", "any"):
         if isinstance(c.get(key), list):
             subs = [x for x in (clean_cond(s, used, nums, bad, depth + 1) for s in c[key][:6]) if x]
@@ -303,11 +407,14 @@ def clean_cond(c, used, nums, bad, depth=0):
         s = clean_cond(c["not"], used, nums, bad, depth + 1)
         return {"not": s} if s else None
     name = str(c.get("var") or "").strip().lower()
-    op = OP_ALIASES.get(str(c.get("op") or "==").strip(), str(c.get("op") or "==").strip())
+    op = str(c.get("op") or "==").strip()
+    op = OP_ALIASES.get(op, op)
     if not (name in BUILTINS or VAR_RE.match(name)):
-        bad(f"bad variable in condition: {name}"); return None
+        bad(f"نام متغیر «{name}» در شرط معتبر نیست (حروف انگلیسی کوچک، عدد و _)")
+        return None
     if op not in OPS:
-        bad(f"bad operator: {op}"); return None
+        bad(f"عملگر شرط «{op}» معتبر نیست")
+        return None
     if name not in BUILTINS:
         used.add(name)
         if op in (">", ">=", "<", "<="):
@@ -317,6 +424,7 @@ def clean_cond(c, used, nums, bad, depth=0):
         out["value"] = str(c.get("value", ""))[:100]
     return out
 
+
 def clean_actions(lst, used, nums, bad):
     out = []
     for a in (lst if isinstance(lst, list) else [])[:6]:
@@ -324,17 +432,19 @@ def clean_actions(lst, used, nums, bad):
             continue
         op = str(a.get("op") or "").strip().lower()
         if op not in ACT_OPS:
-            bad(f"bad action: {op}"); continue
+            bad(f"نوع اکشن «{op}» معتبر نیست")
+            continue
         if op == "notify":
             v = str(a.get("value") or "").strip()[:500]
             if v:
                 out.append({"op": "notify", "value": v})
             else:
-                bad("empty notify")
+                bad("متن اعلان (notify) خالیه")
             continue
         name = str(a.get("var") or "").strip().lower()
         if not VAR_RE.match(name) or name in BUILTINS:
-            bad(f"bad action var: {name}"); continue
+            bad(f"نام متغیر «{name}» برای اکشن معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
+            continue
         item = {"op": op, "var": name}
         if op != "clear":
             v = str(a.get("value", "")).strip()[:100]
@@ -342,11 +452,13 @@ def clean_actions(lst, used, nums, bad):
                 if v == "":
                     v = "1"
                 elif to_num(v) is None and not PH_RE.search(v):
-                    bad(f"add value must be number: {name}"); continue
+                    bad(f"مقدار اکشن جمع برای «{name}» باید عدد باشه")
+                    continue
             elif op == "random":
                 m = re.fullmatch(r"(\d{1,9})\s*-\s*(\d{1,9})", v.translate(_DIG))
                 if not m or int(m.group(1)) > int(m.group(2)):
-                    bad(f"bad random range: {name}"); continue
+                    bad(f"بازه‌ی عدد تصادفی «{name}» باید مثل 1-6 باشه")
+                    continue
                 v = f"{int(m.group(1))}-{int(m.group(2))}"
             item["value"] = v
         used.add(name)
@@ -355,7 +467,9 @@ def clean_actions(lst, used, nums, bad):
         out.append(item)
     return out
 
+
 def clean_media(m, bad):
+    """مدیای بخش: {kind, url} — نامعتبر = None"""
     if not isinstance(m, dict):
         return None
     kind = str(m.get("kind") or "photo").strip().lower()
@@ -363,31 +477,36 @@ def clean_media(m, bad):
         kind = "photo"
     u = norm_url(m.get("url"))
     if not u:
-        bad("media url invalid (must be https or uploaded file)")
+        bad("آدرس مدیای بخش معتبر نیست (باید لینک https یا فایل آپلودشده باشه)")
         return None
     return {"kind": kind, "url": u}
 
+
 def sanitize(cfg, strict=False):
+    """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه."""
     if not isinstance(cfg, dict) or not isinstance(cfg.get("nodes"), dict):
-        raise ValueError("bad structure")
+        raise ValueError("ساختار خروجی معتبر نیست")
     nodes_in = cfg["nodes"]
     if not (1 <= len(nodes_in) <= MAX_NODES):
-        raise ValueError(f"nodes must be 1..{MAX_NODES}")
+        raise ValueError(f"تعداد بخش‌ها باید بین ۱ تا {MAX_NODES} باشه")
+
     def bad(msg):
         if strict:
             raise ValueError(msg)
-    used, nums = set(), set()
+
+    used, nums = set(), set()      # متغیرهایی که جایی استفاده شدن / مقدار عددی دارن
     valid = {}
     for nid, n in nodes_in.items():
         nid = str(nid)
         if not ID_RE.match(nid) or not isinstance(n, dict):
-            bad("bad section id"); continue
+            bad("شناسه‌ی یکی از بخش‌ها نامعتبره"); continue
         text = str(n.get("text", "")).strip()[:3500]
         if not text:
-            bad(f"section '{nid}' has no text"); continue
+            bad(f"بخش «{nid}» متن نداره"); continue
         valid[nid] = (n, text)
     if not valid:
-        raise ValueError("no valid sections")
+        raise ValueError("هیچ بخش معتبری وجود نداره")
+
     nodes = {}
     for nid, (n, text) in valid.items():
         rows = []
@@ -398,14 +517,14 @@ def sanitize(cfg, strict=False):
                     continue
                 label = str(b.get("text", "")).strip()[:40]
                 if not label:
-                    bad(f"section '{nid}' has button without label"); continue
+                    bad(f"بخش «{nid}» یه دکمه‌ی بدون متن داره"); continue
                 it = None
                 g = str(b.get("goto") or "")
                 if g:
                     if g in valid:
                         it = {"text": label, "goto": g}
                     else:
-                        bad(f"button '{label}' points nowhere")
+                        bad(f"دکمه‌ی «{label}» به بخش ناموجود وصله")
                 elif str(b.get("alert") or "").strip():
                     it = {"text": label, "alert": str(b["alert"]).strip()[:200]}
                 elif str(b.get("copy") or "").strip():
@@ -415,7 +534,7 @@ def sanitize(cfg, strict=False):
                     if u:
                         it = {"text": label, "url": u}
                     else:
-                        bad(f"button '{label}' link invalid")
+                        bad(f"لینک/آیدی دکمه‌ی «{label}» معتبر نیست (باید https:// یا @آیدی باشه)")
                 if it is None:
                     continue
                 if b.get("when"):
@@ -428,7 +547,7 @@ def sanitize(cfg, strict=False):
                         if acts:
                             it["do"] = acts
                     else:
-                        bad(f"actions only on goto/alert buttons ('{label}')")
+                        bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش» و «پیام پاپ‌آپ» کار می‌کنه (دکمه‌ی «{label}»)")
                 r.append(it)
             if r:
                 rows.append(r)
@@ -436,16 +555,22 @@ def sanitize(cfg, strict=False):
         title = str(n.get("title") or "").strip()[:30]
         if title:
             node["title"] = title
-        # media (new) + legacy photo
+        # مدیا (جدید) + سازگاری با photo قدیمی
         m = clean_media(n.get("media"), bad) if n.get("media") else None
-        if not m and str(n.get("photo") or "").strip():
-            u = norm_url(n.get("photo"))
-            if u:
-                m = {"kind": "photo", "url": u}
-            else:
-                bad(f"photo url invalid in '{nid}'")
+        if not m:
+            ph = str(n.get("photo") or "").strip()
+            if ph:
+                u = norm_url(ph)
+                if u:
+                    m = {"kind": "photo", "url": u}
+                else:
+                    bad(f"آدرس عکس بخش «{nid}» معتبر نیست (باید لینک مستقیم https باشه)")
         if m:
             node["media"] = m
+        if n.get("photo") and not m:
+            pass  # خطاش بالا ثبت شد
+
+        # فرم: سؤال‌ها + ذخیره در متغیر + نوع پاسخ
         fl_raw = n.get("fields") if isinstance(n.get("fields"), list) else []
         sv_raw = n.get("save") if isinstance(n.get("save"), list) else []
         ty_raw = n.get("types") if isinstance(n.get("types"), list) else []
@@ -459,7 +584,7 @@ def sanitize(cfg, strict=False):
                 if VAR_RE.match(v) and v not in BUILTINS:
                     used.add(v)
                 else:
-                    bad(f"bad save var '{v}'"); v = ""
+                    bad(f"نام متغیر «{v}» برای ذخیره‌ی پاسخ معتبر نیست"); v = ""
             t = str(ty_raw[i]).strip().lower() if i < len(ty_raw) else "text"
             if t not in F_TYPES:
                 t = "text"
@@ -475,7 +600,7 @@ def sanitize(cfg, strict=False):
             if n.get("silent"):
                 node["silent"] = True
         if n.get("kb") == "reply" and rows and not node.get("fields") and not node["ask"]:
-            node["kb"] = "reply"
+            node["kb"] = "reply"          # کیبورد زیر صفحه‌ی چت (فقط برای بخش‌های بدون ask/form)
         done = str(n.get("done") or "").strip()[:500]
         if done:
             node["done"] = done
@@ -484,7 +609,9 @@ def sanitize(cfg, strict=False):
             if nxt in valid:
                 node["next"] = nxt
             else:
-                bad(f"next of '{nid}' missing")
+                bad(f"بخش بعدیِ «{nid}» وجود نداره")
+
+        # منطق: اکشن‌ها، هدایت شرطی، متن جایگزین
         acts = clean_actions(n.get("do"), used, nums, bad)
         if acts:
             node["do"] = acts
@@ -496,7 +623,7 @@ def sanitize(cfg, strict=False):
             if w and g in valid:
                 route.append({"when": w, "goto": g})
             else:
-                bad(f"bad route rule in '{nid}'")
+                bad(f"یکی از قانون‌های هدایت شرطیِ بخش «{nid}» کامل نیست")
         if route:
             node["route"] = route
         alt = []
@@ -507,24 +634,30 @@ def sanitize(cfg, strict=False):
             if w and t:
                 alt.append({"when": w, "text": t})
             else:
-                bad(f"bad alt text in '{nid}'")
+                bad(f"یکی از متن‌های جایگزینِ بخش «{nid}» کامل نیست")
         if alt:
             node["alt"] = alt
         nodes[nid] = node
+
     start = str(cfg.get("start") or "")
     if start not in nodes:
-        bad("bad start"); start = next(iter(nodes))
+        bad("بخش شروع معتبر نیست")
+        start = next(iter(nodes))
     fallback = str(cfg.get("fallback") or start)
     if fallback not in nodes:
-        bad("bad fallback"); fallback = start
+        bad("بخش پیام‌های ناشناس معتبر نیست")
+        fallback = start
     cmds = {}
     for k, v in (cfg.get("commands") or {}).items():
         k = str(k).lstrip("/").lower()
         if not CMD_RE.match(k) or k == "start" or str(v) not in nodes:
-            bad(f"bad command /{k}"); continue
+            bad(f"دستور «/{k}» معتبر نیست (فقط حروف انگلیسی کوچک/عدد/_ و غیر از start)")
+            continue
         cmds[k] = str(v)
-    out = {"name": str(cfg.get("name") or "My Bot").strip()[:50] or "My Bot",
-           "start": start, "fallback": fallback, "commands": cmds, "nodes": nodes}
+    out = {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
+           "fallback": fallback, "commands": cmds, "nodes": nodes}
+
+    # متغیرهای اعلام‌شده (+ هر متغیری که جایی استفاده شده ولی اعلام نشده، خودکار اضافه می‌شه)
     declared = {}
     dv = cfg.get("vars")
     for k, v in (dv.items() if isinstance(dv, dict) else []):
@@ -532,43 +665,49 @@ def sanitize(cfg, strict=False):
         if VAR_RE.match(k) and k not in BUILTINS:
             declared[k] = str(v if v is not None else "")[:100]
         else:
-            bad(f"bad var name '{k}'")
+            bad(f"نام متغیر «{k}» معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
     for k in sorted(used):
         declared.setdefault(k, "0" if k in nums else "")
     if len(declared) > MAX_VARS:
         if strict:
-            raise ValueError(f"max {MAX_VARS} variables")
+            raise ValueError(f"حداکثر {MAX_VARS} متغیر می‌تونی داشته باشی")
         declared = dict(list(declared.items())[:MAX_VARS])
     if declared:
         out["vars"] = declared
+
     j = cfg.get("join")
     if isinstance(j, dict):
-        chans = []
-        raw = j.get("channels")
+        chans, raw = [], j.get("channels")
         for c in (raw if isinstance(raw, list) else [])[:3]:
             c = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", str(c).strip(), flags=re.I).lstrip("@")
             if re.match(r"^[A-Za-z][A-Za-z0-9_]{4,31}$", c):
                 chans.append(c)
             else:
-                bad(f"bad channel '{c}'")
+                bad(f"آیدی کانال «{c}» معتبر نیست")
         if chans:
             out["join"] = {"channels": chans,
-                           "text": str(j.get("text") or "Please join to use this bot").strip()[:500]}
+                           "text": str(j.get("text") or "برای استفاده از ربات اول باید عضو کانال بشی 👇").strip()[:500]}
     return out
 
+
+# ───── تشخیص زبان (برای اینکه «thinking» و متن‌ها هیچ‌وقت انگلیسی نشن) ─────
 def _count(s):
     return len(re.findall(r"[\u0600-\u06FF]", s)), len(re.findall(r"[A-Za-z]", s))
+
 
 def detect_lang(s):
     fa, la = _count(s)
     return "fa" if fa >= la else "other"
+
 
 class ThinkLang(ValueError):
     def __init__(self, cfg):
         super().__init__("thinking language mismatch")
         self.cfg = cfg
 
-FALLBACK_THINKING = "Bot designed from your description. Tweak text, buttons or channel ids via Manual edit."
+
+FALLBACK_THINKING = "ربات رو طبق توضیحت طراحی کردم. اگه متن، دکمه یا آیدی کانال چیزی نیاز به تغییر داشت، از «ویرایش دستی» درستش کن."
+
 
 def _walk(o):
     if isinstance(o, dict):
@@ -579,7 +718,9 @@ def _walk(o):
         for v in o:
             yield from _walk(v)
 
+
 def lint(cfg):
+    """مشکل‌های منطقی کانفیگ تمیزشده رو پیدا می‌کنه (برای اینکه AI یک بار خودش درستشون کنه)"""
     nodes, out = cfg["nodes"], []
     seen, stack = set(), [cfg["start"], cfg["fallback"], *cfg["commands"].values()]
     while stack:
@@ -594,55 +735,81 @@ def lint(cfg):
             stack.append(n["next"])
     lost = [i for i in nodes if i not in seen]
     if lost:
-        out.append("unreachable nodes: " + ", ".join(lost[:6]))
+        out.append("unreachable nodes (link them from a goto button / route / next, or remove them): " + ", ".join(lost[:6]))
     dead = [i for i, n in nodes.items() if i in seen and i != cfg["start"] and not n.get("fields") and not n.get("ask")
             and not n.get("route") and not n.get("next") and not any("goto" in b for row in n["buttons"] for b in row)]
     if dead:
-        out.append("dead-end nodes (add back/home button): " + ", ".join(dead[:6]))
+        out.append("dead-end nodes with no goto/back button (add a back or home button): " + ", ".join(dead[:6]))
+    reads, writes = set(), set()
+    for d in _walk(nodes):
+        for v in d.values():
+            if isinstance(v, str):
+                reads.update(m.group(1) for m in PH_RE.finditer(v))
+        op = d.get("op")
+        if op in OPS and d.get("var"):
+            reads.add(d["var"])
+        if op in ACT_OPS and op != "notify" and d.get("var"):
+            writes.add(d["var"])
+        if isinstance(d.get("save"), list):
+            writes.update(x for x in d["save"] if x)
+    unset = sorted((reads & set(cfg.get("vars", {}))) - writes)
+    if unset:
+        out.append("variables that are read but never set by any action or form 'save' (set them somewhere or remove them): " + ", ".join(unset[:6]))
     return out
 
+
 def _call_llm(user, lang, final):
-    r = requests.post(f"{AI_BASE_URL}/chat/completions",
+    r = requests.post(
+        f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
         json={"model": AI_MODEL, "max_tokens": AI_MAX_TOKENS, "temperature": 0.4,
               "messages": [{"role": "system", "content": SYSTEM_PROMPT},
-                           {"role": "user", "content": user}]}, timeout=120)
+                           {"role": "user", "content": user}]},
+        timeout=120)
     if r.status_code >= 400:
         raise RuntimeError(f"AI HTTP {r.status_code}: {r.text[:300]}")
     try:
         txt = r.json()["choices"][0]["message"]["content"] or ""
     except Exception:
-        raise RuntimeError(f"AI bad response: {r.text[:300]}")
+        raise RuntimeError(f"AI پاسخ غیرمنتظره داد: {r.text[:300]}")
     txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S)
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
-        raise ValueError(f"AI returned no JSON: {txt[:200]!r}")
+        raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
     raw = json.loads(m.group(0))
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
-        raise ValueError("AI response missing config")
+        raise ValueError("پاسخ AI فاقد بخش config بود")
     cfg = sanitize(raw["config"])
     thinking = str(raw.get("thinking") or "").strip()[:900]
     if lang == "fa":
         fa, la = _count(thinking)
-        if not thinking or la > fa:
+        if not thinking or la > fa:            # توضیح انگلیسی/خالی شده
             if not final:
                 raise ThinkLang(cfg)
-            thinking = "ربات را طبق توضیحت طراحی کردم. متن یا دکمه‌ای نیاز به تغییر داشت از ویرایش دستی درستش کن."
+            thinking = FALLBACK_THINKING
     return thinking, cfg
 
+
 def build_user(prompt, current, lang, note_extra=""):
-    note = ("OUTPUT LANGUAGE: Persian. thinking and all texts in Persian." if lang == "fa"
-            else "OUTPUT LANGUAGE: same as user request.")
+    if lang == "fa":
+        note = "OUTPUT LANGUAGE: Persian (فارسی). The \"thinking\" field and all node texts/button labels MUST be written in Persian. Do not write them in English."
+    else:
+        note = "OUTPUT LANGUAGE: the same language as the user's request below (\"thinking\" included)."
     if note_extra:
         note += " " + note_extra
     parts = [note]
     if current:
-        parts += ["Current config:\n" + json.dumps(current, ensure_ascii=False), "Change request:\n" + prompt]
+        parts.append("Current config:\n" + json.dumps(current, ensure_ascii=False))
+        parts.append("Change request:\n" + prompt)
     else:
-        parts += ["Bot request:\n" + prompt]
+        parts.append("Bot request:\n" + prompt)
+    parts.append("Reminder: reply with the JSON object only; " +
+                 ("\"thinking\" in Persian." if lang == "fa" else "\"thinking\" in the request's language."))
     return "\n\n".join(parts)
 
+
 def ask_llm(prompt, current=None):
+    """یک بار تلاش اول؛ اگه خروجی خراب بود، زبان توضیح اشتباه بود یا کانفیگ مشکل منطقی داشت، یک بار با بازخورد دوباره"""
     lang = detect_lang(prompt)
     best, last, feedback = None, None, ""
     for attempt in (0, 1):
@@ -650,33 +817,39 @@ def ask_llm(prompt, current=None):
             thinking, cfg = _call_llm(build_user(prompt, current, lang, feedback), lang, final=attempt == 1)
         except ThinkLang as e:
             best, last = best or (None, e.cfg), e
-            feedback = "(Previous thinking used wrong language. Fix it.)"
+            feedback = "(Your previous answer used the wrong language for \"thinking\". Fix that now.)"
+            log.warning("thinking in wrong language, retrying")
             continue
-        except (ValueError, KeyError, TypeError) as e:
+        except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
             last = e
-            feedback = f"(Previous reply rejected: {str(e)[:200]}. Return one valid JSON.)"
+            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.)"
+            log.warning("bad AI output, retrying once", exc_info=True)
             continue
         problems = lint(cfg)
         if problems and attempt == 0:
             best = (thinking, cfg)
-            feedback = "(Fix logic problems, return FULL config: " + "; ".join(problems[:6]) + ")"
+            feedback = "(Your previous config had logic problems, fix them and return the FULL config again: " + "; ".join(problems[:6]) + ")"
+            log.info("lint problems, retrying: %s", problems)
             continue
         return thinking, cfg
-    if best:
+    if best:                        # کانفیگ سالمِ تلاش اول رو نگه می‌داریم
         th, cfg = best
         return (th or FALLBACK_THINKING), cfg
     raise last
 
-# ═════════ MiniApp API ═════════
+
+# ───────────────────────── API مینی‌اپ ─────────────────────────
 @app.get("/")
 def index():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "index.html")
+
 
 @app.get("/media/<name>")
 def serve_media(name):
     if ".." in name or "/" in name:
         return "bad", 400
     return send_from_directory(str(MEDIA_DIR), name)
+
 
 def kind_from_filename(fname, mime):
     ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
@@ -691,28 +864,30 @@ def kind_from_filename(fname, mime):
         return "audio"
     return "document"
 
+
 @app.post("/api/upload")
 def api_upload():
     uid = auth()
     if not uid:
         return jsonify(error="unauthorized"), 401
     if "file" not in request.files:
-        return jsonify(error="file missing"), 400
+        return jsonify(error="فایل پیدا نشد"), 400
     f = request.files["file"]
     if not f.filename:
-        return jsonify(error="file missing"), 400
+        return jsonify(error="فایل پیدا نشد"), 400
     ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
     if ext not in ALLOWED_EXT:
-        return jsonify(error=f"format not supported (max {MAX_MEDIA_MB}MB)"), 400
+        return jsonify(error=f"این فرمت پشتیبانی نمی‌شه (حداکثر {MAX_MEDIA_MB} مگ)"), 400
     data = f.read()
     if len(data) > MAX_MEDIA_BYTES:
-        return jsonify(error=f"file too large (max {MAX_MEDIA_MB}MB)"), 400
+        return jsonify(error=f"فایل خیلی بزرگه (حداکثر {MAX_MEDIA_MB} مگ)"), 400
     if len(data) < 16:
-        return jsonify(error="empty file"), 400
+        return jsonify(error="فایل خالیه"), 400
     name = f"{uuid.uuid4().hex}.{ext}"
     (MEDIA_DIR / name).write_bytes(data)
     kind = kind_from_filename(f.filename, f.mimetype or mimetypes.guess_type(f.filename)[0] or "")
     return jsonify(url=f"{BASE_URL}/media/{name}", kind=kind, name=name)
+
 
 @app.get("/api/me")
 def api_me():
@@ -722,17 +897,16 @@ def api_me():
     u = get_user(uid)
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
     today = now().strftime("%Y-%m-%d")
-    return jsonify(
-        bots=bots, quota=quota_left(uid), limit=DAILY_LIMIT, max_bots=MAX_BOTS,
-        joined=u["created"].isoformat(),
-        tokens=u.get("tokens", 0), total_spent=u.get("total_spent", 0),
-        referrals=u.get("referrals", 0),
-        referral_link=referral_link(uid), referral_code=f"r_{uid}",
-        daily_claimable=(u.get("daily") != today),
-        costs={"build": GENERATE_COST, "upgrade": UPGRADE_COST,
-               "daily": DAILY_BONUS, "referral": REFERRAL_BONUS},
-        level=level_of(len(bots), u.get("total_spent", 0)),
-    )
+    return jsonify(bots=bots, quota=quota_left(uid), limit=DAILY_LIMIT, max_bots=MAX_BOTS,
+                   joined=u["created"].isoformat(),
+                   tokens=u.get("tokens", 0), total_spent=u.get("total_spent", 0),
+                   referrals=u.get("referrals", 0),
+                   referral_link=referral_link(uid), referral_code=f"r_{uid}",
+                   daily_claimable=(u.get("daily") != today),
+                   costs={"build": GENERATE_COST, "upgrade": UPGRADE_COST,
+                          "daily": DAILY_BONUS, "referral": REFERRAL_BONUS},
+                   level=level_of(len(bots), u.get("total_spent", 0)))
+
 
 @app.post("/api/generate")
 def api_generate():
@@ -742,40 +916,44 @@ def api_generate():
     body = request.get_json(silent=True) or {}
     prompt = str(body.get("prompt", "")).strip()[:MAX_PROMPT]
     if len(prompt) < 5:
-        return jsonify(error="Describe your bot in more detail"), 400
+        return jsonify(error="توضیح خیلی کوتاهه"), 400
+
     bot = None
     is_upgrade = False
     if body.get("bot_id"):
         bot = get_bot(body["bot_id"], uid)
         if not bot:
-            return jsonify(error="bot not found"), 404
+            return jsonify(error="ربات پیدا نشد"), 404
         is_upgrade = True
     elif db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
-        return jsonify(error=f"max {MAX_BOTS} bots"), 400
+        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
+
     cost = UPGRADE_COST if is_upgrade else GENERATE_COST
-    u = get_user(uid)
-    if u.get("tokens", 0) < cost:
-        return jsonify(error="not_enough_tokens", need=cost, have=u.get("tokens", 0)), 402
+    if get_user(uid).get("tokens", 0) < cost:
+        return jsonify(error="not_enough_tokens", need=cost,
+                       have=get_user(uid).get("tokens", 0),
+                       msg=f"توکن کافی نداری (لازم: {cost})"), 402
     if not quota_take(uid):
-        return jsonify(error="daily limit reached, try tomorrow"), 429
-    if not spend_tokens(uid, cost, "generate" if not is_upgrade else "upgrade"):
+        return jsonify(error="سهمیه‌ی امروزت تموم شده، فردا دوباره امتحان کن"), 429
+    if not spend_tokens(uid, cost, "upgrade" if is_upgrade else "generate"):
         quota_refund(uid)
-        return jsonify(error="not_enough_tokens", need=cost, have=get_user(uid).get("tokens", 0)), 402
-    # optional media hint attached to prompt
-    media_hint = ""
+        return jsonify(error="not_enough_tokens", need=cost,
+                       have=get_user(uid).get("tokens", 0)), 402
     mh = body.get("media")
+    media_hint = ""
     if isinstance(mh, dict) and mh.get("url"):
-        media_hint = f" The user uploaded a {mh.get('kind','photo')} for the start screen: {mh['url']}. Attach it as start node media."
+        media_hint = f" The user uploaded a {mh.get('kind','photo')} for the start screen: {mh['url']}. Attach it as the start node's media."
     try:
         thinking, cfg = ask_llm(prompt + media_hint, bot["config"] if bot else None)
     except Exception as e:
         add_tokens(uid, cost, "refund:generate_failed")
         quota_refund(uid)
         log.exception("generate failed")
-        msg = "Build failed, simplify the description and retry"
+        msg = "ساخت ربات ناموفق بود، دوباره امتحان کن یا توضیح رو ساده‌تر بنویس"
         if DEBUG:
-            msg += f" [{type(e).__name__}] {str(e)[:300]}"
+            msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         return jsonify(error=msg), 502
+
     if bot:
         db.bots.update_one({"_id": bot["_id"]}, {
             "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
@@ -790,116 +968,34 @@ def api_generate():
         bot = doc
     return jsonify(bot=public(bot), quota=quota_left(uid), tokens=get_user(uid).get("tokens", 0))
 
-@app.post("/api/bots/<bot_id>/undo")
-def api_undo(bot_id):
+
+SHOP = [
+    {"id": "s50", "tokens": 60, "title": "بسته‌ی شروع", "desc": "60 توکن"},
+    {"id": "s150", "tokens": 170, "title": "بسته‌ی سازنده", "desc": "170 توکن · محبوب"},
+    {"id": "s400", "tokens": 450, "title": "بسته‌ی حرفه‌ای", "desc": "450 توکن · به‌صرفه"},
+]
+
+
+@app.get("/api/tokens/shop")
+def api_shop():
     uid = auth()
     if not uid:
         return jsonify(error="unauthorized"), 401
-    bot = get_bot(bot_id, uid)
-    if not bot or not bot.get("versions"):
-        return jsonify(error="no previous version"), 400
-    prev = bot["versions"][-1]
-    db.bots.update_one({"_id": bot["_id"]}, {
-        "$set": {"config": prev, "name": prev["name"], "thinking": "", "updated": now()},
-        "$pop": {"versions": 1}})
-    bot = db.bots.find_one({"_id": bot["_id"]})
-    sync_commands(bot, bot["config"])
-    return jsonify(bot=public(bot))
+    return jsonify(plans=SHOP)
 
-@app.put("/api/bots/<bot_id>/config")
-def api_save_config(bot_id):
-    uid = auth()
-    if not uid:
-        return jsonify(error="unauthorized"), 401
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="bot not found"), 404
-    try:
-        cfg = sanitize((request.get_json(silent=True) or {}).get("config"), strict=True)
-    except ValueError as e:
-        return jsonify(error=str(e)), 400
-    if cfg != bot["config"]:
-        lm = bot.get("last_manual")
-        recent = lm and (now().replace(tzinfo=None) - lm.replace(tzinfo=None)).total_seconds() < 180
-        upd = {"$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now(), "last_manual": now()}}
-        if not recent:
-            upd["$push"] = {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}
-        db.bots.update_one({"_id": bot["_id"]}, upd)
-        bot = db.bots.find_one({"_id": bot["_id"]})
-        sync_commands(bot, cfg)
-    return jsonify(bot=public(bot))
 
-@app.post("/api/bots/<bot_id>/activate")
-def api_activate(bot_id):
-    uid = auth()
-    if not uid:
-        return jsonify(error="unauthorized"), 401
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="bot not found"), 404
-    token = str((request.get_json(silent=True) or {}).get("token", "")).strip()
-    if not re.match(r"^\d{6,12}:[\w-]{30,50}$", token):
-        return jsonify(error="bad token format"), 400
-    me = tg(token, "getMe")
-    if not me.get("ok"):
-        return jsonify(error="invalid token"), 400
-    th = thash(token)
-    if db.bots.find_one({"token_hash": th, "_id": {"$ne": bot["_id"]}}):
-        return jsonify(error="token already used"), 400
-    r = tg(token, "setWebhook", url=f"{BASE_URL}/hook/{bot_id}", secret_token=bot["secret"],
-           allowed_updates=["message", "callback_query"], drop_pending_updates=True)
-    if not r.get("ok"):
-        return jsonify(error="webhook failed"), 502
-    tg(token, "setMyCommands", commands=[{"command": "start", "description": "Start"}] + [
-        {"command": c, "description": c} for c in bot["config"]["commands"]])
-    db.bots.update_one({"_id": bot["_id"]}, {"$set": {
-        "token_enc": enc(token), "token_hash": th, "username": me["result"]["username"],
-        "active": True, "updated": now()}})
-    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
-
-@app.post("/api/bots/<bot_id>/deactivate")
-def api_deactivate(bot_id):
-    uid = auth()
-    if not uid:
-        return jsonify(error="unauthorized"), 401
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="bot not found"), 404
-    if bot.get("token_enc"):
-        tg(dec(bot["token_enc"]), "deleteWebhook")
-    db.bots.update_one({"_id": bot["_id"]}, {
-        "$set": {"active": False, "updated": now()}, "$unset": {"token_enc": "", "token_hash": ""}})
-    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
-
-@app.delete("/api/bots/<bot_id>")
-def api_delete(bot_id):
-    uid = auth()
-    if not uid:
-        return jsonify(error="unauthorized"), 401
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="bot not found"), 404
-    if bot.get("token_enc"):
-        tg(dec(bot["token_enc"]), "deleteWebhook")
-    db.bots.delete_one({"_id": bot["_id"]})
-    db.states.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
-    db.rk.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
-    db.uvars.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
-    return jsonify(ok=True)
-
-# ── Token endpoints ──
 @app.post("/api/tokens/claim-daily")
 def api_daily():
     uid = auth()
     if not uid:
         return jsonify(error="unauthorized"), 401
     today = now().strftime("%Y-%m-%d")
-    u = get_user(uid)
-    if u.get("daily") == today:
-        return jsonify(error="already claimed"), 400
+    if get_user(uid).get("daily") == today:
+        return jsonify(error="پاداش امروز رو گرفتی"), 400
     db.users.update_one({"_id": uid}, {"$set": {"daily": today}})
     add_tokens(uid, DAILY_BONUS, "daily")
     return jsonify(tokens=get_user(uid)["tokens"], bonus=DAILY_BONUS)
+
 
 @app.post("/api/tokens/referral")
 def api_referral():
@@ -908,32 +1004,14 @@ def api_referral():
         return jsonify(error="unauthorized"), 401
     code = str((request.get_json(silent=True) or {}).get("code", "")).strip()
     if not code:
-        return jsonify(error="enter invite code"), 400
+        return jsonify(error="کد دعوت رو وارد کن"), 400
     res = apply_referral(uid, code)
     if res == "ok":
-        try:
-            ref = int(code.strip().lstrip("r_"))
-            if ref in ADMIN_IDS or True:
-                pass
-        except Exception:
-            pass
         return jsonify(ok=True, bonus=REFERRAL_BONUS, tokens=get_user(uid)["tokens"])
     if res == "already":
-        return jsonify(error="referral already used"), 400
-    return jsonify(error="invalid code"), 400
+        return jsonify(error="قبلاً از کد دعوت استفاده کردی"), 400
+    return jsonify(error="کد معتبر نیست"), 400
 
-SHOP = [
-    {"id": "s50", "tokens": 60, "title": "Starter pack", "desc": "60 tokens"},
-    {"id": "s150", "tokens": 170, "title": "Maker pack", "desc": "170 tokens · popular"},
-    {"id": "s400", "tokens": 450, "title": "Pro pack", "desc": "450 tokens · best value"},
-]
-
-@app.get("/api/tokens/shop")
-def api_shop():
-    uid = auth()
-    if not uid:
-        return jsonify(error="unauthorized"), 401
-    return jsonify(plans=SHOP, note="To buy, contact the admin. Payment gateway plug-in point: /api/tokens/buy")
 
 @app.post("/api/tokens/buy")
 def api_buy():
@@ -943,15 +1021,16 @@ def api_buy():
     pid = str((request.get_json(silent=True) or {}).get("plan", ""))
     plan = next((p for p in SHOP if p["id"] == pid), None)
     if not plan:
-        return jsonify(error="unknown plan"), 400
+        return jsonify(error="پلن نامعتبره"), 400
     db.orders.insert_one({"uid": uid, "plan": pid, "tokens": plan["tokens"], "status": "pending", "t": now()})
     for a in ADMIN_IDS:
         try:
             tg(MOTHER_TOKEN, "sendMessage", chat_id=a,
-               text=f"Buy request: user {uid} wants {plan['title']} ({plan['tokens']} tokens)")
+               text=f"درخواست خرید: کاربر {uid} بسته‌ی {plan['title']} ({plan['tokens']} توکن)")
         except Exception:
             pass
-    return jsonify(ok=True, msg="Request sent. Tokens arrive after admin approval.")
+    return jsonify(ok=True, msg="درخواست ثبت شد؛ بعد از تأیید ادمین توکن واریز می‌شه")
+
 
 @app.post("/api/admin/grant")
 def api_grant():
@@ -968,9 +1047,115 @@ def api_grant():
     db.orders.update_many({"uid": target, "status": "pending"}, {"$set": {"status": "granted"}})
     return jsonify(ok=True, tokens=db.users.find_one({"_id": target}).get("tokens", 0))
 
-# ═════════ Engine ═════════
+
+@app.post("/api/bots/<bot_id>/undo")
+def api_undo(bot_id):
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot or not bot.get("versions"):
+        return jsonify(error="نسخه‌ی قبلی وجود نداره"), 400
+    prev = bot["versions"][-1]
+    db.bots.update_one({"_id": bot["_id"]}, {
+        "$set": {"config": prev, "name": prev["name"], "thinking": "", "updated": now()},
+        "$pop": {"versions": 1}})
+    bot = db.bots.find_one({"_id": bot["_id"]})
+    sync_commands(bot, bot["config"])
+    return jsonify(bot=public(bot))
+
+
+@app.put("/api/bots/<bot_id>/config")
+def api_save_config(bot_id):
+    """ذخیره‌ی ویرایش دستی (بدون مصرف سهمیه)"""
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    try:
+        cfg = sanitize((request.get_json(silent=True) or {}).get("config"), strict=True)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    if cfg != bot["config"]:
+        lm = bot.get("last_manual")
+        recent = lm and (now().replace(tzinfo=None) - lm.replace(tzinfo=None)).total_seconds() < 180
+        upd = {"$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now(), "last_manual": now()}}
+        if not recent:      # ویرایش‌های پشت‌سرهم یک نسخه‌ی برگشت حساب می‌شن
+            upd["$push"] = {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}
+        db.bots.update_one({"_id": bot["_id"]}, upd)
+        bot = db.bots.find_one({"_id": bot["_id"]})
+        sync_commands(bot, cfg)
+    return jsonify(bot=public(bot))
+
+
+@app.post("/api/bots/<bot_id>/activate")
+def api_activate(bot_id):
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    token = str((request.get_json(silent=True) or {}).get("token", "")).strip()
+    if not re.match(r"^\d{6,12}:[\w-]{30,50}$", token):
+        return jsonify(error="فرمت توکن درست نیست"), 400
+    me = tg(token, "getMe")
+    if not me.get("ok"):
+        return jsonify(error="توکن معتبر نیست"), 400
+    th = thash(token)
+    if db.bots.find_one({"token_hash": th, "_id": {"$ne": bot["_id"]}}):
+        return jsonify(error="این توکن قبلاً برای ربات دیگه‌ای ثبت شده"), 400
+    r = tg(token, "setWebhook", url=f"{BASE_URL}/hook/{bot_id}", secret_token=bot["secret"],
+           allowed_updates=["message", "callback_query"], drop_pending_updates=True)
+    if not r.get("ok"):
+        return jsonify(error="اتصال وبهوک ناموفق بود"), 502
+    tg(token, "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
+        {"command": c, "description": c} for c in bot["config"]["commands"]])
+    db.bots.update_one({"_id": bot["_id"]}, {"$set": {
+        "token_enc": enc(token), "token_hash": th, "username": me["result"]["username"],
+        "active": True, "updated": now()}})
+    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
+
+
+@app.post("/api/bots/<bot_id>/deactivate")
+def api_deactivate(bot_id):
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    if bot.get("token_enc"):
+        tg(dec(bot["token_enc"]), "deleteWebhook")
+    db.bots.update_one({"_id": bot["_id"]}, {
+        "$set": {"active": False, "updated": now()}, "$unset": {"token_enc": "", "token_hash": ""}})
+    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
+
+
+@app.delete("/api/bots/<bot_id>")
+def api_delete(bot_id):
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    if bot.get("token_enc"):
+        tg(dec(bot["token_enc"]), "deleteWebhook")
+    db.bots.delete_one({"_id": bot["_id"]})
+    db.states.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
+    db.rk.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
+    db.uvars.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
+    return jsonify(ok=True)
+
+
+# ───────────────────────── موتور اجرای کانفیگ ─────────────────────────
 _WEEK = {5: "شنبه", 6: "یکشنبه", 0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه"}
-FORM_HINT = {"number": "Send digits only", "phone": "Send a valid phone, e.g. 09123456789", "email": "Send a valid email"}
+FORM_HINT = {"number": "فقط عدد بفرست 🔢", "phone": "یه شماره‌ی تماس معتبر بفرست، مثل 09123456789 📱",
+             "email": "یه ایمیل معتبر بفرست 📧"}
+
 
 def to_jalali(gy, gm, gd):
     g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
@@ -989,7 +1174,10 @@ def to_jalali(gy, gm, gd):
         jm, jd = 7 + (days - 186) // 30, 1 + (days - 186) % 30
     return jy, jm, jd
 
+
 class Env:
+    """همه‌ی اطلاعات یک رویداد: ربات، کاربر و متغیرهای ذخیره‌شده‌ی همون کاربر"""
+
     def __init__(self, bot, token, chat_id, user, text="", param=""):
         self.bot, self.token, self.chat_id = bot, token, chat_id
         self.cfg, self.bot_id, self.owner = bot["config"], str(bot["_id"]), bot["owner"]
@@ -1002,18 +1190,18 @@ class Env:
         self.vars = {k: str(v) for k, v in (doc.get("v") or {}).items()}
         self.visits = int(doc.get("visits", 0))
         self.dirty = False
-        self._now = now() + timedelta(hours=3, minutes=30)
+        self._now = now() + timedelta(hours=3, minutes=30)      # ساعت تهران
 
     def builtin(self, k):
         u = self.user
         if k == "name":
-            return u.get("first_name") or "friend"
+            return u.get("first_name") or "دوست من"
         if k == "first_name":
             return u.get("first_name") or ""
         if k == "last_name":
             return u.get("last_name") or ""
         if k == "full_name":
-            return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x) or "friend"
+            return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x) or "دوست من"
         if k == "username":
             return ("@" + u["username"]) if u.get("username") else ""
         if k == "id":
@@ -1069,8 +1257,11 @@ class Env:
                                 {"$set": {"v": self.vars, "visits": self.visits, "t": now()}}, upsert=True)
             self.dirty = False
 
+
 def fill(t, env):
+    """{name} / {coins} / {city|پیش‌فرض} رو با مقدار جایگزین می‌کنه (اسم ناشناس دست‌نخورده می‌مونه)"""
     declared = env.cfg.get("vars") or {}
+
     def rep(m):
         k = m.group(1)
         if k in BUILTINS or k in declared:
@@ -1079,7 +1270,9 @@ def fill(t, env):
         return m.group(0)
     return PH_RE.sub(rep, str(t))
 
+
 def check(cond, env, depth=0):
+    """ارزیابی شرط"""
     if not isinstance(cond, dict) or depth > 3:
         return False
     if "all" in cond:
@@ -1104,9 +1297,11 @@ def check(cond, env, depth=0):
         return False
     return {">": x > y, ">=": x >= y, "<": x < y, "<=": x <= y}.get(op, False)
 
+
 def who(env):
     u = env.user
-    return f"User {u.get('first_name', '')} (@{u.get('username', '-')}) — {env.uid}"
+    return f"👤 {u.get('first_name', '')} (@{u.get('username', '-')}) — {env.uid}"
+
 
 def run_actions(acts, env):
     for a in acts or []:
@@ -1123,11 +1318,12 @@ def run_actions(acts, env):
             if m and int(m.group(1)) <= int(m.group(2)):
                 env.set(name, str(random.randint(int(m.group(1)), int(m.group(2)))))
         elif op == "notify" and val.strip():
-            tg(env.token, "sendMessage", chat_id=env.owner,
-               text=f"Update from {env.cfg.get('name', '')}\n{val}\n\n{who(env)}"[:4000])
+            tg(env.token, "sendMessage", chat_id=env.owner, text=f"🔔 {env.cfg.get('name', '')}\n{val}\n\n{who(env)}"[:4000])
+
 
 def visible(b, env):
     return not b.get("when") or check(b["when"], env)
+
 
 def keyboard(node, node_id, env):
     kb = []
@@ -1150,48 +1346,59 @@ def keyboard(node, node_id, env):
             kb.append(r)
     return kb
 
+
 def reply_markup(node, env):
+    """کیبورد زیر صفحه‌ی چت (Reply Keyboard)"""
     rows = [[{"text": fill(b["text"], env)[:64] or "·"} for b in row if visible(b, env)] for row in node["buttons"]]
     return {"keyboard": [r for r in rows if r], "resize_keyboard": True, "is_persistent": True}
 
+
 def clear_reply_kb(env):
+    """کیبورد قبلی زیر چت رو برمی‌داره (با یه پیام موقت که فوراً پاک می‌شه)"""
     if not db.rk.find_one({"_id": env.sid}):
         return
-    r = tg(env.token, "sendMessage", chat_id=env.chat_id, text=".", reply_markup={"remove_keyboard": True})
+    r = tg(env.token, "sendMessage", chat_id=env.chat_id, text="⏳", reply_markup={"remove_keyboard": True})
     mid = (r.get("result") or {}).get("message_id")
     if mid:
         tg(env.token, "deleteMessage", chat_id=env.chat_id, message_id=mid)
     db.rk.delete_one({"_id": env.sid})
+
 
 MEDIA_SEND = {"photo": "sendPhoto", "video": "sendVideo", "animation": "sendAnimation",
               "voice": "sendVoice", "audio": "sendAudio", "document": "sendDocument"}
 MEDIA_FIELD = {"photo": "photo", "video": "video", "animation": "animation",
                "voice": "voice", "audio": "audio", "document": "document"}
 
+
 def send_media_message(token, chat_id, media, caption, markup):
-    kind = media.get("kind", "photo")
+    """ارسال مدیای بخش (ویدیو/صوت/سند/...)"""
+    kind = (media or {}).get("kind", "photo")
     method = MEDIA_SEND.get(kind, "sendPhoto")
     field = MEDIA_FIELD.get(kind, "photo")
-    cap = (caption or "")[:1024]
     data = {"chat_id": chat_id, field: media["url"]}
-    if cap:
-        data["caption"] = cap
+    if caption:
+        data["caption"] = (caption or "")[:1024]
     if markup:
         data["reply_markup"] = markup
-    r = tg(token, method, **data)
-    return bool(r.get("ok"))
+    try:
+        return bool(tg(token, method, **data).get("ok"))
+    except Exception:
+        log.exception("media send failed")
+        return False
+
 
 def send_node(env, node_id, edit=None, depth=0):
+    """edit = پیام قبلی (callback) → اگه ممکن باشه همون پیام ویرایش می‌شه، نه اینکه پیام جدید بیاد"""
     cfg, token, chat_id = env.cfg, env.token, env.chat_id
     if node_id not in cfg["nodes"]:
         node_id = cfg["start"]
     node = cfg["nodes"][node_id]
-    run_actions(node.get("do"), env)
-    if depth < MAX_HOPS:
+    run_actions(node.get("do"), env)                       # ۱) اکشن‌های ورود
+    if depth < MAX_HOPS:                                   # ۲) هدایت شرطی
         for rule in node.get("route", []):
             if rule["goto"] in cfg["nodes"] and check(rule["when"], env):
                 return send_node(env, rule["goto"], edit=edit, depth=depth + 1)
-    text = node["text"]
+    text = node["text"]                                    # ۳) متن جایگزین شرطی
     for alt in node.get("alt", []):
         if check(alt["when"], env):
             text = alt["text"]
@@ -1202,43 +1409,35 @@ def send_node(env, node_id, edit=None, depth=0):
     if not use_reply:
         clear_reply_kb(env)
     markup = reply_markup(node, env) if use_reply else {"inline_keyboard": kb}
+    # مدیا: فرمت جدید media + سازگاری با photo قدیمی
     media = node.get("media")
+    if not media and node.get("photo"):
+        media = {"kind": "photo", "url": node["photo"]}
+    photo = media["url"] if media and media.get("kind") == "photo" else None
     done = False
-    if media and not edit:
-        try:
-            if len(text) <= 1024:
-                done = send_media_message(token, chat_id, media, text, markup if kb else None)
+    if edit and not use_reply and not media and not edit.get("photo"):
+        r = tg(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
+        done = bool(r.get("ok")) or "not modified" in str(r.get("description", ""))
+    if not done:
+        if edit:
+            tg(token, "deleteMessage", chat_id=chat_id, message_id=edit["message_id"])
+        if media and (not photo or media.get("kind") != "photo"):
+            # ویدیو/صوت/سند: ارسال فایل + متن
+            if not send_media_message(token, chat_id, media, text[:1024] if len(text) <= 1024 else "", markup if kb else None):
+                tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
+            elif len(text) > 1024:
+                tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
+            done = True
+        elif photo:
+            data = {"chat_id": chat_id, "photo": photo}
+            if len(text) <= 1000:
+                data.update(caption=text, **({"reply_markup": markup} if kb else {}))
+                done = bool(tg(token, "sendPhoto", **data).get("ok"))
             else:
-                done = send_media_message(token, chat_id, media, "", markup if kb else None)
-                if done:
-                    tg(token, "sendMessage", chat_id=chat_id, text=text,
-                       **({"reply_markup": markup} if kb else {}))
-                    done = True
-                else:
-                    tg(token, "sendMessage", chat_id=chat_id, text=text,
-                       **({"reply_markup": markup} if kb else {}))
-                    done = True
-        except Exception:
-            log.exception("media send failed")
-            done = False
+                tg(token, "sendPhoto", **data)
+                done = False   # متن بلند جداگونه می‌ره
         if not done:
             tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
-            done = True
-    else:
-        if edit and not use_reply and not media and not edit.get("photo"):
-            r = tg(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
-            done = bool(r.get("ok")) or "not modified" in str(r.get("description", ""))
-        if not done:
-            if edit:
-                tg(token, "deleteMessage", chat_id=chat_id, message_id=edit["message_id"])
-            if media:
-                # callback navigation onto media node: send fresh (can't edit media->text reliably)
-                if not send_media_message(token, chat_id, media, text[:1024] if len(text) <= 1024 else "", markup if kb else None):
-                    tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
-                if len(text) > 1024:
-                    tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
-            else:
-                tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
     sid = env.sid
     if use_reply:
         db.rk.replace_one({"_id": sid}, {"_id": sid, "node": node_id, "t": now()}, upsert=True)
@@ -1250,7 +1449,9 @@ def send_node(env, node_id, edit=None, depth=0):
     else:
         db.states.delete_one({"_id": sid})
 
+
 def reply_press(env, rk, text):
+    """وقتی کاربر یکی از دکمه‌های کیبورد زیر چت رو می‌زنه (متن دکمه به‌صورت پیام میاد)"""
     node = env.cfg["nodes"].get(rk.get("node"))
     if not node:
         return False
@@ -1266,18 +1467,21 @@ def reply_press(env, rk, text):
             elif "copy" in b:
                 c = fill(b["copy"], env)[:256]
                 tg(env.token, "sendMessage", chat_id=env.chat_id, text=c,
-                   reply_markup={"inline_keyboard": [[{"text": "Copy", "copy_text": {"text": c}}]]})
+                   reply_markup={"inline_keyboard": [[{"text": "📋 کپی", "copy_text": {"text": c}}]]})
             elif "url" in b:
-                tg(env.token, "sendMessage", chat_id=env.chat_id, text="Open:",
+                tg(env.token, "sendMessage", chat_id=env.chat_id, text="👇",
                    reply_markup={"inline_keyboard": [[{"text": fill(b["text"], env)[:64], "url": b["url"]}]]})
             return True
     return False
+
 
 def finish(env, node, default_done):
     tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(node.get("done") or default_done, env))
     send_node(env, node.get("next") or env.cfg["start"])
 
+
 def valid_answer(kind, t):
+    """اعتبارسنجی جواب فرم؛ (درست؟، مقدار تمیزشده)"""
     t = t.strip()
     if kind == "number":
         n = to_num(t)
@@ -1289,7 +1493,9 @@ def valid_answer(kind, t):
         return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", t)), t
     return True, t
 
+
 def gate_ok(token, cfg, uid):
+    """عضویت اجباری؛ اگه ربات ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
     j = cfg.get("join")
     if not j:
         return True
@@ -1299,11 +1505,13 @@ def gate_ok(token, cfg, uid):
             return False
     return True
 
+
 def send_gate(token, chat_id, cfg):
     j = cfg["join"]
-    kb = [[{"text": f"@{c}", "url": f"https://t.me/{c}"}] for c in j["channels"]]
-    kb.append([{"text": "Joined", "callback_data": "chk"}])
+    kb = [[{"text": f"📢 @{c}", "url": f"https://t.me/{c}"}] for c in j["channels"]]
+    kb.append([{"text": "✅ عضو شدم", "callback_data": "chk"}])
     tg(token, "sendMessage", chat_id=chat_id, text=j["text"], reply_markup={"inline_keyboard": kb})
+
 
 @app.post("/hook/<bot_id>")
 def sub_hook(bot_id):
@@ -1329,7 +1537,7 @@ def sub_hook(bot_id):
             env = Env(bot, token, chat_id, user)
             if not gate_ok(token, cfg, user["id"]):
                 if data == "chk":
-                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="Not joined yet", show_alert=True)
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="هنوز عضو نشدی 🙂", show_alert=True)
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_gate(token, chat_id, cfg)
@@ -1343,7 +1551,7 @@ def sub_hook(bot_id):
                     return "ok"
                 if not visible(b, env):
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
-                       text="Not available", show_alert=True)
+                       text="این گزینه الان در دسترس نیست", show_alert=True)
                     return "ok"
                 run_actions(b.get("do"), env)
                 if kind == "a":
@@ -1387,13 +1595,13 @@ def sub_hook(bot_id):
             node = cfg["nodes"][state["form"]]
             fields = node["fields"]
             if not text:
-                tg(token, "sendMessage", chat_id=chat_id, text="Please reply with text")
+                tg(token, "sendMessage", chat_id=chat_id, text="لطفاً جوابت رو به‌صورت متن بفرست 🙏")
                 return "ok"
             idx = len(state.get("a") or [])
             types = node.get("types") or []
             ok, val = valid_answer(types[idx] if idx < len(types) else "text", text)
             if not ok:
-                tg(token, "sendMessage", chat_id=chat_id, text=FORM_HINT.get(types[idx], "Invalid, retry"))
+                tg(token, "sendMessage", chat_id=chat_id, text=FORM_HINT.get(types[idx], "جواب معتبر نیست، دوباره بفرست 🙏"))
                 return "ok"
             sv = node.get("save") or []
             if idx < len(sv) and sv[idx]:
@@ -1405,17 +1613,17 @@ def sub_hook(bot_id):
             else:
                 db.states.delete_one({"_id": sid})
                 if not node.get("silent"):
-                    body = "\n\n".join(f"{q}\n> {a}" for q, a in zip(fields, ans))
+                    body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
                     tg(token, "sendMessage", chat_id=bot["owner"],
-                       text=(f"New form — {cfg['name']}\n{who(env)}\n\n{body}")[:4000])
-                finish(env, node, "Saved. Thanks!")
+                       text=(f"📝 فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}")[:4000])
+                finish(env, node, "✅ اطلاعاتت ثبت شد، ممنون!")
         elif state and state.get("ask"):
             r = tg(token, "copyMessage", chat_id=bot["owner"], from_chat_id=chat_id, message_id=msg["message_id"])
             if r.get("ok"):
                 tg(token, "sendMessage", chat_id=bot["owner"], text=who(env))
             db.states.delete_one({"_id": sid})
             node = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
-            finish(env, node or {}, "Message sent.")
+            finish(env, node or {}, "✅ پیامت ارسال شد.")
         else:
             rk = db.rk.find_one({"_id": sid}) if text else None
             if not (rk and reply_press(env, rk, text)):
@@ -1427,10 +1635,11 @@ def sub_hook(bot_id):
             try:
                 env.save()
             except Exception:
-                log.exception("saving vars failed")
+                log.exception("saving user vars failed")
     return "ok"
 
-# ── Mother ──
+
+# ───────────────────────── ربات مادر ─────────────────────────
 @app.post("/mother")
 def mother_hook():
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != MOTHER_SECRET:
@@ -1444,17 +1653,19 @@ def mother_hook():
             parts = text.split(maxsplit=1)
             if len(parts) > 1 and parts[1].strip().lower().startswith("r_"):
                 apply_referral(uid, parts[1].strip())
-        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid,
-           text="Super BotMaker: describe any bot, AI builds it. Tokens pay for AI builds. Invite friends to earn.",
-           reply_markup={"inline_keyboard": [[{"text": "Open Studio", "web_app": {"url": BASE_URL}}]]})
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=msg["chat"]["id"],
+           text="سلام! اینجا با هوش مصنوعی ربات تلگرام می‌سازی.\nفقط بگو چه رباتی می‌خوای. ساخت و ارتقا با توکنه؛ با دعوت دوستات توکن بگیر.",
+           reply_markup={"inline_keyboard": [[{"text": "ساخت ربات", "web_app": {"url": BASE_URL}}]]})
     return "ok"
+
 
 def setup_mother():
     r = tg(MOTHER_TOKEN, "setWebhook", url=f"{BASE_URL}/mother", secret_token=MOTHER_SECRET,
            allowed_updates=["message"])
     tg(MOTHER_TOKEN, "setChatMenuButton",
-       menu_button={"type": "web_app", "text": "Studio", "web_app": {"url": BASE_URL}})
+       menu_button={"type": "web_app", "text": "ساخت ربات", "web_app": {"url": BASE_URL}})
     log.info("mother webhook: %s", r)
+
 
 try:
     if MOTHER_TOKEN and BASE_URL:
