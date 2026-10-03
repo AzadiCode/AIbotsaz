@@ -401,6 +401,19 @@ button.tpl b{font-weight:700}
 
 .exs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 button.ex{width:auto;padding:4px 11px;font-size:12px;font-weight:500;background:transparent;color:var(--tx);border:1px solid var(--ln)}
+.usum{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13.5px}
+.usum .dot{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.urow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--ln)}
+.urow:first-child{border-top:0}
+.urow .dot{margin-top:8px}
+.ui{flex:1;min-width:0}
+.u1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.u1 b{font-size:14px}
+.u2{display:flex;gap:10px;align-items:center;font-size:12px}
+.u2 .cpy{font-family:var(--mono);color:var(--ac);cursor:pointer}
+.u3{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.ub{font-family:var(--mono);font-size:11px;border:1px solid var(--ln);border-radius:6px;padding:0 7px;color:var(--hint)}
+.ub.on{color:var(--tx)}
+.ucnt{font-family:var(--mono);font-size:12px;min-width:24px;text-align:center;border:1px solid var(--ln);border-radius:7px;padding:1px 0;margin-top:2px}
 </style>
 </head>
 <body>
@@ -644,7 +657,7 @@ async function commit(fn, msg="ذخیره شد "){
   S.cur = d.bot; closeSheet(); renderBot(); toast(msg);
   tg?.HapticFeedback?.notificationOccurred("success");
 }
-function closeSheet(){ $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function closeSheet(){ clearInterval(openUsers.t); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
 function showSheet(html){
   const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
   sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp">${html}</div>`;
@@ -1153,7 +1166,7 @@ function renderProfile(){
       <div class="g2"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
       <div style="height:6px"></div><div class="g2"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز، اختیاری)" inputmode="numeric"></div>
       <div style="height:6px"></div><button class="ghost" data-ax="acoupon">ساخت کد</button>
-      <div style="height:10px"></div><button class="ghost" data-ax="astats"><i class='ic ic-trend'></i>آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
+      <div style="height:10px"></div><button class="ghost" data-ax="ausers"><i class='ic ic-users'></i>کاربران ربات‌ساز</button><div style="height:8px"></div><button class="ghost" data-ax="astats"><i class='ic ic-trend'></i>آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
     <div class="card kv">
       <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}</b>` : "<b>—</b>"}</div>
       <div><span>اولین ورود</span><b>${joined}</b></div>
@@ -1175,7 +1188,8 @@ document.addEventListener("click", e => {
   const t = e.target.closest("[data-tpl]"); if(t) return useTemplate(t.dataset.tpl, t);
   const x = e.target.closest("[data-ax]"); if(!x) return;
   const a = x.dataset.ax, v = id => ($(id)?.value || "").trim();
-  if(a === "subs") openSubs();
+  if(a === "ausers") openUsers();
+  else if(a === "subs") openSubs();
   else if(a === "bc") openBc();
   else if(a === "bcsend") sendBc(x);
   else if(a === "daily") busy(x, async () => { const d = await api("/api/daily", "POST"); S.bal = d.bal; S.daily.available = false; render(); toast(`+${fa(d.got)} توکن گرفتی `); });
@@ -1274,6 +1288,50 @@ document.addEventListener("click", e => {
     const d = await api("/api/bots/import", "POST", {config: c.config || c});
     closeSheet(); S.cur = d.bot; S.view = "bot"; S.open = new Set(); render(); toast("ربات وارد شد");
   });
+});
+
+/* ───────── حضور آنلاین و فهرست کاربران (ادمین) ───────── */
+if(INIT){
+  const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); };
+  setInterval(ping, 25000);
+  document.addEventListener("visibilitychange", ping);
+}
+let UQ = "";
+const ago = t => { if(!t) return "—"; const m = Math.max(0, (Date.now() - new Date(t)) / 60000);
+  return m < 1 ? "just now" : m < 60 ? Math.floor(m) + " min ago" : m < 1440 ? Math.floor(m / 60) + " h ago" : Math.floor(m / 1440) + " d ago"; };
+function userRow(r){
+  const nm = r.name || (r.un ? "@" + r.un : "—");
+  const bots = r.bots.map(b => `<span class="ub${b.on ? " on" : ""}" dir="ltr">${b.on ? "@" + esc(b.un) : esc(b.name)}</span>`).join("");
+  return `<div class="urow"><span class="dot${r.online ? " on" : ""}" title="${r.online ? "online" : ago(r.seen)}"></span>
+    <div class="ui"><div class="u1"><b>${esc(nm)}</b>${r.un && r.name ? `<span class="muted" dir="ltr">@${esc(r.un)}</span>` : ""}</div>
+      <div class="u2"><span class="cpy" data-pf="copyid" data-id="${r.id}" dir="ltr">${r.id}</span><span class="muted">${r.online ? "online" : ago(r.seen)}</span></div>
+      ${bots ? `<div class="u3">${bots}</div>` : ""}</div>
+    <span class="ucnt" title="bots">${fa(r.bots.length)}</span></div>`;
+}
+const uSum = d => `<span class="dot on"></span><b>${fa(d.online)}</b> online<span class="muted"> / ${fa(d.total)} users</span>`;
+function uList(d){
+  const q = UQ.trim().toLowerCase().replace(/^@/, "");
+  const rows = d.items.filter(r => !q || String(r.id).includes(q) || (r.un || "").toLowerCase().includes(q) || (r.name || "").toLowerCase().includes(q)
+    || r.bots.some(b => (b.un || "").toLowerCase().includes(q)));
+  return rows.map(userRow).join("") || '<p class="muted">no match</p>';
+}
+async function openUsers(){
+  S.sheet = {kind:"info"}; UQ = "";
+  showSheet(head("کاربران ربات‌ساز") + `<p class="muted">در حال بارگذاری…</p>`);
+  const tick = async () => {
+    if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return clearInterval(openUsers.t);
+    try{
+      const d = await api("/api/admin/users"); openUsers.d = d;
+      if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); return; }
+      showSheet(head("کاربران ربات‌ساز") + `<div class="usum" id="usum">${uSum(d)}</div>
+        <input id="uq" placeholder="search id, username, bot" autocomplete="off" style="margin-bottom:6px"><div id="ulist">${uList(d)}</div>`);
+    }catch(e){ closeSheet(); toast(e.message); }
+  };
+  clearInterval(openUsers.t); await tick(); openUsers.t = setInterval(tick, 10000);
+}
+document.addEventListener("input", e => {
+  if(e.target.id !== "uq" || !openUsers.d) return;
+  UQ = e.target.value; $("#ulist").innerHTML = uList(openUsers.d);
 });
 
 load();

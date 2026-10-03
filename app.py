@@ -1038,6 +1038,7 @@ def api_me():
         return jsonify(error="unauthorized"), 401
     m = re.fullmatch(r"ref_(\d{1,15})", u.get("_sp", ""))
     me = ensure_user(uid, int(m.group(1)) if m else None)
+    touch_user(u)
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
     today = f"{now():%Y-%m-%d}"
     return jsonify(
@@ -1409,6 +1410,48 @@ def api_health(bot_id):
     except Exception:
         issues = []
     return jsonify(issues=issues, nodes=len(bot["config"]["nodes"]))
+
+
+
+ONLINE_SECS = 70   # کاربری که توی این بازه پینگ داده باشه «آنلاین» حساب می‌شه
+
+
+def touch_user(u):
+    """آخرین حضور و مشخصات تلگرامی کاربر رو ذخیره می‌کنه (فقط اگه حساب وجود داشته باشه)"""
+    try:
+        name = " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x)[:80]
+        db.users.update_one({"_id": u["id"]}, {"$set": {"seen": now(), "tg_user": (u.get("username") or "")[:40], "tg_name": name}})
+    except Exception:
+        log.exception("touch_user failed")
+
+
+@app.post("/api/ping")
+def api_ping():
+    u = auth_full()
+    if not u:
+        return jsonify(error="unauthorized"), 401
+    touch_user(u)
+    return jsonify(ok=True)
+
+
+@app.get("/api/admin/users")
+def api_admin_users():
+    if not _admin():
+        return jsonify(error="forbidden"), 403
+    cut = now().replace(tzinfo=None) - timedelta(seconds=ONLINE_SECS)
+    users = list(db.users.find({}, {"seen": 1, "tg_user": 1, "tg_name": 1, "created": 1}))
+    by = {}
+    for bt in db.bots.find({}, {"owner": 1, "username": 1, "name": 1, "active": 1}):
+        by.setdefault(bt["owner"], []).append({"name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active"))})
+    out = []
+    for x in users:
+        seen = x.get("seen")
+        seen = seen.replace(tzinfo=None) if seen else None
+        bots = by.get(x["_id"], [])
+        out.append({"id": x["_id"], "un": x.get("tg_user", ""), "name": x.get("tg_name", ""), "online": bool(seen and seen >= cut),
+                    "seen": seen.isoformat() + "Z" if seen else "", "bots": bots})
+    out.sort(key=lambda r: (not r["online"], -(datetime.fromisoformat(r["seen"][:-1]).timestamp() if r["seen"] else 0)))
+    return jsonify(items=out[:300], total=len(out), online=sum(1 for r in out if r["online"]))
 
 
 
