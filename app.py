@@ -165,30 +165,30 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "fallback": "<node_id shown for unknown messages>",
  "commands": {"help": "<node_id>"},
  "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional, see below)
-"nodes": {
-    "<node_id>": {
-      "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
-      "text": "message text (you may use {name} for the user's first name)",
-      "photo": "https://direct-image-link",                                          (optional)
-      "keyboard_type": "inline",                                                    (optional, "inline" or "reply")
-      "buttons": [[ {"text": "label", "goto": "<node_id>"},
-                    {"text": "label", "url": "https://..."},
-                    {"text": "label", "alert": "popup text shown when tapped"},
-                    {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
-      "ask": false,
-      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
-      "done": "message shown after the user finished ask/form",                      (optional)
-      "next": "<node_id shown after finishing>"                                       (optional, default start)
-    }
-  }
+ "nodes": {
+   "<node_id>": {
+     "title": "short human label of this section, max 30 chars, OUTPUT LANGUAGE",
+     "text": "message text (you may use {name} for the user's first name)",
+     "photo": "https://direct-image-link",                                          (optional)
+     "buttons": [[ {"text": "label", "goto": "<node_id>"},
+                   {"text": "label", "url": "https://..."},
+                   {"text": "label", "alert": "popup text shown when tapped"},
+                   {"text": "label", "copy": "text copied to clipboard when tapped"} ]],
+     "ask": false,
+     "kb": "reply",                                                                 (optional, see below)
+     "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
+     "done": "message shown after the user finished ask/form",                      (optional)
+     "next": "<node_id shown after finishing>"                                       (optional, default start)
+   }
+ }
 }
 
 What the engine can do (use these freely when they fit the request):
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (e.g. card number, promo code).
-- "keyboard_type": "inline" (default) = buttons appear below the message (inline keyboard). "reply" = buttons appear below the chat input as a persistent keyboard (reply keyboard). Reply keyboards only support simple text buttons (no goto, url, alert, copy); tapping sends the button text as a message.
 - "ask": true = the user's next message (any type) is forwarded to the bot owner. Good for support/feedback.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary. Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership: before using the bot the user must be a member of these public channels (usernames without @). Only add it if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
+- "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of glass buttons under the message. Omit it (default) for normal inline buttons. Use it only if the user asks for a keyboard under the chat / a main-menu keyboard. Never use it on nodes with "ask" or "fields". Link/popup/copy buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
 - The engine CANNOT do: payments, databases/inventory, external APIs, scheduled messages, sending files. If the user asks for something like that, say so honestly in "thinking" and build the closest working approximation (e.g. order form that is sent to the owner instead of online payment).
 
@@ -279,10 +279,6 @@ def sanitize(cfg, strict=False):
         title = str(n.get("title") or "").strip()[:30]
         if title:
             node["title"] = title
-        kb_type = str(n.get("keyboard_type") or "inline").strip().lower()
-        if kb_type not in ("inline", "reply"):
-            kb_type = "inline"
-        node["keyboard_type"] = kb_type
         ph = str(n.get("photo") or "").strip()
         if ph:
             if ph.startswith("https://") and not re.search(r"\s", ph) and len(ph) <= 500:
@@ -293,6 +289,8 @@ def sanitize(cfg, strict=False):
         fl = [str(f).strip()[:200] for f in fl if str(f).strip()][:6] if isinstance(fl, list) else []
         if fl:
             node["fields"], node["ask"] = fl, False
+        if n.get("kb") == "reply" and rows and not node.get("fields") and not node["ask"]:
+            node["kb"] = "reply"          # کیبورد زیر صفحه‌ی چت (فقط برای بخش‌های بدون ask/form)
         done = str(n.get("done") or "").strip()[:500]
         if done:
             node["done"] = done
@@ -434,7 +432,9 @@ def api_me():
     if not uid:
         return jsonify(error="unauthorized"), 401
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
-    return jsonify(bots=bots, quota=quota_left(uid), limit=DAILY_LIMIT, max_bots=MAX_BOTS)
+    db.users.update_one({"_id": uid}, {"$setOnInsert": {"created": now()}}, upsert=True)
+    joined = db.users.find_one({"_id": uid})["created"].isoformat()
+    return jsonify(bots=bots, quota=quota_left(uid), limit=DAILY_LIMIT, max_bots=MAX_BOTS, joined=joined)
 
 
 @app.post("/api/generate")
@@ -579,7 +579,8 @@ def api_delete(bot_id):
     if bot.get("token_enc"):
         tg(dec(bot["token_enc"]), "deleteWebhook")
     db.bots.delete_one({"_id": bot["_id"]})
-    db.states.delete_many({"bot": bot_id})
+    db.states.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
+    db.rk.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
     return jsonify(ok=True)
 
 
@@ -603,22 +604,26 @@ def keyboard(node, node_id):
                 r.append({"text": b["text"], "callback_data": f"a:{node_id}:{ri}:{ci}"})
             elif "copy" in b:
                 r.append({"text": b["text"], "copy_text": {"text": b["copy"]}})
-            else:
-                r.append({"text": b["text"]})
         if r:
             kb.append(r)
     return kb
 
 
-def keyboard_markup(node, node_id):
-    """Return the appropriate keyboard markup based on node's keyboard_type."""
-    kb = keyboard(node, node_id)
-    if node.get("keyboard_type") == "reply":
-        # Reply keyboard (below chat input)
-        return {"keyboard": kb, "resize_keyboard": True, "one_time_keyboard": False}
-    else:
-        # Inline keyboard (below message)
-        return {"inline_keyboard": kb}
+def reply_markup(node):
+    """کیبورد زیر صفحه‌ی چت (Reply Keyboard)"""
+    return {"keyboard": [[{"text": b["text"]} for b in row] for row in node["buttons"] if row],
+            "resize_keyboard": True, "is_persistent": True}
+
+
+def clear_reply_kb(token, chat_id, sid):
+    """کیبورد قبلی زیر چت رو برمی‌داره (با یه پیام موقت که فوراً پاک می‌شه)"""
+    if not db.rk.find_one({"_id": sid}):
+        return
+    r = tg(token, "sendMessage", chat_id=chat_id, text="⏳", reply_markup={"remove_keyboard": True})
+    mid = (r.get("result") or {}).get("message_id")
+    if mid:
+        tg(token, "deleteMessage", chat_id=chat_id, message_id=mid)
+    db.rk.delete_one({"_id": sid})
 
 
 def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
@@ -626,11 +631,16 @@ def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
     if node_id not in cfg["nodes"]:
         node_id = cfg["start"]
     node = cfg["nodes"][node_id]
+    sid = f"{bot_id}:{chat_id}"
     text = fill(node["text"], user)
-    markup = keyboard_markup(node, node_id)
+    kb = keyboard(node, node_id)
+    use_reply = node.get("kb") == "reply" and bool(kb)
+    if not use_reply:
+        clear_reply_kb(token, chat_id, sid)
+    markup = reply_markup(node) if use_reply else {"inline_keyboard": kb}
     photo = node.get("photo")
     done = False
-    if edit and not photo and not edit.get("photo"):
+    if edit and not use_reply and not photo and not edit.get("photo"):
         r = tg(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
         done = bool(r.get("ok")) or "not modified" in str(r.get("description", ""))
     if not done:
@@ -639,14 +649,15 @@ def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
         if photo:
             data = {"chat_id": chat_id, "photo": photo}
             if len(text) <= 1000:
-                data.update(caption=text, reply_markup=markup)
+                data.update(caption=text, **({"reply_markup": markup} if kb else {}))
                 done = bool(tg(token, "sendPhoto", **data).get("ok"))
             else:
                 tg(token, "sendPhoto", **data)
                 done = False   # متن بلند جداگونه می‌ره
         if not done:
-            tg(token, "sendMessage", chat_id=chat_id, text=text, reply_markup=markup)
-    sid = f"{bot_id}:{chat_id}"
+            tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
+    if use_reply:
+        db.rk.replace_one({"_id": sid}, {"_id": sid, "node": node_id, "t": now()}, upsert=True)
     if node.get("fields"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
         tg(token, "sendMessage", chat_id=chat_id, text=fill(node["fields"][0], user))
@@ -654,6 +665,29 @@ def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
         db.states.replace_one({"_id": sid}, {"_id": sid, "ask": node_id, "t": now()}, upsert=True)
     else:
         db.states.delete_one({"_id": sid})
+
+
+def reply_press(token, chat_id, cfg, rk, text, bot_id, user):
+    """وقتی کاربر یکی از دکمه‌های کیبورد زیر چت رو می‌زنه (متن دکمه به‌صورت پیام میاد)"""
+    node = cfg["nodes"].get(rk.get("node"))
+    if not node:
+        return False
+    for row in node["buttons"]:
+        for b in row:
+            if b["text"] != text:
+                continue
+            if "goto" in b:
+                send_node(token, chat_id, cfg, b["goto"], bot_id, user)
+            elif "alert" in b:
+                tg(token, "sendMessage", chat_id=chat_id, text=b["alert"])
+            elif "copy" in b:
+                tg(token, "sendMessage", chat_id=chat_id, text=b["copy"],
+                   reply_markup={"inline_keyboard": [[{"text": "📋 کپی", "copy_text": {"text": b["copy"]}}]]})
+            elif "url" in b:
+                tg(token, "sendMessage", chat_id=chat_id, text="👇",
+                   reply_markup={"inline_keyboard": [[{"text": b["text"], "url": b["url"]}]]})
+            return True
+    return False
 
 
 def finish(token, chat_id, cfg, node, bot_id, user, default_done):
@@ -765,7 +799,9 @@ def sub_hook(bot_id):
             node = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
             finish(token, chat_id, cfg, node or {}, bot_id, user, "✅ پیامت ارسال شد.")
         else:
-            send_node(token, chat_id, cfg, cfg["fallback"], bot_id, user)
+            rk = db.rk.find_one({"_id": sid}) if text else None
+            if not (rk and reply_press(token, chat_id, cfg, rk, text, bot_id, user)):
+                send_node(token, chat_id, cfg, cfg["fallback"], bot_id, user)
     except Exception:
         log.exception("sub_hook error")
     return "ok"
