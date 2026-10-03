@@ -163,6 +163,9 @@ def public(b):
         "username": b.get("username"), "config": b.get("config"),
         "versions": len(b.get("versions", [])), "updated": b["updated"].isoformat(),
         "thinking": b.get("thinking", ""),
+        "visits": b.get("visits", 0),
+        "likes": b.get("likes", 0),
+        "explore": b.get("explore", False),
     }
 
 
@@ -1145,7 +1148,8 @@ def gen_job(jid, uid, bot_id, prompt, cost):
             sync_commands(bot, cfg)
         else:
             bot = {"owner": uid, "name": cfg["name"], "config": cfg, "thinking": thinking, "versions": [],
-                   "active": False, "secret": secrets.token_hex(16), "created": now(), "updated": now()}
+                    "active": False, "secret": secrets.token_hex(16), "created": now(), "updated": now(),
+                    "visits": 0, "likes": 0, "explore": False}
             bot["_id"] = db.bots.insert_one(bot).inserted_id
         db.jobs.update_one({"_id": jid, "status": "running"},
                            {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas}})
@@ -1369,6 +1373,22 @@ def api_broadcast(uid, bot_id):
     threading.Thread(target=run_broadcast, args=(bot, chats, text, mid, uid), daemon=True).start()
     return jsonify(queued=len(chats), cost=cost, wallet=wallet_info(uid))
 
+
+@app.post("/api/bots/<bot_id>/like")
+@authed
+def api_bot_like(uid, bot_id):
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات یافت نشد"), 404
+    db.bots.update_one({"_id": ObjectId(bot_id)}, {"$inc": {"likes": 1}})
+    updated_bot = db.bots.find_one({"_id": ObjectId(bot_id)})
+    return jsonify(likes=updated_bot.get("likes", 0))
+
+@app.get("/api/explore")
+@authed
+def api_explore(uid):
+    bots = db.bots.find({"explore": True}).sort([("visits", -1), ("likes", -1)]).limit(50)
+    return jsonify(bots=[public(b) for b in bots])
 
 # ───── رسانه ─────
 @app.get("/api/media")
@@ -1978,10 +1998,11 @@ def sub_hook(bot_id):
             return "ok"
         sid = env.sid
         if text.startswith("/"):
-            if cmd == "start":
-                env.visits += 1
-                env.dirty = True
-                send_node(env, cfg["start"])
+             if cmd == "start":
+                 env.visits += 1
+                 db.bots.update_one({"_id": ObjectId(env.bot_id)}, {"$inc": {"visits": 1}})
+                 env.dirty = True
+                 send_node(env, cfg["start"])
             elif cmd in cfg["commands"]:
                 send_node(env, cfg["commands"][cmd])
             else:

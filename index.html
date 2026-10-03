@@ -269,6 +269,7 @@ details.adv .box{padding:0 0 12px}
   <button class="dn" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/></svg><span>ربات‌ها</span></button>
   <button class="dn" data-go="media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.7"/><path d="M4 17l4.5-4.5 3.5 3.5 3-3 5 5"/></svg><span>رسانه</span></button>
   <button class="dn" data-go="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17"/><circle cx="16.5" cy="14.5" r="1" fill="currentColor"/></svg><span>حساب و توکن</span></button>
+   <button class="dn" data-go="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0-10 10A10 10 0 0 0 12 22a10 10 0 0 0 10-10 10 10 0 0 0-10-10zm0 2a8 8 0 0 1 8 8h.01M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg><span>اکسپلور</span></button>
 </div></nav>
 <script>
 const tg = window.Telegram?.WebApp;
@@ -379,7 +380,7 @@ function renderTop(){
 }
 function render(){
   renderTop();
-  ({ home: renderHome, bot: renderBot, media: renderMedia, account: renderAccount })[S.view]();
+   ({ home: renderHome, bot: renderBot, media: renderMedia, account: renderAccount, explore: renderExplore })[S.view]();
   document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.go === (S.view === "bot" ? "home" : S.view)));
 }
 const cellsHTML = (on, total = 10) => Array.from({length: total}, (_, i) => `<i class="${i < on ? "on" : ""}"></i>`).join("");
@@ -648,6 +649,26 @@ function renderAccount(){
       <span class="n ${x.n > 0 ? "pos" : "neg"}">${x.n > 0 ? "+" : ""}${x.n}</span></div>`).join("") : '<span class="muted">هنوز تراکنشی نداری.</span>';
   }).catch(() => {});
 }
+function renderExplore(){
+  $("#app").innerHTML = `<div class="card"><h2>اکسپلور ربات‌ها</h2><div id="explore-list">لودینگ…</div></div>`;
+  api("/api/explore").then(d => {
+    const list = d.bots;
+    if(!list.length) { $("#explore-list").html('<p class="muted">ربتی در اکسپلور نیست.</p>'); return; }
+    $("#explore-list").html(list.map(b => `
+      <div class="card botrow" role="button" tabindex="0" data-a="open" data-id="${b.id}">
+        <span class="dot ${b.active ? "on" : ""}"></span>
+        <div>
+          <b>${esc(b.name)}</b>
+          <span class="muted ltr">${b.active ? "@" + esc(b.username) : ""}</span>
+          ${b.active ? "" : `<span class="muted">هنوز فعال نشده</span>`}
+          <div class="muted">بازدید: ${N(b.visits)} | لایک: ${N(b.likes)}</div>
+        </div>
+        ${IC.go.replace("<svg", '<svg class="go"')}</div>
+        <button class="ghost" data-a="like" data-id="${b.id}" style="margin-left:8px;">لایک</button>
+      </div>
+    `).join(""));
+  }).catch(() => { $("#explore-list").html('<p class="muted">خطا در بارگذاری.</p>'); });
+}
 function buySheet(){
   const m = S.sheet.msg, w = S.wallet, c = S.cfg;
   return head("توکن بیشتر") + `<p class="muted" style="margin-bottom:10px">${digitsHTML(m || "")}</p>
@@ -745,8 +766,9 @@ const A = {
   mdet: el => openMedia(el.dataset.id),
   buy: el => buyPack(el.dataset.id, el),
   copyref: () => navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک دعوت کپی شد"), () => toast(S.ref.link)),
-  shareref: () => { const u = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هر رباتی که بخوای رو با هوش مصنوعی بساز");
-    tg?.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); },
+   shareref: () => { const u = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هر رباتی که بخوای رو با هوش مصنوعی بساز");
+     tg?.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); },
+   like: el => { const id = el.dataset.id; busy(el, async () => { const d = await api(`/api/bots/${id}/like`, "POST"); const b = S.bots.find(b => b.id === id); if(b) b.likes = d.likes; render(); }); },
 };
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if(g) return goTo(g.dataset.go);
@@ -1084,9 +1106,10 @@ function delBtn(){
 function openBot(){
   const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
   S.sheet = {kind: "bot"};
-  D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
-        cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}),
-        refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "" };
+   D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
+         cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}),
+         refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "",
+         explore: !!cfg.explore };
   renderSheet();
 }
 function botSheet(){
@@ -1101,7 +1124,8 @@ function botSheet(){
     ${d.cmds.map(([k, v], i) => `<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">حذف</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
     <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length < 40 ? `<button class="sm ghost" data-sh="addvar">+ متغیر</button>` : ""}</div>
     <p class="muted" style="margin-bottom:6px">هر کاربر مقدار مخصوص خودش رو داره (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع رو بنویس.</p>
-    ${d.vars.map(([k, v], i) => `<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}">حذف</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+     ${d.vars.map(([k, v], i) => `<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}">حذف</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+     <div class="hd" style="margin-top:14px"><span class="lbl">نمایش در اکسپلور</span><label class="chk"><input type="checkbox" id="s-explore"${d.explore ? " checked" : ""}> نمایش ربات در بخش اکسپلور برای همه کاربران</label></div>
     <details class="adv"${d.refVar ? " open" : ""}><summary>پاداش دعوت</summary><div class="box">
       <p class="muted" style="margin-bottom:6px">وقتی کسی با لینک دعوتِ یکی از کاربرهای ربات تو وارد بشه، اون کاربر (دعوت‌کننده) این مقدار رو می‌گیره. لینک و تعداد دعوت‌ها با <b dir="ltr">{ref_link}</b> و <b dir="ltr">{refs}</b> توی متن‌ها قابل نمایشه.</p>
       <div class="cmd"><input class="ltr" id="s-rv" list="vdl" value="${esc(d.refVar)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off"><input id="s-ra" value="${esc(d.refAmt)}" placeholder="مقدار (مثلاً 5)" maxlength="10" inputmode="numeric"></div>
@@ -1138,7 +1162,8 @@ function saveBot(){
     if(d.refVar && !(d.refVar in vars)) vars[d.refVar] = "0";
     if(Object.keys(vars).length) cfg.vars = vars; else delete cfg.vars;
     if(d.refVar){ cfg.on_ref = [{op: "add", var: d.refVar, value: amt}]; } else delete cfg.on_ref;
-    if(d.refText.trim()) cfg.ref_text = d.refText.trim(); else delete cfg.ref_text;
+     if(d.refText.trim()) cfg.ref_text = d.refText.trim(); else delete cfg.ref_text;
+     cfg.explore = d.explore ? true : false;
   }));
 }
 
