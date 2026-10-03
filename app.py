@@ -639,13 +639,13 @@ def send_node(token, chat_id, cfg, node_id, bot_id, user=None, edit=None):
         if photo:
             data = {"chat_id": chat_id, "photo": photo}
             if len(text) <= 1000:
-                data.update(caption=text, **({"reply_markup": markup} if kb else {}))
+                data.update(caption=text, reply_markup=markup)
                 done = bool(tg(token, "sendPhoto", **data).get("ok"))
             else:
                 tg(token, "sendPhoto", **data)
                 done = False   # متن بلند جداگونه می‌ره
         if not done:
-            tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": markup} if kb else {}))
+            tg(token, "sendMessage", chat_id=chat_id, text=text, reply_markup=markup)
     sid = f"{bot_id}:{chat_id}"
     if node.get("fields"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
