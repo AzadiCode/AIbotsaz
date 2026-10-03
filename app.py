@@ -428,7 +428,7 @@ Design rules:
 - Every "goto", "start", "fallback", "next", route target and command target MUST exist in nodes. Every node must be reachable from start; no dead ends: every non-start node has a back/home button (or a "next"/"route").
 - Button labels short (max ~22 chars). Put at most 2 buttons in a row when labels are long.
 - Never invent real-world facts (prices, phone numbers, addresses, links). Use obvious placeholders such as [قیمت] or [شماره تماس] and mention it in "thinking".
-- Write all user-facing text in the OUTPUT LANGUAGE. Use emojis moderately.
+- Write all user-facing text in the OUTPUT LANGUAGE. Avoid emojis: use none in button labels and at most one in a whole message, only when it adds meaning. Use Latin digits (0-9) for numbers.
 - When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text, button, variable and rule exactly as it was (the user may have edited them by hand).
 - Plain text only, no Markdown/HTML formatting characters in node texts."""
 
@@ -938,84 +938,84 @@ def _b(text, goto=None, **kw):
     return d
 
 
-HOME = [_b("🏠 منوی اصلی", "home")]
+HOME = [_b("منوی اصلی", "home")]
 
 TEMPLATES = {
-    "shop": {"icon": "🛍", "title": "فروشگاه و سفارش", "desc": "منوی محصولات + فرم ثبت سفارش که برای خودت می‌آد",
+    "shop": {"icon": "bag", "title": "فروشگاه و سفارش", "desc": "منوی محصولات + فرم ثبت سفارش که برای خودت می‌آد",
         "note": "یه فروشگاه ساده ساختم. قیمت‌ها، شماره و آدرس جای‌نگه‌دارن؛ از «ویرایش دستی» عوضشون کن. سفارش‌ها هم برات می‌آد و توی «پاسخ فرم‌ها» ذخیره می‌شه.",
         "config": {"name": "فروشگاه من", "start": "home", "fallback": "home",
             "commands": {"products": "products", "order": "order", "contact": "contact"},
             "nodes": {
-                "home": {"title": "منوی اصلی", "text": "سلام {name} 👋\nبه فروشگاه ما خوش اومدی. چه کمکی از دستم برمیاد؟",
-                         "buttons": [[_b("🛍 محصولات", "products"), _b("📝 ثبت سفارش", "order")], [_b("☎️ تماس با ما", "contact")]]},
-                "products": {"title": "محصولات", "text": "📦 محصولات ما:\n\n۱) [محصول اول] — [قیمت]\n۲) [محصول دوم] — [قیمت]\n۳) [محصول سوم] — [قیمت]\n\nبرای خرید روی «ثبت سفارش» بزن.",
-                             "buttons": [[_b("📝 ثبت سفارش", "order")], HOME]},
-                "order": {"title": "ثبت سفارش", "text": "برای ثبت سفارش چند تا سؤال کوتاه ازت می‌پرسم 👇",
+                "home": {"title": "منوی اصلی", "text": "سلام {name} \nبه فروشگاه ما خوش اومدی. چه کمکی از دستم برمیاد؟",
+                         "buttons": [[_b("محصولات", "products"), _b("ثبت سفارش", "order")], [_b("تماس با ما", "contact")]]},
+                "products": {"title": "محصولات", "text": "محصولات ما:\n\n1) [محصول اول] — [قیمت]\n2) [محصول دوم] — [قیمت]\n3) [محصول سوم] — [قیمت]\n\nبرای خرید روی «ثبت سفارش» بزن.",
+                             "buttons": [[_b("ثبت سفارش", "order")], HOME]},
+                "order": {"title": "ثبت سفارش", "text": "برای ثبت سفارش چند تا سؤال کوتاه ازت می‌پرسم ",
                           "fields": ["اسم و فامیلت؟", "شماره تماست؟", "چه محصولی می‌خوای؟ (تعداد و توضیحات)", "آدرس یا شهرت؟"],
-                          "types": ["text", "phone", "text", "text"], "done": "✅ سفارشت ثبت شد. به‌زودی باهات تماس می‌گیریم.", "next": "home", "buttons": []},
-                "contact": {"title": "تماس با ما", "text": "☎️ [شماره تماس]\n📍 [آدرس]\n🕘 [ساعت کاری]",
-                            "buttons": [[_b("📋 کپی شماره", copy="[شماره تماس]")], HOME]}}}},
-    "support": {"icon": "🎧", "title": "پشتیبانی مشتری", "desc": "سؤال‌های پرتکرار + ارسال پیام به پشتیبان",
+                          "types": ["text", "phone", "text", "text"], "done": "سفارشت ثبت شد. به‌زودی باهات تماس می‌گیریم.", "next": "home", "buttons": []},
+                "contact": {"title": "تماس با ما", "text": "[شماره تماس]\n[آدرس]\n[ساعت کاری]",
+                            "buttons": [[_b("کپی شماره", copy="[شماره تماس]")], HOME]}}}},
+    "support": {"icon": "headset", "title": "پشتیبانی مشتری", "desc": "سؤال‌های پرتکرار + ارسال پیام به پشتیبان",
         "note": "ربات پشتیبانی ساختم؛ پیام کاربرها مستقیم برات فوروارد می‌شه. جواب‌های سؤال‌های پرتکرار رو با ویرایش دستی عوض کن.",
         "config": {"name": "پشتیبانی", "start": "home", "fallback": "home", "commands": {"help": "faq"},
             "nodes": {
-                "home": {"title": "منوی اصلی", "text": "سلام {name} 🌟\nبه پشتیبانی خوش اومدی. چی می‌خوای؟",
-                         "buttons": [[_b("❓ سؤال‌های پرتکرار", "faq")], [_b("✉️ ارسال پیام به پشتیبان", "ticket")]]},
-                "faq": {"title": "سؤال‌های پرتکرار", "text": "روی هر سؤال بزن تا جوابش رو ببینی 👇",
-                        "buttons": [[_b("⏱ زمان پاسخگویی", alert="معمولاً ظرف چند ساعت کاری پاسخ می‌دیم.")],
-                                    [_b("💳 روش‌های پرداخت", alert="[روش‌های پرداخت رو اینجا بنویس]")], HOME]},
-                "ticket": {"title": "پیام به پشتیبان", "text": "مشکلت یا سؤالت رو بنویس؛ پیامت مستقیم برای پشتیبان ارسال می‌شه 👇",
-                           "ask": True, "done": "✅ پیامت رسید. به‌زودی جواب می‌دیم.", "next": "home",
-                           "buttons": [[_b("❌ انصراف", "home")]]}}}},
-    "form": {"icon": "📝", "title": "فرم ثبت‌نام", "desc": "جمع‌آوری اطلاعات با فرم چندمرحله‌ای و اعتبارسنجی",
+                "home": {"title": "منوی اصلی", "text": "سلام {name} \nبه پشتیبانی خوش اومدی. چی می‌خوای؟",
+                         "buttons": [[_b("سؤال‌های پرتکرار", "faq")], [_b("ارسال پیام به پشتیبان", "ticket")]]},
+                "faq": {"title": "سؤال‌های پرتکرار", "text": "روی هر سؤال بزن تا جوابش رو ببینی ",
+                        "buttons": [[_b("زمان پاسخگویی", alert="معمولاً ظرف چند ساعت کاری پاسخ می‌دیم.")],
+                                    [_b("روش‌های پرداخت", alert="[روش‌های پرداخت رو اینجا بنویس]")], HOME]},
+                "ticket": {"title": "پیام به پشتیبان", "text": "مشکلت یا سؤالت رو بنویس؛ پیامت مستقیم برای پشتیبان ارسال می‌شه ",
+                           "ask": True, "done": "پیامت رسید. به‌زودی جواب می‌دیم.", "next": "home",
+                           "buttons": [[_b("انصراف", "home")]]}}}},
+    "form": {"icon": "form", "title": "فرم ثبت‌نام", "desc": "جمع‌آوری اطلاعات با فرم چندمرحله‌ای و اعتبارسنجی",
         "note": "فرم ثبت‌نام با اعتبارسنجی شماره ساختم و شهر هر کاربر رو یادش می‌مونه. جواب‌ها توی «پاسخ فرم‌ها» جمع می‌شن.",
         "config": {"name": "ثبت‌نام", "start": "home", "fallback": "home", "commands": {}, "vars": {"city": ""},
             "nodes": {
-                "home": {"title": "خوش‌آمدگویی", "text": "سلام {name} 👋\nبرای ثبت‌نام روی دکمه‌ی زیر بزن.",
-                         "alt": [{"when": {"var": "city", "op": "filled"}, "text": "خوش برگشتی {name} از {city} 🌟\nمی‌خوای اطلاعاتت رو دوباره ثبت کنی؟"}],
-                         "buttons": [[_b("📝 شروع ثبت‌نام", "register")]]},
-                "register": {"title": "فرم ثبت‌نام", "text": "چند تا سؤال کوتاه دارم 👇",
+                "home": {"title": "خوش‌آمدگویی", "text": "سلام {name} \nبرای ثبت‌نام روی دکمه‌ی زیر بزن.",
+                         "alt": [{"when": {"var": "city", "op": "filled"}, "text": "خوش برگشتی {name} از {city} \nمی‌خوای اطلاعاتت رو دوباره ثبت کنی؟"}],
+                         "buttons": [[_b("شروع ثبت‌نام", "register")]]},
+                "register": {"title": "فرم ثبت‌نام", "text": "چند تا سؤال کوتاه دارم ",
                              "fields": ["اسم و فامیلت؟", "شماره تماست؟", "ساکن کدوم شهری؟"], "save": ["", "", "city"],
-                             "types": ["text", "phone", "text"], "done": "✅ ثبت‌نامت انجام شد، {city} عزیز!", "next": "home", "buttons": []}}}},
-    "club": {"icon": "🎖", "title": "باشگاه مشتریان", "desc": "امتیاز، جایزه‌ی روزانه و سطح‌بندی کاربران",
-        "note": "باشگاه مشتریان ساختم: هر کاربر روزی یک‌بار ۱۰ امتیاز می‌گیره و با ۵۰ امتیاز عضو طلایی می‌شه. امتیاز هر نفر جداگونه شمرده می‌شه.",
+                             "types": ["text", "phone", "text"], "done": "ثبت‌نامت انجام شد، {city} عزیز!", "next": "home", "buttons": []}}}},
+    "club": {"icon": "medal", "title": "باشگاه مشتریان", "desc": "امتیاز، جایزه‌ی روزانه و سطح‌بندی کاربران",
+        "note": "باشگاه مشتریان ساختم: هر کاربر روزی یک‌بار 10 امتیاز می‌گیره و با 50 امتیاز عضو طلایی می‌شه. امتیاز هر نفر جداگونه شمرده می‌شه.",
         "config": {"name": "باشگاه مشتریان", "start": "home", "fallback": "home", "commands": {}, "vars": {"points": "0", "lastday": ""},
             "nodes": {
-                "home": {"title": "منوی اصلی", "text": "🎖 باشگاه مشتریان\nسلام {name}! امتیاز تو: {points}",
-                         "alt": [{"when": {"var": "points", "op": ">=", "value": "50"}, "text": "🏅 سلام {name}، عضو طلایی ما!\nامتیاز تو: {points}"}],
-                         "buttons": [[_b("🎁 جایزه‌ی امروز", "gate")], [_b("🏆 جوایز", "rewards")]]},
-                "gate": {"title": "جایزه‌ی روزانه", "text": "🎁 جایزه‌ی امروزت آماده‌ست!",
-                         "alt": [{"when": {"var": "lastday", "op": "==", "value": "{date}"}, "text": "امروز جایزه‌ات رو گرفتی 🌙 فردا برگرد."}],
-                         "buttons": [[_b("✨ دریافت ۱۰ امتیاز", "claimed", when={"var": "lastday", "op": "!=", "value": "{date}"},
+                "home": {"title": "منوی اصلی", "text": "باشگاه مشتریان\nسلام {name}! امتیاز تو: {points}",
+                         "alt": [{"when": {"var": "points", "op": ">=", "value": "50"}, "text": "سلام {name}، عضو طلایی ما!\nامتیاز تو: {points}"}],
+                         "buttons": [[_b("جایزه‌ی امروز", "gate")], [_b("جوایز", "rewards")]]},
+                "gate": {"title": "جایزه‌ی روزانه", "text": "جایزه‌ی امروزت آماده‌ست!",
+                         "alt": [{"when": {"var": "lastday", "op": "==", "value": "{date}"}, "text": "امروز جایزه‌ات رو گرفتی فردا برگرد."}],
+                         "buttons": [[_b("دریافت 10 امتیاز", "claimed", when={"var": "lastday", "op": "!=", "value": "{date}"},
                                          do=[{"op": "set", "var": "lastday", "value": "{date}"}, {"op": "add", "var": "points", "value": "10"}])], HOME]},
-                "claimed": {"title": "جایزه گرفته شد", "text": "🎉 ۱۰ امتیاز گرفتی!\nمجموع امتیازت: {points}", "buttons": [HOME]},
-                "rewards": {"title": "جوایز", "text": "🎁 با ۵۰ امتیاز: [جایزه‌ی اول]\n🎁 با ۱۰۰ امتیاز: [جایزه‌ی دوم]",
-                            "buttons": [[_b("🛒 درخواست جایزه", "redeem", when={"var": "points", "op": ">=", "value": "50"})], HOME]},
-                "redeem": {"title": "درخواست جایزه", "text": "✅ درخواستت برای ادمین ارسال شد.",
+                "claimed": {"title": "جایزه گرفته شد", "text": "10 امتیاز گرفتی!\nمجموع امتیازت: {points}", "buttons": [HOME]},
+                "rewards": {"title": "جوایز", "text": "با 50 امتیاز: [جایزه‌ی اول]\nبا 100 امتیاز: [جایزه‌ی دوم]",
+                            "buttons": [[_b("درخواست جایزه", "redeem", when={"var": "points", "op": ">=", "value": "50"})], HOME]},
+                "redeem": {"title": "درخواست جایزه", "text": "درخواستت برای ادمین ارسال شد.",
                            "do": [{"op": "notify", "value": "درخواست جایزه — امتیاز: {points}"}], "buttons": [HOME]}}}},
-    "quiz": {"icon": "🧠", "title": "کوییز", "desc": "سؤال و جواب با امتیازدهی و نتیجه‌ی شرطی",
+    "quiz": {"icon": "quiz", "title": "کوییز", "desc": "سؤال و جواب با امتیازدهی و نتیجه‌ی شرطی",
         "note": "یه کوییز دوسؤالی ساختم که امتیاز هر نفر رو می‌شماره. سؤال‌ها و جواب‌ها رو با ویرایش دستی عوض کن یا بخش جدید اضافه کن.",
         "config": {"name": "کوییز", "start": "home", "fallback": "home", "commands": {}, "vars": {"score": "0"},
             "nodes": {
-                "home": {"title": "شروع", "text": "🧠 کوییز سریع!\nدو سؤال داری؛ آماده‌ای {name}؟", "buttons": [[_b("🚀 شروع", "q1")]]},
-                "q1": {"title": "سؤال ۱", "text": "۱) پایتخت ایران کدومه؟", "do": [{"op": "set", "var": "score", "value": "0"}],
+                "home": {"title": "شروع", "text": "کوییز سریع!\nدو سؤال داری؛ آماده‌ای {name}؟", "buttons": [[_b("شروع", "q1")]]},
+                "q1": {"title": "سؤال 1", "text": "1) پایتخت ایران کدومه؟", "do": [{"op": "set", "var": "score", "value": "0"}],
                        "buttons": [[_b("تهران", "q2", do=[{"op": "add", "var": "score", "value": "1"}]), _b("شیراز", "q2")], [_b("تبریز", "q2")]]},
-                "q2": {"title": "سؤال ۲", "text": "۲) ۷ × ۸ چنده؟",
-                       "buttons": [[_b("۵۶", "result", do=[{"op": "add", "var": "score", "value": "1"}]), _b("۴۸", "result"), _b("۶۴", "result")]]},
-                "result": {"title": "نتیجه", "text": "نتیجه: {score} از ۲ — یه بار دیگه امتحان کن 💪",
+                "q2": {"title": "سؤال 2", "text": "2) 7 × 8 چنده؟",
+                       "buttons": [[_b("56", "result", do=[{"op": "add", "var": "score", "value": "1"}]), _b("48", "result"), _b("64", "result")]]},
+                "result": {"title": "نتیجه", "text": "نتیجه: {score} از 2 — یه بار دیگه امتحان کن ",
                            "route": [{"when": {"var": "score", "op": ">=", "value": "2"}, "goto": "win"}],
-                           "buttons": [[_b("🔁 دوباره", "q1")], HOME]},
-                "win": {"title": "برنده", "text": "🏆 آفرین {name}! امتیازت {score} از ۲", "buttons": [[_b("🔁 دوباره", "q1")], HOME]}}}},
-    "ai": {"icon": "🤖", "title": "چت‌بات هوشمند", "desc": "دستیار هوشمند که با هوش مصنوعی جواب می‌ده",
-        "note": "یه دستیار هوشمند ساختم. دستورالعملش رو توی ویرایش بخش «گفتگو» با اطلاعات کسب‌وکارت پر کن. هر پیام کاربر حدود ۱ توکن از حساب تو مصرف می‌کنه.",
+                           "buttons": [[_b("دوباره", "q1")], HOME]},
+                "win": {"title": "برنده", "text": "آفرین {name}! امتیازت {score} از 2", "buttons": [[_b("دوباره", "q1")], HOME]}}}},
+    "ai": {"icon": "bot", "title": "چت‌بات هوشمند", "desc": "دستیار هوشمند که با هوش مصنوعی جواب می‌ده",
+        "note": "یه دستیار هوشمند ساختم. دستورالعملش رو توی ویرایش بخش «گفتگو» با اطلاعات کسب‌وکارت پر کن. هر پیام کاربر حدود 1 توکن از حساب تو مصرف می‌کنه.",
         "config": {"name": "دستیار هوشمند", "start": "home", "fallback": "home", "commands": {},
             "nodes": {
-                "home": {"title": "منوی اصلی", "text": "🤖 سلام {name}! من دستیار هوشمند [نام کسب‌وکار] هستم.",
-                         "buttons": [[_b("💬 شروع گفتگو", "chat")], [_b("ℹ️ درباره‌ی ما", "about")]]},
-                "chat": {"title": "گفتگو", "text": "سلام! هر سؤالی داری بپرس 👇",
+                "home": {"title": "منوی اصلی", "text": "سلام {name}! من دستیار هوشمند [نام کسب‌وکار] هستم.",
+                         "buttons": [[_b("شروع گفتگو", "chat")], [_b("درباره‌ی ما", "about")]]},
+                "chat": {"title": "گفتگو", "text": "سلام! هر سؤالی داری بپرس ",
                          "ai": {"system": "تو دستیار هوشمند [نام کسب‌وکار] هستی. مؤدب، کوتاه و به زبان کاربر جواب بده. فقط درباره‌ی خدمات و محصولات همین کسب‌وکار کمک کن. اگه جواب رو نمی‌دونی بگو با پشتیبانی تماس بگیرن و چیزی از خودت نساز.",
                                 "memory": 3, "limit": 20},
-                         "buttons": [[_b("🏠 پایان گفتگو", "home")]]},
+                         "buttons": [[_b("پایان گفتگو", "home")]]},
                 "about": {"title": "درباره‌ی ما", "text": "[توضیح کوتاه درباره‌ی کسب‌وکارت]", "buttons": [HOME]}}}},
 }
 
@@ -1331,6 +1331,87 @@ def api_broadcast(bot_id):
 
 
 # ───────────────────────── پنل ادمین ─────────────────────────
+# ───────────────────────── قابلیت‌های جدید: خروجی/ورودی، کپی، چک سلامت ─────────────────────────
+@app.after_request
+def _secure(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    if request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.get("/healthz")
+def healthz():
+    try:
+        db.command("ping") if MONGO_URI else None
+        return jsonify(ok=True, t=now().isoformat())
+    except Exception:
+        return jsonify(ok=False), 503
+
+
+@app.get("/api/bots/<bot_id>/export")
+def api_export(bot_id):
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    return jsonify(format="botmaker/1", config=bot["config"])
+
+
+@app.post("/api/bots/import")
+def api_import():
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    ensure_user(uid)
+    if db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
+        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
+    if not rate_ok(f"imp:{uid}", 6, 60):
+        return jsonify(error="کمی بعد دوباره امتحان کن"), 429
+    raw = (request.get_json(silent=True) or {}).get("config")
+    try:
+        cfg = sanitize(raw, strict=True)
+    except Exception as e:
+        return jsonify(error="فایل معتبر نیست: " + str(e)[:120]), 400
+    bot = _new_bot(uid, cfg, "")
+    return jsonify(bot=public(bot))
+
+
+@app.post("/api/bots/<bot_id>/duplicate")
+def api_duplicate(bot_id):
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    if db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
+        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
+    cfg = json.loads(json.dumps(bot["config"]))
+    cfg["name"] = (cfg.get("name", "bot") + " copy")[:50]
+    return jsonify(bot=public(_new_bot(uid, cfg, "")))
+
+
+@app.get("/api/bots/<bot_id>/health")
+def api_health(bot_id):
+    """چک سلامت مسیرها: بخش‌های گم‌شده، بن‌بست‌ها و متغیرهای بدون مقدار (رایگان)"""
+    uid = auth()
+    if not uid:
+        return jsonify(error="unauthorized"), 401
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    try:
+        issues = lint(bot["config"])
+    except Exception:
+        issues = []
+    return jsonify(issues=issues, nodes=len(bot["config"]["nodes"]))
+
+
+
 def _admin():
     uid = auth()
     return uid if uid in ADMIN_IDS else None

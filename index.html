@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>رباتساز هوشمند</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
@@ -53,18 +55,18 @@ input{direction:ltr;text-align:left}
   border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-left:6px}
 @keyframes s{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
-.think{display:flex;gap:8px;background:linear-gradient(135deg,rgba(47,124,246,.09),rgba(47,124,246,.03));
-  border:1px solid rgba(47,124,246,.16);border-radius:11px;padding:8px 11px;margin:-2px 0 12px;
+.think{display:flex;gap:8px;background:linear-gradient(135deg,rgba(14,165,160,.09),rgba(14,165,160,.03));
+  border:1px solid rgba(14,165,160,.16);border-radius:11px;padding:8px 11px;margin:-2px 0 12px;
   font-size:12px;line-height:1.6;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
   transition:opacity .35s ease,max-height .35s ease,margin .35s ease,padding .35s ease}
 .think.show{opacity:1;max-height:700px;margin:0 0 12px}
-.think .ic{flex:none;font-size:14px;line-height:1.5}
+.think .thi{flex:none;font-size:14px;line-height:1.5}
 .think .tt{color:var(--hint)}
 
 /* ── انیمیشن «در حال فکر کردن» ── */
 .live{display:flex;align-items:center;gap:12px;background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px;
-  border:1px solid rgba(47,124,246,.18);position:relative;overflow:hidden;animation:pop .3s ease}
-.live::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(47,124,246,.09) 50%,transparent 70%);
+  border:1px solid rgba(14,165,160,.18);position:relative;overflow:hidden;animation:pop .3s ease}
+.live::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(14,165,160,.09) 50%,transparent 70%);
   transform:translateX(-100%);animation:sh 2s ease-in-out infinite}
 .orb{width:36px;height:36px;border-radius:50%;flex:none;position:relative;
   background:conic-gradient(from 0deg,var(--ac),#9b6bff,#34c3ff,var(--ac));animation:s 1.3s linear infinite}
@@ -125,7 +127,7 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
   opacity:1;transition:opacity .2s,max-height .3s}
 .nd.open .ns{opacity:0;max-height:0}
 .nd .nm{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
-.nd .tag.cnt{background:rgba(47,124,246,.1);color:var(--ac)}
+.nd .tag.cnt{background:rgba(14,165,160,.1);color:var(--ac)}
 .nd .chev{width:18px;height:18px;flex:none;color:var(--hint);transition:transform .3s cubic-bezier(.2,.8,.2,1),color .2s}
 .nd.open .chev{transform:rotate(180deg);color:var(--ac)}
 .nbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .34s cubic-bezier(.2,.8,.2,1)}
@@ -150,11 +152,11 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 .seg button svg{width:38px;height:28px;margin-bottom:1px}
 .seg button b{color:var(--tx);font-weight:600;font-size:12px}
 .seg button small{font-size:10px}
-.seg button.on{border-color:var(--ac);color:var(--ac);background:rgba(47,124,246,.06)}
+.seg button.on{border-color:var(--ac);color:var(--ac);background:rgba(14,165,160,.06)}
 
 /* ═════════ انیمیشن ساخت ═════════ */
 .build{position:relative;background:var(--bg);border-radius:14px;padding:11px 13px 12px;margin-bottom:10px;overflow:hidden;
-  border:1px solid rgba(47,124,246,.2);animation:pop .35s ease}
+  border:1px solid rgba(14,165,160,.2);animation:pop .35s ease}
 .build .bh{display:flex;align-items:center;gap:10px}
 .build .bt{flex:1;min-width:0}
 .build .bt b{display:block;font-size:13px;line-height:1.4}
@@ -177,10 +179,10 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
   background-size:13px 13px;-webkit-mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%);mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%)}
 .bp .msg{position:relative;flex:0 0 52%;background:var(--bg);border-radius:9px 9px 9px 3px;padding:7px 8px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
 .bp .msg i{display:block;height:4px;border-radius:3px;background:rgba(127,127,127,.3);width:var(--w);transform-origin:100% 50%;animation:lineIn 4.8s ease-in-out infinite;animation-delay:calc(var(--k)*.18s)}
-.bp .msg::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(47,124,246,.12) 50%,transparent 70%);
+.bp .msg::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(14,165,160,.12) 50%,transparent 70%);
   transform:translateX(100%);animation:sh2 2.2s ease-in-out infinite}
 .bp .keys{position:relative;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
-.bp .keys b{height:15px;border-radius:6px;background:var(--bg);border:1px solid rgba(47,124,246,.35);opacity:0;
+.bp .keys b{height:15px;border-radius:6px;background:var(--bg);border:1px solid rgba(14,165,160,.35);opacity:0;
   animation:keyIn 4.8s ease-in-out infinite;animation-delay:calc(.9s + var(--k)*.22s)}
 @keyframes lineIn{0%{transform:scaleX(0);opacity:0}14%{opacity:1}30%,86%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes keyIn{0%,6%{opacity:0;transform:translateY(5px) scale(.94)}20%,76%{opacity:1;transform:none}92%,100%{opacity:0}}
@@ -196,7 +198,7 @@ button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(22
 .st.done i::after{content:"";position:absolute;left:1.8px;top:.1px;width:2px;height:4.4px;border:solid var(--act);border-width:0 1.4px 1.4px 0;transform:rotate(40deg)}
 .st.cur{color:var(--tx)}
 .st.cur i{border-color:var(--ac);animation:ping 1.6s ease-out infinite}
-@keyframes ping{0%{box-shadow:0 0 0 0 rgba(47,124,246,.45)}100%{box-shadow:0 0 0 8px rgba(47,124,246,0)}}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(14,165,160,.45)}100%{box-shadow:0 0 0 8px rgba(14,165,160,0)}}
 .build .prog{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(127,127,127,.14);overflow:hidden}
 .build .prog::after{content:"";position:absolute;left:0;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,var(--ac),#9b6bff,transparent);
   animation:slide 1.7s ease-in-out infinite}
@@ -226,8 +228,8 @@ body.dock-closed{--dockh:calc(30px + env(safe-area-inset-bottom))}
 .dock .dn{width:auto;flex:1;max-width:150px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 10px 6px;
   background:transparent;color:var(--hint);font-size:11.5px;border-radius:14px;transition:color .2s,background .2s}
 .dock .dn svg{width:22px;height:22px}
-.dock .dn.on{color:var(--ac);background:rgba(47,124,246,.1)}
-.dock .dn.on svg{filter:drop-shadow(0 0 5px rgba(47,124,246,.45))}
+.dock .dn.on{color:var(--ac);background:rgba(14,165,160,.1)}
+.dock .dn.on svg{filter:drop-shadow(0 0 5px rgba(14,165,160,.45))}
 .dock button:focus-visible,.nd .nh:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 #toast{bottom:calc(var(--dockh) + 12px);transition:opacity .2s,bottom .42s}
 
@@ -294,10 +296,115 @@ button.tpl span{font-size:22px}button.tpl b{font-size:13.5px}button.tpl small{fo
 .sub{border-top:1px solid var(--bg2);padding:10px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
 .sub:first-child{border-top:0}.sub small{display:block;color:var(--hint);font-size:11.5px}
 .pos{color:var(--green)}.neg{color:var(--red)}
+.ic-bot{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%224%22 y=%228%22 width=%2216%22 height=%2211%22 rx=%223.5%22/%3E%3Cpath d=%22M12 8V4.5%22/%3E%3Ccircle cx=%2212%22 cy=%223.6%22 r=%221%22/%3E%3Ccircle cx=%229%22 cy=%2213.5%22 r=%221%22 fill=%22%23000%22/%3E%3Ccircle cx=%2215%22 cy=%2213.5%22 r=%221%22 fill=%22%23000%22/%3E%3C/svg%3E")}
+.ic-coin{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%222.2%22/%3E%3C/svg%3E")}
+.ic-megaphone{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 10v4h3l7 4V6L7 10z%22/%3E%3Cpath d=%22M17.5 9a4 4 0 0 1 0 6%22/%3E%3C/svg%3E")}
+.ic-chat{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 6h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z%22/%3E%3C/svg%3E")}
+.ic-copy{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%228.5%22 y=%228.5%22 width=%2211%22 height=%2211%22 rx=%222.5%22/%3E%3Cpath d=%22M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2%22/%3E%3C/svg%3E")}
+.ic-link{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1%22/%3E%3Cpath d=%22M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1%22/%3E%3C/svg%3E")}
+.ic-eye{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%222.8%22/%3E%3C/svg%3E")}
+.ic-bolt{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M13 3L5 13.5h6L10 21l8-10.5h-6z%22/%3E%3C/svg%3E")}
+.ic-keyboard{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%223%22 y=%226.5%22 width=%2218%22 height=%2211%22 rx=%222.5%22/%3E%3Cpath d=%22M7 10.5h.01M10.5 10.5h.01M14 10.5h.01M17 10.5h.01M8 14h8%22/%3E%3C/svg%3E")}
+.ic-clip{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M20 11.5l-7.8 7.8a4.5 4.5 0 0 1-6.4-6.4l8-8a3 3 0 0 1 4.3 4.3l-8 8a1.5 1.5 0 0 1-2.1-2.1l7.4-7.4%22/%3E%3C/svg%3E")}
+.ic-puzzle{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 8h4V6.5a2 2 0 1 1 4 0V8h4v4h-1.5a2 2 0 1 0 0 4H17v4H5z%22/%3E%3C/svg%3E")}
+.ic-pen{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z%22/%3E%3C/svg%3E")}
+.ic-spark{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z%22/%3E%3C/svg%3E")}
+.ic-gear{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%223%22/%3E%3Cpath d=%22M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8%22/%3E%3C/svg%3E")}
+.ic-dot{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%225%22 fill=%22%23000%22/%3E%3C/svg%3E")}
+.ic-trash{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5M14 11v5%22/%3E%3C/svg%3E")}
+.ic-gift{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%224%22 y=%229%22 width=%2216%22 height=%2211%22 rx=%222%22/%3E%3Cpath d=%22M12 9v11M3.5 9h17M12 9c-3.5 0-4.5-4-2-4.5 1.5 0 2 2 2 4.5zm0 0c3.5 0 4.5-4 2-4.5-1.5 0-2 2-2 4.5z%22/%3E%3C/svg%3E")}
+.ic-ticket{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z%22/%3E%3Cpath d=%22M14 7v10%22 stroke-dasharray=%221.5 2%22/%3E%3C/svg%3E")}
+.ic-receipt{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 3.5h12v17l-3-2-3 2-3-2-3 2z%22/%3E%3Cpath d=%22M9 8.5h6M9 12h6%22/%3E%3C/svg%3E")}
+.ic-chart{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 20V10M10 20V5M16 20v-7M21 20H3%22/%3E%3C/svg%3E")}
+.ic-inbox{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 13l2.5-7h11L20 13v6H4z%22/%3E%3Cpath d=%22M4 13h4.5a3.5 3.5 0 0 0 7 0H20%22/%3E%3C/svg%3E")}
+.ic-book{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 4.5h10a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z%22/%3E%3Cpath d=%22M5 17a3 3 0 0 1 3-3h10%22/%3E%3C/svg%3E")}
+.ic-users{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%229%22 cy=%229%22 r=%223.2%22/%3E%3Cpath d=%22M3 20c.6-3.4 3-5 6-5s5.4 1.6 6 5%22/%3E%3Ccircle cx=%2217.2%22 cy=%228.5%22 r=%222.4%22/%3E%3Cpath d=%22M17 14c2.4.2 3.7 1.7 4 4%22/%3E%3C/svg%3E")}
+.ic-share{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 15V4M8 8l4-4 4 4%22/%3E%3Cpath d=%22M5 12v7h14v-7%22/%3E%3C/svg%3E")}
+.ic-wrench{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M15 5a4 4 0 0 0-4 5.2L4.5 16.7a2 2 0 0 0 2.8 2.8l6.5-6.5A4 4 0 0 0 19 9l-2.5 2.5-2.5-.5-.5-2.5z%22/%3E%3C/svg%3E")}
+.ic-trend{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3.5 17l5.5-6 4 4 7-8%22/%3E%3Cpath d=%22M15 7h5.5v5.5%22/%3E%3C/svg%3E")}
+.ic-split{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 5v3a4 4 0 0 0 4 4h6a4 4 0 0 1 4 4v3%22/%3E%3Ccircle cx=%225%22 cy=%225%22 r=%221.5%22/%3E%3Ccircle cx=%2219%22 cy=%2219%22 r=%221.5%22/%3E%3C/svg%3E")}
+.ic-check{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 12.5l4.5 4.5L19 7.5%22/%3E%3C/svg%3E")}
+.ic-arrowl{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M19 12H5M11 6l-6 6 6 6%22/%3E%3C/svg%3E")}
+.ic-arrowr{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 12h14M13 6l6 6-6 6%22/%3E%3C/svg%3E")}
+.ic-undo{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M9 6L4 11l5 5%22/%3E%3Cpath d=%22M4.5 11H14a4.5 4.5 0 0 1 0 9h-4%22/%3E%3C/svg%3E")}
+.ic-plus{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 5v14M5 12h14%22/%3E%3C/svg%3E")}
+.ic-x{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 6l12 12M18 6L6 18%22/%3E%3C/svg%3E")}
+.ic-bag{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 8h14l-1 12H6z%22/%3E%3Cpath d=%22M9 8V6.5a3 3 0 0 1 6 0V8%22/%3E%3C/svg%3E")}
+.ic-headset{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4.5 14v-2a7.5 7.5 0 0 1 15 0v2%22/%3E%3Crect x=%223.5%22 y=%2213%22 width=%224%22 height=%226%22 rx=%221.5%22/%3E%3Crect x=%2216.5%22 y=%2213%22 width=%224%22 height=%226%22 rx=%221.5%22/%3E%3C/svg%3E")}
+.ic-form{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%225%22 y=%224%22 width=%2214%22 height=%2216%22 rx=%222.5%22/%3E%3Cpath d=%22M9 9h6M9 13h6M9 17h3%22/%3E%3C/svg%3E")}
+.ic-medal{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%229.5%22 r=%225%22/%3E%3Cpath d=%22M8.5 14L7 21l5-2.5L17 21l-1.5-7%22/%3E%3C/svg%3E")}
+.ic-quiz{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%228.5%22/%3E%3Cpath d=%22M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 16.5h.01%22/%3E%3C/svg%3E")}
+.ic-download{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 4v11M8 11l4 4 4-4M5 19h14%22/%3E%3C/svg%3E")}
+.ic-upload{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 15V4M8 8l4-4 4 4M5 19h14%22/%3E%3C/svg%3E")}
+.ic-pulse{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 12h4l2.5-6 4 12 2.5-6H21%22/%3E%3C/svg%3E")}
+.ic-layers{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 4l8.5 4.5L12 13 3.5 8.5z%22/%3E%3Cpath d=%22M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5%22/%3E%3C/svg%3E")}
+
+/* ═════════ BotMaker v2 — پوسته‌ی رباتیک ═════════ */
+:root{--ac:#0ea5a0;--ac2:#6d5efc;--act:#fff;--green:#16a37f;--red:#e5484d;--r:12px;
+  --ln:color-mix(in srgb,var(--tx) 12%,transparent);--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+body{font-family:"Space Grotesk","Vazirmatn",Tahoma,system-ui,sans-serif;font-size:14.5px;line-height:1.75;
+  background-color:var(--bg2);background-image:radial-gradient(color-mix(in srgb,var(--tx) 10%,transparent) 1px,transparent 1.3px);background-size:18px 18px}
+h1,h2,b,.big{font-family:"Space Grotesk","Vazirmatn",system-ui,sans-serif}
+.top{padding:14px 2px 12px}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;fill:none;stroke:var(--ac);stroke-width:1.7;stroke-linecap:round}
+.mark .eye{fill:var(--ac);stroke:none;transform-origin:center;transform-box:fill-box;animation:blink 6s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96.5%{transform:scaleY(.1)}}
+.top h1{font-size:17px;font-weight:800;line-height:1.3}
+.tagline{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--hint);direction:ltr;text-align:right}
+.chip{display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:12.5px;border:1px solid var(--ln);color:var(--tx);padding:3px 11px;border-radius:9px;cursor:pointer}
+.chip .ic{color:var(--ac);margin:0 0 0 4px}
+.ic{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;margin-inline-end:.4em;background:currentColor;
+  -webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat;flex:none}
+.ic:only-child{margin:0}
+.ic-dot{color:var(--green)}
+.card{border:1px solid var(--ln);border-radius:var(--r)}
+.card h2{display:flex;align-items:center;gap:2px;font-size:14px;font-weight:700}
+.card h2 .ic{color:var(--ac)}
+button{border-radius:10px;font-weight:600;transition:transform .12s,filter .15s}
+button:not(:disabled):active{transform:scale(.98)}
+button:not(.ghost):not(.danger):not(.back):not(.sm):not(.kb):not(.tpl):not(.x):not(.danger-b):not(.dn):not(.tab){
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 86%,#fff),var(--ac))}
+button.ghost{background:transparent;border:1px solid var(--ln);color:var(--tx)}
+button.ghost .ic{color:var(--ac)}
+button.sm.ghost{padding:5px 10px}
+input,textarea,select{border:1px solid transparent;background:color-mix(in srgb,var(--tx) 6%,var(--bg));border-radius:10px}
+input:focus,textarea:focus,select:focus{border-color:var(--ac)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.tag,.id,.kvr code,.stat .v,.big,.chip,.clk{font-family:var(--mono)}
+.tag{border:1px solid var(--ln);background:transparent;border-radius:6px;display:inline-flex;align-items:center}
+.tag .ic{width:1em;height:1em;margin-inline-end:.3em}
+.bubble{border-radius:12px;border:1px solid var(--ln);background:var(--bg)}
+.bubble .pen{opacity:.5;color:var(--ac)}.bubble .pen .ic{margin:0}
+button.kb{border:1px solid var(--ln);background:var(--bg)}
+button.kb small{display:flex;align-items:center;justify-content:center;gap:2px}
+button.kb small .ic{width:.95em;height:.95em;margin:0 0 0 3px;color:var(--ac)}
+button.kb.add{border:1px dashed color-mix(in srgb,var(--ac) 60%,transparent);color:var(--ac);background:transparent;display:flex;align-items:center;justify-content:center;gap:4px}
+.back{display:inline-flex;align-items:center;color:var(--ac);font-weight:600}
+.think{border-radius:12px}.think .thi{color:var(--ac)}.think .thi .ic{margin:0}
+.dot{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 0%,transparent)}.dot.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.tplg{gap:8px}
+button.tpl{border:1px solid var(--ln);border-radius:var(--r);gap:6px}
+button.tpl .tic{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac)}
+button.tpl .tic .ic{width:19px;height:19px}
+button.tpl b{font-weight:700}
+.sp{border-radius:18px 18px 0 0;border:1px solid var(--ln);border-bottom:0}
+.sp .hd h2{font-size:15px}
+.sp .hd .x{color:var(--hint)}
+#toast{font-family:"Space Grotesk","Vazirmatn",sans-serif;border:1px solid rgba(255,255,255,.12);border-radius:10px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.tools button{display:flex;align-items:center;justify-content:center;gap:2px;font-size:13px;padding:10px 8px}
+.hl{padding:8px 0;border-top:1px solid var(--ln);font-size:13px}.hl:first-child{border-top:0}
+.hl.ok{color:var(--green)}
+.dpanel button .ic{margin:0}
+@media (prefers-reduced-motion:reduce){.mark .eye{animation:none}}
+
+.exs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+button.ex{width:auto;padding:4px 11px;font-size:12px;font-weight:500;background:transparent;color:var(--tx);border:1px solid var(--ln)}
 </style>
 </head>
 <body>
-<div class="top"><h1>🤖 رباتساز هوشمند</h1><span class="chip" id="quota" style="cursor:pointer"></span></div>
+<div class="top"><div class="brand"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="8" width="26" height="19" rx="7"/><path d="M16 8V4"/><circle cx="16" cy="3.2" r="1.4"/><circle class="eye" cx="11.5" cy="17" r="1.9"/><circle class="eye" cx="20.5" cy="17" r="1.9"/><path d="M12.5 22h7"/></svg><div><h1>رباتساز هوشمند</h1><span class="tagline">AI BOTMAKER</span></div></div><span class="chip" id="quota" role="button" tabindex="0"></span></div>
 <div id="app"></div>
 <div id="sheet" class="sheet"></div>
 <div id="toast"></div>
@@ -346,7 +453,7 @@ async function load(){
 }
 
 function render(){
-  $("#quota").textContent = `🪙 ${fa(S.bal)} توکن`; $("#quota").onclick = () => go("profile");
+  $("#quota").innerHTML = `<i class="ic ic-coin"></i><b>${fa(S.bal)}</b>`; $("#quota").onclick = () => go("profile");
   S.view === "list" ? renderList() : S.view === "profile" ? renderProfile() : renderBot();
   syncDock();
 }
@@ -358,7 +465,7 @@ function renderList(){
       <div><b>${esc(b.name)}</b><span class="muted">${b.active ? "@"+esc(b.username) : "هنوز فعال نشده"}</span></div>
     </div>`).join("");
   $("#app").innerHTML = (list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">یه جمله بنویس، ربات آماده می‌شه.</span></p></div>`)
-    + (S.bots.length < S.maxBots ? `<button id="new">＋ ساخت ربات جدید</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
+    + (S.bots.length < S.maxBots ? `<button id="new"><i class='ic ic-plus'></i>ساخت ربات جدید</button><button class="ghost" data-tl="import" style="margin-top:8px"><i class='ic ic-upload'></i>ورود از JSON</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
   document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.view="bot"; S.open = new Set(); render(); });
   $("#new")?.addEventListener("click", () => { S.cur = null; S.view = "bot"; S.open = new Set(); render(); });
 }
@@ -371,12 +478,12 @@ const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (
 const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : CH_RE.test(b.url||"") ? "channel" : "url";
 const btnInfo0 = (cfg, b) => {
   const k = kindOf(b);
-  return k==="goto" ? "← "+esc(titleOf(cfg,b.goto)) : k==="channel" ? "📢 @"+esc(CH_RE.exec(b.url)[1])
-    : k==="alert" ? "💬 پیام پاپ‌آپ" : k==="copy" ? "📋 کپی متن" : "🔗 "+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
+  return k==="goto" ? "<i class='ic ic-arrowl'></i>"+esc(titleOf(cfg,b.goto)) : k==="channel" ? "<i class='ic ic-megaphone'></i>@"+esc(CH_RE.exec(b.url)[1])
+    : k==="alert" ? "<i class='ic ic-chat'></i>پیام پاپ‌آپ" : k==="copy" ? "<i class='ic ic-copy'></i>کپی متن" : "<i class='ic ic-link'></i>"+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
 };
-const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " · 👁 شرطی" : "") + (b.do?.length ? " · ⚡" : "");
+const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " · <i class='ic ic-eye'></i>شرطی" : "") + (b.do?.length ? " · <i class='ic ic-bolt'></i>" : "");
 
-const fa = n => Number(n || 0).toLocaleString("fa-IR");
+const fa = n => Number(n || 0).toLocaleString("en-US");
 const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
 function nodeCard(cfg, id, i = 0, rise = false){
@@ -385,15 +492,15 @@ function nodeCard(cfg, id, i = 0, rise = false){
   if(id===cfg.fallback) tags.push("پیام ناشناس");
   if(n.fields) tags.push("فرم");
   else if(n.ask) tags.push("دریافت پیام");
-  if(isRk) tags.push("⌨️ کیبورد چت");
-  if(n.media || n.photo) tags.push("📎 فایل");
-  if(n.ai) tags.push("🤖 هوش مصنوعی");
-  if(n.do?.length || n.route?.length || n.alt?.length) tags.push("🧩 منطق");
+  if(isRk) tags.push("<i class='ic ic-keyboard'></i>کیبورد چت");
+  if(n.media || n.photo) tags.push("<i class='ic ic-clip'></i>فایل");
+  if(n.ai) tags.push("<i class='ic ic-bot'></i>هوش مصنوعی");
+  if(n.do?.length || n.route?.length || n.alt?.length) tags.push("<i class='ic ic-puzzle'></i>منطق");
   const open = S.open.has(id), nb = n.buttons.reduce((a,r) => a + r.length, 0);
   const prev = (n.text||"").replace(/\s+/g," ").slice(0,70);
   const kb = n.buttons.map((row,r) => `<div class="krow${isRk?" rk":""}">${row.map((b,c) =>
       `<button class="kb" data-sa="btn" data-n="${id}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg,b)}</small></button>`).join("")}
-      ${row.length<3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}">＋</button>` : ""}</div>`).join("");
+      ${row.length<3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}"><i class='ic ic-plus'></i></button>` : ""}</div>`).join("");
   return `
     <div class="card nd${open?" open":""}${rise?" rise":""}" style="--i:${Math.min(i,8)}">
       <div class="nh" role="button" tabindex="0" aria-expanded="${open}" data-sa="toggle" data-n="${id}">
@@ -401,10 +508,10 @@ function nodeCard(cfg, id, i = 0, rise = false){
         <div class="nm">${tags.map(t=>`<span class="tag">${t}</span>`).join("")}<span class="tag cnt">${nb ? fa(nb)+" دکمه" : "بدون دکمه"}</span></div>
       </div>
       <div class="nbody"><div><div class="nbi">
-        <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen">✏️</span></div>
-        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map((q,i) => esc(q) + (n.save?.[i] ? ' <span class="tag" dir="ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" ← ")}</div>` : ""}
+        <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen"><i class='ic ic-pen'></i></span></div>
+        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map((q,i) => esc(q) + (n.save?.[i] ? ' <span class="tag" dir="ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" <i class='ic ic-arrowl'></i>")}</div>` : ""}
         ${isRk ? `<div class="tray">${kb}</div>` : kb}
-        ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">＋ دکمه‌ی جدید</button>` : ""}
+        ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}"><i class='ic ic-plus'></i>دکمه‌ی جدید</button>` : ""}
       </div></div></div>
     </div>`;
 }
@@ -435,6 +542,7 @@ function renderBot(){
     <div class="card">
       <h2>${b ? "چی رو تغییر بدم؟" : "چه رباتی می‌خوای؟"}</h2>
       <textarea id="prompt" maxlength="2000" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
+      ${b ? "" : `<div class="exs">${EXAMPLES.map(([t,p]) => `<button class="ex" data-ex="${esc(p)}">${t}</button>`).join("")}</div>`}
       <div style="height:10px"></div>
       <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
       <p class="muted" style="margin-top:8px;font-size:12px">هزینه‌ی هر ساخت یا ارتقا حدود ${fa(S.costs.typical)} توکن (حداقل ${fa(S.costs.min)}) • ویرایش دستی و قالب‌ها رایگانه</p>
@@ -442,22 +550,27 @@ function renderBot(){
     <div id="live"></div>`;
   let body = "";
   if(!b && S.templates.length){
-    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">یا از قالب آماده شروع کن (رایگان)</h2></div><div class="tplg">${S.templates.map(t => `<button class="tpl" data-tpl="${t.id}"><span>${t.icon}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`;
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">یا از قالب آماده شروع کن (رایگان)</h2></div><div class="tplg">${S.templates.map(t => `<button class="tpl" data-tpl="${t.id}"><span class="tic"><i class="ic ic-${t.icon}"></i></span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`;
   }
   if(b){
-    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="ic">✨</span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
-    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot">⚙️ تنظیمات ربات</button></div>
+    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="thi"><i class='ic ic-spark'></i></span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot"><i class='ic ic-gear'></i>تنظیمات ربات</button></div>
              <div class="pvhd"><span class="muted">هر بخش رو باز کن، بعد روی متن یا دکمه بزن تا ویرایشش کنی.</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
     body += Object.keys(b.config.nodes).map((id,i) => nodeCard(b.config, id, i, S.fresh)).join("");
-    body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">＋ بخش جدید</button>`;
+    body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px"><i class='ic ic-plus'></i>بخش جدید</button>`;
     body += `<div class="card" id="stats"><span class="muted">در حال بارگذاری آمار…</span></div>`;
-    if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px">↩ برگشت به نسخه‌ی قبلی</button>`;
+    body += `<div class="card"><h2><i class='ic ic-wrench'></i>ابزارها</h2><div class="tools">
+      <button class="ghost" data-tl="health"><i class='ic ic-pulse'></i>بررسی مسیرها</button>
+      <button class="ghost" data-tl="export"><i class='ic ic-download'></i>خروجی JSON</button>
+      <button class="ghost" data-tl="dup"><i class='ic ic-layers'></i>کپی ربات</button>
+      <button class="ghost" data-tl="csv"><i class='ic ic-inbox'></i>خروجی CSV فرم‌ها</button></div></div>`;
+    if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px"><i class='ic ic-undo'></i>برگشت به نسخه‌ی قبلی</button>`;
     body += b.active
-      ? `<div class="card"><h2>🟢 فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
+      ? `<div class="card"><h2><i class='ic ic-dot'></i>فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
       : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act">فعال کن</button></div>`;
     body += `<button class="danger" id="del">حذف ربات</button>`;
   }
-  $("#app").innerHTML = `<button class="back" id="back">← بازگشت</button>${prompt}${body}`;
+  $("#app").innerHTML = `<button class="back" id="back"><i class='ic ic-arrowr'></i>بازگشت</button>${prompt}${body}`;
   $("#back").onclick = () => { S.view="list"; S.cur=null; closeSheet(); load(); };
   $("#gen").onclick = generate;
   $("#undo")?.addEventListener("click", undo);
@@ -525,7 +638,7 @@ function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); con
 
 /* ───────── ویرایشگر سریع (شیت پایین صفحه) ───────── */
 let D = null;   // پیش‌نویس فرم باز
-async function commit(fn, msg="ذخیره شد ✅"){
+async function commit(fn, msg="ذخیره شد "){
   const cfg = cp(S.cur.config); fn(cfg);
   const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: cfg});
   S.cur = d.bot; closeSheet(); renderBot(); toast(msg);
@@ -538,17 +651,17 @@ function showSheet(html){
   sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
 }
 const nodeOpts = (cfg, cur, extra="") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i===cur?" selected":""}>${esc(titleOf(cfg,i))}</option>`).join("");
-const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="close">✕</button></div>`;
+const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="close"><i class='ic ic-x'></i></button></div>`;
 
 /* ── منطق: متغیر، شرط و اکشن ── */
 const OPS = [["==","مساوی باشه با"],["!=","مساوی نباشه با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشه"],["empty","خالی باشه"],["filled","پر باشه"]];
 const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
 const APH = {set:"مقدار (می‌تونی {متغیر} بذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شه"};
-const MEDIA_TYPES = [["photo","🖼 عکس"],["video","🎬 ویدیو"],["audio","🎵 صوت"],["document","📄 فایل"],["animation","🎞 گیف"]];
+const MEDIA_TYPES = [["photo","عکس"],["video","ویدیو"],["audio","صوت"],["document","فایل"],["animation","گیف"]];
 const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
-  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ ۱ یا ۰"],["is_owner","صاحب ربات؟ ۱ یا ۰"],["visits","تعداد استارت‌های کاربر"],["text","آخرین پیام کاربر"],
-  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (۰ تا ۲۳)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["text","آخرین پیام کاربر"],
+  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
 const BUILTIN = BUILTIN_HELP.map(x => x[0]);
 const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
 const simpleCond = c => !!c && typeof c.var === "string" && !c.all && !c.any && !c.not;
@@ -557,14 +670,14 @@ const newRule = l => l==="do" ? {op:"set", var:"", value:""} : l==="route" ? {c:
 const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
 
 function condHTML(c){
-  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px">🔀 شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
+  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px"><i class='ic ic-split'></i>شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
   const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
   return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
     <select class="c-op" data-sh="re">${OPS.map(([v,l]) => `<option value="${v}"${v===x.op?" selected":""}>${l}</option>`).join("")}</select></div>
     ${nov ? "" : `<input class="fa c-val" value="${esc(x.value || "")}" placeholder="مقدار" maxlength="100">`}`;
 }
 function ruleHTML(list, o, i, cfg){
-  const del = `<button class="sm x" data-sh="delrl" data-l="${list}" data-i="${i}">✕</button>`;
+  const del = `<button class="sm x" data-sh="delrl" data-l="${list}" data-i="${i}"><i class='ic ic-x'></i></button>`;
   let inner;
   if(list === "do"){
     inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v,l]) => `<option value="${v}"${v===o.op?" selected":""}>${l}</option>`).join("")}</select>
@@ -579,7 +692,7 @@ function ruleHTML(list, o, i, cfg){
 }
 function ruleSection(title, hint, list, cfg, max){
   const arr = D[list];
-  return `<div class="sub"><span>${title}</span>${arr.length < max ? `<button class="sm ghost" data-sh="addrl" data-l="${list}">＋</button>` : ""}</div>
+  return `<div class="sub"><span>${title}</span>${arr.length < max ? `<button class="sm ghost" data-sh="addrl" data-l="${list}"><i class='ic ic-plus'></i></button>` : ""}</div>
     ${hint ? `<p class="muted" style="margin:-3px 0 6px">${hint}</p>` : ""}${arr.map((o,i) => ruleHTML(list, o, i, cfg)).join("")}`;
 }
 function readRl(list){
@@ -643,7 +756,7 @@ function nodeSheet(){
   return head("ویرایش بخش") + `
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
-    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی ⚙️ تنظیمات ربات.</p>
+    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی <i class='ic ic-gear'></i>تنظیمات ربات.</p>
     <span class="lbl">فایل ضمیمه (اختیاری — لینک مستقیم https)</span>
     <div class="cmd"><select id="f-mtype">${MEDIA_TYPES.map(([v,l]) => `<option value="${v}"${v===d.mtype?" selected":""}>${l}</option>`).join("")}</select><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../file" autocomplete="off"></div>
     <span class="lbl">این بخش چی کار کنه؟</span>
@@ -651,31 +764,31 @@ function nodeSheet(){
       <option value="show"${d.mode==="show"?" selected":""}>فقط پیام و دکمه‌ها رو نشون بده</option>
       <option value="ask"${d.mode==="ask"?" selected":""}>یه پیام از کاربر بگیر و برای من بفرست</option>
       <option value="form"${d.mode==="form"?" selected":""}>فرم چندمرحله‌ای (چند سؤال پشت‌سرهم)</option>
-      <option value="ai"${d.mode==="ai"?" selected":""}>🤖 گفتگوی هوشمند با هوش مصنوعی (مصرف توکن)</option>
+      <option value="ai"${d.mode==="ai"?" selected":""}>گفتگوی هوشمند با هوش مصنوعی (مصرف توکن)</option>
     </select>
-    ${d.mode==="show" ? kbPicker(d.kb) : `<p class="muted" style="margin-top:10px">⌨️ کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
+    ${d.mode==="show" ? kbPicker(d.kb) : `<p class="muted" style="margin-top:10px"><i class='ic ic-keyboard'></i>کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
     ${d.mode==="form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
-      ${d.fields.map((f,i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">✕</button></div>
+      ${d.fields.map((f,i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}"><i class='ic ic-x'></i></button></div>
         <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
         <select class="ft">${TYPES.map(([v,l]) => `<option value="${v}"${v===f.t?" selected":""}>${l}</option>`).join("")}</select></div></div>`).join("")}
-      ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld">＋ سؤال</button>` : ""}
+      ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld"><i class='ic ic-plus'></i>سؤال</button>` : ""}
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent?" checked":""}> نتیجه‌ی فرم برای من فرستاده نشه</label>` : ""}
     ${d.mode==="ai" ? `<span class="lbl">دستورالعمل هوش مصنوعی (نقش، لحن، اطلاعات کسب‌وکار)</span>
       <textarea class="fa" id="f-aisys" maxlength="1500" placeholder="مثلاً: تو دستیار فروشگاه موبایل هستی. مؤدب و کوتاه جواب بده…">${esc(d.aisys)}</textarea>
       <div class="cmd" style="align-items:flex-end"><div style="flex:1"><span class="lbl">حافظه‌ی گفتگو</span><select id="f-aimem">${[0,1,2,3,4,5,6].map(i => `<option value="${i}"${i===+d.aimem?" selected":""}>${i} پیام قبلی</option>`).join("")}</select></div>
       <div style="flex:1"><span class="lbl">سقف پیام روزانه‌ی هر کاربر</span><input id="f-ailim" type="number" min="1" max="100" value="${d.ailim}"></div></div>
-      <span class="lbl">پیام وقتی توکنت تموم شده (اختیاری)</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="🙏 فعلاً در دسترس نیست">
-      <p class="muted" style="margin-top:6px">متن بالا، پیام خوش‌آمد گفتگوئه و دکمه‌های این بخش راه خروج کاربرن (حتماً یه دکمه‌ی بازگشت بذار). هر پیام کاربر حدود ۱ توکن از حساب تو مصرف می‌کنه.</p>` : ""}
-    ${d.mode==="form"||d.mode==="ask" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="✅ ثبت شد، ممنون!">
+      <span class="lbl">پیام وقتی توکنت تموم شده (اختیاری)</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="فعلاً در دسترس نیست">
+      <p class="muted" style="margin-top:6px">متن بالا، پیام خوش‌آمد گفتگوئه و دکمه‌های این بخش راه خروج کاربرن (حتماً یه دکمه‌ی بازگشت بذار). هر پیام کاربر حدود 1 توکن از حساب تو مصرف می‌کنه.</p>` : ""}
+    ${d.mode==="form"||d.mode==="ask" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
       <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>` : ""}
-    <details class="adv"${advOpen ? " open" : ""}><summary>🧩 متغیر و شرط (پیشرفته)</summary><div class="box">
+    <details class="adv"${advOpen ? " open" : ""}><summary><i class='ic ic-puzzle'></i>متغیر و شرط (پیشرفته)</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقدار ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
       ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر رو به بخش دیگه‌ای می‌فرسته (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
       ${ruleSection("متن جایگزین شرطی", "اگه شرط درست بود، به‌جای متن اصلی نشون داده می‌شه", "alt", cfg, 4)}
     </div></details>${dlist()}
     <label class="chk"><input type="checkbox" id="f-start"${d.start?" checked disabled":""}> صفحه‌ی شروع (/start)</label>
     <label class="chk"><input type="checkbox" id="f-fb"${d.fb?" checked disabled":""}> جواب پیام‌های نامفهوم کاربر</label>
-    <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف بخش</button>`}</div>`;
+    <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del"><i class='ic ic-trash'></i>حذف بخش</button>`}</div>`;
 }
 function readNode(){
   const g = s => $(s)?.value ?? null;
@@ -740,13 +853,13 @@ function delNode(){
 }
 function addNode(){
   const cfg = S.cur.config, ids = Object.keys(cfg.nodes);
-  if(ids.length >= 40) return toast("حداکثر ۴۰ بخش");
+  if(ids.length >= 40) return toast("حداکثر 40 بخش");
   let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
   const id = "page_"+k;
   S.open.add(id);
   busy($('[data-sa="addnode"]'), async () => {
     await commit(c => { c.nodes[id] = {title:"بخش جدید", text:"متن این بخش رو بنویس", ask:false,
-      buttons:[[{text:"🏠 منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
+      buttons:[[{text:"منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
     openNode(id);
   });
 }
@@ -764,7 +877,7 @@ function openBtn(nid, r, c){
   }
   renderSheet();
 }
-const KINDS = [["goto","↩ رفتن به یه بخش"],["channel","📢 کانال / گروه"],["url","🔗 لینک"],["alert","💬 پیام پاپ‌آپ"],["copy","📋 کپی کردن متن"]];
+const KINDS = [["goto","رفتن به یه بخش"],["channel","کانال / گروه"],["url","لینک"],["alert","پیام پاپ‌آپ"],["copy","کپی کردن متن"]];
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
@@ -780,12 +893,12 @@ function btnSheet(){
     <span class="lbl">با لمس دکمه چی بشه؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l]) => `<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
     ${val}
-    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>🧩 شرط و اکشن (پیشرفته)</summary><div class="box">
+    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary><i class='ic ic-puzzle'></i>شرط و اکشن (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافیه", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشون دادن پیام اجرا می‌شن", "do", cfg, 6)
               : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یه بخش» و «پیام پاپ‌آپ» کار می‌کنه.</p>`}
     </div></details>${dlist()}
-    <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del">🗑 حذف دکمه</button>`}</div>`;
+    <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del"><i class='ic ic-trash'></i>حذف دکمه</button>`}</div>`;
 }
 function readBtn(){
   D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
@@ -830,18 +943,18 @@ function openBot(){
 }
 function botSheet(){
   const cfg = S.cur.config, d = D;
-  return head("⚙️ تنظیمات ربات") + `
+  return head("<i class='ic ic-gear'></i>تنظیمات ربات") + `
     <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
     <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
-    <p class="muted">تا ۳ کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه تا بتونه عضویت رو چک کنه. خالی = غیرفعال.</p>
-    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی 👇">${esc(d.jtext)}</textarea>
-    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length<10?`<button class="sm ghost" data-sh="addcmd">＋ دستور</button>`:""}</div>
-    ${d.cmds.map(([k,v],i)=>`<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
-    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length<20?`<button class="sm ghost" data-sh="addvar">＋ متغیر</button>`:""}</div>
+    <p class="muted">تا 3 کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه تا بتونه عضویت رو چک کنه. خالی = غیرفعال.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی ">${esc(d.jtext)}</textarea>
+    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length<10?`<button class="sm ghost" data-sh="addcmd"><i class='ic ic-plus'></i>دستور</button>`:""}</div>
+    ${d.cmds.map(([k,v],i)=>`<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}"><i class='ic ic-x'></i></button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
+    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length<20?`<button class="sm ghost" data-sh="addvar"><i class='ic ic-plus'></i>متغیر</button>`:""}</div>
     <p class="muted" style="margin-bottom:6px">هر کاربر مقدار مخصوص خودش رو داره (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع رو بنویس.</p>
-    ${d.vars.map(([k,v],i)=>`<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}">✕</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
-    <details class="adv"><summary>📖 متغیرهای آماده‌ی تلگرام</summary><div class="box">
+    ${d.vars.map(([k,v],i)=>`<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}"><i class='ic ic-x'></i></button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+    <details class="adv"><summary><i class='ic ic-book'></i>متغیرهای آماده‌ی تلگرام</summary><div class="box">
       <p class="muted" style="margin-bottom:6px">توی متن‌ها و شرط‌ها قابل استفاده‌ن؛ مثلاً <b dir="ltr">{name}</b>. اگه خالی بود می‌تونی مقدار جایگزین بذاری: <b dir="ltr">{username|بدون آیدی}</b></p>
       ${BUILTIN_HELP.map(([k,l]) => `<div class="kvr"><code dir="ltr">{${k}}</code><span>${l}</span></div>`).join("")}
     </div></details>
@@ -939,7 +1052,7 @@ function generate(){
       const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
       const wasActive = S.cur?.active;
       S.cur = d.bot; S.bal = d.bal; S.fresh = true; stopLive(); render();
-      toast((wasActive ? "ربات ارتقا پیدا کرد ✅" : "ربات ساخته شد ✅") + ` · ${fa(d.cost)} توکن`);
+      toast((wasActive ? "ربات ارتقا پیدا کرد " : "ربات ساخته شد ") + ` · ${fa(d.cost)} توکن`);
       tg?.HapticFeedback?.notificationOccurred("success");
     } finally { stopLive(); ta.readOnly = false; }
   });
@@ -947,7 +1060,7 @@ function generate(){
 function undo(){ busy($("#undo"), async () => { const d = await api(`/api/bots/${S.cur.id}/undo`,"POST"); S.cur = d.bot; render(); toast("برگشت داده شد"); }); }
 function activate(){
   const t = $("#token").value.trim(); if(!t) return toast("توکن رو وارد کن");
-  busy($("#act"), async () => { const d = await api(`/api/bots/${S.cur.id}/activate`,"POST",{token:t}); S.cur = d.bot; render(); toast("ربات فعال شد 🎉"); });
+  busy($("#act"), async () => { const d = await api(`/api/bots/${S.cur.id}/activate`,"POST",{token:t}); S.cur = d.bot; render(); toast("ربات فعال شد "); });
 }
 function act(action, msg){ busy($("#off"), async () => { const d = await api(`/api/bots/${S.cur.id}/${action}`,"POST"); S.cur = d.bot; render(); toast(msg); }); }
 function remove(){
@@ -957,24 +1070,24 @@ function remove(){
 
 /* ───────── قالب‌ها، آمار ربات، پیام همگانی ───────── */
 function useTemplate(id, btn){
-  busy(btn, async () => { const d = await api(`/api/templates/${id}/create`, "POST"); S.cur = d.bot; S.fresh = true; S.open = new Set(); render(); toast("قالب آماده شد ✅"); });
+  busy(btn, async () => { const d = await api(`/api/templates/${id}/create`, "POST"); S.cur = d.bot; S.fresh = true; S.open = new Set(); render(); toast("قالب آماده شد "); });
 }
 async function loadStats(){
   const el = $("#stats"); if(!el || !S.cur) return;
   try{
     const d = await api(`/api/bots/${S.cur.id}/stats`);
     if(!$("#stats")) return;
-    el.innerHTML = `<h2>📊 آمار و کاربران</h2>
+    el.innerHTML = `<h2><i class='ic ic-chart'></i>آمار و کاربران</h2>
       <div class="stats" style="margin:10px 0">
         <div class="stat"><div class="k">کاربران ربات</div><div class="v">${fa(d.users)}</div></div>
         <div class="stat"><div class="k">فعال امروز</div><div class="v">${fa(d.today)}</div></div>
         <div class="stat"><div class="k">پاسخ فرم‌ها</div><div class="v">${fa(d.forms)}</div></div>
         <div class="stat"><div class="k">توکنِ مصرفیِ AI ربات</div><div class="v">${fa(d.ai_tokens)}</div></div>
       </div>
-      <div class="g2"><button class="ghost" data-ax="subs">📥 پاسخ فرم‌ها</button><button class="ghost" data-ax="bc">📣 پیام همگانی</button></div>`;
+      <div class="g2"><button class="ghost" data-ax="subs"><i class='ic ic-inbox'></i>پاسخ فرم‌ها</button><button class="ghost" data-ax="bc"><i class='ic ic-megaphone'></i>پیام همگانی</button></div>`;
   }catch(_){ $("#stats")?.remove(); }
 }
-const fdate = t => new Date(t).toLocaleString("fa-IR", {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+const fdate = t => new Date(t).toLocaleString("fa-IR-u-nu-latn", {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
 async function openSubs(){
   S.sheet = {kind:"info"}; showSheet(head("پاسخ فرم‌ها") + `<p class="muted">در حال بارگذاری…</p>`);
   try{
@@ -986,12 +1099,12 @@ async function openSubs(){
 function openBc(){
   if(!S.cur.active) return toast("اول ربات رو فعال کن");
   S.sheet = {kind:"info"};
-  showSheet(head("📣 پیام همگانی") + `<p class="muted" style="margin-bottom:8px">پیام برای همه‌ی کاربرهای ربات فرستاده می‌شه. (هر ۱۰ دقیقه یک بار)</p>
+  showSheet(head("<i class='ic ic-megaphone'></i>پیام همگانی") + `<p class="muted" style="margin-bottom:8px">پیام برای همه‌ی کاربرهای ربات فرستاده می‌شه. (هر 10 دقیقه یک بار)</p>
     <textarea class="fa" id="bc-text" maxlength="3500" placeholder="متن پیام…"></textarea><div style="height:10px"></div><button data-ax="bcsend">ارسال</button>`);
 }
 function sendBc(btn){
   const t = $("#bc-text").value.trim(); if(t.length < 2) return toast("متن پیام رو بنویس");
-  busy(btn, async () => { const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text:t}); closeSheet(); toast(`ارسال برای ${fa(d.queued)} نفر شروع شد 📣`); });
+  busy(btn, async () => { const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text:t}); closeSheet(); toast(`ارسال برای ${fa(d.queued)} نفر شروع شد `); });
 }
 
 /* ───────── پروفایل کاربر ───────── */
@@ -1002,7 +1115,7 @@ function renderProfile(){
   const u = tg?.initDataUnsafe?.user || {};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
   const active = S.bots.filter(b => b.active).length, r = S.ref || {}, dl = S.daily || {};
-  const joined = S.joined ? new Date(S.joined).toLocaleDateString("fa-IR", {year:"numeric", month:"long", day:"numeric"}) : "—";
+  const joined = S.joined ? new Date(S.joined).toLocaleDateString("fa-IR-u-nu-latn", {year:"numeric", month:"long", day:"numeric"}) : "—";
   $("#app").innerHTML = `
     <div class="card pf">
       <div class="av"><span class="ring"></span>
@@ -1011,28 +1124,28 @@ function renderProfile(){
       ${u.username ? `<span class="muted un">@${esc(u.username)}</span>` : ""}
     </div>
     <div class="card wal">
-      <div class="k">موجودی توکن</div><div class="big">🪙 ${fa(S.bal)}</div>
+      <div class="k">موجودی توکن</div><div class="big"><i class='ic ic-coin'></i>${fa(S.bal)}</div>
       <p class="muted" style="margin-bottom:10px">هر ساخت یا ارتقای ربات حدود ${fa(S.costs.typical)} توکن مصرف می‌کنه. ویرایش دستی و قالب‌ها رایگانه.</p>
-      <button data-ax="daily" ${dl.available ? "" : "disabled"}>${dl.available ? `🎁 هدیه‌ی امروز (+${fa(dl.amount)} توکن)` : "هدیه‌ی امروز رو گرفتی 🌙"}</button>
+      <button data-ax="daily" ${dl.available ? "" : "disabled"}>${dl.available ? `<i class='ic ic-gift'></i>هدیه‌ی امروز (+${fa(dl.amount)} توکن)` : "هدیه‌ی امروز رو گرفتی "}</button>
     </div>
     <div class="card">
-      <h2>👥 دعوت دوستان = توکن رایگان</h2>
+      <h2><i class='ic ic-users'></i>دعوت دوستان = توکن رایگان</h2>
       <p class="muted" style="margin:6px 0 10px">دوستت با لینک تو که بیاد ${fa(r.new)} توکن می‌گیره؛ وقتی اولین رباتش رو فعال کنه، تو ${fa(r.inviter)} توکن می‌گیری (تا ${fa(r.max)} دعوت).</p>
       <input readonly value="${esc(r.link || "")}" onclick="this.select()"><div style="height:8px"></div>
-      <div class="g2"><button class="ghost" data-ax="copyref">📋 کپی لینک</button><button data-ax="shareref">📤 اشتراک‌گذاری</button></div>
+      <div class="g2"><button class="ghost" data-ax="copyref"><i class='ic ic-copy'></i>کپی لینک</button><button data-ax="shareref"><i class='ic ic-share'></i>اشتراک‌گذاری</button></div>
       <div class="stats" style="margin:12px 0 0">
         <div class="stat"><div class="k">دعوت‌شده‌ها</div><div class="v">${fa(r.joined)}</div></div>
         <div class="stat"><div class="k">توکن درآمدی</div><div class="v">${fa(r.earned)}</div></div>
       </div>
     </div>
-    <div class="card"><h2>🎟 کد هدیه</h2><div style="height:8px"></div>
+    <div class="card"><h2><i class='ic ic-ticket'></i>کد هدیه</h2><div style="height:8px"></div>
       <div class="g2" style="grid-template-columns:1fr auto"><input id="cpn" placeholder="CODE" autocomplete="off"><button data-ax="coupon" style="width:auto">ثبت</button></div></div>
     <div class="stats">
       <div class="stat"><div class="k">ربات‌های من</div><div class="v">${fa(S.bots.length)} <small>از ${fa(S.maxBots)}</small></div></div>
       <div class="stat"><div class="k">ربات‌های فعال</div><div class="v">${fa(active)} <small>از ${fa(S.bots.length)}</small></div></div>
     </div>
-    <div class="card" id="ledger"><h2>🧾 تاریخچه‌ی توکن</h2><p class="muted">در حال بارگذاری…</p></div>
-    ${S.isAdmin ? `<div class="card" id="admin"><h2>🛠 پنل ادمین</h2><div style="height:8px"></div>
+    <div class="card" id="ledger"><h2><i class='ic ic-receipt'></i>تاریخچه‌ی توکن</h2><p class="muted">در حال بارگذاری…</p></div>
+    ${S.isAdmin ? `<div class="card" id="admin"><h2><i class='ic ic-wrench'></i>پنل ادمین</h2><div style="height:8px"></div>
       <span class="lbl">افزودن/کم‌کردن توکن کاربر</span>
       <div class="g2"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
       <div style="height:6px"></div><button class="ghost" data-ax="agrant">اعمال</button>
@@ -1040,7 +1153,7 @@ function renderProfile(){
       <div class="g2"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
       <div style="height:6px"></div><div class="g2"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز، اختیاری)" inputmode="numeric"></div>
       <div style="height:6px"></div><button class="ghost" data-ax="acoupon">ساخت کد</button>
-      <div style="height:10px"></div><button class="ghost" data-ax="astats">📈 آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
+      <div style="height:10px"></div><button class="ghost" data-ax="astats"><i class='ic ic-trend'></i>آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
     <div class="card kv">
       <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}</b>` : "<b>—</b>"}</div>
       <div><span>اولین ورود</span><b>${joined}</b></div>
@@ -1050,13 +1163,13 @@ function renderProfile(){
 async function loadLedger(){
   try{
     const d = await api("/api/ledger"); const el = $("#ledger"); if(!el) return;
-    el.innerHTML = `<h2>🧾 تاریخچه‌ی توکن</h2><div style="height:6px"></div>` + (d.items.length ? `<div class="kv" style="padding:0">${d.items.map(x =>
+    el.innerHTML = `<h2><i class='ic ic-receipt'></i>تاریخچه‌ی توکن</h2><div style="height:6px"></div>` + (d.items.length ? `<div class="kv" style="padding:0">${d.items.map(x =>
       `<div><span>${esc(reasonOf(x.reason))} • ${fdate(x.t)}</span><b class="${x.delta > 0 ? "pos" : "neg"}" dir="ltr">${x.delta > 0 ? "+" : ""}${fa(x.delta)}</b></div>`).join("")}</div>` : `<p class="muted">هنوز تراکنشی نداری.</p>`);
   }catch(_){ $("#ledger")?.remove(); }
 }
 document.addEventListener("click", e => {
   const c = e.target.closest('[data-pf="copyid"]'); if(!c) return;
-  navigator.clipboard?.writeText(c.dataset.id).then(() => toast("شناسه کپی شد ✅"), () => toast(c.dataset.id));
+  navigator.clipboard?.writeText(c.dataset.id).then(() => toast("شناسه کپی شد "), () => toast(c.dataset.id));
 });
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-tpl]"); if(t) return useTemplate(t.dataset.tpl, t);
@@ -1065,15 +1178,15 @@ document.addEventListener("click", e => {
   if(a === "subs") openSubs();
   else if(a === "bc") openBc();
   else if(a === "bcsend") sendBc(x);
-  else if(a === "daily") busy(x, async () => { const d = await api("/api/daily", "POST"); S.bal = d.bal; S.daily.available = false; render(); toast(`+${fa(d.got)} توکن گرفتی 🎁`); });
-  else if(a === "copyref") navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک کپی شد ✅"), () => toast(S.ref.link));
+  else if(a === "daily") busy(x, async () => { const d = await api("/api/daily", "POST"); S.bal = d.bal; S.daily.available = false; render(); toast(`+${fa(d.got)} توکن گرفتی `); });
+  else if(a === "copyref") navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک کپی شد "), () => toast(S.ref.link));
   else if(a === "shareref"){
-    const url = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هوشمند، ربات تلگرامت رو در چند ثانیه بساز 🤖");
+    const url = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هوشمند، ربات تلگرامت رو در چند ثانیه بساز ");
     tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
   }
   else if(a === "coupon"){
     if(!v("#cpn")) return toast("کد رو وارد کن");
-    busy(x, async () => { const d = await api("/api/coupon", "POST", {code: v("#cpn")}); S.bal = d.bal; render(); toast(`+${fa(d.got)} توکن اضافه شد 🎟`); });
+    busy(x, async () => { const d = await api("/api/coupon", "POST", {code: v("#cpn")}); S.bal = d.bal; render(); toast(`+${fa(d.got)} توکن اضافه شد `); });
   }
   else if(a === "agrant") busy(x, async () => { const d = await api("/api/admin/grant", "POST", {uid: v("#ag-uid"), amount: v("#ag-amt")}); toast(`موجودی جدید کاربر: ${fa(d.bal)}`); });
   else if(a === "acoupon") busy(x, async () => { const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")}); toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); });
@@ -1115,6 +1228,53 @@ document.addEventListener("focusout", () => setTimeout(() => {
   if(!document.activeElement?.matches?.("input,textarea,select")) dock.classList.remove("hide");
 }, 150));
 setDock(dockOpen, false);
+
+/* ───────── ابزارهای جدید: ورودی/خروجی، کپی، سلامت‌سنجی، نمونه‌ها ───────── */
+const EXAMPLES = [
+  ["فروشگاه", "ربات فروشگاه لوازم جانبی موبایل با منوی محصولات، قیمت و فرم ثبت سفارش"],
+  ["پشتیبانی", "ربات پشتیبانی مشتری با سؤال‌های پرتکرار و ارسال پیام به پشتیبان"],
+  ["باشگاه امتیاز", "ربات باشگاه مشتریان با جایزه‌ی روزانه، امتیاز و سطح‌بندی طلایی"],
+  ["کوییز", "ربات کوییز ۵ سؤالی با امتیازدهی و نتیجه‌ی نهایی"]
+];
+const HEALTH_FA = [["unreachable nodes", "بخش‌های بدون مسیر ورود"], ["dead-end nodes", "بن‌بست‌ها (دکمه‌ی بازگشت ندارن)"], ["variables that are read", "متغیرهای بدون مقدار"]];
+function textSheet(title, text, hint){
+  S.sheet = {kind:"info"};
+  showSheet(head(title) + (hint ? `<p class="muted" style="margin-bottom:8px">${hint}</p>` : "") +
+    `<textarea id="tx-out" readonly dir="ltr" style="min-height:220px;font-family:var(--mono);font-size:12px"></textarea>
+     <div style="height:10px"></div><button data-tl="copyout"><i class='ic ic-copy'></i>کپی</button>`);
+  $("#tx-out").value = text;
+}
+function csvOf(items){
+  const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  return ["time,section,name,username,answers", ...items.map(r =>
+    [r.t, r.title, r.name, r.un, (r.qa || []).map(([a, b]) => a + ": " + b).join(" | ") || r.text].map(q).join(","))].join("\n");
+}
+document.addEventListener("click", e => {
+  const ex = e.target.closest("[data-ex]");
+  if(ex){ const t = $("#prompt"); if(t){ t.value = ex.dataset.ex; t.focus(); } return; }
+  const x = e.target.closest("[data-tl]"); if(!x) return;
+  const a = x.dataset.tl;
+  if(a === "copyout"){ const t = $("#tx-out"); t.select(); navigator.clipboard?.writeText(t.value).then(() => toast("کپی شد"), () => toast("متن رو دستی کپی کن")); }
+  else if(a === "health") busy(x, async () => {
+    const d = await api(`/api/bots/${S.cur.id}/health`); S.sheet = {kind:"info"};
+    const row = i => { const h = HEALTH_FA.find(([k]) => i.startsWith(k)); return `<div class="hl"><b>${h ? h[1] : "هشدار"}</b><br><span class="muted" dir="ltr">${esc(i.split(": ").pop())}</span></div>`; };
+    showSheet(head("بررسی مسیرها") + (d.issues.length ? d.issues.map(row).join("") : `<div class="hl ok"><i class='ic ic-check'></i>مشکلی پیدا نشد؛ ${fa(d.nodes)} بخش بررسی شد.</div>`));
+  });
+  else if(a === "export") busy(x, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "این متن رو نگه دار؛ هر وقت خواستی از «ورود از JSON» برگردونش."); });
+  else if(a === "csv") busy(x, async () => { const d = await api(`/api/bots/${S.cur.id}/submissions`); if(!d.items.length) return toast("هنوز پاسخی ثبت نشده"); textSheet("خروجی CSV", csvOf(d.items), "آخرین ۵۰ پاسخ. توی اکسل یا گوگل‌شیت پیست کن."); });
+  else if(a === "dup") busy(x, async () => { const d = await api(`/api/bots/${S.cur.id}/duplicate`, "POST"); S.cur = d.bot; S.open = new Set(); render(); scrollTo({top:0}); toast("کپی ساخته شد"); });
+  else if(a === "import"){
+    S.sheet = {kind:"info"};
+    showSheet(head("ورود از JSON") + `<p class="muted" style="margin-bottom:8px">خروجی JSON یه ربات رو اینجا بچسبون تا به‌عنوان ربات جدید ساخته بشه.</p>
+      <textarea id="im-text" dir="ltr" style="min-height:200px;font-family:var(--mono);font-size:12px" placeholder='{"name": "...", "nodes": {...}}'></textarea>
+      <div style="height:10px"></div><button data-tl="importgo"><i class='ic ic-upload'></i>ساخت ربات</button>`);
+  }
+  else if(a === "importgo") busy(x, async () => {
+    let c; try{ c = JSON.parse($("#im-text").value); }catch(_){ return toast("JSON معتبر نیست"); }
+    const d = await api("/api/bots/import", "POST", {config: c.config || c});
+    closeSheet(); S.cur = d.bot; S.view = "bot"; S.open = new Set(); render(); toast("ربات وارد شد");
+  });
+});
 
 load();
 </script>
