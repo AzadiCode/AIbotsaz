@@ -1,6 +1,6 @@
-Flask>=3.0
-pymongo>=4.6
-requests>=2.31
-cryptography>=42.0
-mongomock>=5.0
-gunicorn>=21.2
+flask
+gunicorn
+requests
+pymongo
+mongomock
+cryptography
