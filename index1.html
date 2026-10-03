@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>رباتساز هوشمند</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:var(--tg-theme-bg-color,#fff);
+  --bg2:var(--tg-theme-secondary-bg-color,#f1f3f5);
+  --tx:var(--tg-theme-text-color,#111);
+  --hint:var(--tg-theme-hint-color,#7a828a);
+  --ac:var(--tg-theme-button-color,#2f7cf6);
+  --act:var(--tg-theme-button-text-color,#fff);
+  --red:#e5484d; --green:#2fa36b;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:Tahoma,"Vazirmatn",system-ui,sans-serif;background:var(--bg2);color:var(--tx);
+  font-size:15px;line-height:1.7;padding:0 14px calc(var(--dockh,84px) + 18px)}
+.top{display:flex;align-items:center;justify-content:space-between;padding:16px 2px 12px}
+.top h1{font-size:18px;font-weight:700}
+.chip{font-size:12px;background:var(--bg);color:var(--hint);padding:3px 11px;border-radius:99px}
+.card{background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{font-size:14px;margin-bottom:8px}
+.muted{color:var(--hint);font-size:13px}
+button{font:inherit;border:0;border-radius:11px;padding:11px 16px;cursor:pointer;background:var(--ac);color:var(--act);width:100%}
+button.ghost{background:var(--bg2);color:var(--tx)}
+button.danger{background:transparent;color:var(--red)}
+button:disabled{opacity:.5}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+textarea,input{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 12px;outline:none;resize:none}
+textarea{min-height:110px}
+input{direction:ltr;text-align:left}
+.bot{display:flex;align-items:center;gap:10px;cursor:pointer}
+.bot b{display:block}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--hint);flex:none}
+.dot.on{background:var(--green)}
+.back{background:none;color:var(--ac);width:auto;padding:8px 2px;margin-bottom:2px}
+.node{border-top:1px solid var(--bg2);padding:10px 0}
+.node:first-of-type{border-top:0}
+.node .id{font-size:12px;color:var(--hint);direction:ltr;text-align:right}
+.node .tx{white-space:pre-wrap;margin:2px 0 6px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font-size:12.5px;background:var(--bg2);border-radius:8px;padding:3px 10px}
+.empty{text-align:center;padding:26px 8px}
+.empty p{margin-bottom:14px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 18px;
+  border-radius:11px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center}
+#toast.show{opacity:1}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-left:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
+.think{display:flex;gap:8px;background:linear-gradient(135deg,rgba(14,165,160,.09),rgba(14,165,160,.03));
+  border:1px solid rgba(14,165,160,.16);border-radius:11px;padding:8px 11px;margin:-2px 0 12px;
+  font-size:12px;line-height:1.6;color:var(--tx);opacity:0;max-height:0;overflow:hidden;
+  transition:opacity .35s ease,max-height .35s ease,margin .35s ease,padding .35s ease}
+.think.show{opacity:1;max-height:700px;margin:0 0 12px}
+.think .thi{flex:none;font-size:14px;line-height:1.5}
+.think .tt{color:var(--hint)}
+
+/* ── انیمیشن «در حال فکر کردن» ── */
+.live{display:flex;align-items:center;gap:12px;background:var(--bg);border-radius:14px;padding:14px;margin-bottom:12px;
+  border:1px solid rgba(14,165,160,.18);position:relative;overflow:hidden;animation:pop .3s ease}
+.live::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(14,165,160,.09) 50%,transparent 70%);
+  transform:translateX(-100%);animation:sh 2s ease-in-out infinite}
+.orb{width:36px;height:36px;border-radius:50%;flex:none;position:relative;
+  background:conic-gradient(from 0deg,var(--ac),#9b6bff,#34c3ff,var(--ac));animation:s 1.3s linear infinite}
+.orb::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--bg)}
+.live .lt b{display:block;font-size:14px}
+.live .lt b i{display:inline-block;font-style:normal;animation:bn 1.2s infinite}
+.live .lt b i:nth-child(2){animation-delay:.15s}.live .lt b i:nth-child(3){animation-delay:.3s}
+.live .ph{font-size:12.5px;color:var(--hint);transition:opacity .3s}
+.live .ph.out{opacity:0}
+@keyframes sh{to{transform:translateX(100%)}}
+@keyframes bn{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.orb{animation-duration:3s}.live::after,.live .lt b i{animation:none}}
+
+/* ── ویرایشگر ── */
+.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.hd h2{margin:0}
+button.sm{width:auto;padding:5px 11px;font-size:12.5px;border-radius:9px}
+button.x{background:transparent;color:var(--red);padding:5px 9px}
+.lbl{display:block;font-size:12.5px;color:var(--hint);margin:12px 0 4px}
+input.fa,textarea.fa{direction:rtl;text-align:right}
+input[type=checkbox]{width:auto;flex:none;margin:0}
+select{font:inherit;width:100%;background:var(--bg2);color:var(--tx);border:0;border-radius:11px;padding:11px 10px;outline:none;min-width:0}
+.chk{display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px}
+.tag{font-size:11px;background:var(--bg2);border-radius:6px;padding:1px 8px;color:var(--hint)}
+.bubble{position:relative;background:var(--bg2);border-radius:14px;padding:10px 12px 10px 34px;white-space:pre-wrap;cursor:pointer;
+  border:1px solid transparent;transition:border-color .15s}
+.bubble:active{border-color:var(--ac)}
+.bubble .pen{position:absolute;left:10px;top:9px;font-size:13px;opacity:.55}
+.krow{display:flex;gap:6px;margin-top:6px}
+button.kb{flex:1;min-width:0;background:var(--bg2);color:var(--tx);padding:8px 6px;font-size:13.5px;border-radius:10px;
+  border:1px solid rgba(127,127,127,.2);line-height:1.5}
+button.kb:active{border-color:var(--ac)}
+button.kb small{display:block;color:var(--hint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.kb.add{flex:0 0 40px;background:transparent;color:var(--ac);border:1px dashed var(--ac);font-size:15px}
+button.kb.add.wide{display:block;width:100%;margin-top:6px;font-size:13px}
+.cmd{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.cmd input{flex:1;min-width:0}.cmd .cmdn{flex:0 0 34%}
+.bar{display:flex;gap:8px;margin-top:16px}
+.bar button{flex:1}
+button.danger-b{background:transparent;color:var(--red);border:1px solid rgba(229,72,77,.35)}
+.sheet{position:fixed;inset:0;z-index:50;display:none}
+.sheet.show{display:block}
+.sb{position:absolute;inset:0;background:rgba(0,0,0,.45);animation:fi .2s}
+.sp{position:absolute;bottom:0;left:0;right:0;max-height:90vh;overflow-y:auto;background:var(--bg);border-radius:20px 20px 0 0;
+  padding:16px 16px calc(18px + env(safe-area-inset-bottom));animation:up .24s ease;overscroll-behavior:contain}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+#toast{z-index:99}
+
+/* ═════════ کارت‌های کشویی ═════════ */
+.card.nd{padding:0;overflow:hidden}
+.nd .nh{display:block;padding:13px 14px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.nd .nr{display:flex;align-items:center;gap:10px}
+.nd .nt{flex:1;min-width:0}
+.nd .nt b{display:block;font-size:14px;line-height:1.5}
+.nd .ns{display:block;font-size:12px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:20px;
+  opacity:1;transition:opacity .2s,max-height .3s}
+.nd.open .ns{opacity:0;max-height:0}
+.nd .nm{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.nd .tag.cnt{background:rgba(14,165,160,.1);color:var(--ac)}
+.nd .chev{width:18px;height:18px;flex:none;color:var(--hint);transition:transform .3s cubic-bezier(.2,.8,.2,1),color .2s}
+.nd.open .chev{transform:rotate(180deg);color:var(--ac)}
+.nbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .34s cubic-bezier(.2,.8,.2,1)}
+.nd.open .nbody{grid-template-rows:1fr}
+.nbody>div{overflow:hidden;min-height:0}
+.nbi{padding:2px 14px 14px;border-top:1px solid transparent;opacity:0;transform:translateY(-4px);transition:opacity .25s .05s,transform .3s .05s}
+.nd.open .nbi{opacity:1;transform:none;border-top-color:var(--bg2)}
+.nd .nbi{padding-top:12px}
+.tray{background:rgba(127,127,127,.13);border-radius:12px;padding:6px 6px 7px;margin-top:10px}
+.tray .krow{margin-top:5px}.tray .krow:first-child{margin-top:0}
+.krow.rk button.kb{border:0;border-radius:6px;background:var(--bg);box-shadow:0 1px 0 rgba(127,127,127,.4)}
+.pvhd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 10px}
+.pvhd .muted{font-size:12.5px}
+.pvhd button{white-space:nowrap;flex:none}
+.rise{animation:riseIn .5s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--i,0)*60ms)}
+@keyframes riseIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+
+/* انتخاب نوع دکمه‌ها */
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 6px 6px;background:transparent;color:var(--hint);
+  border:1px solid rgba(127,127,127,.26);border-radius:10px;line-height:1.4;transition:border-color .18s,background .18s,color .18s}
+.seg button svg{width:38px;height:28px;margin-bottom:1px}
+.seg button b{color:var(--tx);font-weight:600;font-size:12px}
+.seg button small{font-size:10px}
+.seg button.on{border-color:var(--ac);color:var(--ac);background:rgba(14,165,160,.06)}
+
+/* ═════════ انیمیشن ساخت ═════════ */
+.build{position:relative;background:var(--bg);border-radius:14px;padding:11px 13px 12px;margin-bottom:10px;overflow:hidden;
+  border:1px solid rgba(14,165,160,.2);animation:pop .35s ease}
+.build .bh{display:flex;align-items:center;gap:10px}
+.build .bt{flex:1;min-width:0}
+.build .bt b{display:block;font-size:13px;line-height:1.4}
+.build .ph{display:block;font-size:11.5px;color:var(--hint);transition:opacity .3s,transform .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.build .ph.out{opacity:0;transform:translateY(3px)}
+.build .clk{font-size:11px;color:var(--hint);direction:ltr;font-variant-numeric:tabular-nums;letter-spacing:.04em;
+  background:var(--bg2);border-radius:99px;padding:1px 8px}
+.core{width:34px;height:34px;flex:none;overflow:visible}
+.core .glow{fill:var(--ac);opacity:.16;animation:glow 2.4s ease-in-out infinite;transform-origin:50% 50%}
+.core .r1{fill:none;stroke:var(--ac);stroke-opacity:.4;stroke-width:1;stroke-dasharray:1.5 4.5;transform-origin:50% 50%;animation:s 16s linear infinite}
+.core .arc{fill:none;stroke:url(#gA);stroke-width:2.2;stroke-linecap:round;transform-origin:50% 50%;animation:s 2.6s cubic-bezier(.5,0,.5,1) infinite}
+.core .arc2{fill:none;stroke:#34c3ff;stroke-opacity:.7;stroke-width:1.4;stroke-linecap:round;transform-origin:50% 50%;animation:s 4.2s linear infinite reverse}
+.core .orb1{fill:#9b6bff;transform-origin:50% 50%;animation:s 5s linear infinite}
+.core .cpu{fill:url(#gA);transform-origin:50% 50%;animation:chip 3.6s ease-in-out infinite}
+.core .eye{fill:var(--bg)}
+@keyframes glow{50%{transform:scale(1.5);opacity:.05}}
+@keyframes chip{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(90deg) scale(.86)}}
+.bp{position:relative;display:flex;align-items:flex-start;gap:10px;margin:9px 0 9px;padding:8px 10px;border-radius:10px;background:var(--bg2);overflow:hidden}
+.bp::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(127,127,127,.25) 1px,transparent 0);
+  background-size:13px 13px;-webkit-mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%);mask-image:radial-gradient(ellipse at center,#000 30%,transparent 78%)}
+.bp .msg{position:relative;flex:0 0 52%;background:var(--bg);border-radius:9px 9px 9px 3px;padding:7px 8px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.bp .msg i{display:block;height:4px;border-radius:3px;background:rgba(127,127,127,.3);width:var(--w);transform-origin:100% 50%;animation:lineIn 4.8s ease-in-out infinite;animation-delay:calc(var(--k)*.18s)}
+.bp .msg::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(14,165,160,.12) 50%,transparent 70%);
+  transform:translateX(100%);animation:sh2 2.2s ease-in-out infinite}
+.bp .keys{position:relative;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
+.bp .keys b{height:15px;border-radius:6px;background:var(--bg);border:1px solid rgba(14,165,160,.35);opacity:0;
+  animation:keyIn 4.8s ease-in-out infinite;animation-delay:calc(.9s + var(--k)*.22s)}
+@keyframes lineIn{0%{transform:scaleX(0);opacity:0}14%{opacity:1}30%,86%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
+@keyframes keyIn{0%,6%{opacity:0;transform:translateY(5px) scale(.94)}20%,76%{opacity:1;transform:none}92%,100%{opacity:0}}
+@keyframes sh2{to{transform:translateX(-100%)}}
+.steps{display:flex}
+.st{position:relative;flex:1;text-align:center;font-size:10.5px;color:var(--hint);line-height:1.4;transition:color .3s}
+.st::before{content:"";position:absolute;top:4px;left:-50%;width:100%;height:2px;background:rgba(127,127,127,.22);transition:background .5s}
+.st:last-child::before{display:none}
+.st.done::before{background:var(--ac)}
+.st i{position:relative;z-index:1;display:block;width:10px;height:10px;border-radius:50%;margin:0 auto 4px;background:var(--bg);
+  border:2px solid rgba(127,127,127,.35);transition:background .3s,border-color .3s}
+.st.done i{background:var(--ac);border-color:var(--ac)}
+.st.done i::after{content:"";position:absolute;left:1.8px;top:.1px;width:2px;height:4.4px;border:solid var(--act);border-width:0 1.4px 1.4px 0;transform:rotate(40deg)}
+.st.cur{color:var(--tx)}
+.st.cur i{border-color:var(--ac);animation:ping 1.6s ease-out infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(14,165,160,.45)}100%{box-shadow:0 0 0 8px rgba(14,165,160,0)}}
+.build .prog{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(127,127,127,.14);overflow:hidden}
+.build .prog::after{content:"";position:absolute;left:0;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,var(--ac),#9b6bff,transparent);
+  animation:slide 1.7s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(270%)}}
+@media (prefers-reduced-motion:reduce){
+  .core *,.bp .msg i,.bp .msg::after,.bp .keys b,.build .prog::after,.st.cur i,.rise{animation:none!important}
+  .bp .keys b{opacity:1}.nbody,.nbi,.nd .chev{transition:none}
+}
+
+/* ═════════ نوار پایین (دوک) ═════════ */
+body{--dockh:calc(84px + env(safe-area-inset-bottom))}
+body.dock-closed{--dockh:calc(30px + env(safe-area-inset-bottom))}
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:40;touch-action:none;
+  transition:transform .42s cubic-bezier(.3,.9,.25,1)}
+.dock.closed{transform:translateY(100%)}
+.dock.hide{transform:translateY(calc(100% + 40px))}
+.dock .tab{position:absolute;left:50%;bottom:100%;width:76px;height:24px;margin:0 0 0 -38px;padding:0;border-radius:15px 15px 0 0;
+  background:var(--bg);color:var(--hint);display:grid;place-items:center;box-shadow:0 -5px 14px rgba(0,0,0,.08)}
+.dock .tab::before,.dock .tab::after{content:"";position:absolute;bottom:0;width:12px;height:12px}
+.dock .tab::before{right:100%;border-bottom-right-radius:12px;box-shadow:6px 6px 0 6px var(--bg)}
+.dock .tab::after{left:100%;border-bottom-left-radius:12px;box-shadow:-6px 6px 0 6px var(--bg)}
+.dock .tab svg{width:20px;height:20px;transition:transform .4s cubic-bezier(.3,.9,.25,1)}
+.dock.closed .tab svg{transform:rotate(180deg)}
+.dock .tab i{position:absolute;top:5px;width:22px;height:3px;border-radius:2px;background:currentColor;opacity:.28}
+.dpanel{display:flex;justify-content:center;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+  background:var(--bg);box-shadow:0 -6px 22px rgba(0,0,0,.09)}
+.dock .dn{width:auto;flex:1;max-width:150px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 10px 6px;
+  background:transparent;color:var(--hint);font-size:11.5px;border-radius:14px;transition:color .2s,background .2s}
+.dock .dn svg{width:22px;height:22px}
+.dock .dn.on{color:var(--ac);background:rgba(14,165,160,.1)}
+.dock .dn.on svg{filter:drop-shadow(0 0 5px rgba(14,165,160,.45))}
+.dock button:focus-visible,.nd .nh:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+#toast{bottom:calc(var(--dockh) + 12px);transition:opacity .2s,bottom .42s}
+
+/* ═════════ پروفایل ═════════ */
+.pf{position:relative;overflow:hidden;text-align:center;padding:24px 16px 18px;animation:pop .3s ease}
+.pf::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(127,127,127,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(127,127,127,.12) 1px,transparent 1px);
+  background-size:18px 18px;-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 10%,transparent 70%);mask-image:radial-gradient(ellipse at 50% 30%,#000 10%,transparent 70%)}
+.pf>*{position:relative}
+.av{position:relative;width:84px;height:84px;margin:0 auto 12px}
+.av .ring{position:absolute;inset:-6px;border-radius:50%;background:conic-gradient(from 0deg,var(--ac),#9b6bff,#34c3ff,var(--ac));
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));
+  animation:s 14s linear infinite}
+.av .img{position:absolute;inset:0;border-radius:50%;background:var(--bg2);display:grid;place-items:center;font-size:32px;font-weight:700;color:var(--ac);overflow:hidden}
+.av .img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pf h2{font-size:18px;margin:0}
+.pf .un{direction:ltr;display:inline-block;margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--bg);border-radius:14px;padding:12px 14px}
+.stat .k{font-size:12px;color:var(--hint)}
+.stat .v{font-size:24px;font-weight:700;line-height:1.4;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;font-weight:400;color:var(--hint)}
+.pips{display:flex;gap:4px;margin-top:6px}
+.pips i{flex:1;height:5px;border-radius:3px;background:rgba(127,127,127,.22)}
+.pips i.on{background:linear-gradient(90deg,var(--ac),#9b6bff)}
+.quota{display:flex;align-items:center;gap:14px;grid-column:1/-1}
+.quota svg{width:64px;height:64px;flex:none;transform:rotate(-90deg)}
+.quota circle{fill:none;stroke-width:5;stroke-linecap:round}
+.quota .tr{stroke:rgba(127,127,127,.2)}
+.quota .fg{stroke:url(#gQ);transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)}
+.quota .qv{font-size:13.5px;line-height:1.7}
+.quota .qv b{font-size:20px;font-variant-numeric:tabular-nums}
+.kv{padding:4px 14px}
+.kv div{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--bg2);font-size:13.5px}
+.kv div:first-child{border-top:0}
+.kv span{color:var(--hint)}
+.kv b{font-weight:500}
+.kv .cpy{cursor:pointer;direction:ltr;display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.kv .cpy svg{width:14px;height:14px;color:var(--hint)}
+/* ═════════ ویرایشگر متغیر و شرط ═════════ */
+.cmd select{flex:1;min-width:0}
+details.adv{margin-top:14px;border:1px solid rgba(127,127,127,.22);border-radius:12px;padding:0 12px}
+details.adv>summary{cursor:pointer;padding:10px 0;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::after{content:"＋";color:var(--hint)}
+details.adv[open]>summary::after{content:"－"}
+details.adv .box{padding:0 0 12px}
+.sub{font-size:12.5px;font-weight:600;margin:12px 0 6px;display:flex;justify-content:space-between;align-items:center}
+.rl{background:var(--bg2);border-radius:11px;padding:8px;margin-bottom:8px}
+.rl .cmd{margin-bottom:6px}.rl .cmd:last-child{margin-bottom:0}
+.rl input,.rl select,.rl textarea{padding:8px 9px;font-size:13px;border-radius:9px;background:var(--bg)}
+.rl textarea{min-height:64px}
+.rl>input{margin-top:0}
+.rl .lbl{margin:6px 0 3px}
+.kvr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--bg2);font-size:12.5px}
+.kvr:first-of-type{border-top:0}
+.kvr code{font-family:ui-monospace,Menlo,monospace;color:var(--ac);font-size:12px}
+.kvr span{color:var(--hint)}
+.wal{text-align:center}.wal .k{font-size:12px;color:var(--hint)}
+.wal .big{font-size:34px;font-weight:800;line-height:1.5;font-variant-numeric:tabular-nums}
+.tplg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+button.tpl{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:right;background:var(--bg);color:var(--tx);padding:12px;border-radius:14px}
+button.tpl span{font-size:22px}button.tpl b{font-size:13.5px}button.tpl small{font-size:11.5px;color:var(--hint);line-height:1.5}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sub{border-top:1px solid var(--bg2);padding:10px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+.sub:first-child{border-top:0}.sub small{display:block;color:var(--hint);font-size:11.5px}
+.pos{color:var(--green)}.neg{color:var(--red)}
+.ic-bot{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%224%22 y=%228%22 width=%2216%22 height=%2211%22 rx=%223.5%22/%3E%3Cpath d=%22M12 8V4.5%22/%3E%3Ccircle cx=%2212%22 cy=%223.6%22 r=%221%22/%3E%3Ccircle cx=%229%22 cy=%2213.5%22 r=%221%22 fill=%22%23000%22/%3E%3Ccircle cx=%2215%22 cy=%2213.5%22 r=%221%22 fill=%22%23000%22/%3E%3C/svg%3E")}
+.ic-coin{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%222.2%22/%3E%3C/svg%3E")}
+.ic-megaphone{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 10v4h3l7 4V6L7 10z%22/%3E%3Cpath d=%22M17.5 9a4 4 0 0 1 0 6%22/%3E%3C/svg%3E")}
+.ic-chat{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 6h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z%22/%3E%3C/svg%3E")}
+.ic-copy{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%228.5%22 y=%228.5%22 width=%2211%22 height=%2211%22 rx=%222.5%22/%3E%3Cpath d=%22M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2%22/%3E%3C/svg%3E")}
+.ic-link{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1%22/%3E%3Cpath d=%22M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1%22/%3E%3C/svg%3E")}
+.ic-eye{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%222.8%22/%3E%3C/svg%3E")}
+.ic-bolt{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M13 3L5 13.5h6L10 21l8-10.5h-6z%22/%3E%3C/svg%3E")}
+.ic-keyboard{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%223%22 y=%226.5%22 width=%2218%22 height=%2211%22 rx=%222.5%22/%3E%3Cpath d=%22M7 10.5h.01M10.5 10.5h.01M14 10.5h.01M17 10.5h.01M8 14h8%22/%3E%3C/svg%3E")}
+.ic-clip{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M20 11.5l-7.8 7.8a4.5 4.5 0 0 1-6.4-6.4l8-8a3 3 0 0 1 4.3 4.3l-8 8a1.5 1.5 0 0 1-2.1-2.1l7.4-7.4%22/%3E%3C/svg%3E")}
+.ic-puzzle{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 8h4V6.5a2 2 0 1 1 4 0V8h4v4h-1.5a2 2 0 1 0 0 4H17v4H5z%22/%3E%3C/svg%3E")}
+.ic-pen{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z%22/%3E%3C/svg%3E")}
+.ic-spark{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z%22/%3E%3C/svg%3E")}
+.ic-gear{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%223%22/%3E%3Cpath d=%22M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8%22/%3E%3C/svg%3E")}
+.ic-dot{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%225%22 fill=%22%23000%22/%3E%3C/svg%3E")}
+.ic-trash{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5M14 11v5%22/%3E%3C/svg%3E")}
+.ic-gift{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%224%22 y=%229%22 width=%2216%22 height=%2211%22 rx=%222%22/%3E%3Cpath d=%22M12 9v11M3.5 9h17M12 9c-3.5 0-4.5-4-2-4.5 1.5 0 2 2 2 4.5zm0 0c3.5 0 4.5-4 2-4.5-1.5 0-2 2-2 4.5z%22/%3E%3C/svg%3E")}
+.ic-ticket{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z%22/%3E%3Cpath d=%22M14 7v10%22 stroke-dasharray=%221.5 2%22/%3E%3C/svg%3E")}
+.ic-receipt{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 3.5h12v17l-3-2-3 2-3-2-3 2z%22/%3E%3Cpath d=%22M9 8.5h6M9 12h6%22/%3E%3C/svg%3E")}
+.ic-chart{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 20V10M10 20V5M16 20v-7M21 20H3%22/%3E%3C/svg%3E")}
+.ic-inbox{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 13l2.5-7h11L20 13v6H4z%22/%3E%3Cpath d=%22M4 13h4.5a3.5 3.5 0 0 0 7 0H20%22/%3E%3C/svg%3E")}
+.ic-book{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 4.5h10a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z%22/%3E%3Cpath d=%22M5 17a3 3 0 0 1 3-3h10%22/%3E%3C/svg%3E")}
+.ic-users{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%229%22 cy=%229%22 r=%223.2%22/%3E%3Cpath d=%22M3 20c.6-3.4 3-5 6-5s5.4 1.6 6 5%22/%3E%3Ccircle cx=%2217.2%22 cy=%228.5%22 r=%222.4%22/%3E%3Cpath d=%22M17 14c2.4.2 3.7 1.7 4 4%22/%3E%3C/svg%3E")}
+.ic-share{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 15V4M8 8l4-4 4 4%22/%3E%3Cpath d=%22M5 12v7h14v-7%22/%3E%3C/svg%3E")}
+.ic-wrench{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M15 5a4 4 0 0 0-4 5.2L4.5 16.7a2 2 0 0 0 2.8 2.8l6.5-6.5A4 4 0 0 0 19 9l-2.5 2.5-2.5-.5-.5-2.5z%22/%3E%3C/svg%3E")}
+.ic-trend{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3.5 17l5.5-6 4 4 7-8%22/%3E%3Cpath d=%22M15 7h5.5v5.5%22/%3E%3C/svg%3E")}
+.ic-split{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 5v3a4 4 0 0 0 4 4h6a4 4 0 0 1 4 4v3%22/%3E%3Ccircle cx=%225%22 cy=%225%22 r=%221.5%22/%3E%3Ccircle cx=%2219%22 cy=%2219%22 r=%221.5%22/%3E%3C/svg%3E")}
+.ic-check{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 12.5l4.5 4.5L19 7.5%22/%3E%3C/svg%3E")}
+.ic-arrowl{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M19 12H5M11 6l-6 6 6 6%22/%3E%3C/svg%3E")}
+.ic-arrowr{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 12h14M13 6l6 6-6 6%22/%3E%3C/svg%3E")}
+.ic-undo{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M9 6L4 11l5 5%22/%3E%3Cpath d=%22M4.5 11H14a4.5 4.5 0 0 1 0 9h-4%22/%3E%3C/svg%3E")}
+.ic-plus{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 5v14M5 12h14%22/%3E%3C/svg%3E")}
+.ic-x{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 6l12 12M18 6L6 18%22/%3E%3C/svg%3E")}
+.ic-bag{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 8h14l-1 12H6z%22/%3E%3Cpath d=%22M9 8V6.5a3 3 0 0 1 6 0V8%22/%3E%3C/svg%3E")}
+.ic-headset{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4.5 14v-2a7.5 7.5 0 0 1 15 0v2%22/%3E%3Crect x=%223.5%22 y=%2213%22 width=%224%22 height=%226%22 rx=%221.5%22/%3E%3Crect x=%2216.5%22 y=%2213%22 width=%224%22 height=%226%22 rx=%221.5%22/%3E%3C/svg%3E")}
+.ic-form{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%225%22 y=%224%22 width=%2214%22 height=%2216%22 rx=%222.5%22/%3E%3Cpath d=%22M9 9h6M9 13h6M9 17h3%22/%3E%3C/svg%3E")}
+.ic-medal{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%229.5%22 r=%225%22/%3E%3Cpath d=%22M8.5 14L7 21l5-2.5L17 21l-1.5-7%22/%3E%3C/svg%3E")}
+.ic-quiz{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%228.5%22/%3E%3Cpath d=%22M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 16.5h.01%22/%3E%3C/svg%3E")}
+.ic-download{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 4v11M8 11l4 4 4-4M5 19h14%22/%3E%3C/svg%3E")}
+.ic-upload{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 15V4M8 8l4-4 4 4M5 19h14%22/%3E%3C/svg%3E")}
+.ic-pulse{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 12h4l2.5-6 4 12 2.5-6H21%22/%3E%3C/svg%3E")}
+.ic-layers{--m:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%221.8%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 4l8.5 4.5L12 13 3.5 8.5z%22/%3E%3Cpath d=%22M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5%22/%3E%3C/svg%3E")}
+
+/* ═════════ BotMaker v2 — پوسته‌ی رباتیک ═════════ */
+:root{--ac:#0ea5a0;--ac2:#6d5efc;--act:#fff;--green:#16a37f;--red:#e5484d;--r:12px;
+  --ln:color-mix(in srgb,var(--tx) 12%,transparent);--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+body{font-family:"Space Grotesk","Vazirmatn",Tahoma,system-ui,sans-serif;font-size:14.5px;line-height:1.75;
+  background-color:var(--bg2);background-image:radial-gradient(color-mix(in srgb,var(--tx) 10%,transparent) 1px,transparent 1.3px);background-size:18px 18px}
+h1,h2,b,.big{font-family:"Space Grotesk","Vazirmatn",system-ui,sans-serif}
+.top{padding:14px 2px 12px}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;fill:none;stroke:var(--ac);stroke-width:1.7;stroke-linecap:round}
+.mark .eye{fill:var(--ac);stroke:none;transform-origin:center;transform-box:fill-box;animation:blink 6s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96.5%{transform:scaleY(.1)}}
+.top h1{font-size:17px;font-weight:800;line-height:1.3}
+.tagline{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--hint);direction:ltr;text-align:right}
+.chip{display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:12.5px;border:1px solid var(--ln);color:var(--tx);padding:3px 11px;border-radius:9px;cursor:pointer}
+.chip .ic{color:var(--ac);margin:0 0 0 4px}
+.ic{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;margin-inline-end:.4em;background:currentColor;
+  -webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat;flex:none}
+.ic:only-child{margin:0}
+.ic-dot{color:var(--green)}
+.card{border:1px solid var(--ln);border-radius:var(--r)}
+.card h2{display:flex;align-items:center;gap:2px;font-size:14px;font-weight:700}
+.card h2 .ic{color:var(--ac)}
+button{border-radius:10px;font-weight:600;transition:transform .12s,filter .15s}
+button:not(:disabled):active{transform:scale(.98)}
+button:not(.ghost):not(.danger):not(.back):not(.sm):not(.kb):not(.tpl):not(.x):not(.danger-b):not(.dn):not(.tab):not(.xb){
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 86%,#fff),var(--ac))}
+button.ghost{background:transparent;border:1px solid var(--ln);color:var(--tx)}
+button.ghost .ic{color:var(--ac)}
+button.sm.ghost{padding:5px 10px}
+input,textarea,select{border:1px solid transparent;background:color-mix(in srgb,var(--tx) 6%,var(--bg));border-radius:10px}
+input:focus,textarea:focus,select:focus{border-color:var(--ac)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.tag,.id,.kvr code,.stat .v,.big,.chip,.clk{font-family:var(--mono)}
+.tag{border:1px solid var(--ln);background:transparent;border-radius:6px;display:inline-flex;align-items:center}
+.tag .ic{width:1em;height:1em;margin-inline-end:.3em}
+.bubble{border-radius:12px;border:1px solid var(--ln);background:var(--bg)}
+.bubble .pen{opacity:.5;color:var(--ac)}.bubble .pen .ic{margin:0}
+button.kb{border:1px solid var(--ln);background:var(--bg)}
+button.kb small{display:flex;align-items:center;justify-content:center;gap:2px}
+button.kb small .ic{width:.95em;height:.95em;margin:0 0 0 3px;color:var(--ac)}
+button.kb.add{border:1px dashed color-mix(in srgb,var(--ac) 60%,transparent);color:var(--ac);background:transparent;display:flex;align-items:center;justify-content:center;gap:4px}
+.back{display:inline-flex;align-items:center;color:var(--ac);font-weight:600}
+.think{border-radius:12px}.think .thi{color:var(--ac)}.think .thi .ic{margin:0}
+.dot{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 0%,transparent)}.dot.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.tplg{gap:8px}
+button.tpl{border:1px solid var(--ln);border-radius:var(--r);gap:6px}
+button.tpl .tic{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:color-mix(in srgb,var(--ac) 12%,transparent);color:var(--ac)}
+button.tpl .tic .ic{width:19px;height:19px}
+button.tpl b{font-weight:700}
+.sp{border-radius:18px 18px 0 0;border:1px solid var(--ln);border-bottom:0}
+.sp .hd h2{font-size:15px}
+.sp .hd .x{color:var(--hint)}
+#toast{font-family:"Space Grotesk","Vazirmatn",sans-serif;border:1px solid rgba(255,255,255,.12);border-radius:10px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.tools button{display:flex;align-items:center;justify-content:center;gap:2px;font-size:13px;padding:10px 8px}
+.hl{padding:8px 0;border-top:1px solid var(--ln);font-size:13px}.hl:first-child{border-top:0}
+.hl.ok{color:var(--green)}
+.dpanel button .ic{margin:0}
+@media (prefers-reduced-motion:reduce){.mark .eye{animation:none}}
+
+.exs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+button.ex{width:auto;padding:4px 11px;font-size:12px;font-weight:500;background:transparent;color:var(--tx);border:1px solid var(--ln)}
+.usum{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13.5px}
+.usum .dot{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.urow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--ln)}
+.urow:first-child{border-top:0}
+.urow .dot{margin-top:8px}
+.ui{flex:1;min-width:0}
+.u1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.u1 b{font-size:14px}
+.u2{display:flex;gap:10px;align-items:center;font-size:12px}
+.u2 .cpy{font-family:var(--mono);color:var(--ac);cursor:pointer}
+.u3{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.ub{font-family:var(--mono);font-size:11px;border:1px solid var(--ln);border-radius:6px;padding:0 7px;color:var(--hint)}
+.ub.on{color:var(--tx)}
+.ucnt{font-family:var(--mono);font-size:12px;min-width:24px;text-align:center;border:1px solid var(--ln);border-radius:7px;padding:1px 0;margin-top:2px}
+.ic-compass{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Ccircle%20cx=%2212%22%20cy=%2212%22%20r=%229%22/%3E%3Cpath%20d=%22M15.6%208.4l-2.1%205.1-5.1%202.1%202.1-5.1z%22/%3E%3C/svg%3E")}
+.ic-heart{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M12%2020s-7.5-4.6-7.5-10.2A4.3%204.3%200%200%201%2012%207.3a4.3%204.3%200%200%201%207.5%202.5C19.5%2015.4%2012%2020%2012%2020z%22/%3E%3C/svg%3E")}
+.ic-heartf{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22%23000%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M12%2020s-7.5-4.6-7.5-10.2A4.3%204.3%200%200%201%2012%207.3a4.3%204.3%200%200%201%207.5%202.5C19.5%2015.4%2012%2020%2012%2020z%22/%3E%3C/svg%3E")}
+.ic-play{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22%23000%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M8.5%205.8v12.4L18.2%2012z%22/%3E%3C/svg%3E")}
+.ic-flame{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M12%203c.6%203.2-2.7%204.8-2.7%208.2a2.7%202.7%200%200%200%205.4%200c0-1-.4-1.8-.4-1.8%202.3%201.2%203.5%203.3%203.5%205.4a5.8%205.8%200%200%201-11.6%200C6.2%209.6%2010.4%208.2%2012%203z%22/%3E%3C/svg%3E")}
+.ic-flag{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M6%2021V4%22/%3E%3Cpath%20d=%22M6%205h11.5l-2.3%204%202.3%204H6%22/%3E%3C/svg%3E")}
+.ic-refresh{--m:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%221.8%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M20%2011.5A8%208%200%201%200%2017.7%2017%22/%3E%3Cpath%20d=%22M20.5%205v6.5H14%22/%3E%3C/svg%3E")}
+
+/* ═════════ اکسپلور ═════════ */
+.xhd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 12px}
+.xhd>div{display:flex;flex-direction:column;min-width:0}
+.xhd h2{font-size:18px;font-weight:800;display:flex;align-items:center;gap:2px;line-height:1.4;margin:0}
+.xhd h2 .ic{color:var(--ac)}
+.xhd .xsub{font-size:12px;color:var(--hint);line-height:1.6}
+.xb{width:auto;font-weight:600}
+.xref{padding:8px;background:transparent;border:1px solid var(--ln);color:var(--hint);border-radius:10px}
+.xref .ic{margin:0}.xref.spin .ic{animation:s .8s linear infinite}
+.xtabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
+.xtabs::-webkit-scrollbar{display:none}
+.xtabs .xb{flex:none;display:inline-flex;align-items:center;padding:6px 13px;font-size:13px;background:transparent;color:var(--hint);border:1px solid var(--ln);border-radius:99px;transition:background .2s,color .2s}
+.xtabs .xb .ic{width:1em;height:1em}
+.xtabs .xb.on{color:var(--act);background:var(--ac);border-color:transparent}
+.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.xc{position:relative;display:flex;flex-direction:column;gap:7px;min-width:0;padding:12px;background:var(--bg);border:1px solid var(--ln);
+  border-radius:16px;cursor:pointer;overflow:hidden;transition:transform .15s,border-color .2s}
+.xc:active{transform:scale(.985)}
+.xc.hot{border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
+.xt{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;min-width:0;padding-top:4px}
+.xn{min-width:0;flex:1}
+.xn b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;line-height:1.45;display:-webkit-box}
+.xn .un{display:block;direction:ltr;text-align:center;font-family:var(--mono);font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xav{position:relative;flex:none;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;overflow:hidden;
+  font-weight:800;font-size:21px;color:#fff;background:linear-gradient(135deg,hsl(var(--h,200) 70% 52%),hsl(calc(var(--h,200) + 40) 70% 42%))}
+.xav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.xd{text-align:center;font-size:12.5px;line-height:1.65;color:var(--hint);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+.xs{display:flex;align-items:center;justify-content:center;gap:12px;font-family:var(--mono);font-size:11.5px;color:var(--hint)}
+.xs span{display:inline-flex;align-items:center}
+.xs .ic{width:1em;height:1em;margin-inline-end:.3em}
+.xa{display:flex;gap:6px;margin-top:auto}
+.xstart{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:2px;padding:8px 10px;font-size:13px;border-radius:10px}
+.xstart .ic{width:.9em;height:.9em}
+.xlike{display:inline-flex;align-items:center;gap:2px;padding:8px 11px;font-size:12.5px;font-family:var(--mono);background:transparent;color:var(--hint);border:1px solid var(--ln);border-radius:10px}
+.xlike .ic{margin:0 0 0 4px}
+.xlike.on{color:#e5484d;border-color:color-mix(in srgb,#e5484d 40%,transparent);background:color-mix(in srgb,#e5484d 8%,transparent)}
+.xlike.pop .ic{animation:beat .45s cubic-bezier(.3,1.6,.5,1)}
+.xlike:disabled{opacity:.55}
+@keyframes beat{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
+.xbd{position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;font-family:var(--mono);font-size:10.5px;line-height:1;padding:4px 7px;border-radius:99px;
+  color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent)}
+.xbd .ic{width:1em;height:1em;margin-inline-end:.25em}
+.xbd.n{color:var(--green);background:color-mix(in srgb,var(--green) 13%,transparent)}
+.xbd.m{color:var(--hint);background:color-mix(in srgb,var(--tx) 8%,transparent)}
+.xc.feat{grid-column:1/-1;padding:16px;gap:10px;border:1px solid transparent;
+  background:linear-gradient(var(--bg),var(--bg)) padding-box,linear-gradient(135deg,var(--ac),var(--ac2)) border-box}
+.xc.feat::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(rgba(127,127,127,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(127,127,127,.1) 1px,transparent 1px);background-size:18px 18px;
+  -webkit-mask-image:radial-gradient(ellipse at 85% 0,#000 5%,transparent 65%);mask-image:radial-gradient(ellipse at 85% 0,#000 5%,transparent 65%)}
+.xc.feat>*:not(.xbd){position:relative}
+.xc.feat .xt{flex-direction:row;text-align:start;gap:12px;padding-top:0}
+.xc.feat .xn .un{text-align:right}
+.xc.feat .xav{width:62px;height:62px;font-size:25px}
+.xc.feat .xd,.xc.feat .xs{text-align:start;justify-content:flex-start}
+.xc.feat .xn b{min-height:0;-webkit-line-clamp:1}
+.xc.feat .xn b{font-size:16px}
+.xc.feat .xd{font-size:13px;-webkit-line-clamp:3}
+.xc.feat .xbd{position:static;align-self:flex-start;color:var(--act);background:linear-gradient(135deg,var(--ac),var(--ac2));font-size:11px;padding:5px 10px}
+.xc.feat .xstart{padding:10px}
+.xc.sk{pointer-events:none;gap:9px}
+.xc.sk i{display:block;height:10px;border-radius:5px;background:linear-gradient(100deg,var(--ln) 30%,color-mix(in srgb,var(--tx) 16%,transparent) 50%,var(--ln) 70%);background-size:220% 100%;animation:xsh 1.3s linear infinite}
+.xc.sk .xav{background:var(--ln);animation:none}
+@keyframes xsh{from{background-position:120% 0}to{background-position:-120% 0}}
+.xempty{text-align:center;padding:34px 16px}
+.xempty .ic{width:34px;height:34px;color:var(--ac);margin:0 auto 8px;display:block}
+.xmore{margin-bottom:12px}
+.xbig{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.xbig div{border:1px solid var(--ln);border-radius:12px;padding:9px 6px;text-align:center}
+.xbig b{display:block;font-family:var(--mono);font-size:17px;line-height:1.4}
+.xbig small{font-size:11.5px;color:var(--hint)}
+.xsheet-top{display:flex;align-items:center;gap:12px}
+.xsheet-top .xt{flex-direction:row;text-align:start;padding:0;gap:12px;align-items:center}
+.xsheet-top .xn .un{text-align:right}
+.xsheet-top .xn b{min-height:0}
+.xsheet-top .xav{width:64px;height:64px;font-size:26px}
+.xsheet-top .xn b{font-size:17px}
+.xsheet-desc{margin-top:12px;text-align:start;font-size:13.5px;line-height:1.85;color:var(--tx)}
+.xsheet-act{display:flex;gap:8px;margin-top:4px}
+.xsheet-act .xstart{padding:12px}
+.xsheet-act .xlike{padding:12px 16px}
+.xlinks{display:flex;gap:8px;margin-top:10px}
+.xlinks .xb{flex:1;font-size:12.5px;padding:8px;background:transparent;border:1px solid var(--ln);color:var(--hint);border-radius:10px;display:inline-flex;align-items:center;justify-content:center}
+.xlinks .xb.dg{color:var(--red)}
+.xo .xprev .xc{cursor:default;margin:0 auto 12px;width:calc(50% - 5px);min-width:168px}
+.xo .xprev .xc:active{transform:none}
+.xo textarea{min-height:60px;font-size:13.5px}
+.xcnt{display:flex;justify-content:flex-end;font-family:var(--mono);font-size:11px;color:var(--hint);margin:2px 2px 10px}
+.xo .tag.on{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent);margin-inline-start:6px;font-size:11px}
+.xo .xs.sum{margin:0 2px 12px;gap:14px}
+@media (prefers-reduced-motion:reduce){.xc.sk i,.xlike.pop .ic,.xref.spin .ic{animation:none}}
+</style>
+</head>
+<body>
+<div class="top"><div class="brand"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="8" width="26" height="19" rx="7"/><path d="M16 8V4"/><circle cx="16" cy="3.2" r="1.4"/><circle class="eye" cx="11.5" cy="17" r="1.9"/><circle class="eye" cx="20.5" cy="17" r="1.9"/><path d="M12.5 22h7"/></svg><div><h1>رباتساز هوشمند</h1><span class="tagline">AI BOTMAKER</span></div></div><span class="chip" id="quota" role="button" tabindex="0"></span></div>
+<div id="app"></div>
+<div id="sheet" class="sheet"></div>
+<div id="toast"></div>
+<nav class="dock" id="dock" aria-label="ناوبری اصلی">
+  <button class="tab" id="dockTab" aria-label="باز و بسته کردن نوار پایین" aria-expanded="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10l6 6 6-6"/></svg>
+  </button>
+  <div class="dpanel">
+    <button class="dn" data-d="bots">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/></svg>
+      <span>ربات‌ها</span>
+    </button>
+    <button class="dn" data-d="explore">
+      <i class="ic ic-compass" style="width:22px;height:22px;margin:0"></i>
+      <span>اکسپلور</span>
+    </button>
+    <button class="dn" data-d="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></svg>
+      <span>پروفایل</span>
+    </button>
+  </div>
+</nav>
+
+<script>
+const tg = window.Telegram?.WebApp;
+tg?.ready(); tg?.expand();
+const INIT = tg?.initData || "";
+// خالی = همون دامنه‌ای که این صفحه ازش لود شده (حالت پیش‌فرض). فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
+const API_BASE = "";
+let S = { open: new Set(), joined: null, bots: [], bal: 0, costs: {min:5, typical:11}, ref: null, daily: null, isAdmin: false, templates: [], maxBots: 10, view: "list", cur: null, busy: false, edit: null, dirty: false, fresh: false };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2800); }
+
+async function api(path, method="GET", body){
+  const r = await fetch(API_BASE + path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body?JSON.stringify(body):undefined });
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok){ const e = new Error(d.error || "خطا در ارتباط با سرور"); e.status = r.status; throw e; }
+  return d;
+}
+
+async function load(){
+  try{
+    const d = await api("/api/me");
+    S.bots = d.bots; S.bal = d.bal; S.costs = d.costs; S.ref = d.ref; S.daily = d.daily; S.isAdmin = d.is_admin; S.templates = d.templates || []; S.maxBots = d.max_bots; S.joined = d.joined;
+  }catch(e){ $("#dock").hidden = true; $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`; return; }
+  render();
+}
+
+function render(){
+  $("#quota").innerHTML = `<i class="ic ic-coin"></i><b>${fa(S.bal)}</b>`; $("#quota").onclick = () => go("profile");
+  S.view === "list" ? renderList() : S.view === "profile" ? renderProfile() : S.view === "explore" ? renderExplore() : renderBot();
+  syncDock();
+}
+
+function renderList(){
+  const list = S.bots.map(b => `
+    <div class="card bot" data-id="${b.id}">
+      <span class="dot ${b.active?"on":""}"></span>
+      <div><b>${esc(b.name)}</b><span class="muted">${b.active ? "@"+esc(b.username) : "هنوز فعال نشده"}</span></div>
+    </div>`).join("");
+  $("#app").innerHTML = (list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">یه جمله بنویس، ربات آماده می‌شه.</span></p></div>`)
+    + (S.bots.length < S.maxBots ? `<button id="new"><i class='ic ic-plus'></i>ساخت ربات جدید</button><button class="ghost" data-tl="import" style="margin-top:8px"><i class='ic ic-upload'></i>ورود از JSON</button>` : `<p class="muted" style="text-align:center">به سقف ${S.maxBots} ربات رسیدی</p>`);
+  document.querySelectorAll(".bot").forEach(el => el.onclick = () => { S.cur = S.bots.find(b=>b.id===el.dataset.id); S.view="bot"; S.open = new Set(); render(); });
+  $("#new")?.addEventListener("click", () => { S.cur = null; S.view = "bot"; S.open = new Set(); render(); });
+}
+
+const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
+const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
+const cp = o => JSON.parse(JSON.stringify(o));
+
+const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g," ").slice(0,24) || id) : "؟"; };
+const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : CH_RE.test(b.url||"") ? "channel" : "url";
+const btnInfo0 = (cfg, b) => {
+  const k = kindOf(b);
+  return k==="goto" ? "<i class='ic ic-arrowl'></i>"+esc(titleOf(cfg,b.goto)) : k==="channel" ? "<i class='ic ic-megaphone'></i>@"+esc(CH_RE.exec(b.url)[1])
+    : k==="alert" ? "<i class='ic ic-chat'></i>پیام پاپ‌آپ" : k==="copy" ? "<i class='ic ic-copy'></i>کپی متن" : "<i class='ic ic-link'></i>"+esc((b.url||"").replace(/^https:\/\//,"").slice(0,22));
+};
+const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " · <i class='ic ic-eye'></i>شرطی" : "") + (b.do?.length ? " · <i class='ic ic-bolt'></i>" : "");
+
+const fa = n => Number(n || 0).toLocaleString("en-US");
+const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+
+function nodeCard(cfg, id, i = 0, rise = false){
+  const n = cfg.nodes[id], tags = [], isRk = n.kb === "reply";
+  if(id===cfg.start) tags.push("شروع");
+  if(id===cfg.fallback) tags.push("پیام ناشناس");
+  if(n.fields) tags.push("فرم");
+  else if(n.ask) tags.push("دریافت پیام");
+  if(isRk) tags.push("<i class='ic ic-keyboard'></i>کیبورد چت");
+  if(n.media || n.photo) tags.push("<i class='ic ic-clip'></i>فایل");
+  if(n.ai) tags.push("<i class='ic ic-bot'></i>هوش مصنوعی");
+  if(n.do?.length || n.route?.length || n.alt?.length) tags.push("<i class='ic ic-puzzle'></i>منطق");
+  const open = S.open.has(id), nb = n.buttons.reduce((a,r) => a + r.length, 0);
+  const prev = (n.text||"").replace(/\s+/g," ").slice(0,70);
+  const kb = n.buttons.map((row,r) => `<div class="krow${isRk?" rk":""}">${row.map((b,c) =>
+      `<button class="kb" data-sa="btn" data-n="${id}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg,b)}</small></button>`).join("")}
+      ${row.length<3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}"><i class='ic ic-plus'></i></button>` : ""}</div>`).join("");
+  return `
+    <div class="card nd${open?" open":""}${rise?" rise":""}" style="--i:${Math.min(i,8)}">
+      <div class="nh" role="button" tabindex="0" aria-expanded="${open}" data-sa="toggle" data-n="${id}">
+        <div class="nr"><div class="nt"><b>${esc(titleOf(cfg,id))}</b><span class="ns">${esc(prev)}</span></div>${CHEV}</div>
+        <div class="nm">${tags.map(t=>`<span class="tag">${t}</span>`).join("")}<span class="tag cnt">${nb ? fa(nb)+" دکمه" : "بدون دکمه"}</span></div>
+      </div>
+      <div class="nbody"><div><div class="nbi">
+        <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen"><i class='ic ic-pen'></i></span></div>
+        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map((q,i) => esc(q) + (n.save?.[i] ? ' <span class="tag" dir="ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" <i class='ic ic-arrowl'></i>")}</div>` : ""}
+        ${isRk ? `<div class="tray">${kb}</div>` : kb}
+        ${n.buttons.length<6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}"><i class='ic ic-plus'></i>دکمه‌ی جدید</button>` : ""}
+      </div></div></div>
+    </div>`;
+}
+
+function toggleNode(id, head){
+  const card = head.closest(".nd"), o = card.classList.toggle("open");
+  head.setAttribute("aria-expanded", o);
+  o ? S.open.add(id) : S.open.delete(id);
+  syncAll();
+  tg?.HapticFeedback?.selectionChanged();
+}
+function toggleAll(){
+  const ids = Object.keys(S.cur.config.nodes), all = ids.every(i => S.open.has(i));
+  S.open = all ? new Set() : new Set(ids);
+  document.querySelectorAll(".nd").forEach((el,i) => {
+    el.classList.toggle("open", !all); el.querySelector(".nh").setAttribute("aria-expanded", !all);
+  });
+  syncAll();
+}
+function syncAll(){
+  const b = $("#allbtn"); if(!b || !S.cur) return;
+  b.textContent = Object.keys(S.cur.config.nodes).every(i => S.open.has(i)) ? "بستن همه" : "باز کردن همه";
+}
+
+function renderBot(){
+  const b = S.cur;
+  const prompt = `
+    <div class="card">
+      <h2>${b ? "چی رو تغییر بدم؟" : "چه رباتی می‌خوای؟"}</h2>
+      <textarea id="prompt" maxlength="2000" placeholder="${b ? "مثلاً: یه دکمه‌ی پشتیبانی اضافه کن" : "مثلاً: ربات فروشگاه لوازم جانبی موبایل با منوی محصولات و دکمه‌ی سفارش"}"></textarea>
+      ${b ? "" : `<div class="exs">${EXAMPLES.map(([t,p]) => `<button class="ex" data-ex="${esc(p)}">${t}</button>`).join("")}</div>`}
+      <div style="height:10px"></div>
+      <button id="gen">${b ? "ارتقا بده" : "بساز"}</button>
+      <p class="muted" style="margin-top:8px;font-size:12px">هزینه‌ی هر ساخت یا ارتقا حدود ${fa(S.costs.typical)} توکن (حداقل ${fa(S.costs.min)}) • ویرایش دستی و قالب‌ها رایگانه</p>
+    </div>
+    <div id="live"></div>`;
+  let body = "";
+  if(!b && S.templates.length){
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">یا از قالب آماده شروع کن (رایگان)</h2></div><div class="tplg">${S.templates.map(t => `<button class="tpl" data-tpl="${t.id}"><span class="tic"><i class="ic ic-${t.icon}"></i></span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`;
+  }
+  if(b){
+    body += `<div class="think${b.thinking?" show":""}" id="think"><span class="thi"><i class='ic ic-spark'></i></span><span class="tt">${S.fresh ? "" : esc(b.thinking||"")}</span></div>`;
+    body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot"><i class='ic ic-gear'></i>تنظیمات ربات</button></div>
+             <div class="pvhd"><span class="muted">هر بخش رو باز کن، بعد روی متن یا دکمه بزن تا ویرایشش کنی.</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
+    body += Object.keys(b.config.nodes).map((id,i) => nodeCard(b.config, id, i, S.fresh)).join("");
+    body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px"><i class='ic ic-plus'></i>بخش جدید</button>`;
+    body += `<div class="card" id="stats"><span class="muted">در حال بارگذاری آمار…</span></div>`;
+    body += `<div class="card"><h2><i class='ic ic-wrench'></i>ابزارها</h2><div class="tools">
+      <button class="ghost" data-tl="health"><i class='ic ic-pulse'></i>بررسی مسیرها</button>
+      <button class="ghost" data-tl="export"><i class='ic ic-download'></i>خروجی JSON</button>
+      <button class="ghost" data-tl="dup"><i class='ic ic-layers'></i>کپی ربات</button>
+      <button class="ghost" data-tl="csv"><i class='ic ic-inbox'></i>خروجی CSV فرم‌ها</button></div></div>`;
+    if(b.versions) body += `<button class="ghost" id="undo" style="margin-bottom:12px"><i class='ic ic-undo'></i>برگشت به نسخه‌ی قبلی</button>`;
+    body += b.active
+      ? `<div class="card"><h2><i class='ic ic-dot'></i>فعاله: @${esc(b.username)}</h2><p class="muted" style="margin-bottom:10px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام‌های کاربرها، یک بار ربات خودت رو استارت کن.</p><button class="ghost" id="off">غیرفعال کردن</button></div>`
+      : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act">فعال کن</button></div>`;
+    if(b.active) body += xoHTML(b);
+    body += `<button class="danger" id="del">حذف ربات</button>`;
+  }
+  $("#app").innerHTML = `<button class="back" id="back"><i class='ic ic-arrowr'></i>بازگشت</button>${prompt}${body}`;
+  $("#back").onclick = () => { S.view="list"; S.cur=null; closeSheet(); load(); };
+  $("#gen").onclick = generate;
+  $("#undo")?.addEventListener("click", undo);
+  $("#act")?.addEventListener("click", activate);
+  $("#off")?.addEventListener("click", () => act("deactivate", "ربات غیرفعال شد"));
+  $("#del")?.addEventListener("click", remove);
+  bindXo();
+  syncAll(); if(b) loadStats();
+  if(S.fresh && b?.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+  S.fresh = false;
+}
+
+/* ───────── تایپ تدریجی توضیح هوش مصنوعی ───────── */
+function typeText(el, text){
+  const id = ++typeText.id;
+  if(matchMedia("(prefers-reduced-motion:reduce)").matches){ el.textContent = text; return; }
+  let i = 0; el.textContent = "";
+  (function step(){
+    if(id !== typeText.id || !el.isConnected) return;
+    i = Math.min(text.length, i + 2); el.textContent = text.slice(0, i);
+    if(i < text.length) setTimeout(step, 16);
+  })();
+}
+typeText.id = 0;
+
+/* ───────── انیمیشن ساخت ربات ───────── */
+const STEPS = ["درک درخواست","طراحی مسیرها","ساخت بخش‌ها","بازبینی نهایی"];
+const PHASES = [["دارم درخواستت رو می‌خونم…",0],["ببینم ربات واقعاً به چی نیاز داره…",0],["مسیر کاربرها رو طراحی می‌کنم…",1],
+  ["بخش‌ها و دکمه‌ها رو می‌چینم…",2],["متن‌ها رو می‌نویسم…",2],["یه بررسی نهایی می‌کنم…",3]];
+const CORE = `<svg class="core" viewBox="0 0 48 48" aria-hidden="true">
+  <defs><linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ac)"/><stop offset="1" stop-color="#9b6bff"/></linearGradient></defs>
+  <circle class="glow" cx="24" cy="24" r="13"/>
+  <circle class="r1" cx="24" cy="24" r="22"/>
+  <path class="arc" d="M24 5a19 19 0 0 1 16.5 9.5"/>
+  <path class="arc2" d="M24 43a19 19 0 0 1-16.5-9.5"/>
+  <g class="orb1"><circle cx="24" cy="2.6" r="2"/></g>
+  <rect class="cpu" x="17" y="17" width="14" height="14" rx="4.5"/>
+  <circle class="eye" cx="21.4" cy="24" r="1.3"/><circle class="eye" cx="26.6" cy="24" r="1.3"/>
+</svg>`;
+function startLive(){
+  const box = $("#live"); if(!box) return;
+  $("#think")?.classList.remove("show");
+  box.innerHTML = `<div class="build" role="status" aria-live="polite">
+    <div class="bh">${CORE}<div class="bt"><b>در حال طراحی ربات</b><span class="ph" id="ph">${PHASES[0][0]}</span></div><span class="clk" id="clk">00:00</span></div>
+    <div class="bp"><div class="msg"><i style="--w:92%;--k:0"></i><i style="--w:70%;--k:1"></i><i style="--w:44%;--k:2"></i></div>
+      <div class="keys"><b style="--k:0"></b><b style="--k:1"></b><b style="--k:2"></b><b style="--k:3"></b></div></div>
+    <div class="steps" id="steps">${STEPS.map(t=>`<div class="st"><i></i>${t}</div>`).join("")}</div>
+    <div class="prog"></div></div>`;
+  box.scrollIntoView({behavior:"smooth",block:"center"});
+  const t0 = Date.now(); let i = 0;
+  clearInterval(startLive.t); clearInterval(startLive.c);
+  setStep(0);
+  startLive.t = setInterval(() => {
+    const ph = $("#ph"); if(!ph) return clearInterval(startLive.t);
+    ph.classList.add("out");
+    setTimeout(() => { i = Math.min(i + 1, PHASES.length - 1); ph.textContent = PHASES[i][0]; setStep(PHASES[i][1]); ph.classList.remove("out"); }, 280);
+  }, 2800);
+  startLive.c = setInterval(() => {
+    const c = $("#clk"); if(!c) return clearInterval(startLive.c);
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    c.textContent = String(Math.floor(sec / 60)).padStart(2,"0") + ":" + String(sec % 60).padStart(2,"0");
+  }, 1000);
+}
+function setStep(k){ document.querySelectorAll("#steps .st").forEach((el,j) => { el.classList.toggle("done", j < k); el.classList.toggle("cur", j === k); }); }
+function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); const box = $("#live"); if(box) box.innerHTML = ""; }
+
+/* ───────── ویرایشگر سریع (شیت پایین صفحه) ───────── */
+let D = null;   // پیش‌نویس فرم باز
+async function commit(fn, msg="ذخیره شد "){
+  const cfg = cp(S.cur.config); fn(cfg);
+  const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: cfg});
+  S.cur = d.bot; closeSheet(); renderBot(); toast(msg);
+  tg?.HapticFeedback?.notificationOccurred("success");
+}
+function closeSheet(){ clearInterval(openUsers.t); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function showSheet(html){
+  const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
+  sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp">${html}</div>`;
+  sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
+}
+const nodeOpts = (cfg, cur, extra="") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i===cur?" selected":""}>${esc(titleOf(cfg,i))}</option>`).join("");
+const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="close"><i class='ic ic-x'></i></button></div>`;
+
+/* ── منطق: متغیر، شرط و اکشن ── */
+const OPS = [["==","مساوی باشه با"],["!=","مساوی نباشه با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشه"],["empty","خالی باشه"],["filled","پر باشه"]];
+const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
+const APH = {set:"مقدار (می‌تونی {متغیر} بذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شه"};
+const MEDIA_TYPES = [["photo","عکس"],["video","ویدیو"],["audio","صوت"],["document","فایل"],["animation","گیف"]];
+const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
+const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["text","آخرین پیام کاربر"],
+  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
+const BUILTIN = BUILTIN_HELP.map(x => x[0]);
+const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
+const simpleCond = c => !!c && typeof c.var === "string" && !c.all && !c.any && !c.not;
+const blankCond = () => ({var:"", op:"==", value:""});
+const newRule = l => l==="do" ? {op:"set", var:"", value:""} : l==="route" ? {c:blankCond(), goto:S.cur.config.start} : l==="alt" ? {c:blankCond(), text:""} : {c:blankCond()};
+const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
+
+function condHTML(c){
+  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px"><i class='ic ic-split'></i>شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
+  const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
+  return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
+    <select class="c-op" data-sh="re">${OPS.map(([v,l]) => `<option value="${v}"${v===x.op?" selected":""}>${l}</option>`).join("")}</select></div>
+    ${nov ? "" : `<input class="fa c-val" value="${esc(x.value || "")}" placeholder="مقدار" maxlength="100">`}`;
+}
+function ruleHTML(list, o, i, cfg){
+  const del = `<button class="sm x" data-sh="delrl" data-l="${list}" data-i="${i}"><i class='ic ic-x'></i></button>`;
+  let inner;
+  if(list === "do"){
+    inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v,l]) => `<option value="${v}"${v===o.op?" selected":""}>${l}</option>`).join("")}</select>
+      ${o.op === "notify" ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
+      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op])}" maxlength="${o.op==="notify"?500:100}">`}`;
+  } else {
+    inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگه…"}</span>${del}</div>${condHTML(o.c)}`;
+    if(list === "route") inner += `<span class="lbl" style="margin:6px 0 3px">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
+    if(list === "alt") inner += `<textarea class="fa r-text" maxlength="3500" placeholder="متن جایگزین">${esc(o.text || "")}</textarea>`;
+  }
+  return `<div class="rl" data-list="${list}" data-i="${i}">${inner}</div>`;
+}
+function ruleSection(title, hint, list, cfg, max){
+  const arr = D[list];
+  return `<div class="sub"><span>${title}</span>${arr.length < max ? `<button class="sm ghost" data-sh="addrl" data-l="${list}"><i class='ic ic-plus'></i></button>` : ""}</div>
+    ${hint ? `<p class="muted" style="margin:-3px 0 6px">${hint}</p>` : ""}${arr.map((o,i) => ruleHTML(list, o, i, cfg)).join("")}`;
+}
+function readRl(list){
+  const rows = [...document.querySelectorAll(`.rl[data-list="${list}"]`)];
+  if(!rows.length || !D[list]) return;
+  D[list] = rows.map((r,i) => {
+    const o = {...(D[list][i] || {})}, q = s => r.querySelector(s);
+    if(q(".c-var")) o.c = {var:cleanVar(q(".c-var").value), op:q(".c-op").value, value:q(".c-val")?.value ?? ""};
+    if(q(".r-goto")) o.goto = q(".r-goto").value;
+    if(q(".r-text")) o.text = q(".r-text").value;
+    if(q(".a-op")){
+      o.op = q(".a-op").value;
+      o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
+      o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
+    }
+    return o;
+  });
+}
+function ruleErr(){
+  const empty = c => c && simpleCond(c) && !c.var;
+  for(const a of D.do || []){
+    if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلانِ اکشن «به من خبر بده» رو بنویس"; }
+    else if(!a.var) return "اسم متغیرِ اکشن رو بنویس";
+  }
+  for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، اسم متغیرِ شرط رو بنویس";
+  for(const r of D.alt || []){
+    if(empty(r.c)) return "برای متن جایگزین، اسم متغیرِ شرط رو بنویس";
+    if(!(r.text || "").trim()) return "متن جایگزین نباید خالی باشه";
+  }
+  for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط رو بنویس";
+  return null;
+}
+const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
+
+/* ── بخش (کارت) ── */
+function openNode(id){
+  const cfg = S.cur.config, n = cfg.nodes[id];
+  S.sheet = {kind:"node", id};
+  const mm = n.media || (n.photo ? {type:"photo", url:n.photo} : null);
+  D = { title:n.title||"", text:n.text, photo:mm?.url||"", mtype:mm?.type||"photo", done:n.done||"", next:n.next||"",
+        aisys:n.ai?.system||"", aimem:n.ai?.memory ?? 3, ailim:n.ai?.limit ?? 20,
+        fields:n.fields ? n.fields.map((q,i) => ({q, v:(n.save||[])[i]||"", t:(n.types||[])[i]||"text"})) : [{q:"", v:"", t:"text"}],
+        silent:!!n.silent, mode:n.ai ? "ai" : n.fields ? "form" : n.ask ? "ask" : "show", kb:n.kb==="reply" ? "reply" : "inline",
+        start:id===cfg.start, fb:id===cfg.fallback,
+        do:cp(n.do||[]), route:(n.route||[]).map(r => ({c:cp(r.when), goto:r.goto})), alt:(n.alt||[]).map(r => ({c:cp(r.when), text:r.text})), adv:false };
+  renderSheet();
+}
+function kbPicker(cur){
+  const inl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="40" height="17" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="4.7" y="24" width="23" height="8" rx="3.5"/><rect x="30.7" y="24" width="23" height="8" rx="3.5"/><rect x="4.7" y="34.5" width="49" height="7" rx="3.5"/></svg>`;
+  const rpl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="2" width="40" height="15" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="1" y="24" width="56" height="19" rx="4" fill="currentColor" fill-opacity=".1" stroke="none"/><rect x="4" y="27" width="15" height="6" rx="2"/><rect x="21.5" y="27" width="15" height="6" rx="2"/><rect x="39" y="27" width="15" height="6" rx="2"/><rect x="4" y="35" width="50" height="5" rx="2"/></svg>`;
+  return `<span class="lbl">دکمه‌های این بخش کجا نمایش داده بشن؟</span>
+    <div class="seg">
+      <button class="${cur!=="reply"?"on":""}" data-sh="kbt" data-v="inline">${inl}<b>شیشه‌ای زیر پیام</b><small>چسبیده به همین پیام</small></button>
+      <button class="${cur==="reply"?"on":""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد زیر چت</b><small>مثل منوی ثابت پایین صفحه</small></button>
+    </div>
+    ${cur==="reply" ? `<p class="muted" style="margin-top:8px">لینک، پیام پاپ‌آپ و کپی توی کیبورد هم کار می‌کنن، ولی به‌جای اجرای مستقیم، یه پیام کوچیک می‌فرستن.</p>` : ""}`;
+}
+function nodeSheet(){
+  const cfg = S.cur.config, id = S.sheet.id, d = D;
+  const advOpen = d.adv || d.do.length || d.route.length || d.alt.length;
+  return head("ویرایش بخش") + `
+    <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
+    <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
+    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{date}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی <i class='ic ic-gear'></i>تنظیمات ربات.</p>
+    <span class="lbl">فایل ضمیمه (اختیاری — لینک مستقیم https)</span>
+    <div class="cmd"><select id="f-mtype">${MEDIA_TYPES.map(([v,l]) => `<option value="${v}"${v===d.mtype?" selected":""}>${l}</option>`).join("")}</select><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../file" autocomplete="off"></div>
+    <span class="lbl">این بخش چی کار کنه؟</span>
+    <select id="f-mode" data-sh="mode">
+      <option value="show"${d.mode==="show"?" selected":""}>فقط پیام و دکمه‌ها رو نشون بده</option>
+      <option value="ask"${d.mode==="ask"?" selected":""}>یه پیام از کاربر بگیر و برای من بفرست</option>
+      <option value="form"${d.mode==="form"?" selected":""}>فرم چندمرحله‌ای (چند سؤال پشت‌سرهم)</option>
+      <option value="ai"${d.mode==="ai"?" selected":""}>گفتگوی هوشمند با هوش مصنوعی (مصرف توکن)</option>
+    </select>
+    ${d.mode==="show" ? kbPicker(d.kb) : `<p class="muted" style="margin-top:10px"><i class='ic ic-keyboard'></i>کیبورد زیر چت فقط برای بخش‌هایی که «فقط پیام و دکمه» نشون می‌دن قابل انتخابه.</p>`}
+    ${d.mode==="form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
+      ${d.fields.map((f,i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}"><i class='ic ic-x'></i></button></div>
+        <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
+        <select class="ft">${TYPES.map(([v,l]) => `<option value="${v}"${v===f.t?" selected":""}>${l}</option>`).join("")}</select></div></div>`).join("")}
+      ${d.fields.length<6 ? `<button class="sm ghost" data-sh="addfld"><i class='ic ic-plus'></i>سؤال</button>` : ""}
+      <label class="chk"><input type="checkbox" id="f-silent"${d.silent?" checked":""}> نتیجه‌ی فرم برای من فرستاده نشه</label>` : ""}
+    ${d.mode==="ai" ? `<span class="lbl">دستورالعمل هوش مصنوعی (نقش، لحن، اطلاعات کسب‌وکار)</span>
+      <textarea class="fa" id="f-aisys" maxlength="1500" placeholder="مثلاً: تو دستیار فروشگاه موبایل هستی. مؤدب و کوتاه جواب بده…">${esc(d.aisys)}</textarea>
+      <div class="cmd" style="align-items:flex-end"><div style="flex:1"><span class="lbl">حافظه‌ی گفتگو</span><select id="f-aimem">${[0,1,2,3,4,5,6].map(i => `<option value="${i}"${i===+d.aimem?" selected":""}>${i} پیام قبلی</option>`).join("")}</select></div>
+      <div style="flex:1"><span class="lbl">سقف پیام روزانه‌ی هر کاربر</span><input id="f-ailim" type="number" min="1" max="100" value="${d.ailim}"></div></div>
+      <span class="lbl">پیام وقتی توکنت تموم شده (اختیاری)</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="فعلاً در دسترس نیست">
+      <p class="muted" style="margin-top:6px">متن بالا، پیام خوش‌آمد گفتگوئه و دکمه‌های این بخش راه خروج کاربرن (حتماً یه دکمه‌ی بازگشت بذار). هر پیام کاربر حدود 1 توکن از حساب تو مصرف می‌کنه.</p>` : ""}
+    ${d.mode==="form"||d.mode==="ask" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
+      <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>` : ""}
+    <details class="adv"${advOpen ? " open" : ""}><summary><i class='ic ic-puzzle'></i>متغیر و شرط (پیشرفته)</summary><div class="box">
+      ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقدار ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
+      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر رو به بخش دیگه‌ای می‌فرسته (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
+      ${ruleSection("متن جایگزین شرطی", "اگه شرط درست بود، به‌جای متن اصلی نشون داده می‌شه", "alt", cfg, 4)}
+    </div></details>${dlist()}
+    <label class="chk"><input type="checkbox" id="f-start"${d.start?" checked disabled":""}> صفحه‌ی شروع (/start)</label>
+    <label class="chk"><input type="checkbox" id="f-fb"${d.fb?" checked disabled":""}> جواب پیام‌های نامفهوم کاربر</label>
+    <div class="bar"><button data-sh="save">ذخیره</button>${d.start||d.fb ? "" : `<button class="ghost danger-b" data-sh="del"><i class='ic ic-trash'></i>حذف بخش</button>`}</div>`;
+}
+function readNode(){
+  const g = s => $(s)?.value ?? null;
+  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo; D.mtype = g("#f-mtype") ?? D.mtype; D.aisys = g("#f-aisys") ?? D.aisys;
+  if($("#f-aimem")) D.aimem = +$("#f-aimem").value; if($("#f-ailim")) D.ailim = Math.max(1, Math.min(100, +$("#f-ailim").value || 20));
+  D.mode = g("#f-mode") ?? D.mode;
+  const fq = [...document.querySelectorAll(".fq")];
+  if(fq.length) D.fields = fq.map(r => ({q:r.querySelector(".fld").value, v:cleanVar(r.querySelector(".fv").value), t:r.querySelector(".ft").value}));
+  if($("#f-silent")) D.silent = $("#f-silent").checked;
+  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next") ?? D.next; }
+  if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
+  if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
+  for(const l of ["do","route","alt"]) readRl(l);
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
+}
+function saveNode(){
+  const id = S.sheet.id;
+  if(!D.text.trim()) return toast("متن پیام نباید خالی باشه");
+  if(D.mode==="form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
+  if(D.mode==="ai" && !D.aisys.trim()) return toast("دستورالعمل هوش مصنوعی رو بنویس");
+  if(D.mode==="ai" && !S.cur.config.nodes[id].buttons.length) return toast("اول یه دکمه‌ی بازگشت به این بخش اضافه کن تا کاربر بتونه از گفتگو خارج بشه");
+  if(D.mode==="show" && D.kb==="reply" && !S.cur.config.nodes[id].buttons.length) return toast("برای کیبورد زیر چت اول یه دکمه به این بخش اضافه کن");
+  const err = ruleErr(); if(err) return toast(err);
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    const n = cfg.nodes[id];
+    for(const k of ["title","photo","media","ai","ask","fields","save","types","silent","done","next","kb","do","route","alt"]) delete n[k];
+    if(D.mode==="show" && D.kb==="reply") n.kb = "reply";
+    n.text = D.text.trim();
+    if(D.title.trim()) n.title = D.title.trim();
+    if(D.photo.trim()) n.media = {type:D.mtype, url:D.photo.trim()};
+    if(D.mode==="ai") n.ai = {system:D.aisys.trim(), memory:D.aimem, limit:D.ailim};
+    if(D.mode==="ask") n.ask = true;
+    if(D.mode==="form"){
+      const fl = D.fields.filter(f => f.q.trim());
+      n.fields = fl.map(f => f.q.trim());
+      if(fl.some(f => f.v)) n.save = fl.map(f => f.v);
+      if(fl.some(f => f.t !== "text")) n.types = fl.map(f => f.t);
+      if(D.silent) n.silent = true;
+    }
+    if(D.mode==="form" || D.mode==="ask"){ if(D.done.trim()) n.done = D.done.trim(); if(D.next) n.next = D.next; }
+    else if(D.mode==="ai" && D.done.trim()) n.done = D.done.trim();
+    if(D.do.length) n.do = outActs(D.do);
+    if(D.route.length) n.route = D.route.map(r => ({when:r.c, goto:r.goto}));
+    if(D.alt.length) n.alt = D.alt.map(r => ({when:r.c, text:r.text.trim()}));
+    if(D.start) cfg.start = id;
+    if(D.fb) cfg.fallback = id;
+  }));
+}
+function delNode(){
+  const id = S.sheet.id;
+  const go = ok => ok && busy($('[data-sh="del"]'), () => commit(cfg => {
+    delete cfg.nodes[id];
+    for(const n of Object.values(cfg.nodes)){
+      n.buttons = n.buttons.map(r => r.filter(b => b.goto !== id)).filter(r => r.length);
+      if(n.next === id) delete n.next;
+      if(n.route){ n.route = n.route.filter(r => r.goto !== id); if(!n.route.length) delete n.route; }
+    }
+    for(const k of Object.keys(cfg.commands||{})) if(cfg.commands[k] === id) delete cfg.commands[k];
+  }, "بخش حذف شد"));
+  const q = "این بخش و دکمه‌هایی که بهش وصلن حذف بشن؟";
+  tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
+}
+function addNode(){
+  const cfg = S.cur.config, ids = Object.keys(cfg.nodes);
+  if(ids.length >= 40) return toast("حداکثر 40 بخش");
+  let k = ids.length + 1; while(cfg.nodes["page_"+k]) k++;
+  const id = "page_"+k;
+  S.open.add(id);
+  busy($('[data-sa="addnode"]'), async () => {
+    await commit(c => { c.nodes[id] = {title:"بخش جدید", text:"متن این بخش رو بنویس", ask:false,
+      buttons:[[{text:"منوی اصلی", goto:c.start}]]}; }, "بخش اضافه شد");
+    openNode(id);
+  });
+}
+
+/* ── دکمه ── */
+function openBtn(nid, r, c){
+  const cfg = S.cur.config;
+  S.sheet = {kind:"btn", n:nid, r, c};
+  if(c === null) D = {text:"دکمه‌ی جدید", kind:"goto", goto:cfg.start, val:"", when:[], do:[], adv:false};
+  else {
+    const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
+    D = {text:b.text, kind:k, goto:b.goto||cfg.start,
+         val: k==="channel" ? "@"+CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || "",
+         when:b.when ? [{c:cp(b.when)}] : [], do:cp(b.do||[]), adv:false};
+  }
+  renderSheet();
+}
+const KINDS = [["goto","رفتن به یه بخش"],["channel","کانال / گروه"],["url","لینک"],["alert","پیام پاپ‌آپ"],["copy","کپی کردن متن"]];
+function btnSheet(){
+  const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
+  const val = {
+    goto: `<span class="lbl">کدوم بخش باز بشه؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
+    channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
+    url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
+    alert: `<span class="lbl">متنی که کاربر توی پاپ‌آپ می‌بینه</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌تونی از <b dir="ltr">{coins}</b> یا هر متغیر دیگه‌ای توش استفاده کنی؛ بعد از اجرای اکشن‌ها محاسبه می‌شه.</p>`,
+    copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`
+  }[d.kind];
+  const canDo = d.kind === "goto" || d.kind === "alert";
+  return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
+    <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
+    <span class="lbl">با لمس دکمه چی بشه؟</span>
+    <select id="b-kind" data-sh="bkind">${KINDS.map(([v,l]) => `<option value="${v}"${v===d.kind?" selected":""}>${l}</option>`).join("")}</select>
+    ${val}
+    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary><i class='ic ic-puzzle'></i>شرط و اکشن (پیشرفته)</summary><div class="box">
+      ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافیه", "when", cfg, 1)}
+      ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشون دادن پیام اجرا می‌شن", "do", cfg, 6)
+              : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یه بخش» و «پیام پاپ‌آپ» کار می‌کنه.</p>`}
+    </div></details>${dlist()}
+    <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del"><i class='ic ic-trash'></i>حذف دکمه</button>`}</div>`;
+}
+function readBtn(){
+  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
+  if($("#b-goto")) D.goto = $("#b-goto").value;
+  if($("#b-val")) D.val = $("#b-val").value;
+  readRl("when"); readRl("do");
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
+}
+function saveBtn(){
+  const {n:nid, r, c} = S.sheet, d = D;
+  if(!d.text.trim()) return toast("متن دکمه رو بنویس");
+  if(d.kind!=="goto" && !d.val.trim()) return toast("مقصد دکمه رو وارد کن");
+  const err = ruleErr(); if(err) return toast(err);
+  const btn = {text:d.text.trim()};
+  if(d.kind==="goto") btn.goto = d.goto;
+  else if(d.kind==="alert") btn.alert = d.val.trim();
+  else if(d.kind==="copy") btn.copy = d.val.trim();
+  else btn.url = d.val.trim();
+  if(d.when.length) btn.when = d.when[0].c;
+  if(d.do.length && (d.kind==="goto" || d.kind==="alert")) btn.do = outActs(d.do);
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    const rows = cfg.nodes[nid].buttons;
+    if(c !== null) rows[r][c] = btn;
+    else if(r !== null && rows[r]) rows[r].push(btn);
+    else rows.push([btn]);
+  }));
+}
+function delBtn(){
+  const {n:nid, r, c} = S.sheet;
+  busy($('[data-sh="del"]'), () => commit(cfg => {
+    const rows = cfg.nodes[nid].buttons; rows[r].splice(c,1); if(!rows[r].length) rows.splice(r,1);
+  }, "دکمه حذف شد"));
+}
+
+/* ── تنظیمات کلی ربات ── */
+function openBot(){
+  const cfg = S.cur.config;
+  S.sheet = {kind:"bot"};
+  D = { name:cfg.name, channels:(cfg.join?.channels||[]).map(c=>"@"+c).join(" "), jtext:cfg.join?.text||"",
+        cmds:Object.entries(cfg.commands||{}), vars:Object.entries(cfg.vars||{}) };
+  renderSheet();
+}
+function botSheet(){
+  const cfg = S.cur.config, d = D;
+  return head("<i class='ic ic-gear'></i>تنظیمات ربات") + `
+    <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
+    <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
+    <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
+    <p class="muted">تا 3 کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه تا بتونه عضویت رو چک کنه. خالی = غیرفعال.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی ">${esc(d.jtext)}</textarea>
+    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length<10?`<button class="sm ghost" data-sh="addcmd"><i class='ic ic-plus'></i>دستور</button>`:""}</div>
+    ${d.cmds.map(([k,v],i)=>`<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}"><i class='ic ic-x'></i></button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
+    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length<20?`<button class="sm ghost" data-sh="addvar"><i class='ic ic-plus'></i>متغیر</button>`:""}</div>
+    <p class="muted" style="margin-bottom:6px">هر کاربر مقدار مخصوص خودش رو داره (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع رو بنویس.</p>
+    ${d.vars.map(([k,v],i)=>`<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}"><i class='ic ic-x'></i></button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+    <details class="adv"><summary><i class='ic ic-book'></i>متغیرهای آماده‌ی تلگرام</summary><div class="box">
+      <p class="muted" style="margin-bottom:6px">توی متن‌ها و شرط‌ها قابل استفاده‌ن؛ مثلاً <b dir="ltr">{name}</b>. اگه خالی بود می‌تونی مقدار جایگزین بذاری: <b dir="ltr">{username|بدون آیدی}</b></p>
+      ${BUILTIN_HELP.map(([k,l]) => `<div class="kvr"><code dir="ltr">{${k}}</code><span>${l}</span></div>`).join("")}
+    </div></details>
+    <div class="bar"><button data-sh="save">ذخیره</button></div>`;
+}
+function readBot(){
+  D.name = $("#s-name")?.value ?? D.name; D.channels = $("#s-chs")?.value ?? D.channels; D.jtext = $("#s-jtext")?.value ?? D.jtext;
+  const ns = [...document.querySelectorAll(".cmdn")], vs = [...document.querySelectorAll(".cmdv")];
+  if(ns.length || document.querySelector("#s-name")) D.cmds = ns.map((n,i) => [n.value, vs[i].value]);
+  if(document.querySelector("#s-name")){
+    const vn = [...document.querySelectorAll(".vn")], vd = [...document.querySelectorAll(".vd")];
+    D.vars = vn.map((n,i) => [cleanVar(n.value), vd[i].value]);
+  }
+}
+function saveBot(){
+  const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    cfg.name = d.name.trim() || "ربات من";
+    if(chs.length) cfg.join = {channels:chs, text:d.jtext.trim()}; else delete cfg.join;
+    cfg.commands = {};
+    d.cmds.forEach(([k,v]) => { k = k.trim().replace(/^\//,"").toLowerCase(); if(k) cfg.commands[k] = v; });
+    const vars = {};
+    d.vars.forEach(([k,v]) => { if(k) vars[k] = v.trim(); });
+    if(Object.keys(vars).length) cfg.vars = vars; else delete cfg.vars;
+  }));
+}
+
+/* ── هماهنگی شیت‌ها ── */
+function renderSheet(){
+  showSheet({node:nodeSheet, btn:btnSheet, bot:botSheet}[S.sheet.kind]());
+}
+function readSheet(){ ({node:readNode, btn:readBtn, bot:readBot}[S.sheet.kind])(); }
+
+function shAction(a, ds){
+  if(!S.sheet) return;
+  const prev = D.kind;
+  readSheet();
+  if(a==="save") return {node:saveNode, btn:saveBtn, bot:saveBot}[S.sheet.kind]();
+  if(a==="del") return S.sheet.kind==="node" ? delNode() : delBtn();
+  if(a==="bkind"){
+    const k = D.kind, wasText = prev==="channel"||prev==="url";
+    if(k==="channel"){ const m = CH_RE.exec(D.val) || NAME_RE.exec(D.val); D.val = m ? "@"+m[1] : ""; }
+    else if(k==="url"){ D.val = NAME_RE.test(D.val) ? "https://t.me/"+D.val.replace("@","") : (wasText ? D.val : ""); }
+    else if(k!=="goto" && prev!==k) D.val = "";
+  }
+  else if(a==="kbt") D.kb = ds.v;
+  else if(a==="addfld") D.fields.push({q:"", v:"", t:"text"});
+  else if(a==="delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push({q:"", v:"", t:"text"});
+  else if(a==="addcmd") D.cmds.push(["help", S.cur.config.start]);
+  else if(a==="delcmd") D.cmds.splice(+ds.i, 1);
+  else if(a==="addvar") D.vars.push(["", ""]);
+  else if(a==="delvar") D.vars.splice(+ds.i, 1);
+  else if(a==="addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
+  else if(a==="delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
+  renderSheet();
+}
+
+document.addEventListener("click", e => {
+  const x = e.target.closest("[data-x],[data-sa],[data-sh]"); if(!x || x.tagName==="SELECT") return;
+  const ds = x.dataset;
+  if(ds.x) return closeSheet();
+  if(ds.sh) return shAction(ds.sh, ds);
+  const r = ds.r !== undefined ? +ds.r : null;
+  if(ds.sa==="node") openNode(ds.n);
+  else if(ds.sa==="btn") openBtn(ds.n, r, +ds.c);
+  else if(ds.sa==="newbtn") openBtn(ds.n, r, null);
+  else if(ds.sa==="newrow") openBtn(ds.n, null, null);
+  else if(ds.sa==="bot") openBot();
+  else if(ds.sa==="addnode") addNode();
+  else if(ds.sa==="toggle") toggleNode(ds.n, x);
+  else if(ds.sa==="toggleall") toggleAll();
+});
+document.addEventListener("keydown", e => {
+  const h = e.target.closest?.('[data-sa="toggle"]');
+  if(h && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); toggleNode(h.dataset.n, h); }
+});
+document.addEventListener("change", e => {
+  const a = e.target.dataset.sh;
+  if(a==="mode" || a==="bkind" || a==="re") shAction(a, e.target.dataset);
+});
+
+async function busy(btn, fn){
+  if(S.busy) return; S.busy = true;
+  const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = old + '<span class="spin"></span>';
+  try{ await fn(); }catch(e){ toast(e.message); if(e.status === 402) setTimeout(() => go("profile"), 1500); }
+  S.busy = false; if(btn.isConnected){ btn.disabled = false; btn.innerHTML = old; }
+}
+
+function generate(){
+  const btn = $("#gen"), ta = $("#prompt"), p = ta.value.trim();
+  if(p.length < 5) return toast("توضیح بیشتری بنویس");
+  busy(btn, async () => {
+    ta.readOnly = true; startLive();
+    try{
+      const d = await api("/api/generate","POST",{ prompt:p, bot_id:S.cur?.id });
+      const wasActive = S.cur?.active;
+      S.cur = d.bot; S.bal = d.bal; S.fresh = true; stopLive(); render();
+      toast((wasActive ? "ربات ارتقا پیدا کرد " : "ربات ساخته شد ") + ` · ${fa(d.cost)} توکن`);
+      tg?.HapticFeedback?.notificationOccurred("success");
+    } finally { stopLive(); ta.readOnly = false; }
+  });
+}
+function undo(){ busy($("#undo"), async () => { const d = await api(`/api/bots/${S.cur.id}/undo`,"POST"); S.cur = d.bot; render(); toast("برگشت داده شد"); }); }
+function activate(){
+  const t = $("#token").value.trim(); if(!t) return toast("توکن رو وارد کن");
+  busy($("#act"), async () => { const d = await api(`/api/bots/${S.cur.id}/activate`,"POST",{token:t}); S.cur = d.bot; render(); toast("ربات فعال شد "); });
+}
+function act(action, msg){ busy($("#off"), async () => { const d = await api(`/api/bots/${S.cur.id}/${action}`,"POST"); S.cur = d.bot; render(); toast(msg); }); }
+function remove(){
+  const go = async ok => { if(!ok) return; await api(`/api/bots/${S.cur.id}`,"DELETE"); S.view="list"; S.cur=null; load(); toast("حذف شد"); };
+  tg?.showConfirm ? tg.showConfirm("این ربات برای همیشه حذف بشه؟", go) : go(confirm("حذف بشه؟"));
+}
+
+/* ───────── قالب‌ها، آمار ربات، پیام همگانی ───────── */
+function useTemplate(id, btn){
+  busy(btn, async () => { const d = await api(`/api/templates/${id}/create`, "POST"); S.cur = d.bot; S.fresh = true; S.open = new Set(); render(); toast("قالب آماده شد "); });
+}
+async function loadStats(){
+  const el = $("#stats"); if(!el || !S.cur) return;
+  try{
+    const d = await api(`/api/bots/${S.cur.id}/stats`);
+    if(!$("#stats")) return;
+    el.innerHTML = `<h2><i class='ic ic-chart'></i>آمار و کاربران</h2>
+      <div class="stats" style="margin:10px 0">
+        <div class="stat"><div class="k">کاربران ربات</div><div class="v">${fa(d.users)}</div></div>
+        <div class="stat"><div class="k">فعال امروز</div><div class="v">${fa(d.today)}</div></div>
+        <div class="stat"><div class="k">پاسخ فرم‌ها</div><div class="v">${fa(d.forms)}</div></div>
+        <div class="stat"><div class="k">توکنِ مصرفیِ AI ربات</div><div class="v">${fa(d.ai_tokens)}</div></div>
+      </div>
+      <div class="g2"><button class="ghost" data-ax="subs"><i class='ic ic-inbox'></i>پاسخ فرم‌ها</button><button class="ghost" data-ax="bc"><i class='ic ic-megaphone'></i>پیام همگانی</button></div>`;
+  }catch(_){ $("#stats")?.remove(); }
+}
+const fdate = t => new Date(t).toLocaleString("fa-IR-u-nu-latn", {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+async function openSubs(){
+  S.sheet = {kind:"info"}; showSheet(head("پاسخ فرم‌ها") + `<p class="muted">در حال بارگذاری…</p>`);
+  try{
+    const d = await api(`/api/bots/${S.cur.id}/submissions`);
+    showSheet(head("پاسخ فرم‌ها") + (d.items.length ? d.items.map(r => `<div class="sub"><small>${esc(r.title)} • ${esc(r.name)}${r.un ? " @"+esc(r.un) : ""} • ${fdate(r.t)}</small>${
+      r.qa.length ? r.qa.map(([q,a]) => `${esc(q)}\n» <b>${esc(a)}</b>`).join("\n") : esc(r.text)}</div>`).join("") : `<p class="muted">هنوز پاسخی ثبت نشده.</p>`));
+  }catch(e){ closeSheet(); toast(e.message); }
+}
+function openBc(){
+  if(!S.cur.active) return toast("اول ربات رو فعال کن");
+  S.sheet = {kind:"info"};
+  showSheet(head("<i class='ic ic-megaphone'></i>پیام همگانی") + `<p class="muted" style="margin-bottom:8px">پیام برای همه‌ی کاربرهای ربات فرستاده می‌شه. (هر 10 دقیقه یک بار)</p>
+    <textarea class="fa" id="bc-text" maxlength="3500" placeholder="متن پیام…"></textarea><div style="height:10px"></div><button data-ax="bcsend">ارسال</button>`);
+}
+function sendBc(btn){
+  const t = $("#bc-text").value.trim(); if(t.length < 2) return toast("متن پیام رو بنویس");
+  busy(btn, async () => { const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text:t}); closeSheet(); toast(`ارسال برای ${fa(d.queued)} نفر شروع شد `); });
+}
+
+/* ───────── پروفایل کاربر ───────── */
+const pips = (n, total) => `<div class="pips">${Array.from({length: Math.max(total,1)}, (_,i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</div>`;
+const REASONS = {welcome:"هدیه‌ی ثبت‌نام", daily:"هدیه‌ی روزانه", referral_new:"هدیه‌ی ورود با لینک دعوت", referral_inviter:"پاداش دعوت دوست", coupon:"کد هدیه", admin:"تنظیم توسط ادمین", generate:"ساخت ربات", upgrade:"ارتقای ربات"};
+const reasonOf = r => r.startsWith("bot_ai") ? "مصرف هوش مصنوعیِ ربات‌هات" : (REASONS[r] || r);
+function renderProfile(){
+  const u = tg?.initDataUnsafe?.user || {};
+  const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
+  const active = S.bots.filter(b => b.active).length, r = S.ref || {}, dl = S.daily || {};
+  const joined = S.joined ? new Date(S.joined).toLocaleDateString("fa-IR-u-nu-latn", {year:"numeric", month:"long", day:"numeric"}) : "—";
+  $("#app").innerHTML = `
+    <div class="card pf">
+      <div class="av"><span class="ring"></span>
+        <div class="img">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div></div>
+      <h2>${esc(name)}</h2>
+      ${u.username ? `<span class="muted un">@${esc(u.username)}</span>` : ""}
+    </div>
+    <div class="card wal">
+      <div class="k">موجودی توکن</div><div class="big"><i class='ic ic-coin'></i>${fa(S.bal)}</div>
+      <p class="muted" style="margin-bottom:10px">هر ساخت یا ارتقای ربات حدود ${fa(S.costs.typical)} توکن مصرف می‌کنه. ویرایش دستی و قالب‌ها رایگانه.</p>
+      <button data-ax="daily" ${dl.available ? "" : "disabled"}>${dl.available ? `<i class='ic ic-gift'></i>هدیه‌ی امروز (+${fa(dl.amount)} توکن)` : "هدیه‌ی امروز رو گرفتی "}</button>
+    </div>
+    <div class="card">
+      <h2><i class='ic ic-users'></i>دعوت دوستان = توکن رایگان</h2>
+      <p class="muted" style="margin:6px 0 10px">دوستت با لینک تو که بیاد ${fa(r.new)} توکن می‌گیره؛ وقتی اولین رباتش رو فعال کنه، تو ${fa(r.inviter)} توکن می‌گیری (تا ${fa(r.max)} دعوت).</p>
+      <input readonly value="${esc(r.link || "")}" onclick="this.select()"><div style="height:8px"></div>
+      <div class="g2"><button class="ghost" data-ax="copyref"><i class='ic ic-copy'></i>کپی لینک</button><button data-ax="shareref"><i class='ic ic-share'></i>اشتراک‌گذاری</button></div>
+      <div class="stats" style="margin:12px 0 0">
+        <div class="stat"><div class="k">دعوت‌شده‌ها</div><div class="v">${fa(r.joined)}</div></div>
+        <div class="stat"><div class="k">توکن درآمدی</div><div class="v">${fa(r.earned)}</div></div>
+      </div>
+    </div>
+    <div class="card"><h2><i class='ic ic-ticket'></i>کد هدیه</h2><div style="height:8px"></div>
+      <div class="g2" style="grid-template-columns:1fr auto"><input id="cpn" placeholder="CODE" autocomplete="off"><button data-ax="coupon" style="width:auto">ثبت</button></div></div>
+    <div class="stats">
+      <div class="stat"><div class="k">ربات‌های من</div><div class="v">${fa(S.bots.length)} <small>از ${fa(S.maxBots)}</small></div></div>
+      <div class="stat"><div class="k">ربات‌های فعال</div><div class="v">${fa(active)} <small>از ${fa(S.bots.length)}</small></div></div>
+    </div>
+    <div class="card" id="ledger"><h2><i class='ic ic-receipt'></i>تاریخچه‌ی توکن</h2><p class="muted">در حال بارگذاری…</p></div>
+    ${S.isAdmin ? `<div class="card" id="admin"><h2><i class='ic ic-wrench'></i>پنل ادمین</h2><div style="height:8px"></div>
+      <span class="lbl">افزودن/کم‌کردن توکن کاربر</span>
+      <div class="g2"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
+      <div style="height:6px"></div><button class="ghost" data-ax="agrant">اعمال</button>
+      <span class="lbl" style="margin-top:12px">ساخت کد هدیه</span>
+      <div class="g2"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
+      <div style="height:6px"></div><div class="g2"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز، اختیاری)" inputmode="numeric"></div>
+      <div style="height:6px"></div><button class="ghost" data-ax="acoupon">ساخت کد</button>
+      <div style="height:10px"></div><button class="ghost" data-ax="ausers"><i class='ic ic-users'></i>کاربران ربات‌ساز</button><div style="height:8px"></div><button class="ghost" data-ax="astats"><i class='ic ic-trend'></i>آمار سیستم</button><div id="astats" class="muted" style="margin-top:8px"></div></div>` : ""}
+    <div class="card kv">
+      <div><span>شناسه‌ی تلگرام</span>${u.id ? `<b class="cpy" data-pf="copyid" data-id="${u.id}">${u.id}</b>` : "<b>—</b>"}</div>
+      <div><span>اولین ورود</span><b>${joined}</b></div>
+    </div>`;
+  loadLedger();
+}
+async function loadLedger(){
+  try{
+    const d = await api("/api/ledger"); const el = $("#ledger"); if(!el) return;
+    el.innerHTML = `<h2><i class='ic ic-receipt'></i>تاریخچه‌ی توکن</h2><div style="height:6px"></div>` + (d.items.length ? `<div class="kv" style="padding:0">${d.items.map(x =>
+      `<div><span>${esc(reasonOf(x.reason))} • ${fdate(x.t)}</span><b class="${x.delta > 0 ? "pos" : "neg"}" dir="ltr">${x.delta > 0 ? "+" : ""}${fa(x.delta)}</b></div>`).join("")}</div>` : `<p class="muted">هنوز تراکنشی نداری.</p>`);
+  }catch(_){ $("#ledger")?.remove(); }
+}
+document.addEventListener("click", e => {
+  const c = e.target.closest('[data-pf="copyid"]'); if(!c) return;
+  navigator.clipboard?.writeText(c.dataset.id).then(() => toast("شناسه کپی شد "), () => toast(c.dataset.id));
+});
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tpl]"); if(t) return useTemplate(t.dataset.tpl, t);
+  const x = e.target.closest("[data-ax]"); if(!x) return;
+  const a = x.dataset.ax, v = id => ($(id)?.value || "").trim();
+  if(a === "ausers") openUsers();
+  else if(a === "subs") openSubs();
+  else if(a === "bc") openBc();
+  else if(a === "bcsend") sendBc(x);
+  else if(a === "daily") busy(x, async () => { const d = await api("/api/daily", "POST"); S.bal = d.bal; S.daily.available = false; render(); toast(`+${fa(d.got)} توکن گرفتی `); });
+  else if(a === "copyref") navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک کپی شد "), () => toast(S.ref.link));
+  else if(a === "shareref"){
+    const url = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هوشمند، ربات تلگرامت رو در چند ثانیه بساز ");
+    tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
+  }
+  else if(a === "coupon"){
+    if(!v("#cpn")) return toast("کد رو وارد کن");
+    busy(x, async () => { const d = await api("/api/coupon", "POST", {code: v("#cpn")}); S.bal = d.bal; render(); toast(`+${fa(d.got)} توکن اضافه شد `); });
+  }
+  else if(a === "agrant") busy(x, async () => { const d = await api("/api/admin/grant", "POST", {uid: v("#ag-uid"), amount: v("#ag-amt")}); toast(`موجودی جدید کاربر: ${fa(d.bal)}`); });
+  else if(a === "acoupon") busy(x, async () => { const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")}); toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); });
+  else if(a === "astats") busy(x, async () => { const d = await api("/api/admin/stats"); $("#astats").innerHTML = `کاربران: ${fa(d.users)} • ربات‌ها: ${fa(d.bots)} (فعال: ${fa(d.active)}) • کاربران رباتا: ${fa(d.bot_users)}<br>توکنِ در گردش: ${fa(d.circulation)} • دعوت موفق: ${fa(d.referrals)}`; });
+});
+
+/* ───────── نوار پایین ───────── */
+const dock = $("#dock");
+let dockOpen = true;
+try{ dockOpen = localStorage.getItem("dockOpen") !== "0"; }catch(_){}
+function setDock(o, save = true){
+  dockOpen = o; dock.classList.toggle("closed", !o); document.body.classList.toggle("dock-closed", !o);
+  $("#dockTab").setAttribute("aria-expanded", o);
+  if(save) try{ localStorage.setItem("dockOpen", o ? "1" : "0"); }catch(_){}
+}
+function syncDock(){
+  document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.d === ({profile:"profile", explore:"explore"}[S.view] || "bots")));
+}
+function go(where){
+  if(S.busy) return toast("صبر کن کار فعلی تموم شه");
+  closeSheet();
+  if(where === "profile"){ if(S.view !== "profile"){ S.view = "profile"; render(); } }
+  else if(where === "explore"){ if(S.view !== "explore"){ S.view = "explore"; S.cur = null; render(); } }
+  else if(S.view !== "list"){ S.view = "list"; S.cur = null; S.open = new Set(); load(); }
+  scrollTo({top:0, behavior:"smooth"});
+  tg?.HapticFeedback?.selectionChanged();
+}
+let py = null;
+dock.addEventListener("pointerdown", e => { py = e.clientY; });
+dock.addEventListener("pointercancel", () => { py = null; });
+dock.addEventListener("pointerup", e => {
+  if(py === null) return;
+  const dy = e.clientY - py; py = null;
+  if(dy > 24) setDock(false); else if(dy < -24) setDock(true);
+  else if(e.target.closest("#dockTab")) setDock(!dockOpen);
+});
+dock.addEventListener("click", e => { const n = e.target.closest("[data-d]"); if(n) go(n.dataset.d); });
+document.addEventListener("focusin", e => { if(e.target.matches?.("input,textarea,select")) dock.classList.add("hide"); });
+document.addEventListener("focusout", () => setTimeout(() => {
+  if(!document.activeElement?.matches?.("input,textarea,select")) dock.classList.remove("hide");
+}, 150));
+setDock(dockOpen, false);
+
+/* ───────── اکسپلور ───────── */
+const XP = { sort: "hot", items: [], more: false, tok: 0, seen: new Set(), q: [], io: null };
+const hueOf = id => [...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+const kfmt = n => n >= 1e6 ? fa((n / 1e6).toFixed(1).replace(/\.0$/, "")) + " م" : n >= 1000 ? fa((n / 1000).toFixed(1).replace(/\.0$/, "")) + " هزار" : fa(n);
+const xAv = (name, id, av) => `<span class="xav" style="--h:${hueOf(id)}">${esc((name || "?").trim().charAt(0))}${av ? `<img src="${API_BASE}/xp/avatar/${id}?v=${av}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
+const xStats = it => `<div class="xs"><span title="بازدید"><i class="ic ic-eye"></i>${kfmt(it.v)}</span><span title="استارت"><i class="ic ic-play"></i>${kfmt(it.s)}</span></div>`;
+const likeBtn = it => `<button class="xb xlike${it.liked ? " on" : ""}" data-xp="like" data-id="${it.id}" aria-pressed="${!!it.liked}" aria-label="لایک"${it.mine ? " disabled" : ""}><i class="ic ${it.liked ? "ic-heartf" : "ic-heart"}"></i><span>${kfmt(it.l)}</span></button>`;
+
+function xCard(it, i){
+  const feat = XP.sort !== "new" && it.rank === 1, hot = XP.sort === "hot" && it.rank > 1 && it.rank <= 5;
+  const badge = feat ? `<span class="xbd"><i class="ic ic-flame"></i>${XP.sort === "hot" ? "داغ‌ترین" : "محبوب‌ترین"}</span>`
+    : hot ? `<span class="xbd"><i class="ic ic-flame"></i>داغ</span>`
+    : it.mine ? `<span class="xbd m">ربات تو</span>` : it.new ? `<span class="xbd n">جدید</span>` : "";
+  return `<article class="xc rise${feat ? " feat" : ""}${hot ? " hot" : ""}" data-id="${it.id}" style="--i:${Math.min(i, 8)}">
+    ${badge}
+    <div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div></div>
+    <p class="xd">${esc(it.desc)}</p>
+    ${xStats(it)}
+    <div class="xa"><button class="xb xstart" data-xp="start" data-id="${it.id}">شروع<i class="ic ic-play" style="margin:0 0 0 0"></i></button>${likeBtn(it)}</div>
+  </article>`;
+}
+const xSkel = () => `<div class="xc sk"><div class="xt"><span class="xav"></span><div class="xn"><i style="width:70%"></i></div></div><i></i><i style="width:60%"></i><i style="width:45%"></i></div>`;
+
+function renderExplore(){
+  const tabs = [["hot", "flame", "داغ‌ترین"], ["new", "spark", "جدیدترین"], ["top", "heart", "محبوب‌ترین"]];
+  $("#app").innerHTML = `
+    <div class="xhd"><div><h2><i class="ic ic-compass"></i>اکسپلور</h2><span class="xsub">ربات‌های بقیه رو ببین، امتحان کن و لایک بزن</span></div>
+      <button class="xb xref" data-xp="refresh" aria-label="تازه‌سازی"><i class="ic ic-refresh"></i></button></div>
+    <div class="xtabs" role="tablist">${tabs.map(([k, ic, t]) => `<button class="xb${XP.sort === k ? " on" : ""}" role="tab" aria-selected="${XP.sort === k}" data-xp="sort" data-k="${k}"><i class="ic ic-${ic}"></i>${t}</button>`).join("")}</div>
+    <div class="xgrid" id="xgrid"></div><div id="xmore"></div>`;
+  loadExplore(true);
+}
+
+async function loadExplore(reset){
+  const tok = ++XP.tok, grid = $("#xgrid"); if(!grid) return;
+  if(reset){ XP.items = []; grid.innerHTML = xSkel() + xSkel() + xSkel() + xSkel(); $("#xmore").innerHTML = ""; }
+  try{
+    const d = await api(`/api/explore?sort=${XP.sort}&offset=${XP.items.length}`);
+    if(tok !== XP.tok || S.view !== "explore") return;
+    const start = XP.items.length; XP.items = XP.items.concat(d.items); XP.more = d.more;
+    if(reset) grid.innerHTML = "";
+    if(!XP.items.length){
+      grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1"><i class="ic ic-compass"></i><b>اکسپلور هنوز خالیه</b><p class="muted">ربات خودت رو فعال کن و از صفحه‌ی ربات، اولین کارت اکسپلور رو بساز.</p></div>`;
+      return;
+    }
+    grid.insertAdjacentHTML("beforeend", d.items.map((it, i) => xCard(it, i)).join(""));
+    $("#xmore").innerHTML = XP.more ? `<button class="ghost xmore" data-xp="more">نمایش بیشتر</button>` : "";
+    xObserve();
+  }catch(e){
+    if(tok !== XP.tok) return;
+    grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1"><p class="muted">${esc(e.message)}</p><button class="ghost" data-xp="refresh" style="margin-top:10px">دوباره امتحان کن</button></div>`;
+  }
+}
+
+/* بازدید: وقتی کارت واقعاً روی صفحه دیده شد (هر نفر روزی یک‌بار، صاحب ربات حساب نمی‌شه) */
+function xObserve(){
+  XP.io?.disconnect();
+  XP.io = new IntersectionObserver(es => es.forEach(e => {
+    if(!e.isIntersecting) return;
+    XP.io.unobserve(e.target);
+    const id = e.target.dataset.id, it = XP.items.find(x => x.id === id);
+    if(it && !it.mine && !XP.seen.has(id)){ XP.seen.add(id); XP.q.push(id); clearTimeout(XP.t); XP.t = setTimeout(xFlush, 1200); }
+  }), {threshold: .6});
+  document.querySelectorAll("#xgrid .xc[data-id]").forEach(el => XP.io.observe(el));
+}
+function xFlush(){ const ids = XP.q.splice(0, 20); if(ids.length) api("/api/explore/view", "POST", {ids}).catch(() => {}); }
+
+function xStart(id){
+  const it = XP.items.find(x => x.id === id); if(!it) return;
+  const url = `https://t.me/${it.username}?start=ex`;
+  tg?.openTelegramLink ? tg.openTelegramLink(url) : window.open(url, "_blank");
+}
+async function xLike(id){
+  const it = XP.items.find(x => x.id === id); if(!it || it.mine) return;
+  const was = it.liked; it.liked = !was; it.l += was ? -1 : 1; xSyncLike(it, true);
+  tg?.HapticFeedback?.impactOccurred("light");
+  try{ const d = await api(`/api/explore/${id}/like`, "POST"); it.liked = d.liked; it.l = d.likes; }
+  catch(e){ it.liked = was; it.l += was ? 1 : -1; toast(e.message); }
+  xSyncLike(it, false);
+}
+function xSyncLike(it, pop){
+  document.querySelectorAll(`.xlike[data-id="${it.id}"]`).forEach(b => {
+    b.outerHTML = likeBtn(it);
+  });
+  if(pop) document.querySelectorAll(`.xlike[data-id="${it.id}"]`).forEach(b => { if(it.liked){ b.classList.add("pop"); setTimeout(() => b.classList.remove("pop"), 500); } });
+}
+
+function xOpen(id){
+  const it = XP.items.find(x => x.id === id); if(!it) return;
+  S.sheet = {kind: "xp"};
+  showSheet(head('اکسپلور') + `
+    <div class="xsheet-top"><div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div></div></div>
+    ${it.desc ? `<p class="xsheet-desc">${esc(it.desc)}</p>` : ""}
+    <div class="xbig"><div><b>${kfmt(it.v)}</b><small>بازدید</small></div><div><b>${kfmt(it.l)}</b><small>لایک</small></div><div><b>${kfmt(it.s)}</b><small>استارت</small></div></div>
+    <div class="xsheet-act"><button class="xb xstart" data-xp="start" data-id="${it.id}">شروع و امتحان ربات<i class="ic ic-play" style="margin:0 6px 0 0"></i></button>${likeBtn(it)}</div>
+    <div class="xlinks">${it.mine ? "" : `<button class="xb" data-xp="report" data-id="${it.id}"><i class="ic ic-flag"></i>گزارش</button>`}${S.isAdmin ? `<button class="xb dg" data-xp="adm" data-id="${it.id}"><i class="ic ic-trash"></i>حذف از اکسپلور</button>` : ""}</div>`);
+}
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-xp]");
+  if(!b){
+    const c = e.target.closest("#xgrid .xc[data-id]");
+    if(c) xOpen(c.dataset.id);
+    return;
+  }
+  const a = b.dataset.xp, id = b.dataset.id;
+  if(a === "sort"){ XP.sort = b.dataset.k; renderExplore(); }
+  else if(a === "refresh"){ b.classList.add("spin"); XP.seen.clear(); await loadExplore(true); b.classList.remove("spin"); }
+  else if(a === "more"){ b.disabled = true; await loadExplore(false); }
+  else if(a === "start") xStart(id);
+  else if(a === "like") xLike(id);
+  else if(a === "report"){
+    const go = async ok => { if(!ok) return; try{ await api(`/api/explore/${id}/report`, "POST"); toast("گزارشت ثبت شد، ممنون"); closeSheet(); }catch(err){ toast(err.message); } };
+    tg?.showConfirm ? tg.showConfirm("این ربات رو گزارش می‌کنی؟", go) : go(confirm("گزارش بشه؟"));
+  }
+  else if(a === "adm"){
+    try{ await api(`/api/admin/explore/${id}`, "POST", {hide: true}); XP.items = XP.items.filter(x => x.id !== id); document.querySelector(`#xgrid .xc[data-id="${id}"]`)?.remove(); closeSheet(); toast("از اکسپلور برداشته شد"); }
+    catch(err){ toast(err.message); }
+  }
+});
+
+/* ── کارت اکسپلور توی صفحه‌ی ربات (برای صاحب ربات) ── */
+const xDefault = b => ((b.config.nodes[b.config.start]?.text) || "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
+function xPrev(b, desc){
+  const x = b.explore || {};
+  return `<article class="xc"><div class="xt">${xAv(b.name, b.id, x.av)}<div class="xn"><b>${esc(b.name)}</b><span class="un">@${esc(b.username)}</span></div></div>
+    <p class="xd" id="xpd">${esc(desc)}</p>
+    ${xStats({v: x.v || 0, s: x.s || 0})}
+    <div class="xa"><span class="xb xstart" style="background:var(--ac);color:var(--act);font-weight:600">شروع<i class="ic ic-play" style="margin:0"></i></span><span class="xb xlike"><i class="ic ic-heart"></i><span>${kfmt(x.l || 0)}</span></span></div></article>`;
+}
+function xoHTML(b){
+  const x = b.explore || {};
+  return `<div class="card xo" id="xo">
+    <h2><i class="ic ic-compass"></i>اکسپلور${x.on ? `<span class="tag on">فعال</span>` : ""}</h2>
+    <p class="muted" style="margin-bottom:12px">${x.hidden ? "این ربات توسط ادمین از اکسپلور برداشته شده." : "ربات رو با یه کارت ظریف توی ویترین عمومی بذار تا بقیه ببیننش، لایک کنن و استارتش بزنن."}</p>
+    ${x.hidden ? "" : `<div class="xprev">${xPrev(b, x.desc || xDefault(b) || "—")}</div>
+      <textarea id="xdesc" maxlength="90" placeholder="توضیح کوتاه برای کارت (لینک و آیدی حذف می‌شن)">${esc(x.desc || "")}</textarea>
+      <div class="xcnt"><span id="xcn">${fa((x.desc || "").length)}/${fa(90)}</span></div>
+      <button id="xsave">${x.on ? "ذخیره و به‌روزرسانی عکس" : "اضافه به اکسپلور"}</button>
+      ${x.on ? `<button class="ghost" id="xoff" style="margin-top:8px">برداشتن از اکسپلور</button>` : ""}`}
+  </div>`;
+}
+function bindXo(){
+  const t = $("#xdesc"); if(!t) return;
+  const b = S.cur;
+  t.addEventListener("input", () => { $("#xcn").textContent = `${fa(t.value.length)}/${fa(90)}`; const d = $("#xpd"); if(d) d.textContent = t.value.trim() || xDefault(b) || "—"; });
+  const save = (on, btn) => busy(btn, async () => {
+    const d = await api(`/api/bots/${b.id}/explore`, "POST", {on, desc: t.value});
+    S.cur = d.bot; const i = S.bots.findIndex(x => x.id === d.bot.id); if(i >= 0) S.bots[i] = d.bot;
+    $("#xo").outerHTML = xoHTML(S.cur); bindXo();
+    toast(on ? "توی اکسپلور قرار گرفت" : "از اکسپلور برداشته شد");
+    tg?.HapticFeedback?.notificationOccurred("success");
+  });
+  $("#xsave").onclick = () => save(true, $("#xsave"));
+  $("#xoff")?.addEventListener("click", () => save(false, $("#xoff")));
+}
+
+
+/* ───────── ابزارهای جدید: ورودی/خروجی، کپی، سلامت‌سنجی، نمونه‌ها ───────── */
+const EXAMPLES = [
+  ["فروشگاه", "ربات فروشگاه لوازم جانبی موبایل با منوی محصولات، قیمت و فرم ثبت سفارش"],
+  ["پشتیبانی", "ربات پشتیبانی مشتری با سؤال‌های پرتکرار و ارسال پیام به پشتیبان"],
+  ["باشگاه امتیاز", "ربات باشگاه مشتریان با جایزه‌ی روزانه، امتیاز و سطح‌بندی طلایی"],
+  ["کوییز", "ربات کوییز ۵ سؤالی با امتیازدهی و نتیجه‌ی نهایی"]
+];
+const HEALTH_FA = [["unreachable nodes", "بخش‌های بدون مسیر ورود"], ["dead-end nodes", "بن‌بست‌ها (دکمه‌ی بازگشت ندارن)"], ["variables that are read", "متغیرهای بدون مقدار"]];
+function textSheet(title, text, hint){
+  S.sheet = {kind:"info"};
+  showSheet(head(title) + (hint ? `<p class="muted" style="margin-bottom:8px">${hint}</p>` : "") +
+    `<textarea id="tx-out" readonly dir="ltr" style="min-height:220px;font-family:var(--mono);font-size:12px"></textarea>
+     <div style="height:10px"></div><button data-tl="copyout"><i class='ic ic-copy'></i>کپی</button>`);
+  $("#tx-out").value = text;
+}
+function csvOf(items){
+  const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  return ["time,section,name,username,answers", ...items.map(r =>
+    [r.t, r.title, r.name, r.un, (r.qa || []).map(([a, b]) => a + ": " + b).join(" | ") || r.text].map(q).join(","))].join("\n");
+}
+document.addEventListener("click", e => {
+  const ex = e.target.closest("[data-ex]");
+  if(ex){ const t = $("#prompt"); if(t){ t.value = ex.dataset.ex; t.focus(); } return; }
+  const x = e.target.closest("[data-tl]"); if(!x) return;
+  const a = x.dataset.tl;
+  if(a === "copyout"){ const t = $("#tx-out"); t.select(); navigator.clipboard?.writeText(t.value).then(() => toast("کپی شد"), () => toast("متن رو دستی کپی کن")); }
+  else if(a === "health") busy(x, async () => {
+    const d = await api(`/api/bots/${S.cur.id}/health`); S.sheet = {kind:"info"};
+    const row = i => { const h = HEALTH_FA.find(([k]) => i.startsWith(k)); return `<div class="hl"><b>${h ? h[1] : "هشدار"}</b><br><span class="muted" dir="ltr">${esc(i.split(": ").pop())}</span></div>`; };
+    showSheet(head("بررسی مسیرها") + (d.issues.length ? d.issues.map(row).join("") : `<div class="hl ok"><i class='ic ic-check'></i>مشکلی پیدا نشد؛ ${fa(d.nodes)} بخش بررسی شد.</div>`));
+  });
+  else if(a === "export") busy(x, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "این متن رو نگه دار؛ هر وقت خواستی از «ورود از JSON» برگردونش."); });
+  else if(a === "csv") busy(x, async () => { const d = await api(`/api/bots/${S.cur.id}/submissions`); if(!d.items.length) return toast("هنوز پاسخی ثبت نشده"); textSheet("خروجی CSV", csvOf(d.items), "آخرین ۵۰ پاسخ. توی اکسل یا گوگل‌شیت پیست کن."); });
+  else if(a === "dup") busy(x, async () => { const d = await api(`/api/bots/${S.cur.id}/duplicate`, "POST"); S.cur = d.bot; S.open = new Set(); render(); scrollTo({top:0}); toast("کپی ساخته شد"); });
+  else if(a === "import"){
+    S.sheet = {kind:"info"};
+    showSheet(head("ورود از JSON") + `<p class="muted" style="margin-bottom:8px">خروجی JSON یه ربات رو اینجا بچسبون تا به‌عنوان ربات جدید ساخته بشه.</p>
+      <textarea id="im-text" dir="ltr" style="min-height:200px;font-family:var(--mono);font-size:12px" placeholder='{"name": "...", "nodes": {...}}'></textarea>
+      <div style="height:10px"></div><button data-tl="importgo"><i class='ic ic-upload'></i>ساخت ربات</button>`);
+  }
+  else if(a === "importgo") busy(x, async () => {
+    let c; try{ c = JSON.parse($("#im-text").value); }catch(_){ return toast("JSON معتبر نیست"); }
+    const d = await api("/api/bots/import", "POST", {config: c.config || c});
+    closeSheet(); S.cur = d.bot; S.view = "bot"; S.open = new Set(); render(); toast("ربات وارد شد");
+  });
+});
+
+/* ───────── حضور آنلاین و فهرست کاربران (ادمین) ───────── */
+if(INIT){
+  const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); };
+  setInterval(ping, 25000);
+  document.addEventListener("visibilitychange", ping);
+}
+let UQ = "";
+const ago = t => { if(!t) return "—"; const m = Math.max(0, (Date.now() - new Date(t)) / 60000);
+  return m < 1 ? "just now" : m < 60 ? Math.floor(m) + " min ago" : m < 1440 ? Math.floor(m / 60) + " h ago" : Math.floor(m / 1440) + " d ago"; };
+function userRow(r){
+  const nm = r.name || (r.un ? "@" + r.un : "—");
+  const bots = r.bots.map(b => `<span class="ub${b.on ? " on" : ""}" dir="ltr">${b.on ? "@" + esc(b.un) : esc(b.name)}</span>`).join("");
+  return `<div class="urow"><span class="dot${r.online ? " on" : ""}" title="${r.online ? "online" : ago(r.seen)}"></span>
+    <div class="ui"><div class="u1"><b>${esc(nm)}</b>${r.un && r.name ? `<span class="muted" dir="ltr">@${esc(r.un)}</span>` : ""}</div>
+      <div class="u2"><span class="cpy" data-pf="copyid" data-id="${r.id}" dir="ltr">${r.id}</span><span class="muted">${r.online ? "online" : ago(r.seen)}</span></div>
+      ${bots ? `<div class="u3">${bots}</div>` : ""}</div>
+    <span class="ucnt" title="bots">${fa(r.bots.length)}</span></div>`;
+}
+const uSum = d => `<span class="dot on"></span><b>${fa(d.online)}</b> online<span class="muted"> / ${fa(d.total)} users</span>`;
+function uList(d){
+  const q = UQ.trim().toLowerCase().replace(/^@/, "");
+  const rows = d.items.filter(r => !q || String(r.id).includes(q) || (r.un || "").toLowerCase().includes(q) || (r.name || "").toLowerCase().includes(q)
+    || r.bots.some(b => (b.un || "").toLowerCase().includes(q)));
+  return rows.map(userRow).join("") || '<p class="muted">no match</p>';
+}
+async function openUsers(){
+  S.sheet = {kind:"info"}; UQ = "";
+  showSheet(head("کاربران ربات‌ساز") + `<p class="muted">در حال بارگذاری…</p>`);
+  const tick = async () => {
+    if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return clearInterval(openUsers.t);
+    try{
+      const d = await api("/api/admin/users"); openUsers.d = d;
+      if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); return; }
+      showSheet(head("کاربران ربات‌ساز") + `<div class="usum" id="usum">${uSum(d)}</div>
+        <input id="uq" placeholder="search id, username, bot" autocomplete="off" style="margin-bottom:6px"><div id="ulist">${uList(d)}</div>`);
+    }catch(e){ closeSheet(); toast(e.message); }
+  };
+  clearInterval(openUsers.t); await tick(); openUsers.t = setInterval(tick, 10000);
+}
+document.addEventListener("input", e => {
+  if(e.target.id !== "uq" || !openUsers.d) return;
+  UQ = e.target.value; $("#ulist").innerHTML = uList(openUsers.d);
+});
+
+load();
+</script>
+</body>
+</html>
