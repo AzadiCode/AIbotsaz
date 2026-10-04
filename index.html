@@ -31,7 +31,7 @@ html{color-scheme:light}
 :root[data-theme=dark]{color-scheme:dark}
 body{font-family:"Vazirmatn",Tahoma,system-ui,sans-serif;font-size:15px;line-height:1.8;color:var(--ink);background:var(--bg);
   background-image:radial-gradient(var(--dot) 1px,transparent 1.3px);background-size:20px 20px;
-  min-height:100vh;padding-bottom:calc(88px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+  min-height:100vh;padding-bottom:calc(32px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit}
 button:disabled{opacity:.5;cursor:default}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
@@ -59,10 +59,10 @@ svg{display:block}
 @keyframes look{0%,10%{transform:translate(0,0)}15%,27%{transform:translate(-1.5px,0)}33%,45%{transform:translate(1.5px,0)}51%,63%{transform:translate(0,1px)}70%,100%{transform:translate(0,0)}}
 @keyframes blink{0%,38%,42%,86%,90%,100%{transform:scaleY(1)}40%,88%{transform:scaleY(.08)}}
 @keyframes ant{0%,60%,100%{transform:rotate(0)}66%{transform:rotate(14deg)}72%{transform:rotate(-10deg)}78%{transform:rotate(0)}}
-.tokpill{position:relative;display:flex;align-items:center;gap:7px;padding:4px 12px 4px 10px;border-radius:99px;background:var(--toks);color:var(--tok);transition:transform .15s}
+.tokpill{position:relative;display:flex;align-items:center;gap:6px;padding:6px 4px;color:var(--tok);transition:transform .15s}
 .tokpill svg{width:17px;height:17px}
-.tokpill.gift::after{content:"";position:absolute;top:-1px;left:-1px;width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
-.tokpill .n{font-size:15px}
+.tokpill.gift::after{content:"";position:absolute;top:3px;left:-3px;width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
+.tokpill .n{font-size:17px}
 .tokpill:active{transform:scale(.96)}
 .tokpill.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
 @keyframes bump{40%{transform:scale(1.15)}}
@@ -433,38 +433,30 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .ub.on{color:var(--ink)}
 .ucnt{font-size:12px;min-width:24px;text-align:center;border-radius:7px;padding:1px 0;margin-top:2px;box-shadow:inset 0 0 0 1px var(--line)}
 
-/* ── نوار پایین ── */
-.dock{position:fixed;left:0;right:0;bottom:0;z-index:40;transition:transform .3s cubic-bezier(.3,.9,.25,1)}
-.dock.hide{transform:translateY(110%)}
-.dpanel{max-width:560px;margin:0 auto;display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--sf) 92%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
-.dn{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 4px;font-size:11px;font-weight:500;color:var(--mut)}
+/* ── کشوی ناوبری (لبه‌ی چپ) ── */
+.dock{--rw:56px;--shift:62px;position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
+  transform:translate(calc(-1 * var(--shift)),-50%);transition:transform .34s cubic-bezier(.2,.8,.2,1)}
+.dock[hidden]{display:none}
+.dock.open{transform:translate(0,-50%)}
+.dock.hide{transform:translate(calc(-1 * var(--shift) - 40px),-50%)}
+.dpanel{display:flex;flex-direction:column;gap:4px;width:var(--rw);padding:8px 6px;background:color-mix(in srgb,var(--sf) 94%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border:1px solid var(--line);border-left:0;border-radius:0 20px 20px 0;box-shadow:0 10px 32px rgba(0,0,0,.28)}
+.dn{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;color:var(--mut);transition:background .15s,color .15s}
 .dn svg{width:22px;height:22px}
-.dn.on{color:var(--ink)}
-.dn.on svg{color:var(--ac)}
-.dn.on::before{content:"";position:absolute;top:-6px;width:24px;height:3px;border-radius:0 0 3px 3px;background:var(--ac)}
-
-
-/* ── تکمیلی ── */
-.mt{margin-top:12px}
-.ctag{flex:none;font-size:11.5px;line-height:1.8;padding:0 9px;border-radius:99px;background:var(--toks);color:var(--tok);white-space:nowrap}
-.ctag .n{font-size:12.5px}
-.mt2{margin-top:22px}
-.panel+.panel{margin-top:12px}
-.gi .gt span.ltr,.bh2 .muted.ltr,.pf .muted.ltr{text-align:right}
-.note{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--acs)}
-.note .dt{flex:1;font-size:13px;line-height:1.7}
-.note .dt b{display:block;font-size:14px}
-.note .b{width:auto}
-.pstat{display:flex;align-items:center;gap:12px;line-height:1.6}
-.cpn{display:flex;gap:8px}
-.cpn input{flex:1}
-.cpn .b{width:auto;min-height:44px}
-.spinning svg{animation:s .8s linear infinite}
-.empty h2{margin-bottom:2px}
-.xc .b.sm svg{width:12px;height:12px}
+.dn:active{background:var(--sf2)}
+.dn.on{color:var(--ac);background:var(--acs)}
+.dhandle{display:grid;place-items:center;width:17px;height:56px;margin-left:6px;color:var(--ac);background:var(--sf);border:1px solid var(--line);border-left:0;border-radius:0 14px 14px 0;
+  box-shadow:0 6px 20px rgba(0,0,0,.2);transition:border-radius .3s,border-left-width .3s}
+.dock.open .dhandle{border-radius:12px;border-left-width:1px}
+.dh-i{display:block;animation:nudge 1.4s ease-in-out 1.2s 2}
+.dhandle svg{width:13px;height:13px;transition:transform .34s cubic-bezier(.2,.8,.2,1)}
+.dock.open .dhandle svg{transform:rotate(180deg)}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(3px)}}
+.dscrim{position:fixed;inset:0;z-index:39;display:none}
+.dscrim.on{display:block}
 
 /* ── اعلان و جشن ── */
-#toast{position:fixed;bottom:calc(92px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);
+#toast{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);
   padding:10px 18px;border-radius:14px;font-size:13px;line-height:1.7;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:88%;text-align:center;z-index:99}
 #toast.show{opacity:1;transform:translateX(-50%)}
 .cf{position:fixed;top:-10px;width:8px;height:12px;border-radius:2px;z-index:98;pointer-events:none;animation:cf 1.6s ease-in forwards}
@@ -481,7 +473,9 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 <div id="sheet" class="sheet"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fileIn" multiple>
-<nav class="dock" id="dock" aria-label="ناوبری اصلی"><div class="dpanel" id="dpanel"></div></nav>
+<div class="dscrim" id="dscrim"></div>
+<nav class="dock" id="dock" aria-label="ناوبری اصلی"><div class="dpanel" id="dpanel"></div>
+  <button class="dhandle" id="dhandle" aria-label="باز و بسته کردن منو" aria-expanded="false"><span class="dh-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span></button></nav>
 
 <script>
 /* ═════════ اتصال به تلگرام ═════════ */
@@ -607,7 +601,7 @@ const why = {signup:"هدیه‌ی ثبت‌نام", gen:"ساخت ربات", ed
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
 const costOf = isEdit => billingFixed() ? (isEdit ? S.cfg.edit : S.cfg.gen) : (S.cfg.typical || 12);
-const costTxt = isEdit => billingFixed() ? `${N(costOf(isEdit))} توکن` : `حدود ${N(S.cfg.typical || 12)} توکن`;
+const costTxt = isEdit => billingFixed() ? N(costOf(isEdit)) : N("±" + (S.cfg.typical || 12));
 const needCost = isEdit => billingFixed() ? costOf(isEdit) : (S.cfg.min || 5);
 const cellsHTML = (on, total = 10) => Array.from({length: total}, (_, i) => `<i class="${i < on ? "on" : ""}"></i>`).join("");
 const buildsLeft = () => Math.min(10, Math.floor(S.wallet.tokens / (costOf(false) || 6)));
@@ -642,7 +636,13 @@ async function load(){
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
 
 const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["explore", "compass", "اکسپلور"], ["media", "photo", "رسانه"], ["account", "wallet", "حساب"]];
-$("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}">${IC[ic]}<span>${t}</span></button>`).join("");
+$("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}" aria-label="${t}" title="${t}">${IC[ic]}</button>`).join("");
+function setDock(on){ $("#dock").classList.toggle("open", on); $("#dscrim").classList.toggle("on", on); $("#dhandle").setAttribute("aria-expanded", on); }
+document.addEventListener("click", e => {
+  if(e.target.closest("#dhandle")) setDock(!$("#dock").classList.contains("open"));
+  else if(e.target.closest("#dscrim")) setDock(false);
+});
+document.addEventListener("keydown", e => { if(e.key === "Escape") setDock(false); });
 
 function renderTop(){
   $("#top").innerHTML = `<div class="top-in"><div class="brand">${LOGO}<span>ابر رباتساز</span></div>
@@ -655,6 +655,7 @@ function render(){
   document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.go === cur));
 }
 function goTo(where){
+  setDock(false);
   if(S.busy) return toast("صبر کن کار فعلی تموم شه");
   closeSheet();
   if(S.view === "bot"){ S.cur = null; S.open = new Set(); S.ideas = []; }
@@ -750,8 +751,8 @@ function tplBlock(){
   let h = "";
   if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}ویرایش کن</div><div>${N(3)}فعالش کن</div></div>`;
   if((S.templates || []).length && !full){
-    h += `<div class="sec"><h2>قالب آماده</h2><span class="muted">ارزان‌تر از ساخت با هوش مصنوعی</span></div>
-      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${t.cost ? `<span class="ctag">${N(t.cost)} توکن</span>` : ""}${goIc}</button>`).join("")}</div>
+    h += `<div class="sec"><h2>قالب آماده</h2></div>
+      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${goIc}</button>`).join("")}</div>
       <button class="b t mt" data-a="import">${IC.upload}ورود از JSON</button>`;
   }
   return h;
@@ -765,7 +766,7 @@ function renderCreate(){
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="توضیح ربات" placeholder="${esc(EXAMPLES[0][1])}"></textarea>
       <div class="chips">${EXAMPLES.map((e, i) => `<button class="chip" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="chip ai" data-a="enhance">${IC.spark}کامل‌ترش کن</button></div>
       <div class="cfoot">
-        <div class="gauge" title="تعداد رباتی که با موجودی فعلی می‌توانی بسازی"><div class="cells">${cellsHTML(buildsLeft())}</div><span class="cost">هزینه ${costTxt(false)}</span></div>
+        <div class="gauge" title="تعداد رباتی که با موجودی فعلی می‌توانی بسازی"><div class="cells">${cellsHTML(buildsLeft())}</div><span class="cost">مصرف توکن ${costTxt(false)}</span></div>
         <button class="b" id="gen" data-a="gen">ساخت ربات</button>
       </div>
     </div>`}
@@ -878,7 +879,7 @@ function tabNodes(b){
   const c = S.cfg, ids = Object.keys(b.config.nodes);
   let h = `<div class="console slim">
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="درخواست ارتقا" placeholder="چه چیزی را تغییر بدهم؟ مثلاً: یک بخش سوالات متداول اضافه کن"></textarea>
-      <div class="cfoot"><div class="gauge"><span class="cost">ارتقا ${costTxt(true)}</span></div><button class="b" id="gen" data-a="gen">${IC.spark}ارتقا</button></div>
+      <div class="cfoot"><div class="gauge"><span class="cost">مصرف توکن ${costTxt(true)}</span></div><button class="b" id="gen" data-a="gen">${IC.spark}ارتقا</button></div>
     </div>
     <div id="live"></div>
     <div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
@@ -1096,7 +1097,7 @@ document.addEventListener("change", e => {
 });
 document.addEventListener("focusin", e => {
   if(!e.target.matches?.("input,textarea,select")) return;
-  $("#dock").classList.add("hide");
+  setDock(false); $("#dock").classList.add("hide");
   if(e.target.id === "prompt" && S.view === "create") e.target.placeholder = "هر رباتی که لازم داری را توضیح بده…";
 });
 document.addEventListener("focusout", () => setTimeout(() => { if(!document.activeElement?.matches?.("input,textarea,select")) $("#dock").classList.remove("hide"); }, 150));
