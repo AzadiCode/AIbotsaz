@@ -7,185 +7,521 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@300..900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#F6F6F3;--sf:#FFFFFF;--sf2:#EFEFEA;--ink:#141414;--mut:#77776F;--line:#DEDED6;--ac:#141414;--acx:#FFFFFF;--acs:rgba(20,20,20,.06);--hl:#D4F54A;--tok:#D9560B;--toks:rgba(217,86,11,.1);--ok:#118A4E;--bad:#D32F3F;--cell:#D6D6CD;--ac2:#141414}
-:root[data-theme=dark]{--bg:#0D0D0C;--sf:#171716;--sf2:#212120;--ink:#F2F2EC;--mut:#8E8E85;--line:#2A2A28;--ac:#D4F54A;--acx:#0D0D0C;--acs:rgba(212,245,74,.1);--tok:#FF9A4D;--toks:rgba(255,154,77,.12);--ok:#5BDB95;--bad:#FF7480;--cell:#33332F}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
-body{font-family:"Vazirmatn",Tahoma,sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.7;padding:0 16px calc(86px + env(safe-area-inset-bottom));min-height:100vh}
-h1,h2,h3,.ttl,.sech,.brand{font-weight:800;line-height:1.45}
-.n{font-family:"IBM Plex Mono",monospace;font-weight:500;direction:ltr;unicode-bidi:isolate;display:inline-block;font-size:.95em}
-.muted{color:var(--mut);font-size:12.5px}code,.ltr{direction:ltr;unicode-bidi:isolate}a{color:var(--ink)}
-/* بالا */
-.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;margin:0 -16px 8px;padding:14px 16px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:8px;font-size:18px}.brand svg{width:24px;height:24px}
-.tokpill{width:auto;background:var(--hl);color:#141414;border-radius:8px;padding:3px 10px;font-weight:600;display:flex;gap:6px;align-items:center}.tokpill small{font-size:11px}
-.tokpill.bump{animation:bump .5s}@keyframes bump{40%{transform:scale(1.12)}}
-/* پایه */
-button{font:inherit;border:0;border-radius:10px;padding:11px 16px;cursor:pointer;background:var(--ac);color:var(--acx);width:100%;font-weight:700;transition:transform .1s,opacity .15s}
-button:active{transform:scale(.98)}button:disabled{opacity:.45}
-button.ghost,button.kb,.xlike,.xref{background:transparent;color:var(--ink);border:1.5px solid var(--line);font-weight:600}
-button.danger{background:transparent;color:var(--bad);font-weight:600}
-button.danger-b{background:transparent;color:var(--bad);border:1.5px solid var(--bad)}
-button.x{background:transparent;color:var(--bad);width:auto;padding:5px 9px}
-button.sm{width:auto;padding:5px 12px;font-size:12.5px;border-radius:8px}
-button.back{background:none;color:var(--ink);width:auto;padding:8px 0;font-weight:600}
-button:focus-visible,.nh:focus-visible,.tile:focus-visible,.botrow:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.card{background:var(--sf);border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
-.card h2{font-size:15px;margin-bottom:8px}
-.row{display:flex;gap:8px}.row>*{flex:1}.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-textarea,input,select{font:inherit;width:100%;background:var(--sf);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;outline:none;resize:none}
-textarea:focus,input:focus,select:focus{border-color:var(--ink)}:root[data-theme=dark] textarea:focus,:root[data-theme=dark] input:focus{border-color:var(--ac)}
-textarea{min-height:100px}input{direction:ltr;text-align:left}input.fa,textarea.fa{direction:rtl;text-align:right}
-input[type=checkbox]{width:auto}input[type=file]{display:none}
-.lbl{display:block;font-size:12.5px;color:var(--mut);margin:12px 0 4px;font-weight:600}
-.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.hd h2{margin:0}
-.bar{display:flex;gap:8px;margin-top:16px}.bar button{flex:1}
-.tag{font-size:11px;background:var(--sf2);border-radius:4px;padding:0 7px;color:var(--mut)}
-.chk{display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px}
-.empty{text-align:center;padding:28px 8px;color:var(--mut)}
-.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:8px}@keyframes s{to{transform:rotate(360deg)}}
-#toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88%;text-align:center;z-index:99}#toast.show{opacity:1}
-.sech{font-size:15px;margin:22px 0 8px;display:flex;justify-content:space-between;align-items:center}
-/* ساخت */
-.console{background:var(--sf);border:2px solid var(--ink);border-radius:12px;margin-bottom:14px;overflow:hidden}
-:root[data-theme=dark] .console{border-color:var(--ac)}
-.console .ch{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0}.console .ch b{font-size:15px;font-weight:800}
-.cells{display:flex;gap:3px}.cells i{width:6px;height:12px;border-radius:1px;background:var(--cell);display:block}.cells i.on{background:var(--ink)}:root[data-theme=dark] .cells i.on{background:var(--ac)}
-.console textarea{border:0;border-radius:0;background:transparent;min-height:100px;padding:10px 14px;font-size:15px}
-.console .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
-.ch2{width:auto;background:var(--sf2);color:var(--ink);border-radius:6px;padding:4px 10px;font-size:12.5px;font-weight:500}
-.console .cta{display:flex;align-items:center;gap:10px;padding:0 14px 14px}.console .cost{font-size:12.5px;color:var(--mut);white-space:nowrap}.console .cta button{flex:1}
-.build{background:var(--sf);border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
-.build .bh{display:flex;justify-content:space-between;margin-bottom:10px}.build .bh b{font-weight:800}.clk{color:var(--mut)}
-.bl{display:flex;flex-direction:column;gap:6px}.bl div{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut)}
-.bl div i{width:12px;height:12px;border-radius:50%;border:2px solid var(--cell);flex:none}
-.bl div.cur{color:var(--ink);font-weight:600}.bl div.cur i{border-color:var(--ink);border-top-color:transparent;animation:s .8s linear infinite}.bl div.done i{background:var(--ok);border-color:var(--ok)}
-.build .meter{height:3px;background:var(--cell);margin-top:12px;overflow:hidden;position:relative}.build .meter::after{content:"";position:absolute;inset:0 auto 0 0;width:30%;background:var(--ink);animation:slide 1.5s ease-in-out infinite}
-@keyframes slide{from{transform:translateX(340%)}to{transform:translateX(-120%)}}
-.daily{display:flex;align-items:center;gap:12px;background:var(--toks);border-color:transparent}.daily .dt{flex:1;font-size:13px}.daily .dt b{display:block;font-size:14px}.daily .dt .n{color:var(--tok)}
-.daily button{width:auto;background:var(--tok);color:#fff}
-/* لیست ربات‌ها */
-.botrow{display:flex;align-items:center;gap:12px;cursor:pointer;padding:13px 14px}
-.botrow .dot,.dot{width:8px;height:8px;border-radius:50%;background:var(--cell);flex:none}.dot.on{background:var(--ok)}
-.botrow b{display:block;font-size:14.5px}.botrow .go{margin-right:auto;color:var(--mut);width:16px;height:16px;transform:scaleX(-1)}
-/* بخش‌ها */
-.think{background:var(--acs);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:13px;display:none}.think.show{display:block}
-.ideas{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.ideas .ch2{text-align:right;width:100%;padding:8px 12px;border:1px dashed var(--mut);background:transparent}
-.pvhd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.pvhd button{white-space:nowrap}
-.card.nd{padding:0;overflow:hidden}.nd .nh{display:block;padding:12px 14px;cursor:pointer;user-select:none}
-.nd .nr{display:flex;align-items:center;gap:10px}.nd .nt{flex:1;min-width:0}.nd .nt b{display:block;font-size:14px}
-.nd .ns{display:block;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:20px;transition:opacity .2s,max-height .3s}.nd.open .ns{opacity:0;max-height:0}
-.nd .nm{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-.nd .tag.cnt{background:var(--hl);color:#141414}.nd .tag.ai{background:var(--toks);color:var(--tok)}
-.nd .chev{width:18px;height:18px;color:var(--mut);transition:transform .3s}.nd.open .chev{transform:rotate(180deg)}
-.nbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s}.nd.open .nbody{grid-template-rows:1fr}.nbody>div{overflow:hidden;min-height:0}
-.nbi{padding:12px 14px 14px;border-top:1.5px solid var(--line);opacity:0;transition:opacity .25s}.nd.open .nbi{opacity:1}
-.bubble{position:relative;background:var(--sf2);border-radius:10px;padding:10px 12px;white-space:pre-wrap;cursor:pointer}.bubble .pen{position:absolute;left:10px;top:8px;font-size:11px;color:var(--mut)}
-.mthumb{display:flex;align-items:center;gap:10px;background:var(--sf2);border-radius:10px;padding:6px;margin-bottom:8px;font-size:12.5px}
-.mi{display:grid;place-items:center;overflow:hidden;background:var(--cell)}.mthumb .mi{width:44px;height:44px;border-radius:8px;flex:none}.mi img{width:100%;height:100%;object-fit:cover}.mi svg{width:22px;height:22px}
-.mthumb span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.krow{display:flex;gap:6px;margin-top:6px}button.kb{flex:1;min-width:0;padding:8px 6px;font-size:13.5px;border-radius:8px;line-height:1.5}
-button.kb small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
-button.kb.add{flex:0 0 40px;border-style:dashed;color:var(--mut)}button.kb.add.wide{display:block;width:100%;margin-top:6px;font-size:13px}
-.tray{background:var(--sf2);border-radius:10px;padding:6px;margin-top:10px}.krow.rk button.kb{background:var(--sf);border-radius:6px}
-/* شیت */
-.sheet{position:fixed;inset:0;z-index:50;display:none}.sheet.show{display:block}.sb{position:absolute;inset:0;background:rgba(0,0,0,.5)}
-.sp{position:absolute;bottom:0;left:0;right:0;max-height:90vh;overflow-y:auto;background:var(--bg);border-top:2px solid var(--ink);border-radius:16px 16px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));animation:up .22s ease;overscroll-behavior:contain}
-@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}.seg button{display:flex;flex-direction:column;align-items:center;padding:6px;background:transparent;color:var(--mut);border:1.5px solid var(--line);border-radius:8px;font-weight:400}
-.seg button svg{width:38px;height:28px}.seg button b{color:var(--ink);font-size:12px}.seg button small{font-size:10px}.seg button.on{border-color:var(--ink);background:var(--sf)}
-.cmd{display:flex;gap:6px;align-items:center;margin-bottom:6px}.cmd input{flex:1;min-width:0}.cmd .cmdn{flex:0 0 34%}.cmd select{flex:1;min-width:0}
-details.adv{margin-top:14px;border:1.5px solid var(--line);border-radius:10px;padding:0 12px}details.adv>summary{cursor:pointer;padding:10px 0;font-size:13px;font-weight:600;list-style:none;display:flex;justify-content:space-between}
-details.adv>summary::-webkit-details-marker{display:none}details.adv>summary::after{content:"+"}details.adv[open]>summary::after{content:"−"}details.adv .box{padding:0 0 12px}
-.sub{font-size:12.5px;font-weight:700;margin:12px 0 6px;display:flex;justify-content:space-between;align-items:center}
-.rl{background:var(--sf2);border-radius:10px;padding:8px;margin-bottom:8px}.rl .cmd:last-child{margin-bottom:0}.rl input,.rl select,.rl textarea{padding:8px 9px;font-size:13px}.rl textarea{min-height:64px}
-.kvr{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--line);font-size:12.5px}.kvr:first-of-type{border-top:0}.kvr span{color:var(--mut)}
-.aibox{background:var(--toks);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12.5px}.aibox .n{color:var(--tok)}
-/* رسانه */
-.mpick{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px}.mpick button{flex:none;width:74px;padding:0;background:var(--sf);color:var(--ink);border:1.5px solid var(--line);border-radius:8px;overflow:hidden;font-weight:400;text-align:center}
-.mpick button.on{border-color:var(--ink)}.mpick .mi{height:56px}.mpick small{display:block;font-size:10.5px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mpick button.up{border-style:dashed;display:grid;place-items:center;min-height:78px;font-size:12px}
-.usage{display:flex;align-items:center;gap:12px}.meter2{flex:1;height:6px;border-radius:3px;background:var(--cell);overflow:hidden}.meter2 i{display:block;height:100%;background:var(--ink);transition:width .5s}:root[data-theme=dark] .meter2 i{background:var(--ac)}
-.dropbtn{display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px dashed var(--ink);background:transparent;color:var(--ink);padding:18px;border-radius:12px;margin-bottom:12px}.dropbtn svg{width:22px;height:22px}
-.upl{background:var(--sf);border:1.5px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12.5px}.upl .pb{height:3px;background:var(--cell);margin-top:6px}.upl .pb i{display:block;height:100%;background:var(--ink);transition:width .2s}
-.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.tile{background:var(--sf);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;overflow:hidden;padding:0;text-align:right;font-weight:400}
-.tile .mi{aspect-ratio:1;position:relative}.tile .mi svg{width:30px;height:30px;color:var(--mut)}.tile .mk{position:absolute;top:5px;right:5px;font-size:10.5px;background:var(--ink);color:var(--bg);padding:0 6px;border-radius:4px}
-.tile .tn{padding:5px 8px 6px;font-size:11.5px;line-height:1.4}.tile .tn b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile .tn span{color:var(--mut);font-size:10.5px}
-.prev{width:100%;max-height:260px;border-radius:10px;object-fit:contain;background:var(--sf2);display:block;margin-bottom:6px}.prevbox{height:120px;border-radius:10px;background:var(--sf2);display:grid;place-items:center;color:var(--mut);margin-bottom:6px}.prevbox svg{width:40px;height:40px}
-/* حساب */
-.pf{display:flex;align-items:center;gap:12px}.av{width:46px;height:46px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800;font-size:18px;overflow:hidden;position:relative;flex:none}.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.pf h2{margin:0;font-size:16px}
-.wallet{padding:16px}.wallet .big{display:flex;align-items:baseline;gap:8px}.wallet .big .n{font-size:46px;line-height:1.2;font-weight:600}.wallet .big span{color:var(--mut)}
-.wallet .cells{margin:10px 0 6px}.wallet .cells i{flex:1;height:10px}
-.costs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:12px}.costs div{background:var(--sf2);border-radius:8px;padding:7px 8px;text-align:center;font-size:11.5px;color:var(--mut);line-height:1.5}.costs .n{display:block;color:var(--ink);font-size:16px}
-.pack{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px}.pack .pt{flex:1}.pack .pt .n{font-size:20px}.pack .pt span{font-size:12px;color:var(--mut);margin-right:6px}.pack .pr{font-size:12px;color:var(--mut);text-align:left}.pack button{width:auto;padding:8px 16px}.pack.best{border-color:var(--ink);background:var(--hl);color:#141414}.pack.best .pr,.pack.best .pt span{color:#3b3b30}
-.reflink{display:flex;align-items:center;gap:8px;background:var(--sf2);border-radius:10px;padding:8px 10px;margin:8px 0 10px;direction:ltr}.reflink code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.reflink button{width:auto;padding:4px 10px;font-size:12px}
-.ms{display:flex;gap:6px;margin-top:10px}.ms div{flex:1;border:1.5px solid var(--line);border-radius:8px;padding:6px 4px;text-align:center;font-size:11px;color:var(--mut)}.ms div .n{display:block;font-size:14px;color:var(--ink)}.ms div.hit{background:var(--hl);border-color:var(--hl);color:#141414}.ms div.hit .n{color:#141414}
-.led{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}.led:first-of-type{border-top:0}.led .pos{color:var(--ok)}.led .neg{color:var(--bad)}.led small{display:block;color:var(--mut);font-size:11.5px}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.stat{background:var(--sf);border:1.5px solid var(--line);border-radius:10px;padding:9px 12px}.stat .k{font-size:12px;color:var(--mut)}.stat .n{font-size:20px}
-/* ناوبری پایین */
-.dock{position:fixed;left:0;right:0;bottom:0;z-index:40;transition:transform .3s}.dock.hide{transform:translateY(110%)}
-.dpanel{display:flex;padding:0 8px env(safe-area-inset-bottom);background:var(--bg);border-top:1.5px solid var(--line)}
-.dn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:10px 4px 8px;background:transparent;color:var(--mut);font-size:11.5px;border-radius:0;font-weight:600;position:relative}
-.dn svg{width:22px;height:22px}.dn.on{color:var(--ink)}.dn.on::before{content:"";position:absolute;top:-1.5px;left:22%;right:22%;height:3px;background:var(--ink);border-radius:0 0 3px 3px}
-:root[data-theme=dark] .dn.on{color:var(--ac)}:root[data-theme=dark] .dn.on::before{background:var(--ac)}
-/* تب‌ها */
-.tp{display:none}.tp.on{display:block}
-.xtabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}.xtabs::-webkit-scrollbar{display:none}
-.xb{width:auto;font-weight:600}
-.xtabs .xb{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 13px;font-size:13px;background:transparent;color:var(--ink);border:1.5px solid var(--line);border-radius:8px}.xtabs .xb svg{width:15px;height:15px}.xtabs .xb.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-:root[data-theme=dark] .xtabs .xb.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
-.ptabs{gap:0;border-bottom:1.5px solid var(--line);margin:4px 0 14px}.ptabs .xb{flex:1;justify-content:center;border:0;border-radius:0;padding:10px 0;color:var(--mut);margin-bottom:-1.5px;border-bottom:3px solid transparent}
-.ptabs .xb.on,:root[data-theme=dark] .ptabs .xb.on{background:transparent;color:var(--ink);border-color:transparent;border-bottom-color:var(--ink);font-weight:800}:root[data-theme=dark] .ptabs .xb.on{border-bottom-color:var(--ac);color:var(--ac)}
-/* قالب‌ها و ابزار */
-.hero{background:var(--hl);color:#141414;border-color:var(--hl)}.hero h2{font-size:16px}.hero .muted{color:#3b3b30}
-.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.steps3 div{background:rgba(255,255,255,.55);border-radius:8px;padding:8px 6px;text-align:center;font-size:11.5px;line-height:1.55}.steps3 div .n{display:block;font-size:16px}
-.tplg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-button.tpl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:right;background:var(--sf);color:var(--ink);border:1.5px solid var(--line);padding:12px;border-radius:12px;font-weight:500}
-button.tpl .tic{display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--ink);color:var(--bg);margin-bottom:2px}button.tpl .tic svg{width:18px;height:18px}
-button.tpl b{font-size:13px;font-weight:800}button.tpl small{font-size:11px;color:var(--mut);line-height:1.55;font-weight:400}
-.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.tools button{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;padding:10px 8px}
-.tools svg,.ibtn svg{width:16px;height:16px;flex:none}.ibtn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
-.hl{padding:9px 0;border-top:1px solid var(--line);font-size:13px}.hl:first-child{border-top:0}.hl.ok{color:var(--ok)}
-.sub2{border-top:1px solid var(--line);padding:10px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}.sub2:first-of-type{border-top:0}.sub2 small{display:block;color:var(--mut);font-size:11.5px}
-.spark{display:flex;align-items:flex-end;gap:5px;height:56px;margin:4px 0 2px}.spark i{flex:1;background:var(--ink);min-height:3px;transition:height .5s}:root[data-theme=dark] .spark i{background:var(--ac)}.spark i.z{background:var(--cell)}
-.sparklbl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut)}
-.topn{margin-top:10px}.topn .tr{display:flex;align-items:center;gap:10px;font-size:12.5px;margin-top:6px}.topn .tr span{flex:0 0 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.topn .bar2{flex:1;height:6px;background:var(--cell);overflow:hidden}.topn .bar2 i{display:block;height:100%;background:var(--ink)}
-textarea.code{direction:ltr;text-align:left;font-family:"IBM Plex Mono",monospace;font-size:12px;min-height:220px}
-/* اکسپلور */
-.xhd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 12px}.xhd h2{font-size:20px;display:flex;align-items:center;gap:8px}.xhd h2 svg{width:22px;height:22px}.xsub{font-size:12px;color:var(--mut);display:block;font-weight:400}
-.xref{padding:8px}.xref svg{width:17px;height:17px;display:block}.xref.spinning svg{animation:s .8s linear infinite}
-.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.xc{position:relative;display:flex;flex-direction:column;gap:7px;min-width:0;padding:12px;background:var(--sf);border:1.5px solid var(--line);border-radius:12px;cursor:pointer;overflow:hidden}.xc:active{transform:scale(.985)}.xc.hot{border-color:var(--ink)}
-.xt{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;min-width:0;padding-top:4px}.xn{min-width:0;flex:1}
-.xn b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;line-height:1.45}.xn .un{display:block;direction:ltr;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xav{position:relative;flex:none;width:52px;height:52px;border-radius:12px;display:grid;place-items:center;overflow:hidden;font-weight:800;font-size:20px;color:#fff;background:hsl(var(--h,200) 45% 40%)}.xav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.xd{text-align:center;font-size:12.5px;line-height:1.65;color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
-.xs{display:flex;align-items:center;justify-content:center;gap:12px;font-size:11.5px;color:var(--mut)}.xs span{display:inline-flex;align-items:center;gap:4px}.xs svg{width:13px;height:13px}
-.xa{display:flex;gap:6px;margin-top:auto}.xstart{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;font-size:13px;border-radius:8px}.xstart svg{width:13px;height:13px}
-.xlike{display:inline-flex;align-items:center;gap:5px;padding:8px 11px;font-size:12.5px;border-radius:8px;width:auto}.xlike svg{width:15px;height:15px}.xlike.on{color:var(--bad);border-color:var(--bad)}.xlike.pop svg{animation:beat .4s}@keyframes beat{40%{transform:scale(1.5)}}.xlike:disabled{opacity:.55}
-.xbd{position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;line-height:1;padding:4px 6px;border-radius:4px;background:var(--hl);color:#141414}.xbd svg{width:11px;height:11px}.xbd.n{background:var(--sf2);color:var(--ok)}.xbd.m{background:var(--sf2);color:var(--mut)}
-.xc.feat{grid-column:1/-1;padding:16px;gap:10px;background:var(--hl);color:#141414;border-color:var(--hl)}.xc.feat .xt{flex-direction:row;text-align:start;gap:12px;padding-top:0}.xc.feat .xav{width:60px;height:60px}.xc.feat .xd,.xc.feat .xs,.xc.feat .xn .un{text-align:start;justify-content:flex-start;color:#3b3b30}.xc.feat .xn b{font-size:16px;-webkit-line-clamp:1}.xc.feat .xbd{position:static;align-self:flex-start;background:#141414;color:var(--hl)}
-.xc.sk{pointer-events:none;gap:9px}.xc.sk i{display:block;height:10px;border-radius:5px;background:linear-gradient(100deg,var(--line) 30%,var(--sf2) 50%,var(--line) 70%);background-size:220% 100%;animation:xsh 1.3s linear infinite}.xc.sk .xav{background:var(--line)}@keyframes xsh{from{background-position:120% 0}to{background-position:-120% 0}}
-.xempty{text-align:center;padding:34px 16px;color:var(--mut)}.xempty svg{width:34px;height:34px;display:block;margin:0 auto 8px}
-.xbig{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.xbig div{border:1.5px solid var(--line);border-radius:10px;padding:9px 6px;text-align:center}.xbig b{display:block;font-size:16px}.xbig small{font-size:11.5px;color:var(--mut)}
-.xsheet-top{display:flex;align-items:center;gap:12px}.xsheet-top .xt{flex-direction:row;text-align:start;padding:0}.xsheet-top .xav{width:62px;height:62px;font-size:26px}
-.xsheet-desc{margin-top:12px;font-size:13.5px;line-height:1.85}.xsheet-act{display:flex;gap:8px;margin-top:4px}
-.xlinks{display:flex;gap:8px;margin-top:10px}.xlinks .xb{flex:1;font-size:12.5px;padding:8px;background:transparent;border:1.5px solid var(--line);color:var(--mut);display:inline-flex;gap:6px;align-items:center;justify-content:center}.xlinks .xb svg{width:14px;height:14px}.xlinks .xb.dg{color:var(--bad)}
-.xo .xprev .xc{cursor:default;margin:0 auto 12px;width:calc(50% - 5px);min-width:168px}.xo textarea{min-height:60px;font-size:13.5px}.xcnt{display:flex;justify-content:flex-end;font-size:11px;color:var(--mut);margin:2px 0 10px}
-/* ادمین */
-.usum{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13.5px}
-.urow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.urow:first-child{border-top:0}.urow .dot{margin-top:9px}.ui{flex:1;min-width:0}.u1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.u1 b{font-size:14px}
-.u2{display:flex;gap:10px;align-items:center;font-size:12px}.u2 .cpy{cursor:pointer;direction:ltr;text-decoration:underline}.u3{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.ub{font-size:11px;background:var(--sf2);border-radius:4px;padding:0 7px;color:var(--mut);direction:ltr}.ub.on{color:var(--ink)}
-.ucnt{font-size:12px;min-width:24px;text-align:center;background:var(--sf2);border-radius:6px;padding:1px 0;margin-top:2px}
-.cf{position:fixed;top:-10px;width:8px;height:12px;border-radius:2px;z-index:98;pointer-events:none;animation:cf 1.6s ease-in forwards}@keyframes cf{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
-@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.cf{display:none}}
+/* ═══════════ توکن‌های طراحی ═══════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  color-scheme:light;
+  --bg:#F4F6FB; --sf:#FFFFFF; --sf2:#F1F3F9; --sf3:#E9EDF6;
+  --ink:#111522; --mut:#6C7690; --line:#E4E8F1;
+  --ac:#4A5BF2; --acx:#FFFFFF; --acs:rgba(74,91,242,.10); --ac2:#8B5CF6;
+  --tok:#F59E0B; --toks:rgba(245,158,11,.12);
+  --ok:#12A678; --bad:#EF4444; --cell:#E2E7F1;
+  --glow:rgba(74,91,242,.13); --glow2:rgba(139,92,246,.10);
+  --sh:0 1px 2px rgba(17,21,34,.05),0 10px 26px -20px rgba(17,21,34,.35);
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --bg:#0A0D16; --sf:#111524; --sf2:#171C2E; --sf3:#1E2439;
+  --ink:#E9EDF9; --mut:#8A93AC; --line:#232A40;
+  --ac:#7C8AFF; --acx:#0A0D16; --acs:rgba(124,138,255,.15); --ac2:#A78BFA;
+  --tok:#FFB648; --toks:rgba(255,182,72,.13);
+  --ok:#3ED3A0; --bad:#FF6B7F; --cell:#242C44;
+  --glow:rgba(124,138,255,.15); --glow2:rgba(167,139,250,.11);
+  --sh:0 1px 2px rgba(0,0,0,.35),0 14px 34px -24px rgba(0,0,0,.9);
+}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:"Vazirmatn","IRANSans",Tahoma,system-ui,sans-serif;
+  font-size:15px;line-height:1.8;color:var(--ink);background:var(--bg);
+  padding:0 16px calc(104px + env(safe-area-inset-bottom));min-height:100vh;overflow-x:hidden;
+  background-image:radial-gradient(700px 330px at 88% -70px,var(--glow),transparent 70%),
+                   radial-gradient(560px 300px at -14% 6%,var(--glow2),transparent 70%);
+  background-attachment:fixed;
+}
+h1,h2,h3,.ttl{font-weight:800;line-height:1.55}
+::selection{background:var(--acs);color:var(--ink)}
+*::-webkit-scrollbar{width:6px;height:6px}
+*::-webkit-scrollbar-thumb{background:var(--cell);border-radius:99px}
+*::-webkit-scrollbar-track{background:transparent}
 
-.wallet .big>span:not(.n){color:var(--mut)}
-.daily{background:var(--sf);border:1.5px solid var(--line)}.daily .dt .n{color:var(--ink);font-weight:600}.daily button{background:var(--ac)!important;color:var(--acx)!important}
-#prompt+.chips,.console.slim textarea{min-height:64px}
+.n{font-family:"Space Grotesk","Vazirmatn",monospace;font-weight:600;font-size:.95em;direction:ltr;
+   unicode-bidi:isolate;display:inline-block;font-variant-numeric:tabular-nums}
+.muted{color:var(--mut);font-size:13px;line-height:1.85}
+code,.ltr,.ltr *{direction:ltr;unicode-bidi:isolate}
+a{color:var(--ac);text-decoration:none}
+
+/* ═══════════ هدر بالا ═══════════ */
+.top{position:sticky;top:0;z-index:30;margin:0 -16px;padding:13px 16px 11px;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16.5px}
+.brand .lg{width:33px;height:33px;border-radius:11px;display:grid;place-items:center;flex:none;color:#fff;
+  background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 8px 18px -10px var(--ac)}
+.brand .lg svg{width:19px;height:19px}
+.tokpill{width:auto;display:flex;align-items:center;gap:7px;background:var(--sf);color:var(--ink);
+  border:1px solid var(--line);border-radius:99px;padding:7px 14px;font-size:12.5px;font-weight:600;
+  box-shadow:var(--sh);transition:transform .15s,border-color .2s}
+.tokpill:active{transform:scale(.96)}
+.tokpill .n{color:var(--tok);font-size:15px;font-weight:700}
+.tokpill small{color:var(--mut);font-size:11.5px;font-weight:500}
+.tokpill.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
+@keyframes bump{40%{transform:scale(1.15)}}
+
+/* ═══════════ عناصر پایه ═══════════ */
+.card{background:var(--sf);border:1px solid var(--line);border-radius:18px;padding:16px;
+  margin-bottom:12px;box-shadow:var(--sh);transition:border-color .2s,transform .15s}
+.card h2{font-size:15px;margin-bottom:9px}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:9px}
+.hd h2{margin:0}
+.row{display:flex;gap:9px}.row>*{flex:1}
+.sech{font-weight:800;font-size:14px;margin:18px 2px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sech .muted{font-size:12.5px;font-weight:500}
+.tag{font-size:11px;background:var(--sf2);border:1px solid var(--line);border-radius:99px;
+  padding:2px 9px;color:var(--mut);white-space:nowrap}
+.tag.cnt{background:var(--acs);color:var(--ac);border-color:transparent}
+.tag.ai{background:var(--toks);color:var(--tok);border-color:transparent}
+.tag.ok{background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok);border-color:transparent}
+.tag.ltr{direction:ltr;unicode-bidi:isolate;font-family:"Space Grotesk",monospace}
+.lbl{display:block;font-size:12.5px;font-weight:600;color:var(--mut);margin:14px 0 6px}
+.chk{display:flex;gap:9px;align-items:center;font-size:13.5px;margin-top:13px;cursor:pointer}
+.empty{text-align:center;padding:30px 14px}
+.empty p{font-size:14.5px;margin-bottom:6px}
+.empty .muted{margin-bottom:14px}
+.empty button{max-width:230px;margin:14px auto 0}
+.bar{display:flex;gap:9px;margin-top:16px}.bar button{flex:1}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin:0 7px}
+@keyframes s{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes riseIn{from{opacity:0;transform:translateY(11px)}to{opacity:1;transform:none}}
+
+#toast{position:fixed;bottom:calc(98px + env(safe-area-inset-bottom));left:50%;
+  transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);
+  padding:10px 19px;border-radius:99px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;
+  transition:opacity .22s,transform .22s;max-width:88%;text-align:center;z-index:99;box-shadow:var(--sh)}
+#toast.show{opacity:1;transform:translateX(-50%)}
+
+/* ═══════════ دکمه‌ها و فرم‌ها ═══════════ */
+button{font:inherit;border:0;border-radius:14px;padding:12px 17px;cursor:pointer;background:var(--ac);
+  color:var(--acx);width:100%;font-weight:600;font-size:14px;transition:transform .12s,opacity .15s,box-shadow .2s}
+button:active{transform:scale(.98)}
+button:focus-visible,.nh:focus-visible,.tile:focus-visible,.botrow:focus-visible,.tab:focus-visible{
+  outline:2px solid var(--ac);outline-offset:2px}
+button:disabled{opacity:.55}
+button.ghost{background:var(--sf2);color:var(--ink);border:1px solid var(--line);font-weight:500}
+button.danger{background:transparent;color:var(--bad);font-weight:600}
+button.danger-b{background:transparent;color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 38%,transparent)}
+button.sm{width:auto;padding:6px 13px;font-size:12.5px;border-radius:11px}
+button.x{background:transparent;color:var(--bad);padding:5px 9px;width:auto;font-weight:500}
+button.back{background:var(--sf);color:var(--ink);border:1px solid var(--line);width:auto;
+  padding:7px 14px;font-size:13px;font-weight:600;border-radius:12px;flex:none}
+button:not(.ghost):not(.danger):not(.back):not(.sm):not(.x):not(.danger-b):not(.dn):not(.tab):not(.kb)
+  :not(.ch2):not(.tpl):not(.tile):not(.xb):not(.tokpill):not(.up):not(.segb){
+  box-shadow:0 8px 18px -12px var(--ac)}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.tools svg,.ibtn svg,.dropbtn svg{width:17px;height:17px;flex:none}
+
+textarea,input,select{font:inherit;width:100%;background:var(--sf2);color:var(--ink);border:1px solid var(--line);
+  border-radius:13px;padding:11px 13px;outline:none;resize:none;transition:border-color .15s,box-shadow .15s}
+textarea:focus,input:focus,select:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
+textarea{min-height:104px;line-height:1.85}
+input{direction:ltr;text-align:left}
+input.fa,textarea.fa{direction:rtl;text-align:right}
+input[type=checkbox]{width:auto;flex:none;accent-color:var(--ac);box-shadow:none}
+input[type=file]{display:none}
+
+/* ═══════════ تب‌ها ═══════════ */
+.tabs{display:flex;gap:5px;padding:5px;background:var(--sf2);border:1px solid var(--line);
+  border-radius:16px;margin-bottom:14px}
+.tab{flex:1;min-width:0;padding:9px 4px;border-radius:12px;background:transparent;color:var(--mut);
+  font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  box-shadow:none;transition:background .18s,color .18s}
+.tab.on{background:var(--sf);color:var(--ac);box-shadow:0 1px 3px rgba(17,21,34,.10)}
+.pane{display:none}
+.pane.on{display:block;animation:fadeUp .26s ease}
+.phead{display:flex;align-items:center;gap:10px;margin:2px 0 13px}
+.phead .ttl{flex:1;min-width:0;font-size:17.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ═══════════ کنسول ساخت ═══════════ */
+.console{background:var(--sf);border:1px solid var(--line);border-radius:20px;overflow:hidden;
+  margin-bottom:14px;box-shadow:var(--sh)}
+.console .ch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 16px 8px}
+.console .ch b{font-size:15.5px;font-weight:800}
+.console textarea{border:0;border-radius:0;background:transparent;box-shadow:none;min-height:112px;
+  padding:6px 16px 12px;font-size:15px}
+.console textarea:focus{box-shadow:none;border-color:transparent}
+.console .chips{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 13px}
+.ch2{width:auto;background:var(--acs);color:var(--ac);border:1px solid transparent;border-radius:99px;
+  padding:6px 13px;font-size:12.5px;font-weight:600;box-shadow:none}
+.console .cta{display:flex;align-items:center;gap:11px;padding:11px 14px 14px;border-top:1px solid var(--line)}
+.console .cost{flex:none;font-size:12.5px;color:var(--mut);white-space:nowrap}
+.console .cost .n{color:var(--tok);font-size:15px}
+.console .cta button{flex:1}
+.cells{display:flex;gap:4px}
+.cells i{width:8px;height:13px;border-radius:3px;background:var(--cell);display:block;transition:background .25s}
+.console .cells i.on{background:var(--ac)}
+
+/* ═══════════ وضعیت ساخت ═══════════ */
+.build{background:var(--sf);border:1px solid color-mix(in srgb,var(--ac) 45%,transparent);
+  border-radius:18px;padding:15px 16px;margin-bottom:14px;box-shadow:var(--sh)}
+.build .bh{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.build .bh b{font-size:14.5px;font-weight:800}
+.build .clk{font-size:13px;color:var(--mut)}
+.bl{display:flex;flex-direction:column;gap:8px}
+.bl div{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut);transition:color .3s}
+.bl div i{width:17px;height:10px;border-radius:3px;background:var(--cell);flex:none;transition:background .3s}
+.bl div.cur{color:var(--ink);font-weight:600}.bl div.cur i{background:var(--ac);animation:blink 1s steps(2) infinite}
+.bl div.done i{background:var(--ok)}
+@keyframes blink{50%{opacity:.25}}
+.build .meter{height:4px;border-radius:99px;background:var(--cell);margin-top:14px;overflow:hidden;position:relative}
+.build .meter::after{content:"";position:absolute;inset:0 auto 0 0;width:34%;background:var(--ac);border-radius:99px;
+  animation:slide 1.6s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(320%)}to{transform:translateX(-120%)}}
+
+/* ═══════════ جایزه روزانه ═══════════ */
+.daily{display:flex;align-items:center;gap:13px;background:var(--toks);
+  border-color:color-mix(in srgb,var(--tok) 32%,transparent)}
+.daily .dt{flex:1;font-size:13px}.daily .dt b{display:block;font-size:14px;font-weight:700}
+.daily .dt .n{color:var(--tok)}
+.daily button{width:auto;background:var(--tok);color:#2B1A00;font-weight:700;padding:9px 17px;box-shadow:none}
+
+/* ═══════════ صفحه اصلی ═══════════ */
+.hero{background:linear-gradient(135deg,var(--acs),rgba(139,92,246,.12));
+  border-color:color-mix(in srgb,var(--ac) 22%,transparent);position:relative;overflow:hidden}
+.hero h2{font-size:15.5px}
+.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.steps3 div{background:color-mix(in srgb,var(--sf) 86%,transparent);border:1px solid var(--line);
+  border-radius:13px;padding:9px 6px;text-align:center;font-size:11.5px;line-height:1.6;color:var(--mut)}
+.steps3 div .n{display:block;color:var(--ac);font-size:16px;font-weight:700;margin-bottom:2px}
+.tplg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}
+button.tpl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:right;
+  background:var(--sf);color:var(--ink);border:1px solid var(--line);padding:13px;border-radius:16px;
+  font-weight:500;box-shadow:var(--sh)}
+button.tpl .tic{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;
+  background:var(--acs);color:var(--ac);margin-bottom:5px}
+button.tpl .tic svg{width:19px;height:19px}
+button.tpl b{font-size:13.5px;font-weight:700}
+button.tpl small{font-size:11.5px;color:var(--mut);line-height:1.6;font-weight:400}
+.botrow{display:flex;align-items:center;gap:13px;cursor:pointer;padding:14px 15px}
+.botrow b{display:block;font-size:14.5px;font-weight:700}
+.botrow .go{margin-inline-start:auto;color:var(--mut);width:18px;height:18px;flex:none;transform:scaleX(-1)}
+
+/* ═══════════ ربات: پیش‌نمایش بخش‌ها ═══════════ */
+.think{background:var(--acs);border:1px solid color-mix(in srgb,var(--ac) 25%,transparent);
+  border-radius:14px;padding:11px 14px;margin:0 0 13px;font-size:13.5px;line-height:1.8;display:none}
+.think.show{display:block;animation:fadeUp .3s ease}
+.pvhd{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;margin:0 2px 11px}
+.pvhd .muted{font-size:12.5px}
+.pvacts{display:flex;gap:7px}
+.pvhd button{white-space:nowrap;flex:none}
+.ideas{display:flex;flex-direction:column;gap:7px;margin:-3px 0 13px}
+.ideas .ch2{text-align:right;width:100%;border-radius:13px;padding:9px 13px;border:1px dashed var(--ac);
+  background:transparent;font-weight:500}
+.card.nd{padding:0;overflow:hidden;box-shadow:none}
+.card.rise{animation:riseIn .42s cubic-bezier(.2,.9,.25,1) backwards}
+.nd .nh{display:block;padding:14px 15px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.nd .nr{display:flex;align-items:center;gap:11px}
+.nd .nt{flex:1;min-width:0}.nd .nt b{display:block;font-size:14.5px;line-height:1.55;font-weight:700}
+.nd .ns{display:block;font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-height:22px;transition:opacity .2s,max-height .3s}
+.nd.open .ns{opacity:0;max-height:0}
+.nd .nm{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.nd .chev{width:18px;height:18px;flex:none;color:var(--mut);transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.nd.open .chev{transform:rotate(180deg);color:var(--ac)}
+.nbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .32s cubic-bezier(.2,.8,.2,1)}
+.nd.open .nbody{grid-template-rows:1fr}
+.nbody>div{overflow:hidden;min-height:0}
+.nbi{padding:13px 15px 15px;border-top:1px solid var(--line);opacity:0;transition:opacity .25s}
+.nd.open .nbi{opacity:1}
+.bubble{position:relative;background:var(--sf2);border:1px solid var(--line);border-radius:15px 15px 15px 5px;
+  padding:12px 14px;white-space:pre-wrap;cursor:pointer;font-size:14px;line-height:1.9;
+  transition:border-color .15s,background .15s}
+.bubble:active{border-color:var(--ac);background:var(--acs)}
+.bubble .pen{position:absolute;left:9px;top:9px;font-size:10.5px;color:var(--mut);background:var(--sf);
+  border:1px solid var(--line);padding:1px 8px;border-radius:8px;line-height:1.7}
+.mthumb{display:flex;align-items:center;gap:11px;background:var(--sf2);border:1px solid var(--line);
+  border-radius:13px;padding:7px;margin-bottom:9px;font-size:12.5px}
+.mthumb .mi{width:46px;height:46px;border-radius:11px;flex:none;background:var(--cell);display:grid;
+  place-items:center;overflow:hidden;color:var(--ink)}
+.mthumb .mi img{width:100%;height:100%;object-fit:cover}.mthumb .mi svg{width:22px;height:22px}
+.mthumb span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.krow{display:flex;gap:7px;margin-top:7px}
+button.kb{flex:1;min-width:0;background:var(--sf);color:var(--ink);padding:9px 8px;font-size:13.5px;
+  border-radius:12px;border:1px solid var(--line);line-height:1.5;font-weight:500;box-shadow:none}
+button.kb:active{border-color:var(--ac)}
+button.kb small{display:block;color:var(--mut);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-weight:400}
+button.kb.add{flex:0 0 42px;background:transparent;color:var(--ac);border:1px dashed var(--ac);font-size:17px}
+button.kb.add.wide{display:block;width:100%;margin-top:7px;font-size:13px;border-radius:12px}
+.tray{background:var(--sf2);border-radius:14px;padding:8px;margin-top:10px;border:1px solid var(--line)}
+.krow.rk button.kb{border-radius:9px;background:var(--sf)}
+.aibox{background:var(--toks);border:1px solid color-mix(in srgb,var(--tok) 28%,transparent);
+  border-radius:13px;padding:11px 13px;margin-top:11px;font-size:12.5px;line-height:1.8}
+.aibox .n{color:var(--tok)}
+
+/* ═══════════ رسانه ═══════════ */
+.usage{display:flex;align-items:center;gap:12px}
+.usage .meter2{flex:1;height:8px;border-radius:99px;background:var(--cell);overflow:hidden}
+.usage .meter2 i{display:block;height:100%;background:linear-gradient(90deg,var(--ac),var(--ac2));
+  border-radius:99px;transition:width .5s}
+.usage .n{font-size:13px}
+.dropbtn{display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px dashed var(--ac);
+  background:var(--acs);color:var(--ac);padding:19px;border-radius:17px;margin-bottom:13px;font-weight:600;
+  box-shadow:none}
+.upl{background:var(--sf);border:1px solid var(--line);border-radius:13px;padding:9px 13px;margin-bottom:8px;
+  font-size:12.5px;box-shadow:var(--sh)}
+.upl .pb{height:4px;border-radius:99px;background:var(--cell);margin-top:7px;overflow:hidden}
+.upl .pb i{display:block;height:100%;background:var(--ac);width:0;transition:width .2s;border-radius:99px}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.tile{background:var(--sf);border:1px solid var(--line);border-radius:15px;overflow:hidden;cursor:pointer;
+  text-align:right;padding:0;box-shadow:var(--sh);color:var(--ink);font-weight:400}
+.tile .mi{aspect-ratio:1;display:grid;place-items:center;background:var(--sf2);overflow:hidden;position:relative}
+.tile .mi img{width:100%;height:100%;object-fit:cover}.tile .mi svg{width:30px;height:30px;color:var(--mut)}
+.tile .mk{position:absolute;top:6px;right:6px;font-size:10.5px;background:rgba(17,21,34,.72);color:#fff;
+  padding:1px 8px;border-radius:99px;backdrop-filter:blur(4px)}
+.tile .tn{padding:7px 9px 8px;font-size:11.5px;line-height:1.45}
+.tile .tn b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .tn span{color:var(--mut);font-size:10.5px}
+.prev{width:100%;max-height:270px;border-radius:14px;object-fit:contain;background:var(--sf2);display:block;margin-bottom:8px}
+.prevbox{height:126px;border-radius:14px;background:var(--sf2);display:grid;place-items:center;color:var(--mut);margin-bottom:8px}
+.prevbox svg{width:42px;height:42px}
+.mpick{display:flex;gap:8px;overflow-x:auto;padding:3px 2px 9px;scrollbar-width:thin}
+.mpick button{flex:none;width:76px;padding:0;background:var(--sf);color:var(--ink);border:1px solid var(--line);
+  border-radius:14px;overflow:hidden;font-weight:400;text-align:center;box-shadow:none}
+.mpick button.on{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
+.mpick .mi{height:56px;display:grid;place-items:center;background:var(--sf2);overflow:hidden;color:var(--mut)}
+.mpick .mi img{width:100%;height:100%;object-fit:cover}.mpick .mi svg{width:24px;height:24px}
+.mpick small{display:block;font-size:10.5px;padding:3px 4px;color:var(--mut);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.mpick button.up{border-style:dashed;color:var(--ac);background:var(--acs);display:grid;place-items:center;
+  min-height:80px;font-size:12px;padding:6px}
+
+/* ═══════════ شیت پایین ═══════════ */
+.sheet{position:fixed;inset:0;z-index:50;display:none}.sheet.show{display:block}
+.sb{position:absolute;inset:0;background:rgba(6,9,18,.5);-webkit-backdrop-filter:blur(3px);
+  backdrop-filter:blur(3px);animation:fi .2s}
+.sp{position:absolute;bottom:0;left:0;right:0;max-height:88vh;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--sf);border-top:1px solid var(--line);border-radius:26px 26px 0 0;
+  padding:12px 16px calc(20px + env(safe-area-inset-bottom));
+  box-shadow:0 -24px 60px -34px rgba(0,0,0,.6);animation:up .26s cubic-bezier(.2,.9,.25,1)}
+.sp::before{content:"";display:block;width:42px;height:4px;border-radius:99px;background:var(--cell);margin:0 auto 13px}
+@keyframes up{from{transform:translateY(46px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.seg button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px;background:var(--sf2);
+  color:var(--mut);border:1px solid var(--line);border-radius:14px;line-height:1.45;font-weight:400;box-shadow:none}
+.seg button svg{width:44px;height:32px;margin-bottom:2px}
+.seg button b{color:var(--ink);font-weight:700;font-size:12.5px}.seg button small{font-size:10.5px}
+.seg button.on{border-color:var(--ac);color:var(--ac);background:var(--acs)}
+.seg button.on b{color:var(--ac)}
+.cmd{display:flex;gap:7px;align-items:center;margin-bottom:7px}
+.cmd input{flex:1;min-width:0;padding:9px 11px;font-size:13.5px}
+.cmd select{flex:1;min-width:0;padding:9px 11px;font-size:13.5px}
+.cmd .cmdn{flex:0 0 34%}
+details.adv{margin-top:15px;border:1px solid var(--line);border-radius:14px;padding:0 13px;background:var(--sf2)}
+details.adv>summary{cursor:pointer;padding:12px 0;font-size:13px;font-weight:600;list-style:none;
+  display:flex;justify-content:space-between;align-items:center}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::after{content:"+";color:var(--mut);font-family:"Space Grotesk",monospace;font-weight:700;font-size:16px}
+details.adv[open]>summary::after{content:"−"}
+details.adv .box{padding:0 0 13px}
+.sub{font-size:13px;font-weight:700;margin:14px 0 7px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rl{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:9px;margin-bottom:8px}
+.rl .cmd:last-child{margin-bottom:0}
+.rl input,.rl select,.rl textarea{padding:8px 10px;font-size:13px;border-radius:10px}
+.rl textarea{min-height:64px}
+.kvr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;
+  border-top:1px solid var(--line);font-size:12.5px}
+.kvr:first-of-type{border-top:0}
+.kvr code{color:var(--ac);font-size:12px;font-family:"Space Grotesk",monospace}
+.kvr span{color:var(--mut)}
+
+/* ═══════════ حساب ═══════════ */
+.pf{display:flex;align-items:center;gap:13px}
+.av{width:50px;height:50px;border-radius:16px;background:var(--acs);color:var(--ac);display:grid;
+  place-items:center;font-weight:800;font-size:20px;overflow:hidden;position:relative;flex:none}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pf h2{margin:0;font-size:16px}
+.wallet{background:linear-gradient(160deg,var(--sf),var(--sf2))}
+.wallet .big{display:flex;align-items:baseline;gap:10px}
+.wallet .big .n{font-size:44px;line-height:1.2;font-weight:700;
+  background:linear-gradient(135deg,var(--tok),#FF8A3D);-webkit-background-clip:text;background-clip:text;color:transparent}
+.wallet .big span{color:var(--mut);font-size:14px}
+.wallet .cells{margin:12px 0 7px}
+.wallet .cells i{flex:1;height:14px}
+.wallet .cells i.on{background:var(--tok)}
+.costs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:13px}
+.costs div{background:var(--sf2);border:1px solid var(--line);border-radius:13px;padding:9px 7px;
+  text-align:center;font-size:11.5px;color:var(--mut);line-height:1.6}
+.costs .n{display:block;color:var(--ink);font-size:16px;font-weight:700}
+.pack{display:flex;align-items:center;gap:13px;padding:13px 14px;border:1px solid var(--line);
+  border-radius:15px;margin-bottom:9px;background:var(--sf2)}
+.pack .pt{flex:1}.pack .pt .n{font-size:21px;font-weight:700;color:var(--tok)}
+.pack .pt span{font-size:12px;color:var(--mut);margin-right:6px}
+.pack .pr{font-size:12px;color:var(--mut);text-align:left;line-height:1.6}
+.pack button{width:auto;padding:9px 18px}
+.pack.best{border-color:color-mix(in srgb,var(--tok) 55%,transparent);background:var(--toks)}
+.reflink{display:flex;align-items:center;gap:8px;background:var(--sf2);border:1px solid var(--line);
+  border-radius:13px;padding:8px 11px;margin:9px 0 11px;direction:ltr}
+.reflink code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.reflink button{width:auto;padding:5px 12px;font-size:12px}
+.ms{display:flex;gap:7px;margin-top:11px}
+.ms div{flex:1;border:1px solid var(--line);border-radius:12px;padding:7px 4px;text-align:center;font-size:11px;
+  color:var(--mut);line-height:1.6}
+.ms div .n{display:block;font-size:14px;color:var(--ink);font-weight:700}
+.ms div.hit{border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 9%,transparent)}
+.ms div.hit .n{color:var(--ok)}
+.led{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;
+  border-top:1px solid var(--line);font-size:13.5px}
+.led:first-of-type{border-top:0}
+.led .n{font-size:14.5px;font-weight:700}.led .pos{color:var(--ok)}.led .neg{color:var(--bad)}
+.led small{display:block;color:var(--mut);font-size:11.5px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}
+.stat{background:var(--sf2);border:1px solid var(--line);border-radius:14px;padding:11px 13px}
+.stat .k{font-size:11.5px;color:var(--mut)}.stat .n{font-size:21px;font-weight:700}
+
+/* ═══════════ نوار پایین ═══════════ */
+.dock{position:fixed;left:14px;right:14px;bottom:calc(11px + env(safe-area-inset-bottom));z-index:40;
+  transition:transform .35s cubic-bezier(.3,.9,.25,1)}
+.dock.hide{transform:translateY(140%)}
+.dpanel{display:flex;gap:4px;padding:6px;background:color-mix(in srgb,var(--sf) 88%,transparent);
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--line);
+  border-radius:22px;box-shadow:0 14px 34px -20px rgba(0,0,0,.55)}
+.dn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 3px;background:transparent;
+  color:var(--mut);font-size:10.5px;border-radius:16px;font-weight:600;box-shadow:none;transition:.2s}
+.dn svg{width:21px;height:21px}
+.dn.on{color:var(--ac);background:var(--acs)}
+
+/* ═══════════ ابزارها و آمار ═══════════ */
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.tools button{display:flex;align-items:center;justify-content:center;gap:7px;font-size:12.5px;padding:11px 8px}
+.hl{padding:10px 0;border-top:1px solid var(--line);font-size:13.5px}.hl:first-child{border-top:0}
+.hl.ok{color:var(--ok);font-weight:600}
+.sub2{border-top:1px solid var(--line);padding:11px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+.sub2:first-of-type{border-top:0}
+.sub2 small{display:block;color:var(--mut);font-size:11.5px}
+.spark{display:flex;align-items:flex-end;gap:6px;height:64px;margin:6px 0 3px}
+.spark i{flex:1;border-radius:7px 7px 3px 3px;background:linear-gradient(180deg,var(--ac),var(--ac2));
+  min-height:4px;opacity:.9;transition:height .5s}
+.spark i.z{background:var(--cell);opacity:.7}
+.sparklbl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut)}
+.topn{margin-top:12px}.topn .tr{display:flex;align-items:center;gap:10px;font-size:12.5px;margin-top:7px}
+.topn .tr span{flex:0 0 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topn .bar2{flex:1;height:7px;border-radius:99px;background:var(--cell);overflow:hidden}
+.topn .bar2 i{display:block;height:100%;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:99px}
+textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;min-height:220px}
+
+/* ═══════════ اکسپلور ═══════════ */
+.xhd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:4px 2px 15px}
+.xhd h2{font-size:19px;display:flex;align-items:center;gap:9px}
+.xhd h2 svg{width:23px;height:23px;color:var(--ac)}
+.xsub{font-size:12.5px;color:var(--mut);display:block;font-weight:400}
+.xb{width:auto;font-weight:600}
+.xref{padding:10px;background:var(--sf);border:1px solid var(--line);color:var(--mut);border-radius:13px;box-shadow:var(--sh)}
+.xref svg{width:17px;height:17px;display:block}
+.xref.spinning svg{animation:s .8s linear infinite}
+.xtabs{display:flex;gap:7px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.xtabs::-webkit-scrollbar{display:none}
+.xtabs .xb{flex:none;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
+  background:var(--sf);color:var(--mut);border:1px solid var(--line);border-radius:99px;box-shadow:var(--sh)}
+.xtabs .xb svg{width:15px;height:15px}
+.xtabs .xb.on{color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));border-color:transparent}
+.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:13px}
+.xc{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0;padding:14px;background:var(--sf);
+  border:1px solid var(--line);border-radius:18px;cursor:pointer;overflow:hidden;box-shadow:var(--sh);
+  transition:transform .15s,border-color .2s}
+.xc:active{transform:scale(.985)}
+.xc.hot{border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
+.xt{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;min-width:0;padding-top:4px}
+.xn{min-width:0;flex:1}
+.xn b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;
+  line-height:1.5;font-weight:700}
+.xn .un{display:block;direction:ltr;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xav{position:relative;flex:none;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;
+  overflow:hidden;font-weight:700;font-size:21px;color:#fff;
+  background:linear-gradient(135deg,hsl(var(--h,200) 72% 55%),hsl(calc(var(--h,200) + 45) 72% 45%))}
+.xav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.xd{text-align:center;font-size:12.5px;line-height:1.7;color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+.xs{display:flex;align-items:center;justify-content:center;gap:13px;font-size:11.5px;color:var(--mut)}
+.xs span{display:inline-flex;align-items:center;gap:4px}.xs svg{width:13px;height:13px}
+.xa{display:flex;gap:6px;margin-top:auto}
+.xstart{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;
+  font-size:13px;border-radius:12px;background:var(--ac);color:var(--acx);box-shadow:none}
+.xstart svg{width:13px;height:13px}
+.xlike{display:inline-flex;align-items:center;gap:5px;padding:9px 12px;font-size:12.5px;background:transparent;
+  color:var(--mut);border:1px solid var(--line);border-radius:12px;box-shadow:none}
+.xlike svg{width:15px;height:15px}
+.xlike.on{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,transparent);
+  background:color-mix(in srgb,var(--bad) 9%,transparent)}
+.xlike.pop svg{animation:beat .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes beat{40%{transform:scale(1.5)}}
+.xlike:disabled{opacity:.55}
+.xbd{position:absolute;top:11px;left:11px;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;
+  line-height:1;padding:5px 8px;border-radius:99px;color:var(--ac);background:var(--acs)}
+.xbd svg{width:11px;height:11px}
+.xbd.n{color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
+.xbd.m{color:var(--mut);background:var(--sf2)}
+.xc.feat{grid-column:1/-1;padding:17px;gap:11px;border:1px solid transparent;
+  background:linear-gradient(var(--sf),var(--sf)) padding-box,linear-gradient(135deg,var(--ac),var(--ac2)) border-box}
+.xc.feat .xt{flex-direction:row;text-align:start;gap:13px;padding-top:0}
+.xc.feat .xav{width:62px;height:62px;font-size:25px}
+.xc.feat .xd,.xc.feat .xs{text-align:start;justify-content:flex-start}
+.xc.feat .xn b{font-size:16px;-webkit-line-clamp:1}
+.xc.feat .xd{-webkit-line-clamp:3}
+.xc.feat .xbd{position:static;align-self:flex-start;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));padding:6px 11px}
+.xc.sk{pointer-events:none;gap:10px}
+.xc.sk i{display:block;height:10px;border-radius:6px;
+  background:linear-gradient(100deg,var(--line) 30%,var(--sf2) 50%,var(--line) 70%);
+  background-size:220% 100%;animation:xsh 1.3s linear infinite}
+.xc.sk .xav{background:var(--line)}
+@keyframes xsh{from{background-position:120% 0}to{background-position:-120% 0}}
+.xempty{text-align:center;padding:36px 16px}.xempty svg{width:36px;height:36px;color:var(--ac);
+  display:block;margin:0 auto 9px}
+.xbig{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}
+.xbig div{background:var(--sf2);border:1px solid var(--line);border-radius:13px;padding:11px 6px;text-align:center}
+.xbig .n{display:block;font-size:17px;font-weight:700}
+.xbig small{font-size:11px;color:var(--mut)}
+.xsheet-top{display:flex;align-items:center;gap:13px}
+.xsheet-top .xt{flex-direction:row;text-align:start;padding:0}
+.xsheet-top .xav{width:64px;height:64px;font-size:26px}
+.xsheet-desc{margin-top:13px;font-size:13.5px;line-height:1.9}
+.xsheet-act{display:flex;gap:8px;margin-top:5px}
+.xlinks{display:flex;gap:8px;margin-top:11px}
+.xlinks .xb{flex:1;font-size:12.5px;padding:9px;background:transparent;border:1px solid var(--line);
+  color:var(--mut);display:inline-flex;gap:6px;align-items:center;justify-content:center;box-shadow:none}
+.xlinks .xb svg{width:14px;height:14px}
+.xlinks .xb.dg{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
+.xo .xprev .xc{cursor:default;margin:0 auto 13px;width:calc(50% - 5px);min-width:168px}
+.xo textarea{min-height:62px;font-size:13.5px}
+.xcnt{display:flex;justify-content:flex-end;font-size:11px;color:var(--mut);margin:3px 2px 11px}
+
+/* ═══════════ ادمین ═══════════ */
+.usum{display:flex;align-items:center;gap:7px;margin-bottom:11px;font-size:13.5px}
+.urow{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-top:1px solid var(--line)}
+.urow:first-child{border-top:0}
+.urow .dot{margin-top:8px}
+.ui{flex:1;min-width:0}
+.u1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.u1 b{font-size:14px}
+.u2{display:flex;gap:11px;align-items:center;font-size:12px}
+.u2 .cpy{color:var(--ac);cursor:pointer;direction:ltr;font-family:"Space Grotesk",monospace}
+.u3{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.ub{font-size:11px;border:1px solid var(--line);border-radius:8px;padding:1px 8px;color:var(--mut);direction:ltr}
+.ub.on{color:var(--ink);border-color:color-mix(in srgb,var(--ac) 45%,transparent);background:var(--acs)}
+.ucnt{font-size:12px;min-width:26px;text-align:center;border:1px solid var(--line);border-radius:9px;
+  padding:1px 0;margin-top:2px}
+
+/* ═══════════ جشن ═══════════ */
+.cf{position:fixed;top:-10px;width:8px;height:12px;border-radius:2px;z-index:98;pointer-events:none;
+  animation:cf 1.6s ease-in forwards}
+@keyframes cf{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .cf{display:none}
+}
 </style>
 </head>
 <body>
@@ -204,10 +540,11 @@ textarea.code{direction:ltr;text-align:left;font-family:"IBM Plex Mono",monospac
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
-// خالی = همون دامنه‌ای که این صفحه ازش لود شده. فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
+// آدرس بک‌اند؛ خالی = همون دامنه‌ی این صفحه
 const API_BASE = "";
 let S = { view: "home", bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
-  ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, open: new Set(), busy: false, fresh: false, ideas: [], sheet: null, uploads: [], stats: null, pickKey: null };
+  ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, open: new Set(), busy: false, fresh: false,
+  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tabs: { home: "build", bot: "edit", account: "wallet" } };
 let D = null;   // پیش‌نویس فرم باز
 
 const $ = s => document.querySelector(s);
@@ -218,11 +555,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const cp = o => JSON.parse(JSON.stringify(o));
 const haptic = k => { try{ k === "ok" ? tg?.HapticFeedback?.notificationOccurred("success") : tg?.HapticFeedback?.selectionChanged(); }catch(_){} };
 
-/* ───────── تم (روشن/تیره از روی تلگرام) ───────── */
+/* ───────── تم ───────── */
 function applyTheme(){
   const dark = (tg?.colorScheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
   document.documentElement.dataset.theme = dark ? "dark" : "light";
-  try{ tg?.setHeaderColor?.(dark ? "#0D0D0C" : "#F6F6F3"); tg?.setBackgroundColor?.(dark ? "#0D0D0C" : "#F6F6F3"); }catch(_){}
+  try{ tg?.setHeaderColor?.(dark ? "#0A0D16" : "#F4F6FB"); tg?.setBackgroundColor?.(dark ? "#0A0D16" : "#F4F6FB"); }catch(_){}
 }
 applyTheme(); tg?.onEvent?.("themeChanged", applyTheme);
 
@@ -274,8 +611,8 @@ const IC = {
 };
 const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><path d="M9 14h.01M15 14h.01" stroke-width="3"/>', 1.9);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
-const why = {signup:"هدیه‌ی ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"پیام همگانی", daily:"جایزه‌ی روزانه",
-  referral:"دعوت موفق", invited:"هدیه‌ی دعوت", milestone:"پاداش ویژه‌ی دعوت", buy:"خرید توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر"};
+const why = {signup:"هدیه ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند", broadcast:"پیام همگانی", daily:"جایزه روزانه",
+  referral:"دعوت موفق", invited:"هدیه دعوت", milestone:"پاداش ویژه", buy:"خرید توکن", refund:"برگشت توکن", admin:"هدیه مدیر"};
 
 /* ───────── ابزارهای رسانه ───────── */
 const mediaById = id => S.media.find(m => m.id === id);
@@ -284,12 +621,24 @@ const sizeHTML = b => b < 1048576 ? N(Math.max(1, Math.round(b / 1024))) + " KB"
 function mthumb(id){
   const m = mediaById(id);
   return m ? `<div class="mthumb"><div class="mi">${miInner(m)}</div><span>${esc(KIND_FA[m.kind])}: ${esc(m.name)}</span></div>`
-           : `<div class="mthumb"><span class="muted">این رسانه پاک شده و نمایش داده نمی‌شه</span></div>`;
+           : `<div class="mthumb"><span class="muted">این رسانه پاک شده</span></div>`;
 }
 function mediaPicker(key, cur){
   const items = S.media.map(m => `<button class="${m.id === cur ? "on" : ""}" data-sh="pickmedia" data-k="${key}" data-v="${m.id}"><div class="mi">${miInner(m)}</div><small>${esc(m.name)}</small></button>`).join("");
-  return `<div class="mpick"><button class="${!cur ? "on" : ""}" data-sh="pickmedia" data-k="${key}" data-v=""><div class="mi"><small>بدون</small></div><small>بدون رسانه</small></button>${items}<button class="up" data-sh="upmedia" data-k="${key}">آپلود جدید</button></div>`;
+  return `<div class="mpick"><button class="${!cur ? "on" : ""}" data-sh="pickmedia" data-k="${key}" data-v=""><div class="mi"><small>—</small></div><small>بدون رسانه</small></button>${items}<button class="up" data-sh="upmedia" data-k="${key}">آپلود جدید</button></div>`;
 }
+
+/* ───────── تب‌ها ───────── */
+const TAB = (v, k, label) => `<button class="tab${S.tabs[v] === k ? " on" : ""}" data-tab="${k}" data-view="${v}" role="tab" aria-selected="${S.tabs[v] === k}">${label}</button>`;
+const PANE = (v, k, html) => `<section class="pane${S.tabs[v] === k ? " on" : ""}" data-pane="${k}" data-view="${v}" role="tabpanel">${html}</section>`;
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab]"); if(!t) return;
+  const v = t.dataset.view, k = t.dataset.tab;
+  S.tabs[v] = k;
+  document.querySelectorAll(`[data-tab][data-view="${v}"]`).forEach(b => { const on = b.dataset.tab === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+  document.querySelectorAll(`[data-pane][data-view="${v}"]`).forEach(p => p.classList.toggle("on", p.dataset.pane === k));
+  haptic();
+});
 
 /* ───────── بارگذاری و رندر اصلی ───────── */
 async function load(){
@@ -298,13 +647,13 @@ async function load(){
     Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin });
   }catch(e){
     $("#dock").hidden = true;
-    $("#app").innerHTML = `<div class="card empty"><p>فقط داخل تلگرام باز می‌شه</p></div>`;
+    $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کند.</p><p class="muted">از ربات مادر، دکمه «ساخت ربات» را بزنید.</p></div>`;
     return;
   }
   render();
 }
 function renderTop(){
-  $("#top").innerHTML = `<div class="brand">${LOGO}<span>ابر رباتساز</span></div>
+  $("#top").innerHTML = `<div class="brand"><span class="lg">${LOGO}</span><span>ابر رباتساز</span></div>
     <button class="tokpill" data-go="account" aria-label="موجودی توکن">${N(S.wallet.tokens)}<small>توکن</small></button>`;
 }
 function render(){
@@ -347,14 +696,14 @@ async function runJob(prompt, botId){
       if(r.status === "done") return r;
       if(r.status === "error") throw new Error(r.error);
     }
-    throw new Error("ساخت بیش از حد طول کشید، دوباره امتحان کن");
+    throw new Error("زمان ساخت تمام شد؛ دوباره امتحان کنید");
   } finally { stopLive(); }
 }
 function submitPrompt(){
   const ta = $("#prompt"), p = ta.value.trim(), botId = S.cur?.id || null;
-  if(p.length < 5) return toast("توضیح بیشتری بنویس");
+  if(p.length < 5) return toast("توضیح را کامل‌تر بنویسید");
   const cost = needCost(!!botId);
-  if(S.wallet.tokens < cost) return openBuy(`این کار حداقل ${cost} توکن می‌خواد و موجودی تو ${S.wallet.tokens} توکنه.`);
+  if(S.wallet.tokens < cost) return openBuy(`حداقل ${cost} توکن لازم است؛ موجودی شما ${S.wallet.tokens} توکن است.`);
   busy($("#gen"), async () => {
     ta.readOnly = true;
     try{
@@ -362,50 +711,57 @@ function submitPrompt(){
       const was = !!botId;
       S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
       S.cur = r.bot; S.view = "bot"; S.fresh = true; S.ideas = r.ideas || []; S.open = new Set(); S.stats = null;
-      render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? ` • ${r.cost} توکن` : "")); haptic("ok");
+      render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا شد" : "ربات ساخته شد") + (r.cost ? ` • ${r.cost} توکن` : "")); haptic("ok");
     }catch(e){
       if(e.status === 402) openBuy(e.message); else toast(e.message);
     }finally{ if(ta.isConnected) ta.readOnly = false; }
   });
 }
 
-/* ───────── صفحه‌ی اصلی ───────── */
+/* ───────── صفحه اصلی ───────── */
 const EXAMPLES = [
-  ["فروشگاه با فرم سفارش", "یه ربات فروشگاه لوازم جانبی موبایل با منوی دسته‌بندی، صفحه‌ی هر محصول و فرم سفارش"],
-  ["دستیار هوشمند", "یه ربات با دستیار هوشمند که به سوال‌های مشتری‌های فروشگاه من جواب بده و دکمه‌ی پشتیبانی هم داشته باشه"],
-  ["کوییز با امتیاز", "یه ربات کوییز چندمرحله‌ای با امتیازدهی و نتیجه‌ی نهایی برای هر کاربر"],
-  ["دعوت و جایزه", "یه ربات که کاربرها دوستاشون رو دعوت کنن و برای هر دعوت سکه بگیرن"],
+  ["فروشگاه", "یک ربات فروشگاه با دسته‌بندی محصولات، صفحه محصول و فرم سفارش"],
+  ["دستیار هوشمند", "یک ربات با دستیار هوشمند برای پاسخ به پرسش مشتریان و دکمه پشتیبانی"],
+  ["کوییز با امتیاز", "یک ربات کوییز چندمرحله‌ای با امتیازدهی و نتیجه نهایی"],
+  ["دعوت و جایزه", "یک ربات برای دعوت دوستان و دریافت توکن به ازای هر دعوت"],
 ];
 function dailyCard(){
   const w = S.wallet;
-  if(w.can_claim) return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز</b>${N("+" + w.next_reward)} توکن${w.streak ? ` — ${N(w.streak)} روز پشت‌سرهم` : ""}</div><button data-a="daily">دریافت</button></div>`;
-  return `<div class="card daily"><div class="dt"><b>جایزه گرفته شد</b><span class="muted">${w.streak ? `${N(w.streak)} روز پشت‌سرهم. فردا ${N("+" + w.next_reward)} توکن` : "فردا بیا"}</span></div></div>`;
+  if(w.can_claim) return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز آماده‌ست</b>${N("+" + w.next_reward)} توکن${w.streak ? ` — ${N(w.streak)} روز پشت‌سرهم` : ""}</div><button data-a="daily">دریافت</button></div>`;
+  return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز گرفته شد</b><span class="muted">${w.streak ? `${N(w.streak)} روز پشت‌سرهم؛ فردا ${N("+" + w.next_reward)} توکن` : "فردا دوباره برگردید"}</span></div></div>`;
 }
 function renderHome(){
   const w = S.wallet, c = S.cfg, full = S.bots.length >= (c.max_bots || 10), cost = costOf(false) || 6;
   const builds = Math.min(10, Math.floor(w.tokens / cost));
   const list = S.bots.map(b => `<div class="card botrow" role="button" tabindex="0" data-a="open" data-id="${b.id}">
       <span class="dot ${b.active ? "on" : ""}"></span>
-      <div><b>${esc(b.name)}</b><span class="muted ltr">${b.active ? "@" + esc(b.username) : ""}</span>${b.active ? "" : `<span class="muted">هنوز فعال نشده</span>`}</div>${IC.go.replace("<svg", '<svg class="go"')}</div>`).join("");
-  $("#app").innerHTML = `
-    ${full ? `<div class="card"><h2>سقف ${N(c.max_bots)} ربات پر شد</h2><p class="muted">یکی حذف کن یا ربات‌هات رو ارتقا بده.</p></div>` : `
+      <div><b>${esc(b.name)}</b><span class="muted ltr">${b.active ? "@" + esc(b.username) : "غیرفعال"}</span></div>${IC.go.replace("<svg", '<svg class="go"')}</div>`).join("");
+  const buildPane = `
+    ${S.bots.length ? "" : `<div class="card hero"><h2>سه قدم تا ربات شما</h2><p class="muted">بدون نیاز به کدنویسی.</p>
+      <div class="steps3"><div>${N(1)}توضیح بدهید</div><div>${N(2)}بسازید و ویرایش کنید</div><div>${N(3)}فعال کنید</div></div></div>`}
+    ${full ? `<div class="card"><h2>به سقف ${N(c.max_bots)} ربات رسیده‌اید</h2><p class="muted">یکی را حذف کنید یا همین‌ها را ارتقا دهید.</p></div>` : `
     <div class="console">
-      <div class="ch"><b>ربات جدید</b><div class="cells" title="تعداد رباتی که با موجودی فعلی می‌تونی بسازی">${cellsHTML(builds)}</div></div>
-      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="رباتت رو توضیح بده…"></textarea>
-      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px;margin-left:4px"')}بهتر کن</button></div>
-      <div class="cta"><span class="cost">${costTxt(false)}</span><button id="gen" data-a="gen">بساز</button></div>
+      <div class="ch"><b>چه رباتی بسازیم؟</b><div class="cells" title="قابل ساخت با موجودی فعلی">${cellsHTML(builds)}</div></div>
+      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="ربات خود را کوتاه توضیح دهید. مثلاً: ربات رزرو نوبت برای آرایشگاه، با لیست خدمات و فرم رزرو."></textarea>
+      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px;margin-left:4px"')}بهینه‌سازی با AI</button></div>
+      <div class="cta"><span class="cost">هزینه ${costTxt(false)}</span><button id="gen" data-a="gen">بسازید</button></div>
     </div>`}
-    <div id="live"></div>
-    ${dailyCard()}
+    ${dailyCard()}`;
+  const botsPane = `
     <div class="sech"><span>ربات‌های من</span><span class="muted">${N(S.bots.length)} از ${N(c.max_bots || 10)}</span></div>
-    ${list || `<div class="card empty"><p>هنوز رباتی نداری</p></div>`}
-    ${tplBlock()}`;
+    ${list || `<div class="card empty"><p>هنوز رباتی نساخته‌اید.</p><p class="muted">توضیح دهید چه چیزی لازم دارید.</p><button data-tab="build" data-view="home">ساخت ربات</button></div>`}`;
+  $("#app").innerHTML = `
+    <div class="tabs" role="tablist">${TAB("home", "build", "ساخت")}${TAB("home", "bots", "ربات‌ها")}${TAB("home", "tpls", "قالب‌ها")}</div>
+    <div id="live"></div>
+    ${PANE("home", "build", buildPane)}
+    ${PANE("home", "bots", botsPane)}
+    ${PANE("home", "tpls", tplBlock())}`;
 }
 
 /* ───────── صفحه‌ی ربات ───────── */
 const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
 const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
-const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g," ").slice(0,24) || id) : "؟"; };
+const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text||"").replace(/\s+/g, " ").slice(0,24) || id) : "؟"; };
 const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.share !== undefined ? "share" : CH_RE.test(b.url||"") ? "channel" : "url";
 const btnInfo0 = (cfg, b) => {
   const k = kindOf(b);
@@ -430,7 +786,7 @@ function nodeCard(cfg, id, i = 0, rise = false){
       `<button class="kb" data-sa="btn" data-n="${id}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg, b)}</small></button>`).join("")}
       ${row.length < 3 ? `<button class="kb add" data-sa="newbtn" data-n="${id}" data-r="${r}">+</button>` : ""}</div>`).join("");
   return `
-    <div class="card nd${open ? " open" : ""}${rise ? " rise" : ""}">
+    <div class="card nd${open ? " open" : ""}${rise ? " rise" : ""}"${rise ? ` style="animation-delay:${i * 45}ms"` : ""}>
       <div class="nh" role="button" tabindex="0" aria-expanded="${open}" data-sa="toggle" data-n="${id}">
         <div class="nr"><div class="nt"><b>${esc(titleOf(cfg, id))}</b><span class="ns">${esc(prev)}</span></div>${IC.chev.replace("<svg", '<svg class="chev"')}</div>
         <div class="nm">${tags.map(t => t.startsWith("<") ? t : `<span class="tag">${t}</span>`).join("")}<span class="tag cnt">${nb ? N(nb) + " دکمه" : "بدون دکمه"}</span></div>
@@ -438,8 +794,8 @@ function nodeCard(cfg, id, i = 0, rise = false){
       <div class="nbody"><div><div class="nbi">
         ${n.media ? mthumb(n.media) : ""}
         <div class="bubble" data-sa="node" data-n="${id}">${esc(n.text)}<span class="pen">ویرایش</span></div>
-        ${n.ai ? `<div class="aibox">گفتگوی هوشمند: ${esc(n.ai.prompt.slice(0, 140))}${n.ai.prompt.length > 140 ? "…" : ""}<br>سقف هر کاربر در روز: ${N(n.ai.daily)} پیام</div>` : ""}
-        ${n.fields ? `<div class="muted" style="margin-top:6px">سؤال‌ها: ${n.fields.map((q, i) => esc(q) + (n.save?.[i] ? ' <span class="tag ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" ← ")}</div>` : ""}
+        ${n.ai ? `<div class="aibox">دستیار: ${esc(n.ai.prompt.slice(0, 140))}${n.ai.prompt.length > 140 ? "…" : ""}<br>سقف روزانه: ${N(n.ai.daily)} پیام</div>` : ""}
+        ${n.fields ? `<div class="muted" style="margin-top:7px">سؤال‌ها: ${n.fields.map((q, i) => esc(q) + (n.save?.[i] ? ' <span class="tag ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" ← ")}</div>` : ""}
         ${isRk ? `<div class="tray">${kb}</div>` : kb}
         ${n.buttons.length < 6 ? `<button class="kb add wide" data-sa="newrow" data-n="${id}">+ دکمه‌ی جدید</button>` : ""}
       </div></div></div>
@@ -462,31 +818,50 @@ function syncAll(){
 
 function renderBot(){
   const b = S.cur, c = S.cfg;
-  const prompt = `
-    <div class="console slim">
-      <div class="ch"><b>ویرایش با AI</b><span class="cost muted">${costTxt(true)}</span></div>
-      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="چی تغییر کنه؟"></textarea>
-      <div class="cta"><button id="gen" data-a="gen">ارتقا بده</button></div>
+  if(S.fresh) S.tabs.bot = "edit";
+  if(!b.active && S.tabs.bot === "stats") S.tabs.bot = "edit";
+
+  const editPane = `
+    <div class="console">
+      <div class="ch"><b>ارتقای ربات</b><span class="cost muted">هزینه ${costTxt(true)}</span></div>
+      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="مثلاً: بخش پرسش‌های متداول اضافه کنید. یا: لوگو را در صفحه شروع بگذارید."></textarea>
+      <div class="cta"><button id="gen" data-a="gen">ارتقا دهید</button></div>
     </div>
-    <div id="live"></div>`;
-  let body = `<div class="tp on" data-tg="bot" data-p="a"><div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
-  if(S.ideas.length) body += `<div class="ideas">${S.ideas.map((t, i) => `<button class="ch2" data-a="idea" data-i="${i}">${esc(t)}</button>`).join("")}</div>`;
-  body += `<div class="pvhd"><span class="muted">برای ویرایش، بخش رو باز کن</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
-  body += Object.keys(b.config.nodes).map((id, i) => nodeCard(b.config, id, i, S.fresh)).join("");
-  body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">+ بخش جدید</button>`;
-  if(b.versions) body += `<button class="ghost" id="undo" data-a="undo" style="margin-bottom:12px">برگشت به نسخه‌ی قبلی</button>`;
-  body += '</div><div class="tp" data-tg="bot" data-p="b">'; body += botTools(b); body += '</div><div class="tp" data-tg="bot" data-p="c">';
-  body += b.active ? `
-    <div class="card"><div class="hd"><h2>فعال: <span class="ltr">@${esc(b.username)}</span></h2></div>
+    <div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>
+    ${S.ideas.length ? `<div class="ideas">${S.ideas.map((t, i) => `<button class="ch2" data-a="idea" data-i="${i}">${esc(t)}</button>`).join("")}</div>` : ""}
+    <div class="pvhd"><span class="muted">برای ویرایش، هر بخش را باز کنید.</span>
+      <div class="pvacts"><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div></div>
+    ${Object.keys(b.config.nodes).map((id, i) => nodeCard(b.config, id, i, S.fresh)).join("")}
+    <button class="ghost" data-sa="addnode" style="margin-bottom:12px">+ بخش جدید</button>
+    ${b.versions ? `<button class="ghost" id="undo" data-a="undo" style="margin-bottom:12px">برگشت به نسخه‌ی قبلی</button>` : ""}`;
+
+  const statsPane = b.active ? `<div class="card"><div class="hd"><h2>آمار ربات</h2></div>
       <div class="stats" id="stats"><div class="stat"><div class="k">کاربرها</div>${N("–")}</div><div class="stat"><div class="k">فعال در هفته</div>${N("–")}</div>
-        <div class="stat"><div class="k">جدید در ۲۴ ساعت</div>${N("–")}</div><div class="stat"><div class="k">ربات رو بلاک کردن</div>${N("–")}</div></div>
+      <div class="stat"><div class="k">جدید در ۲۴ ساعت</div>${N("–")}</div><div class="stat"><div class="k">بلاک‌شده</div>${N("–")}</div></div></div>` : "";
+
+  const settingsPane = `
+    ${b.active ? `<div class="card"><div class="hd"><h2>وضعیت</h2><span class="tag ok">فعال</span></div>
+      <p class="muted ltr" style="margin-bottom:11px">@${esc(b.username)}</p>
       <div class="row"><button data-a="bc">پیام همگانی</button><button class="ghost" id="off" data-a="off">غیرفعال کردن</button></div>
-      </div>`
-    : `<div class="card"><h2>انتشار</h2><p class="muted" style="margin-bottom:10px">توکن @BotFather رو بذار</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act" data-a="act">فعال کن</button></div>`;
-  if(b.active) body += xoHTML(b);
-  body += "</div>";
-  body += `<button class="danger" data-a="del">حذف ربات</button>`;
-  $("#app").innerHTML = `<div class="hd" style="margin-top:4px"><button class="back" data-a="back">‹ بازگشت</button><button class="sm ghost" data-sa="bot">تنظیمات</button></div><div class="ttl" style="font-size:20px;margin:0 0 12px">${esc(b.name)}</div>${prompt}<div class="xtabs ptabs"><button class="xb on" data-a="tab" data-g="bot" data-v="a">بخش‌ها</button><button class="xb" data-a="tab" data-g="bot" data-v="b">ابزارها</button><button class="xb" data-a="tab" data-g="bot" data-v="c">انتشار</button></div>${body}`;
+      <p class="muted" style="margin-top:10px">تغییرات فوراً اعمال می‌شود. برای دریافت پیام کاربران، یک بار ربات را استارت کنید.</p></div>`
+    : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:11px">توکن BotFather را اینجا بگذارید.</p>
+      <input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div>
+      <button id="act" data-a="act">فعال کنید</button></div>`}
+    ${b.active ? xoHTML(b) : ""}
+    <div class="card"><div class="hd"><h2>تنظیمات ربات</h2></div>
+      <p class="muted" style="margin-bottom:11px">نام، دستورها، متغیرها و عضویت کانال.</p>
+      <button class="ghost ibtn" data-sa="bot">${IC.layers}باز کردن تنظیمات</button></div>
+    <button class="danger" data-a="del">حذف ربات</button>`;
+
+  $("#app").innerHTML = `
+    <div class="phead"><button class="back" data-a="back">بازگشت</button><div class="ttl">${esc(b.name)}</div>${b.active ? `<span class="tag ltr">@${esc(b.username)}</span>` : ""}</div>
+    <div class="tabs" role="tablist">${TAB("bot", "edit", "ویرایش")}${b.active ? TAB("bot", "stats", "آمار") : ""}${TAB("bot", "tools", "ابزارها")}${TAB("bot", "settings", "تنظیمات")}</div>
+    <div id="live"></div>
+    ${PANE("bot", "edit", editPane)}
+    ${b.active ? PANE("bot", "stats", statsPane) : ""}
+    ${PANE("bot", "tools", botTools(b))}
+    ${PANE("bot", "settings", settingsPane)}`;
+
   syncAll();
   if(S.fresh && b.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior: "smooth", block: "nearest"}); }
   S.fresh = false;
@@ -497,8 +872,15 @@ async function loadStats(){
   try{
     const id = S.cur?.id, s = await api(`/api/bots/${id}/stats`); S.stats = s;
     if(S.cur?.id !== id || !$("#stats")) return;
-    $("#stats").innerHTML = [["کاربرها", s.users], ["فعال در هفته", s.active7], ["جدید در ۲۴ ساعت", s.new24], ["ربات رو بلاک کردن", s.blocked]]
-      .map(([k, v]) => `<div class="stat"><div class="k">${k}</div>${N(v)}</div>`).join("");
+    $("#stats").innerHTML = [["کاربرها", s.users], ["فعال در هفته", s.active7], ["جدید در ۲۴ ساعت", s.new24], ["بلاک‌شده", s.blocked],
+      ["پاسخ فرم‌ها", s.forms], ["توکن مصرفی AI", s.ai_tokens]].map(([k, v]) => `<div class="stat"><div class="k">${k}</div>${N(v)}</div>`).join("");
+    $("#statx")?.remove();
+    const mx = Math.max(1, ...s.series), days = ["۶ روز پیش", "", "", "", "", "", "امروز"];
+    const top = (s.top || []), tmx = Math.max(1, ...top.map(x => x.n));
+    $("#stats").insertAdjacentHTML("afterend", `<div id="statx"><div class="sub" style="margin-top:14px"><span>عضو جدید در ۷ روز اخیر</span></div>
+      <div class="spark">${s.series.map(v => `<i class="${v ? "" : "z"}" style="height:${Math.max(6, Math.round(v / mx * 100))}%" title="${v}"></i>`).join("")}</div>
+      <div class="sparklbl"><span>${days[0]}</span><span>${days[6]}</span></div>
+      ${top.length ? `<div class="topn"><div class="sub" style="margin:10px 0 3px"><span>پربازدیدترین بخش‌ها</span></div>${top.map(x => `<div class="tr"><span>${esc(x.title)}</span><div class="bar2"><i style="width:${Math.round(x.n / tmx * 100)}%"></i></div>${N(x.n)}</div>`).join("")}</div>` : ""}</div>`);
   }catch(_){}
 }
 function typeText(el, text){
@@ -517,14 +899,14 @@ typeText.id = 0;
 function renderMedia(){
   const c = S.cfg, pct = Math.min(100, Math.round(S.used / (c.media_quota_mb * 1048576) * 100));
   $("#app").innerHTML = `
-    <div class="card"><div class="hd"><h2>رسانه</h2><span class="muted">${N(S.media.length)} از ${N(c.max_media)} فایل</span></div>
+    <div class="card"><div class="hd"><h2>رسانه‌ها</h2><span class="muted">${N(S.media.length)} از ${N(c.max_media)} فایل</span></div>
       <div class="usage"><div class="meter2"><i style="width:${pct}%"></i></div><span class="n">${(S.used / 1048576).toFixed(1)} / ${c.media_quota_mb} MB</span></div>
-      <p class="muted" style="margin-top:8px">حداکثر ${N(c.media_max_mb)} MB برای هر فایل</p></div>
+      <p class="muted" style="margin-top:9px">عکس، ویدیو، گیف، صدا و فایل (تا ${N(c.media_max_mb)} مگ) آپلود کنید و در ویرایش هر بخش انتخاب کنید.</p></div>
     <button class="dropbtn" data-a="upload">${IC.upload}<span>آپلود فایل</span></button>
     <div id="uplist">${S.uploads.map(uploadRow).join("")}</div>
     ${S.media.length ? `<div class="mgrid">${S.media.map(m => `<button class="tile" data-a="mdet" data-id="${m.id}"><div class="mi">${miInner(m)}<span class="mk">${KIND_FA[m.kind]}</span></div>
       <div class="tn"><b>${esc(m.name)}</b><span>${sizeHTML(m.size)}</span></div></button>`).join("")}</div>`
-      : `<div class="card empty"><p>فایلی نیست</p></div>`}`;
+      : `<div class="card empty"><p>هنوز فایلی ندارید.</p><p class="muted">اولین رسانه خود را آپلود کنید.</p></div>`}`;
 }
 const uploadRow = u => `<div class="upl" data-u="${u.id}">${esc(u.name)}<div class="pb"><i style="width:${Math.round(u.p * 100)}%"></i></div></div>`;
 async function handleFiles(files, pickKey){
@@ -553,42 +935,48 @@ function packRows(){
 function inviteCard(){
   const c = S.cfg, n = S.ref.count;
   return `<div class="card"><h2>دعوت دوستان</h2>
-    <p class="muted">هر دعوت موفق: ${N(c.ref_inviter)} توکن برای تو، ${N(c.ref_invitee)} برای دوستت</p>
+    <p class="muted">به ازای هر دوستی که با لینک شما بیاید و ربات بسازد، ${N(c.ref_inviter)} توکن می‌گیرید.</p>
     ${S.ref.link ? `<div class="reflink"><code>${esc(S.ref.link)}</code><button class="ghost" data-a="copyref">کپی</button></div><button data-a="shareref">ارسال لینک دعوت</button>`
-      : `<p class="muted" style="margin-top:8px">لینک دعوت آماده نیست</p>`}
+      : `<p class="muted" style="margin-top:9px">لینک دعوت هنوز آماده نیست.</p>`}
     <div class="ms">${(c.milestones || []).map(([k, v]) => `<div class="${n >= k ? "hit" : ""}">${N(k)} دعوت<span class="n">+${v}</span></div>`).join("")}</div>
-    <p class="muted" style="margin-top:8px">${N(n)} دعوت موفق${S.ref.earned ? ` • ${N(S.ref.earned)} توکن` : ""}</p></div>`;
+    <p class="muted" style="margin-top:10px">${N(n)} دعوت موفق تا الان${S.ref.earned ? `؛ ${N(S.ref.earned)} توکن درآمد` : ""}.</p></div>`;
 }
 function renderAccount(){
   const u = tg?.initDataUnsafe?.user || {}, w = S.wallet, c = S.cfg;
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
   const builds = Math.min(10, Math.floor(w.tokens / (costOf(false) || 6)));
-  $("#app").innerHTML = `
-    <div class="xtabs ptabs"><button class="xb on" data-a="tab" data-g="acc" data-v="a">حساب</button><button class="xb" data-a="tab" data-g="acc" data-v="b">توکن</button><button class="xb" data-a="tab" data-g="acc" data-v="c">دعوت</button></div><div class="tp on" data-tg="acc" data-p="a"><div class="card pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
-      <div><h2>${esc(name)}</h2>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}</div></div>
+  const walletPane = `
     <div class="card wallet"><div class="big">${N(w.tokens)}<span>توکن</span></div>
-      <div class="cells" title="تعداد رباتی که با این موجودی می‌تونی بسازی">${cellsHTML(builds)}</div>
-      <span class="muted">کافی برای ~${N(Math.floor(w.tokens / (costOf(false) || 6)))} ربات</span>
-      <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div>` : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>پخش همگانی<span class="n">1/${c.bc_per}</span></div>`}</div></div>
-    </div><div class="tp" data-tg="acc" data-p="b">${dailyCard()}
-    <div class="card"><h2>خرید توکن</h2>${packRows() || '<p class="muted">بسته‌ای نیست</p>'}<p class="muted">پرداخت با ستاره‌ی تلگرام</p></div>
-    ${couponCard()}</div><div class="tp" data-tg="acc" data-p="c">${inviteCard()}</div><div class="tp on" data-tg="acc" data-p="a">
-    <div class="stats"><div class="stat"><div class="k">ربات‌ها</div>${N(S.bots.length)}</div><div class="stat"><div class="k">ربات‌های فعال</div>${N(S.bots.filter(b => b.active).length)}</div>
-      <div class="stat"><div class="k">توکن مصرف‌شده</div>${N(w.spent || 0)}</div><div class="stat"><div class="k">رسانه</div>${N(S.media.length)}</div></div>
-    ${adminCard()}
-    <div class="card"><h2>تراکنش‌ها</h2><div id="ledger"><span class="muted">…</span></div></div></div>`;
+      <div class="cells" title="قابل ساخت با این موجودی">${cellsHTML(builds)}</div>
+      <span class="muted">قابل ساخت حدود ${N(builds)} ربات جدید</span>
+      <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام AI<span class="n">1</span></div>` : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>پخش همگانی<span class="n">1/${c.bc_per}</span></div>`}</div></div>
+    ${dailyCard()}
+    <div class="card"><h2>خرید توکن</h2>${packRows() || '<p class="muted">بسته‌ای تعریف نشده.</p>'}<p class="muted">پرداخت با ستاره تلگرام؛ توکن فوراً اضافه می‌شود.</p></div>
+    ${couponCard()}`;
+  const reportPane = `
+    <div class="stats"><div class="stat"><div class="k">ربات‌ها</div>${N(S.bots.length)}</div><div class="stat"><div class="k">فعال</div>${N(S.bots.filter(b => b.active).length)}</div>
+      <div class="stat"><div class="k">توکن مصرفی</div>${N(w.spent || 0)}</div><div class="stat"><div class="k">رسانه</div>${N(S.media.length)}</div></div>
+    <div class="card"><h2>تراکنش‌ها</h2><div id="ledger"><span class="muted">در حال بارگذاری…</span></div></div>
+    ${adminCard()}`;
+  $("#app").innerHTML = `
+    <div class="card pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
+      <div><h2>${esc(name)}</h2>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}</div></div>
+    <div class="tabs" role="tablist">${TAB("account", "wallet", "کیف پول")}${TAB("account", "invite", "دعوت")}${TAB("account", "report", "گزارش")}</div>
+    ${PANE("account", "wallet", walletPane)}
+    ${PANE("account", "invite", inviteCard())}
+    ${PANE("account", "report", reportPane)}`;
   api("/api/ledger").then(d => {
     const el = $("#ledger"); if(!el) return;
     el.innerHTML = d.items.length ? d.items.map(x => `<div class="led"><div>${why[x.why] || x.why}<small>${new Date(x.t).toLocaleDateString("fa-IR-u-nu-latn", {month: "long", day: "numeric"})}</small></div>
-      <span class="n ${x.n > 0 ? "pos" : "neg"}">${x.n > 0 ? "+" : ""}${x.n}</span></div>`).join("") : '<span class="muted">خالی</span>';
+      <span class="n ${x.n > 0 ? "pos" : "neg"}">${x.n > 0 ? "+" : ""}${x.n}</span></div>`).join("") : '<span class="muted">هنوز تراکنشی نیست.</span>';
   }).catch(() => {});
 }
 function buySheet(){
   const m = S.sheet.msg, w = S.wallet, c = S.cfg;
-  return head("توکن بیشتر") + `<p class="muted" style="margin-bottom:10px">${digitsHTML(m || "")}</p>
-    ${w.can_claim ? `<div class="card daily" style="margin-bottom:10px"><div class="dt"><b>جایزه‌ی امروز</b>${N("+" + w.next_reward)} توکن</div><button data-a="daily">دریافت</button></div>` : ""}
+  return head("توکن بیشتر") + `<p class="muted" style="margin-bottom:11px">${digitsHTML(m || "")}</p>
+    ${w.can_claim ? `<div class="card daily" style="margin-bottom:11px"><div class="dt"><b>جایزه‌ی امروز آماده‌ست</b>${N("+" + w.next_reward)} توکن</div><button data-a="daily">دریافت</button></div>` : ""}
     ${packRows()}
-    ${S.ref.link ? `<button class="ghost" data-a="shareref" style="margin-top:4px">دعوت دوستان: ${N("+" + c.ref_inviter)} توکن برای هر نفر</button>` : ""}`;
+    ${S.ref.link ? `<button class="ghost" data-a="shareref" style="margin-top:5px">دعوت دوستان: ${N("+" + c.ref_inviter)} توکن برای هر نفر</button>` : ""}`;
 }
 function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
 async function refreshWallet(waitInc){
@@ -612,76 +1000,75 @@ async function buyPack(id, btn){
   });
 }
 
-/* ───────── جزئیات رسانه / پیام همگانی ───────── */
+/* ───────── جزئیات رسانه و پیام همگانی ───────── */
 function openMedia(id){ const m = mediaById(id); if(!m) return; S.sheet = {kind: "media", id}; D = {name: m.name}; renderSheet(); }
 function mediaSheet(){
   const m = mediaById(S.sheet.id);
   return head("رسانه") + ((m.kind === "photo" || m.kind === "animation") ? `<img class="prev" src="${API_BASE + esc(m.url)}" alt="">` : `<div class="prevbox">${IC[m.kind]}</div>`) + `
     <span class="muted">${KIND_FA[m.kind]} — ${sizeHTML(m.size)}</span>
-    <span class="lbl">نام فایل</span><input class="fa" id="m-name" value="${esc(D.name)}" maxlength="80">
+    <span class="lbl">نام فایل (هوش مصنوعی از روی نام، جای فایل را تشخیص می‌دهد)</span><input class="fa" id="m-name" value="${esc(D.name)}" maxlength="80">
     <div class="bar"><button data-sh="save">ذخیره</button><button class="ghost danger-b" data-sh="del">حذف</button></div>`;
 }
 const readMedia = () => { D.name = $("#m-name")?.value ?? D.name; };
 function saveMedia(){
   const id = S.sheet.id;
-  if(!D.name.trim()) return toast("اسم فایل نباید خالی باشه");
+  if(!D.name.trim()) return toast("نام فایل خالی است");
   busy($('[data-sh="save"]'), async () => { const d = await api(`/api/media/${id}`, "PUT", {name: D.name.trim()}); Object.assign(mediaById(id), d.item); closeSheet(); render(); toast("ذخیره شد"); });
 }
 function delMedia(){
-  const id = S.sheet.id, q = "این فایل برای همیشه پاک بشه؟ بخش‌هایی که ازش استفاده می‌کنن بدون رسانه نمایش داده می‌شن.";
+  const id = S.sheet.id, q = "این فایل برای همیشه پاک بشه؟";
   const go = ok => ok && busy($('[data-sh="del"]'), async () => { const d = await api(`/api/media/${id}`, "DELETE"); S.media = S.media.filter(m => m.id !== id); S.used = d.used; closeSheet(); render(); toast("فایل پاک شد"); });
   tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
 }
 function openBc(){ S.sheet = {kind: "bc"}; D = {text: "", media: ""}; renderSheet(); }
 function bcSheet(){
   const live = S.stats ? Math.max(0, S.stats.users - S.stats.blocked) : 0, per = S.cfg.bc_per, cost = Math.max(1, Math.ceil(live / per));
-  return head("پیام همگانی") + `<p class="muted">این پیام برای همه‌ی کاربرهای ربات فرستاده می‌شه. الان ${N(live)} مخاطب فعال داری.</p>
+  return head("پیام همگانی") + `<p class="muted">این پیام برای همه کاربران فرستاده می‌شود. مخاطب فعال: ${N(live)} نفر.</p>
     <span class="lbl">متن پیام</span><textarea class="fa" id="bc-t" maxlength="3500" placeholder="متن اطلاعیه">${esc(D.text)}</textarea>
     <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("media", D.media)}
-    <p class="muted" style="margin-top:6px">هزینه: ${N(cost)} توکن (هر ${N(per)} نفر ${N(1)} توکن). موجودی تو ${N(S.wallet.tokens)} توکنه.</p>
+    <p class="muted" style="margin-top:7px">هزینه: ${N(cost)} توکن (هر ${N(per)} نفر، ${N(1)} توکن). موجودی شما ${N(S.wallet.tokens)} توکن است.</p>
     <div class="bar"><button data-sh="save">ارسال</button></div>`;
 }
 const readBc = () => { D.text = $("#bc-t")?.value ?? D.text; };
 function saveBc(){
-  if(!D.text.trim() && !D.media) return toast("متن یا رسانه‌ی پیام رو وارد کن");
+  if(!D.text.trim() && !D.media) return toast("متن یا رسانه پیام را وارد کنید");
   const go = ok => ok && busy($('[data-sh="save"]'), async () => {
     try{
       const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text: D.text.trim(), media: D.media});
-      S.wallet = d.wallet; renderTop(); closeSheet(); toast(`ارسال برای ${d.queued} نفر شروع شد. وقتی تموم بشه خبرت می‌کنم`); haptic("ok");
+      S.wallet = d.wallet; renderTop(); closeSheet(); toast(`ارسال برای ${d.queued} نفر شروع شد`); haptic("ok");
     }catch(e){ if(e.status === 402){ closeSheet(); openBuy(e.message); } else throw e; }
   });
-  const q = "این پیام برای همه‌ی کاربرها فرستاده بشه؟";
+  const q = "این پیام برای همه فرستاده بشه؟";
   tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
 }
 
 /* ───────── اکشن‌های صفحه ───────── */
 function goTo(where){
-  if(S.busy) return toast("صبر کن کار فعلی تموم شه");
+  if(S.busy) return toast("صبر کنید؛ کار فعلی تمام شود");
   closeSheet();
-  if(where === "home" && S.view !== "home"){ S.view = "home"; S.cur = null; S.open = new Set(); S.ideas = []; load(); }
+  if(where === "home" && S.view !== "home"){ S.view = "home"; S.cur = null; S.open = new Set(); S.ideas = []; S.tabs.home = "build"; load(); }
   else if(S.view !== where){ S.view = where; if(where === "home") S.cur = null; render(); }
   scrollTo({top: 0, behavior: "smooth"}); haptic();
 }
 const A = {
-  tab: el => { const g = el.dataset.g, v = el.dataset.v; document.querySelectorAll(`[data-tg="${g}"]`).forEach(x => x.classList.toggle("on", x.dataset.p === v)); el.parentElement.querySelectorAll(".xb").forEach(b => b.classList.toggle("on", b === el)); haptic(); },
   gen: () => submitPrompt(),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
   idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
-  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); S.view = "bot"; S.open = new Set(); S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
-  back: () => { S.view = "home"; S.cur = null; S.ideas = []; closeSheet(); load(); },
+  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); S.view = "bot"; S.open = new Set(); S.ideas = []; S.stats = null; S.tabs.bot = "edit"; render(); scrollTo(0, 0); },
+  back: () => { S.view = "home"; S.cur = null; S.ideas = []; S.tabs.home = "build"; closeSheet(); load(); },
   daily: el => busy(el, async () => { const d = await api("/api/daily", "POST"); S.wallet = d.wallet; if(S.sheet?.kind === "buy") closeSheet(); render(); toast(`${d.reward} توکن جایزه گرفتی`); haptic("ok"); }),
   undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); S.cur = d.bot; S.ideas = []; render(); toast("برگشت داده شد"); }),
-  act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن رو وارد کن");
+  act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن را وارد کنید");
     busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/activate`, "POST", {token: t}); S.cur = d.bot; render(); toast("ربات فعال شد"); haptic("ok"); }); },
   off: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/deactivate`, "POST"); S.cur = d.bot; render(); toast("ربات غیرفعال شد"); }),
   del: () => { const go = async ok => { if(!ok) return; await api(`/api/bots/${S.cur.id}`, "DELETE"); S.view = "home"; S.cur = null; load(); toast("ربات حذف شد"); };
-    tg?.showConfirm ? tg.showConfirm("این ربات برای همیشه حذف بشه؟", go) : go(confirm("حذف بشه؟")); },
+    tg?.showConfirm ? tg.showConfirm("این ربات حذف بشه؟", go) : go(confirm("حذف بشه؟")); },
   bc: () => openBc(),
   upload: () => { S.pickKey = null; $("#fileIn").click(); },
   mdet: el => openMedia(el.dataset.id),
   buy: el => buyPack(el.dataset.id, el),
-  copyref: () => navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک دعوت کپی شد"), () => toast(S.ref.link)),
-  shareref: () => { const u = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هر رباتی که بخوای رو با هوش مصنوعی بساز");
+  copyref: () => navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک کپی شد"), () => toast(S.ref.link)),
+  shareref: () => { const u = "https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هر رباتی را با هوش مصنوعی بسازید");
     tg?.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank"); },
 };
 document.addEventListener("click", e => {
@@ -733,11 +1120,11 @@ const head = t => `<div class="hd"><h2>${t}</h2><button class="sm x" data-x="clo
 
 /* ── منطق: متغیر، شرط و اکشن ── */
 const OPS = [["==","مساوی باشه با"],["!=","مساوی نباشه با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشه"],["empty","خالی باشه"],["filled","پر باشه"]];
-const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
-const APH = {set:"مقدار (می‌تونی {متغیر} بذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شه"};
+const ACTS = [["set","مقدار دهید"],["add","افزایش / کاهش"],["clear","پاک کردن"],["random","عدد تصادفی"],["notify","اعلان"]];
+const APH = {set:"مقدار (مثل {متغیر})", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متن اعلان"};
 const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
-  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق"],["ref_link","لینک دعوت شخصی"],["text","آخرین پیام کاربر"],
   ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
 const BUILTIN = BUILTIN_HELP.map(x => x[0]);
 const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
@@ -747,7 +1134,7 @@ const newRule = l => l==="do" ? {op:"set", var:"", value:""} : l==="route" ? {c:
 const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
 
 function condHTML(c){
-  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 4px">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شه</div>`;
+  if(c && !simpleCond(c)) return `<div class="muted" style="padding:2px 2px 5px">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شود</div>`;
   const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
   return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
     <select class="c-op" data-sh="re">${OPS.map(([v,l]) => `<option value="${v}"${v===x.op?" selected":""}>${l}</option>`).join("")}</select></div>
@@ -762,7 +1149,7 @@ function ruleHTML(list, o, i, cfg){
       ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op])}" maxlength="${o.op==="notify"?500:100}">`}`;
   } else {
     inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگه…"}</span>${del}</div>${condHTML(o.c)}`;
-    if(list === "route") inner += `<span class="lbl" style="margin:6px 0 3px">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
+    if(list === "route") inner += `<span class="lbl" style="margin:7px 0 4px">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
     if(list === "alt") inner += `<textarea class="fa r-text" maxlength="3500" placeholder="متن جایگزین">${esc(o.text || "")}</textarea>`;
   }
   return `<div class="rl" data-list="${list}" data-i="${i}">${inner}</div>`;
@@ -770,7 +1157,7 @@ function ruleHTML(list, o, i, cfg){
 function ruleSection(title, hint, list, cfg, max){
   const arr = D[list];
   return `<div class="sub"><span>${title}</span>${arr.length < max ? `<button class="sm ghost" data-sh="addrl" data-l="${list}">＋</button>` : ""}</div>
-    ${hint ? `<p class="muted" style="margin:-3px 0 6px">${hint}</p>` : ""}${arr.map((o,i) => ruleHTML(list, o, i, cfg)).join("")}`;
+    ${hint ? `<p class="muted" style="margin:-3px 0 7px">${hint}</p>` : ""}${arr.map((o,i) => ruleHTML(list, o, i, cfg)).join("")}`;
 }
 function readRl(list){
   const rows = [...document.querySelectorAll(`.rl[data-list="${list}"]`)];
@@ -791,15 +1178,15 @@ function readRl(list){
 function ruleErr(){
   const empty = c => c && simpleCond(c) && !c.var;
   for(const a of D.do || []){
-    if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلانِ اکشن «به من خبر بده» رو بنویس"; }
-    else if(!a.var) return "اسم متغیرِ اکشن رو بنویس";
+    if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلان را بنویسید"; }
+    else if(!a.var) return "نام متغیر اکشن را بنویسید";
   }
-  for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، اسم متغیرِ شرط رو بنویس";
+  for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، نام متغیر را بنویسید";
   for(const r of D.alt || []){
-    if(empty(r.c)) return "برای متن جایگزین، اسم متغیرِ شرط رو بنویس";
-    if(!(r.text || "").trim()) return "متن جایگزین نباید خالی باشه";
+    if(empty(r.c)) return "برای متن جایگزین، نام متغیر را بنویسید";
+    if(!(r.text || "").trim()) return "متن جایگزین خالی است";
   }
-  for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط رو بنویس";
+  for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطی دکمه، نام متغیر را بنویسید";
   return null;
 }
 const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
@@ -819,12 +1206,12 @@ function openNode(id){
 function kbPicker(cur){
   const inl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="40" height="17" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="4.7" y="24" width="23" height="8" rx="3.5"/><rect x="30.7" y="24" width="23" height="8" rx="3.5"/><rect x="4.7" y="34.5" width="49" height="7" rx="3.5"/></svg>`;
   const rpl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="2" width="40" height="15" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="1" y="24" width="56" height="19" rx="4" fill="currentColor" fill-opacity=".1" stroke="none"/><rect x="4" y="27" width="15" height="6" rx="2"/><rect x="21.5" y="27" width="15" height="6" rx="2"/><rect x="39" y="27" width="15" height="6" rx="2"/><rect x="4" y="35" width="50" height="5" rx="2"/></svg>`;
-  return `<span class="lbl">دکمه‌های این بخش کجا نمایش داده بشن؟</span>
+  return `<span class="lbl">دکمه‌ها کجا باشن؟</span>
     <div class="seg">
       <button class="${cur !== "reply" ? "on" : ""}" data-sh="kbt" data-v="inline">${inl}<b>زیر پیام</b><small>چسبیده به همین پیام</small></button>
-      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد زیر چت</b><small>مثل منوی ثابت پایین صفحه</small></button>
+      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>زیر چت</b><small>منوی ثابت پایین صفحه</small></button>
     </div>
-    ${cur === "reply" ? `<p class="muted" style="margin-top:8px">لینک، پیام پاپ‌آپ، کپی و اشتراک توی کیبورد هم کار می‌کنن، ولی به‌جای اجرای مستقیم، یه پیام کوچیک می‌فرستن.</p>` : ""}`;
+    ${cur === "reply" ? `<p class="muted" style="margin-top:9px">در کیبورد زیر چت، دکمه‌ها به‌جای اجرای مستقیم، یک پیام کوتاه می‌فرستند.</p>` : ""}`;
 }
 function nodeSheet(){
   const cfg = S.cur.config, id = S.sheet.id, d = D;
@@ -832,22 +1219,22 @@ function nodeSheet(){
   return head("ویرایش بخش") + `
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
-    <p class="muted">توی متن‌ها می‌تونی از <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{refs}</b> و متغیرهای خودت (مثل <b dir="ltr">{coins}</b>) استفاده کنی. لیست کامل توی تنظیمات ربات.</p>
-    <span class="lbl">رسانه‌ی این بخش (عکس، ویدیو، گیف، موسیقی، ویس یا فایل)</span>${mediaPicker("media", d.media)}
-    ${d.media ? `<p class="muted">متن این بخش همراه رسانه فرستاده می‌شه.</p>` : `<span class="lbl">یا لینک مستقیم عکس (اختیاری)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">`}
-    <span class="lbl">این بخش چی کار کنه؟</span>
+    <p class="muted">متغیرها: <b dir="ltr">{name}</b> <b dir="ltr">{username}</b> <b dir="ltr">{refs}</b> و متغیرهای خودت مثل <b dir="ltr">{coins}</b>.</p>
+    <span class="lbl">رسانه‌ی این بخش</span>${mediaPicker("media", d.media)}
+    ${d.media ? `<p class="muted">متن همراه رسانه ارسال می‌شود.</p>` : `<span class="lbl">یا لینک مستقیم عکس (اختیاری)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">`}
+    <span class="lbl">این بخش چه کار کند؟</span>
     <select id="f-mode" data-sh="mode">
-      <option value="show"${d.mode === "show" ? " selected" : ""}>فقط پیام و دکمه‌ها رو نشون بده</option>
-      <option value="ai"${d.mode === "ai" ? " selected" : ""}>گفتگوی هوشمند (هوش مصنوعی جواب بده)</option>
-      <option value="ask"${d.mode === "ask" ? " selected" : ""}>یه پیام از کاربر بگیر و برای من بفرست</option>
-      <option value="form"${d.mode === "form" ? " selected" : ""}>فرم چندمرحله‌ای (چند سؤال پشت‌سرهم)</option>
+      <option value="show"${d.mode === "show" ? " selected" : ""}>فقط پیام و دکمه‌ها</option>
+      <option value="ai"${d.mode === "ai" ? " selected" : ""}>گفتگوی هوشمند</option>
+      <option value="ask"${d.mode === "ask" ? " selected" : ""}>پیام کاربر را برای من بفرست</option>
+      <option value="form"${d.mode === "form" ? " selected" : ""}>فرم چندمرحله‌ای</option>
     </select>
     ${d.mode === "show" ? kbPicker(d.kb) : ""}
-    ${d.mode === "ai" ? `<span class="lbl">دستور دستیار (نقش، لحن، اطلاعات واقعی کسب‌وکار)</span>
-      <textarea class="fa" id="f-aip" maxlength="1500" style="min-height:140px" placeholder="مثلاً: تو دستیار فروشگاه موبایل «نوید» هستی. محترم و کوتاه جواب بده. ساعت کاری ۹ تا ۲۱ است. اگه جواب رو نمی‌دونی بگو و دکمه‌ی پشتیبانی رو معرفی کن.">${esc(d.aip)}</textarea>
+    ${d.mode === "ai" ? `<span class="lbl">دستور دستیار (نقش، لحن و اطلاعات کسب‌وکار)</span>
+      <textarea class="fa" id="f-aip" maxlength="1500" style="min-height:140px" placeholder="مثلاً: شما دستیار فروشگاه «نوید» هستید. کوتاه و محترمانه پاسخ دهید. ساعت کاری ۹ تا ۲۱.">${esc(d.aip)}</textarea>
       <span class="lbl">سقف پیام هر کاربر در روز</span><input id="f-aid" type="number" min="1" max="100" value="${esc(d.aid)}">
-      <span class="lbl">حافظه‌ی گفتگو (چند پیام قبلی رو یادش بمونه، 0 تا 6)</span><input id="f-aim" type="number" min="0" max="6" value="${esc(d.aim)}">
-      <div class="aibox">${billingFixed() ? `هر ${N(S.cfg.ai_per)} پیام هوشمند، ${N(1)} توکن` : "هزینه‌ی هر پیام هوشمند از روی مصرف واقعی مدل حساب می‌شه (معمولاً کسری از یک توکن تا ۱ توکن)؛"} از حساب تو کم می‌کنه. موجودی تو ${N(S.wallet.tokens)} توکنه. اگه موجودی تموم بشه این بخش برای کاربرها غیرفعال می‌شه. حتماً یه دکمه‌ی بازگشت به این بخش اضافه کن.</div>` : ""}
+      <span class="lbl">حافظه‌ی گفتگو (۰ تا ۶ پیام قبلی)</span><input id="f-aim" type="number" min="0" max="6" value="${esc(d.aim)}">
+      <div class="aibox">${billingFixed() ? `هر ${N(S.cfg.ai_per)} پیام هوشمند، ${N(1)} توکن` : "هزینه از روی مصرف واقعی مدل حساب می‌شود؛"} از موجودی شما کم می‌شود. موجودی شما ${N(S.wallet.tokens)} توکن است. حتماً یک دکمه بازگشت به این بخش بگذارید.</div>` : ""}
     ${d.mode === "form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
       ${d.fields.map((f, i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">حذف</button></div>
         <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
@@ -857,14 +1244,14 @@ function nodeSheet(){
     ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
       <span class="lbl">رسانه‌ی پیام تشکر (اختیاری)</span>${mediaPicker("doneMedia", d.doneMedia)}
       <span class="lbl">بعد از ثبت، کدوم بخش نشون داده بشه؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
-      <p class="muted" style="margin-top:8px">پیام‌های کاربرها برای تو فرستاده می‌شن. با Reply روی هر کدوم داخل ربات، جوابت به خودش می‌رسه.</p>` : ""}
+      <p class="muted" style="margin-top:9px">پیام کاربران به خودتان فرستاده می‌شود؛ با Reply داخل ربات پاسخ دهید.</p>` : ""}
     <details class="adv"${advOpen ? " open" : ""}><summary>متغیر و شرط (پیشرفته)</summary><div class="box">
-      ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقدار ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
-      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر رو به بخش دیگه‌ای می‌فرسته (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
-      ${ruleSection("متن جایگزین شرطی", "اگه شرط درست بود، به‌جای متن اصلی نشون داده می‌شه", "alt", cfg, 4)}
+      ${ruleSection("وقتی وارد این بخش شد…", "مثلاً امتیاز جمع کنید یا اعلان بفرستید", "do", cfg, 6)}
+      ${ruleSection("هدایت شرطی", "اولین شرط درست، کاربر را به بخش دیگر می‌فرستد", "route", cfg, 5)}
+      ${ruleSection("متن جایگزین شرطی", "اگر شرط درست بود، جایگزین متن اصلی می‌شود", "alt", cfg, 4)}
     </div></details>${dlist()}
     <label class="chk"><input type="checkbox" id="f-start"${d.start ? " checked disabled" : ""}> صفحه‌ی شروع (/start)</label>
-    <label class="chk"><input type="checkbox" id="f-fb"${d.fb ? " checked disabled" : ""}> جواب پیام‌های نامفهوم کاربر</label>
+    <label class="chk"><input type="checkbox" id="f-fb"${d.fb ? " checked disabled" : ""}> جواب پیام‌های نامفهوم</label>
     <div class="bar"><button data-sh="save">ذخیره</button>${d.start || d.fb ? "" : `<button class="ghost danger-b" data-sh="del">حذف بخش</button>`}</div>`;
 }
 function readNode(){
@@ -883,12 +1270,12 @@ function readNode(){
 }
 function saveNode(){
   const id = S.sheet.id, node = S.cur.config.nodes[id];
-  if(!D.text.trim()) return toast("متن پیام نباید خالی باشه");
-  if(D.mode === "form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
-  if(D.mode === "show" && D.kb === "reply" && !node.buttons.length) return toast("برای کیبورد زیر چت اول یه دکمه به این بخش اضافه کن");
+  if(!D.text.trim()) return toast("متن پیام خالی است");
+  if(D.mode === "form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال بنویسید");
+  if(D.mode === "show" && D.kb === "reply" && !node.buttons.length) return toast("برای کیبورد زیر چت، اول یک دکمه اضافه کنید");
   if(D.mode === "ai"){
-    if(!D.aip.trim()) return toast("دستور دستیار رو بنویس");
-    if(!node.buttons.length) return toast("برای خروج کاربر از گفتگو، اول یه دکمه‌ی بازگشت به این بخش اضافه کن");
+    if(!D.aip.trim()) return toast("دستور دستیار را بنویسید");
+    if(!node.buttons.length) return toast("برای خروج از گفتگو، اول یک دکمه بازگشت اضافه کنید");
   }
   const err = ruleErr(); if(err) return toast(err);
   busy($('[data-sh="save"]'), () => commit(cfg => {
@@ -941,7 +1328,7 @@ function addNode(){
   const id = "page_" + k;
   S.open.add(id);
   busy($('[data-sa="addnode"]'), async () => {
-    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متن این بخش رو بنویس", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
+    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متن این بخش را بنویسید", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
     openNode(id);
   });
 }
@@ -966,9 +1353,9 @@ function btnSheet(){
     goto: `<span class="lbl">کدوم بخش باز بشه؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
     channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
     url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
-    alert: `<span class="lbl">متنی که کاربر توی پاپ‌آپ می‌بینه</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌تونی از <b dir="ltr">{coins}</b> یا هر متغیر دیگه‌ای توش استفاده کنی؛ بعد از اجرای اکشن‌ها محاسبه می‌شه.</p>`,
-    copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`,
-    share: `<span class="lbl">متنی که همراه لینک دعوت فرستاده می‌شه</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="200" placeholder="بیا این ربات رو ببین"><p class="muted">با لمس این دکمه، پنجره‌ی ارسال تلگرام با لینک دعوت شخصیِ همون کاربر باز می‌شه. برای پاداش دعوت، توی تنظیمات ربات «پاداش دعوت» رو پر کن.</p>`
+    alert: `<span class="lbl">متن پاپ‌آپ</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌توانید از <b dir="ltr">{coins}</b> استفاده کنید.</p>`,
+    copy: `<span class="lbl">متنی که کپی می‌شود</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت">`,
+    share: `<span class="lbl">متن همراه لینک دعوت</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="200" placeholder="این ربات را ببینید"><p class="muted">پنجره ارسال تلگرام با لینک دعوت شخصی همان کاربر باز می‌شود.</p>`
   }[d.kind];
   const canDo = d.kind === "goto" || d.kind === "alert";
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
@@ -977,9 +1364,9 @@ function btnSheet(){
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v, l]) => `<option value="${v}"${v === d.kind ? " selected" : ""}>${l}</option>`).join("")}</select>
     ${val}
     <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اکشن (پیشرفته)</summary><div class="box">
-      ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافیه", "when", cfg, 1)}
-      ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشون دادن پیام اجرا می‌شن", "do", cfg, 6)
-              : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یه بخش» و «پیام پاپ‌آپ» کار می‌کنه.</p>`}
+      ${ruleSection("نمایش فقط در این شرایط", "مثلاً فقط برای صاحب ربات", "when", cfg, 1)}
+      ${canDo ? ruleSection("وقتی لمس شد…", "قبل از رفتن به بخش اجرا می‌شود", "do", cfg, 6)
+              : `<p class="muted">اکشن فقط برای «رفتن به یه بخش» و «پیام پاپ‌آپ».</p>`}
     </div></details>${dlist()}
     <div class="bar"><button data-sh="save">ذخیره</button>${isNew ? "" : `<button class="ghost danger-b" data-sh="del">حذف دکمه</button>`}</div>`;
 }
@@ -992,14 +1379,14 @@ function readBtn(){
 }
 function saveBtn(){
   const {n: nid, r, c} = S.sheet, d = D;
-  if(!d.text.trim()) return toast("متن دکمه رو بنویس");
-  if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه رو وارد کن");
+  if(!d.text.trim()) return toast("متن دکمه را بنویسید");
+  if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه را وارد کنید");
   const err = ruleErr(); if(err) return toast(err);
   const btn = {text: d.text.trim()};
   if(d.kind === "goto") btn.goto = d.goto;
   else if(d.kind === "alert") btn.alert = d.val.trim();
   else if(d.kind === "copy") btn.copy = d.val.trim();
-  else if(d.kind === "share") btn.share = d.val.trim() || "بیا این ربات رو ببین";
+  else if(d.kind === "share") btn.share = d.val.trim() || "این ربات را ببینید";
   else btn.url = d.val.trim();
   if(d.when.length) btn.when = d.when[0].c;
   if(d.do.length && (d.kind === "goto" || d.kind === "alert")) btn.do = outActs(d.do);
@@ -1032,21 +1419,21 @@ function botSheet(){
     <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
     <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
-    <p class="muted">تا ${N(3)} کانال، با فاصله جدا کن. ربات باید توی اون کانال‌ها ادمین باشه تا بتونه عضویت رو چک کنه. خالی = غیرفعال.</p>
-    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال بشی.">${esc(d.jtext)}</textarea>
-    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="sm ghost" data-sh="addcmd">+ دستور</button>` : ""}</div>
-    ${d.cmds.map(([k, v], i) => `<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">حذف</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
-    <div class="hd" style="margin-top:14px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length < 40 ? `<button class="sm ghost" data-sh="addvar">+ متغیر</button>` : ""}</div>
-    <p class="muted" style="margin-bottom:6px">هر کاربر مقدار مخصوص خودش رو داره (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع رو بنویس.</p>
+    <p class="muted">تا ${N(3)} کانال را با فاصله جدا کنید؛ ربات باید ادمین آن کانال‌ها باشد. خالی = غیرفعال.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="اول عضو کانال بشی.">${esc(d.jtext)}</textarea>
+    <div class="hd" style="margin-top:15px"><span class="lbl" style="margin:0">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="sm ghost" data-sh="addcmd">+ دستور</button>` : ""}</div>
+    ${d.cmds.map(([k, v], i) => `<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="sm x" data-sh="delcmd" data-i="${i}">حذف</button></div>`).join("") || '<p class="muted">دستوری ندارید.</p>'}
+    <div class="hd" style="margin-top:15px"><span class="lbl" style="margin:0">متغیرهای ربات</span>${d.vars.length < 40 ? `<button class="sm ghost" data-sh="addvar">+ متغیر</button>` : ""}</div>
+    <p class="muted" style="margin-bottom:7px">هر کاربر مقدار مخصوص خود را دارد (مثل امتیاز یا شهر).</p>
     ${d.vars.map(([k, v], i) => `<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="sm x" data-sh="delvar" data-i="${i}">حذف</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
     <details class="adv"${d.refVar ? " open" : ""}><summary>پاداش دعوت</summary><div class="box">
-      <p class="muted" style="margin-bottom:6px">وقتی کسی با لینک دعوتِ یکی از کاربرهای ربات تو وارد بشه، اون کاربر (دعوت‌کننده) این مقدار رو می‌گیره. لینک و تعداد دعوت‌ها با <b dir="ltr">{ref_link}</b> و <b dir="ltr">{refs}</b> توی متن‌ها قابل نمایشه.</p>
+      <p class="muted" style="margin-bottom:7px">وقتی کسی با لینک یکی از کاربران وارد شود، این مقدار به همان کاربر می‌رسد.</p>
       <div class="cmd"><input class="ltr" id="s-rv" list="vdl" value="${esc(d.refVar)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off"><input id="s-ra" value="${esc(d.refAmt)}" placeholder="مقدار (مثلاً 5)" maxlength="10" inputmode="numeric"></div>
-      <span class="lbl">پیام برای دعوت‌کننده (اختیاری)</span><input class="fa" id="s-rt" value="${esc(d.refText)}" maxlength="500" placeholder="یه نفر با لینک تو اومد. سکه‌های تو: {coins}">
-      <p class="muted" style="margin-top:6px">برای هر کاربر فقط وقتی حساب می‌شه که برای اولین بار ربات رو استارت کنه.</p>
+      <span class="lbl">پیام برای دعوت‌کننده (اختیاری)</span><input class="fa" id="s-rt" value="${esc(d.refText)}" maxlength="500" placeholder="فرد جدیدی آمد. سکه‌های شما: {coins}">
+      <p class="muted" style="margin-top:7px">فقط برای اولین استارت هر کاربر حساب می‌شود.</p>
     </div></details>
     <details class="adv"><summary>متغیرهای آماده‌ی تلگرام</summary><div class="box">
-      <p class="muted" style="margin-bottom:6px">توی متن‌ها و شرط‌ها قابل استفاده‌ن؛ مثلاً <b dir="ltr">{name}</b>. اگه خالی بود می‌تونی مقدار جایگزین بذاری: <b dir="ltr">{username|بدون آیدی}</b></p>
+      <p class="muted" style="margin-bottom:7px">مثلاً <b dir="ltr">{name}</b>. برای مقدار جایگزین: <b dir="ltr">{username|بدون آیدی}</b></p>
       ${BUILTIN_HELP.map(([k, l]) => `<div class="kvr"><code dir="ltr">{${k}}</code><span>${l}</span></div>`).join("")}
     </div></details>${dlist()}
     <div class="bar"><button data-sh="save">ذخیره</button></div>`;
@@ -1064,7 +1451,7 @@ function readBot(){
 function saveBot(){
   const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
   const amt = String(d.refAmt).trim();
-  if(d.refVar && !/^-?\d+(\.\d+)?$/.test(amt)) return toast("مقدار پاداش دعوت باید عدد باشه");
+  if(d.refVar && !/^-?\d+(\.\d+)?$/.test(amt)) return toast("مقدار پاداش دعوت باید عدد باشد");
   busy($('[data-sh="save"]'), () => commit(cfg => {
     cfg.name = d.name.trim() || "ربات من";
     if(chs.length) cfg.join = {channels: chs, text: d.jtext.trim()}; else delete cfg.join;
@@ -1118,7 +1505,7 @@ function shAction(a, ds){
 }
 
 
-/* ═════════════════ نسخه‌ی نهایی: افزونه‌ها ═════════════════ */
+/* ═══════════ افزونه‌ها ═══════════ */
 const fa = n => Number(n || 0).toLocaleString("en-US");
 Object.assign(IC, {
   compass: svg('<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>'),
@@ -1147,7 +1534,7 @@ Object.assign(IC, {
   open: svg('<path d="M14 4h6v6M20 4l-9 9M10 6H6.5A2.5 2.5 0 0 0 4 8.5v9A2.5 2.5 0 0 0 6.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"/>'),
   shield: svg('<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>'),
 });
-Object.assign(why, { enhance: "بهینه‌سازی توضیح با AI", coupon: "کد هدیه", ai_chat: "پیام هوشمند داخل ربات‌ها", edit: "ارتقای ربات", gen: "ساخت ربات" });
+Object.assign(why, { enhance: "بهینه‌سازی با AI", coupon: "کد هدیه" });
 
 const billingFixed = () => S.cfg.billing === "fixed";
 const costOf = isEdit => billingFixed() ? (isEdit ? S.cfg.edit : S.cfg.gen) : (S.cfg.typical || 12);
@@ -1156,7 +1543,7 @@ const needCost = isEdit => billingFixed() ? costOf(isEdit) : (S.cfg.min || 5);
 
 function celebrate(){
   if(matchMedia("(prefers-reduced-motion:reduce)").matches) return;
-  const cols = ["#5B93FF", "#8b5cf6", "#FFB547", "#3DCB8A", "#FF6B7F"];
+  const cols = ["#7C8AFF", "#A78BFA", "#FFB648", "#3ED3A0", "#FF6B7F"];
   for(let i = 0; i < 26; i++){
     const e = document.createElement("i"); e.className = "cf";
     e.style.cssText = `left:${Math.random() * 100}vw;background:${cols[i % 5]};animation-delay:${Math.random() * .5}s;animation-duration:${1.2 + Math.random()}s`;
@@ -1167,32 +1554,15 @@ function bumpTokens(){ const p = $(".tokpill"); if(p){ p.classList.remove("bump"
 const openLink = u => tg?.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank");
 const confirmQ = (q, go) => tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
 
-/* ───── قالب‌ها و آموزش صفحه‌ی اصلی ───── */
+/* ───── قالب‌ها ───── */
 function tplBlock(){
   const full = S.bots.length >= (S.cfg.max_bots || 10);
-  return `${S.bots.length ? "" : `<div class="card hero"><h2>سه قدم تا ربات خودت</h2><p class="muted">اینجا لازم نیست کد بنویسی.</p>
-      <div class="steps3"><div>${N(1)}توضیح بده چی می‌خوای</div><div>${N(2)}هوش مصنوعی می‌سازه، خودت ویرایش کن</div><div>${N(3)}توکن BotFather رو بزن و فعالش کن</div></div></div>`}
-    ${(S.templates || []).length && !full ? `<div class="sech"><span>قالب آماده (رایگان)</span><span class="muted">بدون مصرف توکن</span></div>
-      <div class="tplg">${S.templates.map(t => `<button class="tpl" data-a="tpl" data-id="${t.id}"><span class="tic">${IC[t.icon] || IC.bot}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
-      <button class="ghost ibtn" data-a="import" style="margin-bottom:12px">${IC.upload}ورود ربات از JSON</button>` : ""}`;
+  const tpls = S.templates || [];
+  if(full) return `<div class="card empty"><p>به سقف ربات‌ها رسیده‌اید.</p><p class="muted">یکی را حذف کنید یا ارتقا دهید.</p></div>`;
+  return `${tpls.length ? `<div class="tplg">${tpls.map(t => `<button class="tpl" data-a="tpl" data-id="${t.id}"><span class="tic">${IC[t.icon] || IC.bot}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`
+      : `<div class="card empty"><p>قالبی هنوز اضافه نشده.</p></div>`}
+    <button class="ghost ibtn" data-a="import">${IC.upload}ورود ربات از JSON</button>`;
 }
-
-/* ───── آمار: نمودار هفتگی و پربازدیدترین بخش‌ها ───── */
-loadStats = async function(){
-  try{
-    const id = S.cur?.id, s = await api(`/api/bots/${id}/stats`); S.stats = s;
-    if(S.cur?.id !== id || !$("#stats")) return;
-    $("#stats").innerHTML = [["کاربرها", s.users], ["فعال در هفته", s.active7], ["جدید در ۲۴ ساعت", s.new24], ["بلاک‌شده", s.blocked],
-      ["پاسخ فرم‌ها", s.forms], ["توکنِ مصرفیِ AI ربات", s.ai_tokens]].map(([k, v]) => `<div class="stat"><div class="k">${k}</div>${N(v)}</div>`).join("");
-    $("#statx")?.remove();
-    const mx = Math.max(1, ...s.series), days = ["۶ روز پیش", "", "", "", "", "", "امروز"];
-    const top = (s.top || []), tmx = Math.max(1, ...top.map(x => x.n));
-    $("#stats").insertAdjacentHTML("afterend", `<div id="statx"><div class="sub" style="margin-top:0"><span>عضو جدید در ۷ روز اخیر</span></div>
-      <div class="spark">${s.series.map(v => `<i class="${v ? "" : "z"}" style="height:${Math.max(6, Math.round(v / mx * 100))}%" title="${v}"></i>`).join("")}</div>
-      <div class="sparklbl"><span>${days[0]}</span><span>${days[6]}</span></div>
-      ${top.length ? `<div class="topn"><div class="sub" style="margin:8px 0 2px"><span>پربازدیدترین بخش‌ها</span></div>${top.map(x => `<div class="tr"><span>${esc(x.title)}</span><div class="bar2"><i style="width:${Math.round(x.n / tmx * 100)}%"></i></div>${N(x.n)}</div>`).join("")}</div>` : ""}</div>`);
-  }catch(_){}
-};
 
 /* ───── اکسپلور ───── */
 const XP = { sort: "hot", items: [], more: false, tok: 0, seen: new Set(), q: [], io: null };
@@ -1213,7 +1583,7 @@ function xCard(it){
 const xSkel = () => `<div class="xc sk"><div class="xt"><span class="xav"></span><div class="xn"><i style="width:70%"></i></div></div><i></i><i style="width:60%"></i><i style="width:45%"></i></div>`;
 function renderExplore(){
   const tabs = [["hot", "flame", "داغ‌ترین"], ["new", "spark", "جدیدترین"], ["top", "heart", "محبوب‌ترین"]];
-  $("#app").innerHTML = `<div class="xhd"><div><h2>${IC.compass}اکسپلور</h2><span class="xsub">ربات‌های بقیه رو ببین، امتحان کن و لایک بزن</span></div>
+  $("#app").innerHTML = `<div class="xhd"><div><h2>${IC.compass}اکسپلور</h2><span class="xsub">ربات‌های دیگران را ببینید و امتحان کنید</span></div>
     <button class="xb xref" data-xp="refresh" aria-label="تازه‌سازی">${IC.refresh}</button></div>
     <div class="xtabs" role="tablist">${tabs.map(([k, ic, t]) => `<button class="xb${XP.sort === k ? " on" : ""}" role="tab" aria-selected="${XP.sort === k}" data-xp="sort" data-k="${k}">${IC[ic]}${t}</button>`).join("")}</div>
     <div class="xgrid" id="xgrid"></div><div id="xmore"></div>`;
@@ -1227,13 +1597,13 @@ async function loadExplore(reset){
     if(tok !== XP.tok || S.view !== "explore") return;
     XP.items = XP.items.concat(d.items); XP.more = d.more;
     if(reset) grid.innerHTML = "";
-    if(!XP.items.length){ grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1">${IC.compass}<b>اکسپلور هنوز خالیه</b><p class="muted">ربات خودت رو فعال کن و از صفحه‌ی ربات، اولین کارت اکسپلور رو بساز.</p></div>`; return; }
+    if(!XP.items.length){ grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1">${IC.compass}<b>اکسپلور خالی است</b><p class="muted">ربات خود را فعال کنید و از صفحه ربات، کارت اکسپلور را بسازید.</p></div>`; return; }
     grid.insertAdjacentHTML("beforeend", d.items.map(xCard).join(""));
     $("#xmore").innerHTML = XP.more ? `<button class="ghost" data-xp="more" style="margin-bottom:12px">نمایش بیشتر</button>` : "";
     xObserve();
   }catch(e){
     if(tok !== XP.tok) return;
-    grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1"><p class="muted">${esc(e.message)}</p><button class="ghost" data-xp="refresh" style="margin-top:10px">دوباره امتحان کن</button></div>`;
+    grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1"><p class="muted">${esc(e.message)}</p><button class="ghost" data-xp="refresh" style="margin-top:11px">دوباره</button></div>`;
   }
 }
 function xObserve(){
@@ -1264,7 +1634,7 @@ function xOpen(id){
   showSheet(head("اکسپلور") + `<div class="xsheet-top"><div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div></div></div>
     ${it.desc ? `<p class="xsheet-desc">${esc(it.desc)}</p>` : ""}
     <div class="xbig"><div>${kfmt(it.v)}<small>بازدید</small></div><div>${kfmt(it.l)}<small>لایک</small></div><div>${kfmt(it.s)}<small>استارت</small></div></div>
-    <div class="xsheet-act"><button class="xb xstart" data-xp="start" data-id="${it.id}">شروع و امتحان ربات${IC.play}</button>${likeBtn(it)}</div>
+    <div class="xsheet-act"><button class="xb xstart" data-xp="start" data-id="${it.id}">شروع${IC.play}</button>${likeBtn(it)}</div>
     <div class="xlinks">${it.mine ? "" : `<button class="xb" data-xp="report" data-id="${it.id}">${IC.flag}گزارش</button>`}${S.admin ? `<button class="xb dg" data-xp="adm" data-id="${it.id}">${IC.trash}حذف از اکسپلور</button>` : ""}</div>`);
 }
 document.addEventListener("click", async e => {
@@ -1276,27 +1646,27 @@ document.addEventListener("click", async e => {
   else if(a === "more"){ b.disabled = true; await loadExplore(false); }
   else if(a === "start"){ const it = XP.items.find(x => x.id === id); if(it) openLink(`https://t.me/${it.username}?start=ex`); }
   else if(a === "like") xLike(id);
-  else if(a === "report") confirmQ("این ربات رو گزارش می‌کنی؟", async ok => { if(!ok) return; try{ await api(`/api/explore/${id}/report`, "POST"); toast("گزارشت ثبت شد، ممنون"); closeSheet(); }catch(err){ toast(err.message); } });
+  else if(a === "report") confirmQ("این ربات را گزارش می‌دهید؟", async ok => { if(!ok) return; try{ await api(`/api/explore/${id}/report`, "POST"); toast("گزارش شما ثبت شد"); closeSheet(); }catch(err){ toast(err.message); } });
   else if(a === "adm"){ try{ await api(`/api/admin/explore/${id}`, "POST", {hide: true}); XP.items = XP.items.filter(x => x.id !== id); document.querySelector(`#xgrid .xc[data-id="${id}"]`)?.remove(); closeSheet(); toast("از اکسپلور برداشته شد"); }catch(err){ toast(err.message); } }
 });
 
-/* کارت اکسپلور توی صفحه‌ی ربات (برای صاحب ربات) */
+/* کارت اکسپلور توی صفحه‌ی ربات */
 const xDefault = b => ((b.config.nodes[b.config.start]?.text) || "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
 function xPrev(b, desc){
   const x = b.explore || {};
   return `<article class="xc"><div class="xt">${xAv(b.name, b.id, x.av)}<div class="xn"><b>${esc(b.name)}</b><span class="un">@${esc(b.username)}</span></div></div>
     <p class="xd" id="xpd">${esc(desc)}</p>${xStats({v: x.v || 0, s: x.s || 0})}
-    <div class="xa"><span class="xb xstart" style="background:var(--ac);color:#fff">شروع${IC.play}</span><span class="xb xlike">${IC.heart}<span>${kfmt(x.l || 0)}</span></span></div></article>`;
+    <div class="xa"><span class="xb xstart" style="background:var(--ac);color:#fff">شروع${IC.play}</span><span class="xb xlike">${IC.heart}<span>${kfmt(x.l || 0)}</span></div></div></article>`;
 }
 function xoHTML(b){
   const x = b.explore || {}, mx = S.cfg.xp_desc || 90;
-  return `<div class="card xo" id="xo"><h2>اکسپلور${x.on ? ` <span class="tag" style="color:var(--ok)">فعال</span>` : ""}</h2>
-    <p class="muted" style="margin-bottom:12px">${x.hidden ? "این ربات توسط ادمین از اکسپلور برداشته شده." : "ربات رو با یه کارت ظریف توی ویترین عمومی بذار تا بقیه ببیننش، لایک کنن و استارتش بزنن."}</p>
+  return `<div class="card xo" id="xo"><h2>اکسپلور${x.on ? ` <span class="tag ok">فعال</span>` : ""}</h2>
+    <p class="muted" style="margin-bottom:12px">${x.hidden ? "این ربات توسط ادمین از اکسپلور برداشته شده." : "ربات خود را در ویترین عمومی قرار دهید تا دیگران ببینند و لایک بزنند."}</p>
     ${x.hidden ? "" : `<div class="xprev">${xPrev(b, x.desc || xDefault(b) || "—")}</div>
-      <textarea class="fa" id="xdesc" maxlength="${mx}" placeholder="توضیح کوتاه برای کارت (لینک و آیدی حذف می‌شن)">${esc(x.desc || "")}</textarea>
+      <textarea class="fa" id="xdesc" maxlength="${mx}" placeholder="توضیح کوتاه برای کارت">${esc(x.desc || "")}</textarea>
       <div class="xcnt"><span id="xcn">${fa((x.desc || "").length)}/${fa(mx)}</span></div>
-      <button id="xsave">${x.on ? "ذخیره و به‌روزرسانی عکس" : "اضافه به اکسپلور"}</button>
-      ${x.on ? `<button class="ghost" id="xoff" style="margin-top:8px">برداشتن از اکسپلور</button>` : ""}`}</div>`;
+      <button id="xsave">${x.on ? "ذخیره و به‌روزرسانی" : "اضافه به اکسپلور"}</button>
+      ${x.on ? `<button class="ghost" id="xoff" style="margin-top:9px">برداشتن از اکسپلور</button>` : ""}`}</div>`;
 }
 function bindXo(){
   const t = $("#xdesc"); if(!t || !S.cur) return;
@@ -1305,26 +1675,26 @@ function bindXo(){
   const save = (on, btn) => busy(btn, async () => {
     const d = await api(`/api/bots/${b.id}/explore`, "POST", {on, desc: t.value});
     S.cur = d.bot; S.bots = S.bots.map(x => x.id === d.bot.id ? d.bot : x);
-    $("#xo").outerHTML = xoHTML(S.cur); bindXo(); toast(on ? "توی اکسپلور قرار گرفت" : "از اکسپلور برداشته شد"); haptic("ok");
+    $("#xo").outerHTML = xoHTML(S.cur); bindXo(); toast(on ? "در اکسپلور قرار گرفت" : "از اکسپلور برداشته شد"); haptic("ok");
   });
   $("#xsave").onclick = () => save(true, $("#xsave"));
   $("#xoff")?.addEventListener("click", () => save(false, $("#xoff")));
 }
 
 /* ───── ابزارهای ربات ───── */
-const HEALTH_FA = [["unreachable nodes", "بخش‌های بدون مسیر ورود"], ["dead-end nodes", "بن‌بست‌ها (دکمه‌ی بازگشت ندارن)"], ["variables that are read", "متغیرهای بدون مقدار"]];
+const HEALTH_FA = [["unreachable nodes", "بخش‌های بدون مسیر ورود"], ["dead-end nodes", "بن‌بست‌ها (بازگشت ندارن)"], ["variables that are read", "متغیرهای بدون مقدار"]];
 function botTools(b){
   return `<div class="card"><h2>ابزارها</h2><div class="tools">
     <button class="ghost" data-a="health">${IC.heal}بررسی مسیرها</button>
     <button class="ghost" data-a="export">${IC.dl}خروجی JSON</button>
     <button class="ghost" data-a="dup">${IC.layers}کپی ربات</button>
     <button class="ghost" data-a="subs">${IC.inbox}پاسخ فرم‌ها</button>
-    ${b.active ? `<button class="ghost" data-a="openbot">${IC.open}باز کردن ربات</button><button class="ghost" data-a="sharebot">${IC.users}اشتراک ربات</button>` : ""}
+    ${b.active ? `<button class="ghost" data-a="openbot">${IC.open}باز کردن ربات</button><button class="ghost" data-a="sharebot">${IC.users}اشتراک</button>` : ""}
   </div></div>`;
 }
 function textSheet(title, text, hint){
   S.sheet = {kind: "info"};
-  showSheet(head(title) + (hint ? `<p class="muted" style="margin-bottom:8px">${hint}</p>` : "") + `<textarea id="tx-out" class="code" readonly></textarea><div style="height:10px"></div><button data-a="copyout" class="ibtn">${IC.copy}کپی</button>`);
+  showSheet(head(title) + (hint ? `<p class="muted" style="margin-bottom:9px">${hint}</p>` : "") + `<textarea id="tx-out" class="code" readonly></textarea><div style="height:11px"></div><button data-a="copyout" class="ibtn">${IC.copy}کپی</button>`);
   $("#tx-out").value = text;
 }
 const fdate = t => new Date(t).toLocaleString("fa-IR-u-nu-latn", {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
@@ -1332,7 +1702,7 @@ async function openSubs(){
   S.sheet = {kind: "info"}; showSheet(head("پاسخ فرم‌ها") + `<p class="muted">در حال بارگذاری…</p>`);
   try{
     const d = await api(`/api/bots/${S.cur.id}/submissions`); S.subs = d.items;
-    showSheet(head("پاسخ فرم‌ها") + (d.items.length ? `<button class="ghost ibtn sm" data-a="csv" style="margin-bottom:8px">${IC.dl}خروجی CSV</button>` + d.items.map(r => `<div class="sub2"><small>${esc(r.title)} • ${esc(r.name)}${r.un ? " @" + esc(r.un) : ""} • ${fdate(r.t)}</small>${r.qa.length ? r.qa.map(([q, a]) => `${esc(q)}\n» <b>${esc(a)}</b>`).join("\n") : esc(r.text)}</div>`).join("") : `<p class="muted">هنوز پاسخی ثبت نشده.</p>`));
+    showSheet(head("پاسخ فرم‌ها") + (d.items.length ? `<button class="ghost ibtn sm" data-a="csv" style="margin-bottom:9px">${IC.dl}خروجی CSV</button>` + d.items.map(r => `<div class="sub2"><small>${esc(r.title)} • ${esc(r.name)}${r.un ? " @" + esc(r.un) : ""} • ${fdate(r.t)}</small>${r.qa.length ? r.qa.map(([q, a]) => `${esc(q)}\n» <b>${esc(a)}</b>`).join("\n") : esc(r.text)}</div>`).join("") : `<p class="muted">هنوز پاسخی ثبت نشده.</p>`));
   }catch(e){ closeSheet(); toast(e.message); }
 }
 const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
@@ -1340,54 +1710,55 @@ const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""'
 
 /* ───── اکشن‌های جدید ───── */
 Object.assign(A, {
-  enhance: el => { const t = $("#prompt"), p = t?.value.trim() || ""; if(p.length < 5) return toast("اول یه توضیح کوتاه بنویس");
-    if(S.wallet.tokens < (S.cfg.enhance || 1)) return openBuy("برای بهینه‌سازی توضیح توکن کافی نداری.");
-    busy(el, async () => { const d = await api("/api/enhance", "POST", {prompt: p}); t.value = d.prompt; S.wallet = d.wallet; renderTop(); bumpTokens(); toast("توضیح کامل‌تر شد؛ بخون و اگه خوب بود بساز"); haptic("ok"); }); },
+  enhance: el => { const t = $("#prompt"), p = t?.value.trim() || ""; if(p.length < 5) return toast("اول یک توضیح کوتاه بنویسید");
+    if(S.wallet.tokens < (S.cfg.enhance || 1)) return openBuy("برای بهینه‌سازی توکن کافی ندارید.");
+    busy(el, async () => { const d = await api("/api/enhance", "POST", {prompt: p}); t.value = d.prompt; S.wallet = d.wallet; renderTop(); bumpTokens(); toast("توضیح کامل‌تر شد"); haptic("ok"); }); },
   tpl: el => busy(el, async () => { const d = await api(`/api/templates/${el.dataset.id}/create`, "POST"); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.fresh = true; S.open = new Set(); S.ideas = []; S.stats = null; render(); celebrate(); toast("قالب آماده شد"); scrollTo(0, 0); }),
-  import: () => { S.sheet = {kind: "info"}; showSheet(head("ورود از JSON") + `<p class="muted" style="margin-bottom:8px">خروجی JSON یه ربات رو اینجا بچسبون تا به‌عنوان ربات جدید ساخته بشه.</p><textarea id="im-text" class="code" placeholder='{"name": "...", "nodes": {...}}'></textarea><div style="height:10px"></div><button data-a="importgo" class="ibtn">${IC.upload}ساخت ربات</button>`); },
+  import: () => { S.sheet = {kind: "info"}; showSheet(head("ورود از JSON") + `<p class="muted" style="margin-bottom:9px">خروجی JSON یک ربات را اینجا بچسبانید.</p><textarea id="im-text" class="code" placeholder='{"name": "...", "nodes": {...}}'></textarea><div style="height:11px"></div><button data-a="importgo" class="ibtn">${IC.upload}ساخت ربات</button>`); },
   importgo: el => busy(el, async () => { let c; try{ c = JSON.parse($("#im-text").value); }catch(_){ return toast("JSON معتبر نیست"); }
     const d = await api("/api/bots/import", "POST", {config: c.config || c}); closeSheet(); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.open = new Set(); S.ideas = []; S.stats = null; render(); toast("ربات وارد شد"); }),
   health: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/health`); S.sheet = {kind: "info"};
     const row = i => { const h = HEALTH_FA.find(([k]) => i.startsWith(k)); return `<div class="hl"><b>${h ? h[1] : "هشدار"}</b><br><span class="muted ltr">${esc(i.split(": ").pop())}</span></div>`; };
-    showSheet(head("بررسی مسیرها") + (d.issues.length ? d.issues.map(row).join("") + `<p class="muted" style="margin-top:8px">برای رفع خودکار، از بالای صفحه به هوش مصنوعی بگو «مشکلات مسیر رو درست کن».</p>` : `<div class="hl ok">مشکلی پیدا نشد؛ ${N(d.nodes)} بخش بررسی شد.</div>`)); }),
-  export: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "این متن رو نگه دار؛ هر وقت خواستی از «ورود ربات از JSON» برگردونش."); }),
+    showSheet(head("بررسی مسیرها") + (d.issues.length ? d.issues.map(row).join("") + `<p class="muted" style="margin-top:9px">برای رفع خودکار، به هوش مصنوعی بگویید «مشکلات مسیر را درست کن».</p>` : `<div class="hl ok">مشکلی پیدا نشد؛ ${N(d.nodes)} بخش بررسی شد.</div>`)); }),
+  export: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "این متن را نگه دارید؛ بعداً از «ورود از JSON» برمی‌گردانید."); }),
   dup: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/duplicate`, "POST"); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.open = new Set(); S.stats = null; render(); scrollTo(0, 0); toast("کپی ساخته شد"); }),
   subs: () => openSubs(),
-  csv: () => textSheet("خروجی CSV", csvOf(S.subs || []), "آخرین ۵۰ پاسخ. توی اکسل یا گوگل‌شیت پیست کن."),
-  copyout: () => { const t = $("#tx-out"); t.select(); navigator.clipboard?.writeText(t.value).then(() => toast("کپی شد"), () => toast("متن رو دستی کپی کن")); },
+  csv: () => textSheet("خروجی CSV", csvOf(S.subs || []), "آخرین ۵۰ پاسخ؛ در اکسل بچسبانید."),
+  copyout: () => { const t = $("#tx-out"); t.select(); navigator.clipboard?.writeText(t.value).then(() => toast("کپی شد"), () => toast("متن را دستی کپی کنید")); },
   openbot: () => openLink(`https://t.me/${S.cur.username}?start=test`),
   sharebot: () => openLink("https://t.me/share/url?url=" + encodeURIComponent(`https://t.me/${S.cur.username}`) + "&text=" + encodeURIComponent(S.cur.name)),
-  coupon: el => { const v = ($("#cpn")?.value || "").trim(); if(!v) return toast("کد رو وارد کن");
+  coupon: el => { const v = ($("#cpn")?.value || "").trim(); if(!v) return toast("کد را وارد کنید");
     busy(el, async () => { const d = await api("/api/coupon", "POST", {code: v}); S.wallet = d.wallet; render(); bumpTokens(); toast(`${d.got} توکن اضافه شد`); haptic("ok"); }); },
   copyid: el => navigator.clipboard?.writeText(el.dataset.id).then(() => toast("شناسه کپی شد"), () => toast(el.dataset.id)),
-  agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید کاربر: ${d.bal}`); }),
+  agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید: ${d.bal}`); }),
   acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
     toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
   astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
-    $("#astats").innerHTML = `کاربران: ${N(d.users)} (آنلاین ${N(d.online)}، جدید ۲۴ساعته ${N(d.new24)})<br>ربات‌ها: ${N(d.bots)} (فعال ${N(d.active)}، اکسپلور ${N(d.explore)})<br>مخاطب ربات‌ها: ${N(d.bot_users)} • فرم‌ها: ${N(d.forms)}<br>توکنِ در گردش: ${N(d.circulation)} • دعوت موفق: ${N(d.referrals)}`; }),
-  aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان رو بنویس");
-    confirmQ("این اعلان برای همه‌ی کاربرهای ربات‌ساز فرستاده بشه؟", ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
+    $("#astats").innerHTML = `کاربران: ${N(d.users)} (آنلاین ${N(d.online)}، جدید ${N(d.new24)})<br>ربات‌ها: ${N(d.bots)} (فعال ${N(d.active)}، اکسپلور ${N(d.explore)})<br>مخاطب ربات‌ها: ${N(d.bot_users)} • فرم‌ها: ${N(d.forms)}<br>توکن در گردش: ${N(d.circulation)} • دعوت موفق: ${N(d.referrals)}`; }),
+  aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان را بنویسید");
+    confirmQ("این اعلان برای همه فرستاده بشه؟", ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t}); toast(`ارسال برای ${d.queued} نفر`); $("#an-text").value = ""; })); },
   ausers: () => openUsers(),
 });
 document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
 
 function couponCard(){
-  return `<div class="card"><h2>کد هدیه</h2><div style="height:8px"></div><div class="row" style="align-items:stretch"><input id="cpn" placeholder="CODE" autocomplete="off" style="flex:3"><button data-a="coupon" style="flex:1">ثبت</button></div></div>`;
+  return `<div class="card"><h2>کد هدیه</h2><div class="row" style="align-items:stretch"><input id="cpn" placeholder="CODE" autocomplete="off" style="flex:3"><button data-a="coupon" style="flex:1">ثبت</button></div></div>`;
 }
 function adminCard(){
   if(!S.admin) return "";
   return `<div class="card"><h2>${IC.shield.replace("<svg", '<svg style="width:16px;height:16px;vertical-align:-3px;margin-left:6px"')}پنل ادمین</h2>
-    <span class="lbl">افزودن/کم‌کردن توکن کاربر</span><div class="row"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
-    <div style="height:6px"></div><button class="ghost" data-a="agrant">اعمال</button>
+    <span class="lbl">تغییر توکن کاربر</span><div class="row"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
+    <div style="height:7px"></div><button class="ghost" data-a="agrant">اعمال</button>
     <span class="lbl">ساخت کد هدیه</span><div class="row"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
-    <div style="height:6px"></div><div class="row"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric"></div>
-    <div style="height:6px"></div><button class="ghost" data-a="acoupon">ساخت کد</button>
-    <span class="lbl">اعلان همگانی به همه‌ی کاربران</span><textarea class="fa" id="an-text" maxlength="3500" style="min-height:70px" placeholder="متن اعلان"></textarea>
-    <div style="height:6px"></div><button class="ghost" data-a="aannounce">ارسال اعلان</button>
-    <div style="height:10px"></div><div class="row"><button class="ghost" data-a="ausers">کاربران</button><button class="ghost" data-a="astats">آمار سیستم</button></div><div id="astats" class="muted" style="margin-top:8px;line-height:2"></div></div>`;
+    <div style="height:7px"></div><div class="row"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric"></div>
+    <div style="height:7px"></div><button class="ghost" data-a="acoupon">ساخت کد</button>
+    <span class="lbl">اعلان همگانی</span><textarea class="fa" id="an-text" maxlength="3500" style="min-height:74px" placeholder="متن اعلان"></textarea>
+    <div style="height:7px"></div><button class="ghost" data-a="aannounce">ارسال اعلان</button>
+    <div style="height:11px"></div><div class="row"><button class="ghost" data-a="ausers">کاربران</button><button class="ghost" data-a="astats">آمار سیستم</button></div>
+    <div id="astats" class="muted" style="margin-top:9px;line-height:2"></div></div>`;
 }
 
-/* ───── کاربران آنلاین (ادمین) ───── */
+/* ───── کاربران (ادمین) ───── */
 let UQ = "";
 const ago = t => { if(!t) return "—"; const m = Math.max(0, (Date.now() - new Date(t)) / 60000); return m < 1 ? "همین الان" : m < 60 ? Math.floor(m) + " دقیقه پیش" : m < 1440 ? Math.floor(m / 60) + " ساعت پیش" : Math.floor(m / 1440) + " روز پیش"; };
 function userRow(r){
@@ -1409,7 +1780,7 @@ async function openUsers(){
     try{
       const d = await api("/api/admin/users"); openUsers.d = d;
       if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); return; }
-      showSheet(head("کاربران ربات‌ساز") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" style="margin-bottom:6px"><div id="ulist">${uList(d)}</div>`);
+      showSheet(head("کاربران ربات‌ساز") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" style="margin-bottom:7px"><div id="ulist">${uList(d)}</div>`);
     }catch(e){ closeSheet(); toast(e.message); }
   };
   await tick(); window.__ut = setInterval(tick, 10000);
