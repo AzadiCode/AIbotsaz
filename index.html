@@ -54,17 +54,17 @@ a{color:var(--ac);text-decoration:none}
 
 /* ═══════════ هدر بالا ═══════════ */
 .top{position:sticky;top:0;z-index:30;margin:0 -16px;padding:13px 16px 11px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
   background:color-mix(in srgb,var(--bg) 82%,transparent);
   -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16.5px}
 .brand .lg{width:33px;height:33px;border-radius:11px;display:grid;place-items:center;flex:none;color:#fff;
   background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 8px 18px -10px var(--ac)}
 .brand .lg svg{width:19px;height:19px}
-.tokpill{width:auto;display:flex;align-items:center;gap:7px;background:var(--sf);color:var(--ink);
-  border:1px solid var(--line);border-radius:99px;padding:7px 14px;font-size:12.5px;font-weight:600;
-  box-shadow:var(--sh);transition:transform .15s,border-color .2s}
+.tokpill{width:auto;display:flex;align-items:center;gap:6px;background:none;border:0;color:var(--ink);
+  padding:3px 0;font-size:12.5px;font-weight:600;box-shadow:none;transition:transform .15s}
 .tokpill:active{transform:scale(.96)}
-.tokpill .n{color:var(--tok);font-size:15px;font-weight:700}
+.tokpill .n{color:var(--tok);font-size:16px;font-weight:700}
 .tokpill small{color:var(--mut);font-size:11.5px;font-weight:500}
 .tokpill.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
 @keyframes bump{40%{transform:scale(1.15)}}
@@ -152,13 +152,14 @@ input[type=file]{display:none}
 .console textarea{border:0;border-radius:0;background:transparent;box-shadow:none;min-height:112px;
   padding:6px 16px 12px;font-size:15px}
 .console textarea:focus{box-shadow:none;border-color:transparent}
-.console .chips{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 13px}
+.console .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 12px}
 .ch2{width:auto;background:var(--acs);color:var(--ac);border:1px solid transparent;border-radius:99px;
   padding:6px 13px;font-size:12.5px;font-weight:600;box-shadow:none}
-.console .cta{display:flex;align-items:center;gap:11px;padding:11px 14px 14px;border-top:1px solid var(--line)}
+.console .ch2{padding:5px 11px;font-size:11.5px;font-weight:600;line-height:1.45;letter-spacing:-.1px}
+.console .cta{display:flex;align-items:center;justify-content:space-between;gap:11px;padding:11px 14px 14px;border-top:1px solid var(--line)}
 .console .cost{flex:none;font-size:12.5px;color:var(--mut);white-space:nowrap}
 .console .cost .n{color:var(--tok);font-size:15px}
-.console .cta button{flex:1}
+.console .cta button{flex:none;width:auto;padding:8px 24px;font-size:13px;line-height:1.5;border-radius:12px}
 .cells{display:flex;gap:4px}
 .cells i{width:8px;height:13px;border-radius:3px;background:var(--cell);display:block;transition:background .25s}
 .console .cells i.on{background:var(--ac)}
@@ -743,10 +744,9 @@ function renderHome(){
     <div class="console">
       <div class="ch"><b>چه رباتی بسازیم؟</b><div class="cells" title="قابل ساخت با موجودی فعلی">${cellsHTML(builds)}</div></div>
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="ربات خود را کوتاه توضیح دهید. مثلاً: ربات رزرو نوبت برای آرایشگاه، با لیست خدمات و فرم رزرو."></textarea>
-      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px;margin-left:4px"')}بهینه‌سازی با AI</button></div>
+      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:12px;height:12px;vertical-align:-2px;margin-left:3px"')}بهینه‌سازی با AI</button></div>
       <div class="cta"><span class="cost">هزینه ${costTxt(false)}</span><button id="gen" data-a="gen">بسازید</button></div>
-    </div>`}
-    ${dailyCard()}`;
+    </div>`}`;
   const botsPane = `
     <div class="sech"><span>ربات‌های من</span><span class="muted">${N(S.bots.length)} از ${N(c.max_bots || 10)}</span></div>
     ${list || `<div class="card empty"><p>هنوز رباتی نساخته‌اید.</p><p class="muted">توضیح دهید چه چیزی لازم دارید.</p><button data-tab="build" data-view="home">ساخت ربات</button></div>`}`;
