@@ -257,6 +257,98 @@ details.adv .box{padding:0 0 12px}
 .dn svg{width:22px;height:22px}
 .dn.on{color:var(--ac);background:var(--acs)}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ═════════════ نسخه‌ی نهایی: جلا، اکسپلور، ابزارها، ادمین ═════════════ */
+:root{--ac2:#8b5cf6;--glow:rgba(91,147,255,.22)}
+:root:not([data-theme=dark]){--glow:rgba(31,91,255,.14)}
+body{background-image:radial-gradient(900px 420px at 85% -80px,var(--glow),transparent 70%),radial-gradient(700px 380px at -10% 10%,rgba(139,92,246,.12),transparent 70%);background-attachment:fixed}
+.top{position:sticky;top:0;z-index:30;margin:0 -14px;padding:12px 16px 10px;background:color-mix(in srgb,var(--bg) 78%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.tokpill{transition:transform .15s,border-color .2s}.tokpill:active{transform:scale(.96)}
+.tokpill.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
+@keyframes bump{40%{transform:scale(1.14);border-color:var(--tok)}}
+.card{transition:border-color .2s,transform .15s}
+.botrow:hover,.tpl:hover{border-color:var(--ac)}
+button:not(.ghost):not(.danger):not(.back):not(.sm):not(.kb):not(.x):not(.danger-b):not(.dn):not(.ch2):not(.tokpill):not(.tile):not(.xb):not(.tpl):not(.chip2){background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}
+:root[data-theme=dark] button:not(.ghost):not(.danger):not(.back):not(.sm):not(.kb):not(.x):not(.danger-b):not(.dn):not(.ch2):not(.tokpill):not(.tile):not(.xb):not(.tpl):not(.chip2){color:#fff}
+.daily button{background:var(--tok)!important}
+.hero{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--acs),rgba(139,92,246,.1));border-color:transparent}
+.hero h2{font-size:15.5px;margin-bottom:4px}
+.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.steps3 div{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:8px 6px;text-align:center;font-size:11.5px;line-height:1.55;color:var(--mut)}
+.steps3 div .n{display:block;color:var(--ac);font-size:16px}
+.tplg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+button.tpl{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:right;background:var(--sf);color:var(--ink);border:1px solid var(--line);padding:11px;border-radius:14px;font-weight:500}
+button.tpl .tic{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--acs);color:var(--ac);margin-bottom:2px}
+button.tpl .tic svg{width:19px;height:19px}
+button.tpl b{font-family:"Noto Kufi Arabic",sans-serif;font-size:13px;font-weight:700}
+button.tpl small{font-size:11px;color:var(--mut);line-height:1.55;font-weight:400}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.tools button{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px;padding:10px 8px}
+.tools svg,.ibtn svg{width:16px;height:16px;flex:none}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.hl{padding:9px 0;border-top:1px solid var(--line);font-size:13px}.hl:first-child{border-top:0}.hl.ok{color:var(--ok)}
+.sub2{border-top:1px solid var(--line);padding:10px 0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}.sub2:first-of-type{border-top:0}.sub2 small{display:block;color:var(--mut);font-size:11.5px}
+.spark{display:flex;align-items:flex-end;gap:5px;height:56px;margin:4px 0 2px}
+.spark i{flex:1;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,var(--ac),var(--ac2));min-height:3px;opacity:.85;transition:height .5s}
+.spark i.z{background:var(--cell);opacity:.6}
+.sparklbl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut)}
+.topn{margin-top:10px}.topn .tr{display:flex;align-items:center;gap:10px;font-size:12.5px;margin-top:6px}
+.topn .tr span{flex:0 0 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topn .bar2{flex:1;height:7px;border-radius:4px;background:var(--cell);overflow:hidden}.topn .bar2 i{display:block;height:100%;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:4px}
+textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monospace;font-size:12px;min-height:220px}
+/* اکسپلور */
+.xhd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 2px 12px}
+.xhd h2{font-size:18px;display:flex;align-items:center;gap:8px}.xhd h2 svg{width:22px;height:22px;color:var(--ac)}
+.xsub{font-size:12px;color:var(--mut);display:block;font-weight:400;font-family:"Vazirmatn",sans-serif}
+.xb{width:auto;font-weight:600}
+.xref{padding:8px;background:transparent;border:1px solid var(--line);color:var(--mut)}.xref svg{width:17px;height:17px;display:block}
+.xref.spinning svg{animation:s .8s linear infinite}
+.xtabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}.xtabs::-webkit-scrollbar{display:none}
+.xtabs .xb{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 13px;font-size:13px;background:transparent;color:var(--mut);border:1px solid var(--line);border-radius:99px}
+.xtabs .xb svg{width:15px;height:15px}.xtabs .xb.on{color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));border-color:transparent}
+.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.xc{position:relative;display:flex;flex-direction:column;gap:7px;min-width:0;padding:12px;background:var(--sf);border:1px solid var(--line);border-radius:16px;cursor:pointer;overflow:hidden;transition:transform .15s,border-color .2s}
+.xc:active{transform:scale(.985)}.xc.hot{border-color:color-mix(in srgb,var(--ac) 45%,transparent)}
+.xt{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;min-width:0;padding-top:4px}
+.xn{min-width:0;flex:1}.xn b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.5px;line-height:1.45;font-family:"Noto Kufi Arabic",sans-serif}
+.xn .un{display:block;direction:ltr;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xav{position:relative;flex:none;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;overflow:hidden;font-weight:800;font-size:21px;color:#fff;background:linear-gradient(135deg,hsl(var(--h,200) 70% 52%),hsl(calc(var(--h,200) + 40) 70% 42%))}
+.xav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.xd{text-align:center;font-size:12.5px;line-height:1.65;color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+.xs{display:flex;align-items:center;justify-content:center;gap:12px;font-size:11.5px;color:var(--mut)}.xs span{display:inline-flex;align-items:center;gap:4px}.xs svg{width:13px;height:13px}
+.xa{display:flex;gap:6px;margin-top:auto}
+.xstart{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;font-size:13px;border-radius:10px}.xstart svg{width:13px;height:13px}
+.xlike{display:inline-flex;align-items:center;gap:5px;padding:8px 11px;font-size:12.5px;background:transparent;color:var(--mut);border:1px solid var(--line);border-radius:10px}.xlike svg{width:15px;height:15px}
+.xlike.on{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,transparent);background:color-mix(in srgb,var(--bad) 8%,transparent)}
+.xlike.pop svg{animation:beat .45s cubic-bezier(.3,1.6,.5,1)}@keyframes beat{40%{transform:scale(1.5)}}
+.xlike:disabled{opacity:.55}
+.xbd{position:absolute;top:10px;left:10px;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;line-height:1;padding:4px 7px;border-radius:99px;color:var(--ac);background:var(--acs)}.xbd svg{width:11px;height:11px}
+.xbd.n{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}.xbd.m{color:var(--mut);background:var(--sf2)}
+.xc.feat{grid-column:1/-1;padding:16px;gap:10px;border:1px solid transparent;background:linear-gradient(var(--sf),var(--sf)) padding-box,linear-gradient(135deg,var(--ac),var(--ac2)) border-box}
+.xc.feat .xt{flex-direction:row;text-align:start;gap:12px;padding-top:0}.xc.feat .xav{width:62px;height:62px;font-size:25px}
+.xc.feat .xd,.xc.feat .xs{text-align:start;justify-content:flex-start}.xc.feat .xn b{font-size:16px;-webkit-line-clamp:1}.xc.feat .xd{-webkit-line-clamp:3}
+.xc.feat .xbd{position:static;align-self:flex-start;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));padding:5px 10px}
+.xc.sk{pointer-events:none;gap:9px}.xc.sk i{display:block;height:10px;border-radius:5px;background:linear-gradient(100deg,var(--line) 30%,var(--sf2) 50%,var(--line) 70%);background-size:220% 100%;animation:xsh 1.3s linear infinite}
+.xc.sk .xav{background:var(--line)}@keyframes xsh{from{background-position:120% 0}to{background-position:-120% 0}}
+.xempty{text-align:center;padding:34px 16px}.xempty svg{width:34px;height:34px;color:var(--ac);display:block;margin:0 auto 8px}
+.xbig{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.xbig div{border:1px solid var(--line);border-radius:12px;padding:9px 6px;text-align:center}.xbig b{display:block;font-size:16px}.xbig small{font-size:11.5px;color:var(--mut)}
+.xsheet-top{display:flex;align-items:center;gap:12px}.xsheet-top .xt{flex-direction:row;text-align:start;padding:0}.xsheet-top .xav{width:64px;height:64px;font-size:26px}
+.xsheet-desc{margin-top:12px;font-size:13.5px;line-height:1.85}.xsheet-act{display:flex;gap:8px;margin-top:4px}
+.xlinks{display:flex;gap:8px;margin-top:10px}.xlinks .xb{flex:1;font-size:12.5px;padding:8px;background:transparent;border:1px solid var(--line);color:var(--mut);display:inline-flex;gap:6px;align-items:center;justify-content:center}.xlinks .xb svg{width:14px;height:14px}.xlinks .xb.dg{color:var(--bad)}
+.xo .xprev .xc{cursor:default;margin:0 auto 12px;width:calc(50% - 5px);min-width:168px}.xo textarea{min-height:60px;font-size:13.5px}
+.xcnt{display:flex;justify-content:flex-end;font-size:11px;color:var(--mut);margin:2px 2px 10px}
+/* ادمین */
+.usum{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13.5px}
+.urow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.urow:first-child{border-top:0}
+.urow .dot{margin-top:8px}.ui{flex:1;min-width:0}.u1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.u1 b{font-size:14px}
+.u2{display:flex;gap:10px;align-items:center;font-size:12px}.u2 .cpy{color:var(--ac);cursor:pointer;direction:ltr}
+.u3{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}.ub{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:0 7px;color:var(--mut);direction:ltr}.ub.on{color:var(--ink)}
+.ucnt{font-size:12px;min-width:24px;text-align:center;border:1px solid var(--line);border-radius:7px;padding:1px 0;margin-top:2px}
+/* جشن */
+.cf{position:fixed;top:-10px;width:8px;height:12px;border-radius:2px;z-index:98;pointer-events:none;animation:cf 1.6s ease-in forwards}
+@keyframes cf{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
+@media (prefers-reduced-motion:reduce){.cf{display:none}.spark i{transition:none}}
 </style>
 </head>
 <body>
@@ -267,6 +359,7 @@ details.adv .box{padding:0 0 12px}
 <input type="file" id="fileIn" multiple>
 <nav class="dock" id="dock" aria-label="ناوبری اصلی"><div class="dpanel">
   <button class="dn" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/></svg><span>ربات‌ها</span></button>
+  <button class="dn" data-go="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>اکسپلور</span></button>
   <button class="dn" data-go="media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.7"/><path d="M4 17l4.5-4.5 3.5 3.5 3-3 5 5"/></svg><span>رسانه</span></button>
   <button class="dn" data-go="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17"/><circle cx="16.5" cy="14.5" r="1" fill="currentColor"/></svg><span>حساب و توکن</span></button>
 </div></nav>
@@ -277,7 +370,7 @@ const INIT = tg?.initData || "";
 // خالی = همون دامنه‌ای که این صفحه ازش لود شده. فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
 const API_BASE = "";
 let S = { view: "home", bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
-  ref: { link: "", count: 0 }, joined: null, cur: null, open: new Set(), busy: false, fresh: false, ideas: [], sheet: null, uploads: [], stats: null, pickKey: null };
+  ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, open: new Set(), busy: false, fresh: false, ideas: [], sheet: null, uploads: [], stats: null, pickKey: null };
 let D = null;   // پیش‌نویس فرم باز
 
 const $ = s => document.querySelector(s);
@@ -365,7 +458,7 @@ function mediaPicker(key, cur){
 async function load(){
   try{
     const d = await api("/api/me");
-    Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined });
+    Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin });
   }catch(e){
     $("#dock").hidden = true;
     $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`;
@@ -379,7 +472,7 @@ function renderTop(){
 }
 function render(){
   renderTop();
-  ({ home: renderHome, bot: renderBot, media: renderMedia, account: renderAccount })[S.view]();
+  ({ home: renderHome, bot: renderBot, media: renderMedia, account: renderAccount, explore: renderExplore })[S.view]();
   document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.go === (S.view === "bot" ? "home" : S.view)));
 }
 const cellsHTML = (on, total = 10) => Array.from({length: total}, (_, i) => `<i class="${i < on ? "on" : ""}"></i>`).join("");
@@ -423,8 +516,8 @@ async function runJob(prompt, botId){
 function submitPrompt(){
   const ta = $("#prompt"), p = ta.value.trim(), botId = S.cur?.id || null;
   if(p.length < 5) return toast("توضیح بیشتری بنویس");
-  const cost = botId ? S.cfg.edit : S.cfg.gen;
-  if(S.wallet.tokens < cost) return openBuy(`این کار ${cost} توکن می‌خواد و موجودی تو ${S.wallet.tokens} توکنه.`);
+  const cost = needCost(!!botId);
+  if(S.wallet.tokens < cost) return openBuy(`این کار حداقل ${cost} توکن می‌خواد و موجودی تو ${S.wallet.tokens} توکنه.`);
   busy($("#gen"), async () => {
     ta.readOnly = true;
     try{
@@ -432,7 +525,7 @@ function submitPrompt(){
       const was = !!botId;
       S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
       S.cur = r.bot; S.view = "bot"; S.fresh = true; S.ideas = r.ideas || []; S.open = new Set(); S.stats = null;
-      render(); toast(was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد"); haptic("ok");
+      render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? ` • ${r.cost} توکن` : "")); haptic("ok");
     }catch(e){
       if(e.status === 402) openBuy(e.message); else toast(e.message);
     }finally{ if(ta.isConnected) ta.readOnly = false; }
@@ -452,7 +545,7 @@ function dailyCard(){
   return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز گرفته شد</b><span class="muted">${w.streak ? `${N(w.streak)} روز پشت‌سرهم. فردا ${N("+" + w.next_reward)} توکن` : "فردا دوباره بیا"}</span></div></div>`;
 }
 function renderHome(){
-  const w = S.wallet, c = S.cfg, full = S.bots.length >= (c.max_bots || 10), cost = c.gen || 6;
+  const w = S.wallet, c = S.cfg, full = S.bots.length >= (c.max_bots || 10), cost = costOf(false) || 6;
   const builds = Math.min(10, Math.floor(w.tokens / cost));
   const list = S.bots.map(b => `<div class="card botrow" role="button" tabindex="0" data-a="open" data-id="${b.id}">
       <span class="dot ${b.active ? "on" : ""}"></span>
@@ -462,13 +555,14 @@ function renderHome(){
     <div class="console">
       <div class="ch"><b>چه رباتی می‌خوای؟</b><div class="cells" title="تعداد رباتی که با موجودی فعلی می‌تونی بسازی">${cellsHTML(builds)}</div></div>
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="هر رباتی که لازم داری رو توضیح بده. مثلاً: ربات رزرو نوبت برای آرایشگاه، با لیست خدمات و قیمت، فرم رزرو و دستیار هوشمند."></textarea>
-      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}</div>
-      <div class="cta"><span class="cost">هزینه ${N(cost)} توکن</span><button id="gen" data-a="gen">بساز</button></div>
+      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px;margin-left:4px"')}بهینه‌سازی با AI</button></div>
+      <div class="cta"><span class="cost">هزینه ${costTxt(false)}</span><button id="gen" data-a="gen">بساز</button></div>
     </div>`}
     <div id="live"></div>
     ${dailyCard()}
     <div class="sech"><span>ربات‌های من</span><span class="muted">${N(S.bots.length)} از ${N(c.max_bots || 10)}</span></div>
-    ${list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">بالا توضیح بده، ربات آماده می‌شه.</span></p></div>`}`;
+    ${list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">بالا توضیح بده، ربات آماده می‌شه.</span></p></div>`}
+    ${tplBlock()}`;
 }
 
 /* ───────── صفحه‌ی ربات ───────── */
@@ -533,7 +627,7 @@ function renderBot(){
   const b = S.cur, c = S.cfg;
   const prompt = `
     <div class="console">
-      <div class="ch"><b>چی رو تغییر بدم؟</b><span class="cost muted">ارتقا ${N(c.edit)} توکن</span></div>
+      <div class="ch"><b>چی رو تغییر بدم؟</b><span class="cost muted">ارتقا ${costTxt(true)}</span></div>
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="مثلاً: یه بخش سوالات متداول اضافه کن. یا: عکس لوگو رو بذار صفحه‌ی شروع. یا: یه بخش دستیار هوشمند اضافه کن."></textarea>
       <div class="cta"><button id="gen" data-a="gen">ارتقا بده</button></div>
     </div>
@@ -545,6 +639,7 @@ function renderBot(){
   body += Object.keys(b.config.nodes).map((id, i) => nodeCard(b.config, id, i, S.fresh)).join("");
   body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">+ بخش جدید</button>`;
   if(b.versions) body += `<button class="ghost" id="undo" data-a="undo" style="margin-bottom:12px">برگشت به نسخه‌ی قبلی</button>`;
+  body += botTools(b);
   body += b.active ? `
     <div class="card"><div class="hd"><h2>فعاله: <span class="ltr">@${esc(b.username)}</span></h2></div>
       <div class="stats" id="stats"><div class="stat"><div class="k">کاربرها</div>${N("–")}</div><div class="stat"><div class="k">فعال در هفته</div>${N("–")}</div>
@@ -552,11 +647,13 @@ function renderBot(){
       <div class="row"><button data-a="bc">پیام همگانی</button><button class="ghost" id="off" data-a="off">غیرفعال کردن</button></div>
       <p class="muted" style="margin-top:8px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام کاربرها، یک بار ربات خودت رو استارت کن و به پیام‌هاشون با Reply جواب بده.</p></div>`
     : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act" data-a="act">فعال کن</button></div>`;
+  if(b.active) body += xoHTML(b);
   body += `<button class="danger" data-a="del">حذف ربات</button>`;
   $("#app").innerHTML = `<button class="back" data-a="back">بازگشت</button><div class="ttl" style="font-size:17px;margin:0 2px 10px">${esc(b.name)}</div>${prompt}${body}`;
   syncAll();
   if(S.fresh && b.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior: "smooth", block: "nearest"}); }
   S.fresh = false;
+  bindXo();
   if(b.active) loadStats();
 }
 async function loadStats(){
@@ -623,24 +720,26 @@ function inviteCard(){
     ${S.ref.link ? `<div class="reflink"><code>${esc(S.ref.link)}</code><button class="ghost" data-a="copyref">کپی</button></div><button data-a="shareref">ارسال لینک دعوت</button>`
       : `<p class="muted" style="margin-top:8px">لینک دعوت هنوز آماده نیست. از ادمین بخواه MOTHER_USERNAME رو تنظیم کنه.</p>`}
     <div class="ms">${(c.milestones || []).map(([k, v]) => `<div class="${n >= k ? "hit" : ""}">${N(k)} دعوت<span class="n">+${v}</span></div>`).join("")}</div>
-    <p class="muted" style="margin-top:8px">تا الان ${N(n)} نفر با لینک تو اومدن و رباتشون رو ساختن.</p></div>`;
+    <p class="muted" style="margin-top:8px">تا الان ${N(n)} نفر با لینک تو اومدن و رباتشون رو ساختن${S.ref.earned ? `؛ ${N(S.ref.earned)} توکن درآمد داشتی` : ""}.</p></div>`;
 }
 function renderAccount(){
   const u = tg?.initDataUnsafe?.user || {}, w = S.wallet, c = S.cfg;
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const builds = Math.min(10, Math.floor(w.tokens / (c.gen || 6)));
+  const builds = Math.min(10, Math.floor(w.tokens / (costOf(false) || 6)));
   $("#app").innerHTML = `
     <div class="card pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
       <div><h2>${esc(name)}</h2>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}</div></div>
     <div class="card wallet"><div class="big">${N(w.tokens)}<span>توکن</span></div>
       <div class="cells" title="تعداد رباتی که با این موجودی می‌تونی بسازی">${cellsHTML(builds)}</div>
-      <span class="muted">موجودی برای ساخت ${N(Math.floor(w.tokens / (c.gen || 6)))} ربات جدید کافیه</span>
-      <div class="costs"><div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div></div></div>
+      <span class="muted">موجودی برای حدود ${N(Math.floor(w.tokens / (costOf(false) || 6)))} ربات جدید کافیه</span>
+      <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div>` : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>پخش همگانی<span class="n">1/${c.bc_per}</span></div>`}</div></div>
     ${dailyCard()}
     <div class="card"><h2>خرید توکن</h2>${packRows() || '<p class="muted">فعلاً بسته‌ای تعریف نشده.</p>'}<p class="muted">پرداخت با ستاره‌ی تلگرام انجام می‌شه و توکن بلافاصله اضافه می‌شه.</p></div>
     ${inviteCard()}
+    ${couponCard()}
     <div class="stats"><div class="stat"><div class="k">ربات‌ها</div>${N(S.bots.length)}</div><div class="stat"><div class="k">ربات‌های فعال</div>${N(S.bots.filter(b => b.active).length)}</div>
       <div class="stat"><div class="k">توکن مصرف‌شده</div>${N(w.spent || 0)}</div><div class="stat"><div class="k">رسانه</div>${N(S.media.length)}</div></div>
+    ${adminCard()}
     <div class="card"><h2>آخرین تراکنش‌ها</h2><div id="ledger"><span class="muted">در حال بارگذاری…</span></div></div>`;
   api("/api/ledger").then(d => {
     const el = $("#ledger"); if(!el) return;
@@ -786,7 +885,7 @@ async function commit(fn, msg = "ذخیره شد"){
   S.cur = d.bot; S.bots = S.bots.map(b => b.id === d.bot.id ? d.bot : b);
   closeSheet(); renderBot(); toast(msg); haptic("ok");
 }
-function closeSheet(){ $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function closeSheet(){ clearInterval(window.__ut); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
 function showSheet(html){
   const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
   sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp">${html}</div>`;
@@ -875,7 +974,7 @@ function openNode(id){
   D = { title: n.title || "", text: n.text, photo: n.photo || "", media: n.media || "", doneMedia: n.done_media || "", done: n.done || "", next: n.next || "",
         fields: n.fields ? n.fields.map((q, i) => ({q, v: (n.save || [])[i] || "", t: (n.types || [])[i] || "text"})) : [{q: "", v: "", t: "text"}],
         silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
-        aip: n.ai?.prompt || "", aid: n.ai?.daily || 15,
+        aip: n.ai?.prompt || "", aid: n.ai?.daily || 15, aim: n.ai?.memory ?? 3,
         start: id === cfg.start, fb: id === cfg.fallback,
         do: cp(n.do || []), route: (n.route || []).map(r => ({c: cp(r.when), goto: r.goto})), alt: (n.alt || []).map(r => ({c: cp(r.when), text: r.text})), adv: false };
   renderSheet();
@@ -910,7 +1009,8 @@ function nodeSheet(){
     ${d.mode === "ai" ? `<span class="lbl">دستور دستیار (نقش، لحن، اطلاعات واقعی کسب‌وکار)</span>
       <textarea class="fa" id="f-aip" maxlength="1500" style="min-height:140px" placeholder="مثلاً: تو دستیار فروشگاه موبایل «نوید» هستی. محترم و کوتاه جواب بده. ساعت کاری ۹ تا ۲۱ است. اگه جواب رو نمی‌دونی بگو و دکمه‌ی پشتیبانی رو معرفی کن.">${esc(d.aip)}</textarea>
       <span class="lbl">سقف پیام هر کاربر در روز</span><input id="f-aid" type="number" min="1" max="100" value="${esc(d.aid)}">
-      <div class="aibox">هر ${N(S.cfg.ai_per)} پیام هوشمند، ${N(1)} توکن از حساب تو کم می‌کنه. موجودی تو ${N(S.wallet.tokens)} توکنه. اگه موجودی تموم بشه این بخش برای کاربرها غیرفعال می‌شه. حتماً یه دکمه‌ی بازگشت به این بخش اضافه کن.</div>` : ""}
+      <span class="lbl">حافظه‌ی گفتگو (چند پیام قبلی رو یادش بمونه، 0 تا 6)</span><input id="f-aim" type="number" min="0" max="6" value="${esc(d.aim)}">
+      <div class="aibox">${billingFixed() ? `هر ${N(S.cfg.ai_per)} پیام هوشمند، ${N(1)} توکن` : "هزینه‌ی هر پیام هوشمند از روی مصرف واقعی مدل حساب می‌شه (معمولاً کسری از یک توکن تا ۱ توکن)؛"} از حساب تو کم می‌کنه. موجودی تو ${N(S.wallet.tokens)} توکنه. اگه موجودی تموم بشه این بخش برای کاربرها غیرفعال می‌شه. حتماً یه دکمه‌ی بازگشت به این بخش اضافه کن.</div>` : ""}
     ${d.mode === "form" ? `<span class="lbl">سؤال‌ها (به ترتیب)</span>
       ${d.fields.map((f, i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیه؟" maxlength="200"><button class="sm x" data-sh="delfld" data-i="${i}">حذف</button></div>
         <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
@@ -934,7 +1034,7 @@ function readNode(){
   const g = s => $(s)?.value ?? null;
   D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
   D.mode = g("#f-mode") ?? D.mode;
-  D.aip = g("#f-aip") ?? D.aip; D.aid = g("#f-aid") ?? D.aid;
+  D.aip = g("#f-aip") ?? D.aip; D.aid = g("#f-aid") ?? D.aid; D.aim = g("#f-aim") ?? D.aim;
   const fq = [...document.querySelectorAll(".fq")];
   if(fq.length) D.fields = fq.map(r => ({q: r.querySelector(".fld").value, v: cleanVar(r.querySelector(".fv").value), t: r.querySelector(".ft").value}));
   if($("#f-silent")) D.silent = $("#f-silent").checked;
@@ -963,7 +1063,7 @@ function saveNode(){
     if(D.media && mediaById(D.media)) n.media = D.media;
     else if(D.photo.trim()) n.photo = D.photo.trim();
     if(D.mode === "ask") n.ask = true;
-    if(D.mode === "ai") n.ai = {prompt: D.aip.trim(), daily: Math.max(1, Math.min(100, parseInt(D.aid) || 15))};
+    if(D.mode === "ai") n.ai = {prompt: D.aip.trim(), daily: Math.max(1, Math.min(100, parseInt(D.aid) || 15)), memory: Math.max(0, Math.min(6, isNaN(parseInt(D.aim)) ? 3 : parseInt(D.aim)))};
     if(D.mode === "form"){
       const fl = D.fields.filter(f => f.q.trim());
       n.fields = fl.map(f => f.q.trim());
@@ -1179,6 +1279,308 @@ function shAction(a, ds){
   else if(a === "delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
   renderSheet();
 }
+
+
+/* ═════════════════ نسخه‌ی نهایی: افزونه‌ها ═════════════════ */
+const fa = n => Number(n || 0).toLocaleString("en-US");
+Object.assign(IC, {
+  compass: svg('<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>'),
+  heart: svg('<path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>'),
+  heartf: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>`,
+  flame: svg('<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .3 1.2 1 1.8 1.7 2C10.5 8.5 11 5.5 12 3z"/>'),
+  flag: svg('<path d="M6 21V4M6 5h11l-2 4 2 4H6"/>'),
+  refresh: svg('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>'),
+  eye: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/>'),
+  trash: svg('<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>'),
+  spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'),
+  heal: svg('<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>'),
+  dl: svg('<path d="M12 4v11M8 11l4 4 4-4M5 19h14"/>'),
+  layers: svg('<path d="M12 4l8.5 4.5L12 13 3.5 8.5z"/><path d="M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5"/>'),
+  inbox: svg('<path d="M4 13l2.5-7h11L20 13v6H4z"/><path d="M4 13h4.5l1 2h5l1-2H20"/>'),
+  users: svg('<circle cx="9" cy="9" r="3.3"/><path d="M3.5 19c.6-3.2 2.8-4.8 5.5-4.8s4.9 1.6 5.5 4.8M16 6.2a3.2 3.2 0 0 1 0 6M18 14.6c1.6.6 2.6 2 3 4.4"/>'),
+  cal: svg('<rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'),
+  card: svg('<rect x="3" y="6" width="18" height="12" rx="3"/><circle cx="8.5" cy="12" r="2"/><path d="M13 10.5h5M13 13.5h4"/>'),
+  bag: svg('<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>'),
+  headset: svg('<path d="M4.5 14v-2a7.5 7.5 0 0 1 15 0v2"/><rect x="3.5" y="13" width="4" height="6" rx="1.8"/><rect x="16.5" y="13" width="4" height="6" rx="1.8"/>'),
+  form: svg('<rect x="5" y="4" width="14" height="16" rx="3"/><path d="M9 9h6M9 13h6M9 17h3"/>'),
+  medal: svg('<circle cx="12" cy="9.5" r="4.5"/><path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5-1.5-7.5"/>'),
+  quiz: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 16.5h.01"/>'),
+  ticket: svg('<path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/>'),
+  open: svg('<path d="M14 4h6v6M20 4l-9 9M10 6H6.5A2.5 2.5 0 0 0 4 8.5v9A2.5 2.5 0 0 0 6.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"/>'),
+  shield: svg('<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>'),
+});
+Object.assign(why, { enhance: "بهینه‌سازی توضیح با AI", coupon: "کد هدیه", ai_chat: "پیام هوشمند داخل ربات‌ها", edit: "ارتقای ربات", gen: "ساخت ربات" });
+
+const billingFixed = () => S.cfg.billing === "fixed";
+const costOf = isEdit => billingFixed() ? (isEdit ? S.cfg.edit : S.cfg.gen) : (S.cfg.typical || 12);
+const costTxt = isEdit => billingFixed() ? `${N(costOf(isEdit))} توکن` : `حدود ${N(S.cfg.typical || 12)} توکن`;
+const needCost = isEdit => billingFixed() ? costOf(isEdit) : (S.cfg.min || 5);
+
+function celebrate(){
+  if(matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const cols = ["#5B93FF", "#8b5cf6", "#FFB547", "#3DCB8A", "#FF6B7F"];
+  for(let i = 0; i < 26; i++){
+    const e = document.createElement("i"); e.className = "cf";
+    e.style.cssText = `left:${Math.random() * 100}vw;background:${cols[i % 5]};animation-delay:${Math.random() * .5}s;animation-duration:${1.2 + Math.random()}s`;
+    document.body.appendChild(e); setTimeout(() => e.remove(), 2600);
+  }
+}
+function bumpTokens(){ const p = $(".tokpill"); if(p){ p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump"); } }
+const openLink = u => tg?.openTelegramLink ? tg.openTelegramLink(u) : window.open(u, "_blank");
+const confirmQ = (q, go) => tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm(q));
+
+/* ───── قالب‌ها و آموزش صفحه‌ی اصلی ───── */
+function tplBlock(){
+  const full = S.bots.length >= (S.cfg.max_bots || 10);
+  return `${S.bots.length ? "" : `<div class="card hero"><h2>سه قدم تا ربات خودت</h2><p class="muted">اینجا لازم نیست کد بنویسی.</p>
+      <div class="steps3"><div>${N(1)}توضیح بده چی می‌خوای</div><div>${N(2)}هوش مصنوعی می‌سازه، خودت ویرایش کن</div><div>${N(3)}توکن BotFather رو بزن و فعالش کن</div></div></div>`}
+    ${(S.templates || []).length && !full ? `<div class="sech"><span>قالب آماده (رایگان)</span><span class="muted">بدون مصرف توکن</span></div>
+      <div class="tplg">${S.templates.map(t => `<button class="tpl" data-a="tpl" data-id="${t.id}"><span class="tic">${IC[t.icon] || IC.bot}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
+      <button class="ghost ibtn" data-a="import" style="margin-bottom:12px">${IC.upload}ورود ربات از JSON</button>` : ""}`;
+}
+
+/* ───── آمار: نمودار هفتگی و پربازدیدترین بخش‌ها ───── */
+loadStats = async function(){
+  try{
+    const id = S.cur?.id, s = await api(`/api/bots/${id}/stats`); S.stats = s;
+    if(S.cur?.id !== id || !$("#stats")) return;
+    $("#stats").innerHTML = [["کاربرها", s.users], ["فعال در هفته", s.active7], ["جدید در ۲۴ ساعت", s.new24], ["بلاک‌شده", s.blocked],
+      ["پاسخ فرم‌ها", s.forms], ["توکنِ مصرفیِ AI ربات", s.ai_tokens]].map(([k, v]) => `<div class="stat"><div class="k">${k}</div>${N(v)}</div>`).join("");
+    $("#statx")?.remove();
+    const mx = Math.max(1, ...s.series), days = ["۶ روز پیش", "", "", "", "", "", "امروز"];
+    const top = (s.top || []), tmx = Math.max(1, ...top.map(x => x.n));
+    $("#stats").insertAdjacentHTML("afterend", `<div id="statx"><div class="sub" style="margin-top:0"><span>عضو جدید در ۷ روز اخیر</span></div>
+      <div class="spark">${s.series.map(v => `<i class="${v ? "" : "z"}" style="height:${Math.max(6, Math.round(v / mx * 100))}%" title="${v}"></i>`).join("")}</div>
+      <div class="sparklbl"><span>${days[0]}</span><span>${days[6]}</span></div>
+      ${top.length ? `<div class="topn"><div class="sub" style="margin:8px 0 2px"><span>پربازدیدترین بخش‌ها</span></div>${top.map(x => `<div class="tr"><span>${esc(x.title)}</span><div class="bar2"><i style="width:${Math.round(x.n / tmx * 100)}%"></i></div>${N(x.n)}</div>`).join("")}</div>` : ""}</div>`);
+  }catch(_){}
+};
+
+/* ───── اکسپلور ───── */
+const XP = { sort: "hot", items: [], more: false, tok: 0, seen: new Set(), q: [], io: null };
+const hueOf = id => [...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+const kfmt = n => n >= 1e6 ? N((n / 1e6).toFixed(1).replace(/\.0$/, "")) + " م" : n >= 1000 ? N((n / 1000).toFixed(1).replace(/\.0$/, "")) + " هزار" : N(n);
+const xAv = (name, id, av) => `<span class="xav" style="--h:${hueOf(id)}">${esc((name || "?").trim().charAt(0))}${av ? `<img src="${API_BASE}/xp/avatar/${id}?v=${av}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
+const xStats = it => `<div class="xs"><span title="بازدید">${IC.eye}${kfmt(it.v)}</span><span title="استارت">${IC.play}${kfmt(it.s)}</span></div>`;
+const likeBtn = it => `<button class="xb xlike${it.liked ? " on" : ""}" data-xp="like" data-id="${it.id}" aria-pressed="${!!it.liked}" aria-label="لایک"${it.mine ? " disabled" : ""}>${it.liked ? IC.heartf : IC.heart}<span>${kfmt(it.l)}</span></button>`;
+function xCard(it){
+  const feat = XP.sort !== "new" && it.rank === 1, hot = XP.sort === "hot" && it.rank > 1 && it.rank <= 5;
+  const badge = feat ? `<span class="xbd">${IC.flame}${XP.sort === "hot" ? "داغ‌ترین" : "محبوب‌ترین"}</span>` : hot ? `<span class="xbd">${IC.flame}داغ</span>`
+    : it.mine ? `<span class="xbd m">ربات تو</span>` : it.new ? `<span class="xbd n">جدید</span>` : "";
+  return `<article class="xc${feat ? " feat" : ""}${hot ? " hot" : ""}" data-id="${it.id}">${badge}
+    <div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div></div>
+    <p class="xd">${esc(it.desc)}</p>${xStats(it)}
+    <div class="xa"><button class="xb xstart" data-xp="start" data-id="${it.id}">شروع${IC.play}</button>${likeBtn(it)}</div></article>`;
+}
+const xSkel = () => `<div class="xc sk"><div class="xt"><span class="xav"></span><div class="xn"><i style="width:70%"></i></div></div><i></i><i style="width:60%"></i><i style="width:45%"></i></div>`;
+function renderExplore(){
+  const tabs = [["hot", "flame", "داغ‌ترین"], ["new", "spark", "جدیدترین"], ["top", "heart", "محبوب‌ترین"]];
+  $("#app").innerHTML = `<div class="xhd"><div><h2>${IC.compass}اکسپلور</h2><span class="xsub">ربات‌های بقیه رو ببین، امتحان کن و لایک بزن</span></div>
+    <button class="xb xref" data-xp="refresh" aria-label="تازه‌سازی">${IC.refresh}</button></div>
+    <div class="xtabs" role="tablist">${tabs.map(([k, ic, t]) => `<button class="xb${XP.sort === k ? " on" : ""}" role="tab" aria-selected="${XP.sort === k}" data-xp="sort" data-k="${k}">${IC[ic]}${t}</button>`).join("")}</div>
+    <div class="xgrid" id="xgrid"></div><div id="xmore"></div>`;
+  loadExplore(true);
+}
+async function loadExplore(reset){
+  const tok = ++XP.tok, grid = $("#xgrid"); if(!grid) return;
+  if(reset){ XP.items = []; grid.innerHTML = xSkel() + xSkel() + xSkel() + xSkel(); $("#xmore").innerHTML = ""; }
+  try{
+    const d = await api(`/api/explore?sort=${XP.sort}&offset=${XP.items.length}`);
+    if(tok !== XP.tok || S.view !== "explore") return;
+    XP.items = XP.items.concat(d.items); XP.more = d.more;
+    if(reset) grid.innerHTML = "";
+    if(!XP.items.length){ grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1">${IC.compass}<b>اکسپلور هنوز خالیه</b><p class="muted">ربات خودت رو فعال کن و از صفحه‌ی ربات، اولین کارت اکسپلور رو بساز.</p></div>`; return; }
+    grid.insertAdjacentHTML("beforeend", d.items.map(xCard).join(""));
+    $("#xmore").innerHTML = XP.more ? `<button class="ghost" data-xp="more" style="margin-bottom:12px">نمایش بیشتر</button>` : "";
+    xObserve();
+  }catch(e){
+    if(tok !== XP.tok) return;
+    grid.innerHTML = `<div class="card xempty" style="grid-column:1/-1"><p class="muted">${esc(e.message)}</p><button class="ghost" data-xp="refresh" style="margin-top:10px">دوباره امتحان کن</button></div>`;
+  }
+}
+function xObserve(){
+  XP.io?.disconnect();
+  XP.io = new IntersectionObserver(es => es.forEach(e => {
+    if(!e.isIntersecting) return;
+    XP.io.unobserve(e.target);
+    const id = e.target.dataset.id, it = XP.items.find(x => x.id === id);
+    if(it && !it.mine && !XP.seen.has(id)){ XP.seen.add(id); XP.q.push(id); clearTimeout(XP.t); XP.t = setTimeout(xFlush, 1200); }
+  }), {threshold: .6});
+  document.querySelectorAll("#xgrid .xc[data-id]").forEach(el => XP.io.observe(el));
+}
+function xFlush(){ const ids = XP.q.splice(0, 20); if(ids.length) api("/api/explore/view", "POST", {ids}).catch(() => {}); }
+async function xLike(id){
+  const it = XP.items.find(x => x.id === id); if(!it || it.mine) return;
+  const was = it.liked; it.liked = !was; it.l += was ? -1 : 1; xSyncLike(it, true); haptic();
+  try{ const d = await api(`/api/explore/${id}/like`, "POST"); it.liked = d.liked; it.l = d.likes; }
+  catch(e){ it.liked = was; it.l += was ? 1 : -1; toast(e.message); }
+  xSyncLike(it, false);
+}
+function xSyncLike(it, pop){
+  document.querySelectorAll(`.xlike[data-id="${it.id}"]`).forEach(b => { b.outerHTML = likeBtn(it); });
+  if(pop && it.liked) document.querySelectorAll(`.xlike[data-id="${it.id}"]`).forEach(b => { b.classList.add("pop"); setTimeout(() => b.classList.remove("pop"), 500); });
+}
+function xOpen(id){
+  const it = XP.items.find(x => x.id === id); if(!it) return;
+  S.sheet = {kind: "info"};
+  showSheet(head("اکسپلور") + `<div class="xsheet-top"><div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div></div></div>
+    ${it.desc ? `<p class="xsheet-desc">${esc(it.desc)}</p>` : ""}
+    <div class="xbig"><div>${kfmt(it.v)}<small>بازدید</small></div><div>${kfmt(it.l)}<small>لایک</small></div><div>${kfmt(it.s)}<small>استارت</small></div></div>
+    <div class="xsheet-act"><button class="xb xstart" data-xp="start" data-id="${it.id}">شروع و امتحان ربات${IC.play}</button>${likeBtn(it)}</div>
+    <div class="xlinks">${it.mine ? "" : `<button class="xb" data-xp="report" data-id="${it.id}">${IC.flag}گزارش</button>`}${S.admin ? `<button class="xb dg" data-xp="adm" data-id="${it.id}">${IC.trash}حذف از اکسپلور</button>` : ""}</div>`);
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-xp]");
+  if(!b){ const c = e.target.closest("#xgrid .xc[data-id]"); if(c) xOpen(c.dataset.id); return; }
+  const a = b.dataset.xp, id = b.dataset.id;
+  if(a === "sort"){ XP.sort = b.dataset.k; renderExplore(); }
+  else if(a === "refresh"){ b.classList.add("spinning"); XP.seen.clear(); await loadExplore(true); b.classList.remove("spinning"); }
+  else if(a === "more"){ b.disabled = true; await loadExplore(false); }
+  else if(a === "start"){ const it = XP.items.find(x => x.id === id); if(it) openLink(`https://t.me/${it.username}?start=ex`); }
+  else if(a === "like") xLike(id);
+  else if(a === "report") confirmQ("این ربات رو گزارش می‌کنی؟", async ok => { if(!ok) return; try{ await api(`/api/explore/${id}/report`, "POST"); toast("گزارشت ثبت شد، ممنون"); closeSheet(); }catch(err){ toast(err.message); } });
+  else if(a === "adm"){ try{ await api(`/api/admin/explore/${id}`, "POST", {hide: true}); XP.items = XP.items.filter(x => x.id !== id); document.querySelector(`#xgrid .xc[data-id="${id}"]`)?.remove(); closeSheet(); toast("از اکسپلور برداشته شد"); }catch(err){ toast(err.message); } }
+});
+
+/* کارت اکسپلور توی صفحه‌ی ربات (برای صاحب ربات) */
+const xDefault = b => ((b.config.nodes[b.config.start]?.text) || "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
+function xPrev(b, desc){
+  const x = b.explore || {};
+  return `<article class="xc"><div class="xt">${xAv(b.name, b.id, x.av)}<div class="xn"><b>${esc(b.name)}</b><span class="un">@${esc(b.username)}</span></div></div>
+    <p class="xd" id="xpd">${esc(desc)}</p>${xStats({v: x.v || 0, s: x.s || 0})}
+    <div class="xa"><span class="xb xstart" style="background:var(--ac);color:#fff">شروع${IC.play}</span><span class="xb xlike">${IC.heart}<span>${kfmt(x.l || 0)}</span></span></div></article>`;
+}
+function xoHTML(b){
+  const x = b.explore || {}, mx = S.cfg.xp_desc || 90;
+  return `<div class="card xo" id="xo"><h2>اکسپلور${x.on ? ` <span class="tag" style="color:var(--ok)">فعال</span>` : ""}</h2>
+    <p class="muted" style="margin-bottom:12px">${x.hidden ? "این ربات توسط ادمین از اکسپلور برداشته شده." : "ربات رو با یه کارت ظریف توی ویترین عمومی بذار تا بقیه ببیننش، لایک کنن و استارتش بزنن."}</p>
+    ${x.hidden ? "" : `<div class="xprev">${xPrev(b, x.desc || xDefault(b) || "—")}</div>
+      <textarea class="fa" id="xdesc" maxlength="${mx}" placeholder="توضیح کوتاه برای کارت (لینک و آیدی حذف می‌شن)">${esc(x.desc || "")}</textarea>
+      <div class="xcnt"><span id="xcn">${fa((x.desc || "").length)}/${fa(mx)}</span></div>
+      <button id="xsave">${x.on ? "ذخیره و به‌روزرسانی عکس" : "اضافه به اکسپلور"}</button>
+      ${x.on ? `<button class="ghost" id="xoff" style="margin-top:8px">برداشتن از اکسپلور</button>` : ""}`}</div>`;
+}
+function bindXo(){
+  const t = $("#xdesc"); if(!t || !S.cur) return;
+  const b = S.cur, mx = S.cfg.xp_desc || 90;
+  t.addEventListener("input", () => { $("#xcn").textContent = `${fa(t.value.length)}/${fa(mx)}`; const d = $("#xpd"); if(d) d.textContent = t.value.trim() || xDefault(b) || "—"; });
+  const save = (on, btn) => busy(btn, async () => {
+    const d = await api(`/api/bots/${b.id}/explore`, "POST", {on, desc: t.value});
+    S.cur = d.bot; S.bots = S.bots.map(x => x.id === d.bot.id ? d.bot : x);
+    $("#xo").outerHTML = xoHTML(S.cur); bindXo(); toast(on ? "توی اکسپلور قرار گرفت" : "از اکسپلور برداشته شد"); haptic("ok");
+  });
+  $("#xsave").onclick = () => save(true, $("#xsave"));
+  $("#xoff")?.addEventListener("click", () => save(false, $("#xoff")));
+}
+
+/* ───── ابزارهای ربات ───── */
+const HEALTH_FA = [["unreachable nodes", "بخش‌های بدون مسیر ورود"], ["dead-end nodes", "بن‌بست‌ها (دکمه‌ی بازگشت ندارن)"], ["variables that are read", "متغیرهای بدون مقدار"]];
+function botTools(b){
+  return `<div class="card"><h2>ابزارها</h2><div class="tools">
+    <button class="ghost" data-a="health">${IC.heal}بررسی مسیرها</button>
+    <button class="ghost" data-a="export">${IC.dl}خروجی JSON</button>
+    <button class="ghost" data-a="dup">${IC.layers}کپی ربات</button>
+    <button class="ghost" data-a="subs">${IC.inbox}پاسخ فرم‌ها</button>
+    ${b.active ? `<button class="ghost" data-a="openbot">${IC.open}باز کردن ربات</button><button class="ghost" data-a="sharebot">${IC.users}اشتراک ربات</button>` : ""}
+  </div></div>`;
+}
+function textSheet(title, text, hint){
+  S.sheet = {kind: "info"};
+  showSheet(head(title) + (hint ? `<p class="muted" style="margin-bottom:8px">${hint}</p>` : "") + `<textarea id="tx-out" class="code" readonly></textarea><div style="height:10px"></div><button data-a="copyout" class="ibtn">${IC.copy}کپی</button>`);
+  $("#tx-out").value = text;
+}
+const fdate = t => new Date(t).toLocaleString("fa-IR-u-nu-latn", {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"});
+async function openSubs(){
+  S.sheet = {kind: "info"}; showSheet(head("پاسخ فرم‌ها") + `<p class="muted">در حال بارگذاری…</p>`);
+  try{
+    const d = await api(`/api/bots/${S.cur.id}/submissions`); S.subs = d.items;
+    showSheet(head("پاسخ فرم‌ها") + (d.items.length ? `<button class="ghost ibtn sm" data-a="csv" style="margin-bottom:8px">${IC.dl}خروجی CSV</button>` + d.items.map(r => `<div class="sub2"><small>${esc(r.title)} • ${esc(r.name)}${r.un ? " @" + esc(r.un) : ""} • ${fdate(r.t)}</small>${r.qa.length ? r.qa.map(([q, a]) => `${esc(q)}\n» <b>${esc(a)}</b>`).join("\n") : esc(r.text)}</div>`).join("") : `<p class="muted">هنوز پاسخی ثبت نشده.</p>`));
+  }catch(e){ closeSheet(); toast(e.message); }
+}
+const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  return ["time,section,name,username,answers", ...items.map(r => [r.t, r.title, r.name, r.un, (r.qa || []).map(([a, b]) => a + ": " + b).join(" | ") || r.text].map(q).join(","))].join("\n"); };
+
+/* ───── اکشن‌های جدید ───── */
+Object.assign(A, {
+  enhance: el => { const t = $("#prompt"), p = t?.value.trim() || ""; if(p.length < 5) return toast("اول یه توضیح کوتاه بنویس");
+    if(S.wallet.tokens < (S.cfg.enhance || 1)) return openBuy("برای بهینه‌سازی توضیح توکن کافی نداری.");
+    busy(el, async () => { const d = await api("/api/enhance", "POST", {prompt: p}); t.value = d.prompt; S.wallet = d.wallet; renderTop(); bumpTokens(); toast("توضیح کامل‌تر شد؛ بخون و اگه خوب بود بساز"); haptic("ok"); }); },
+  tpl: el => busy(el, async () => { const d = await api(`/api/templates/${el.dataset.id}/create`, "POST"); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.fresh = true; S.open = new Set(); S.ideas = []; S.stats = null; render(); celebrate(); toast("قالب آماده شد"); scrollTo(0, 0); }),
+  import: () => { S.sheet = {kind: "info"}; showSheet(head("ورود از JSON") + `<p class="muted" style="margin-bottom:8px">خروجی JSON یه ربات رو اینجا بچسبون تا به‌عنوان ربات جدید ساخته بشه.</p><textarea id="im-text" class="code" placeholder='{"name": "...", "nodes": {...}}'></textarea><div style="height:10px"></div><button data-a="importgo" class="ibtn">${IC.upload}ساخت ربات</button>`); },
+  importgo: el => busy(el, async () => { let c; try{ c = JSON.parse($("#im-text").value); }catch(_){ return toast("JSON معتبر نیست"); }
+    const d = await api("/api/bots/import", "POST", {config: c.config || c}); closeSheet(); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.open = new Set(); S.ideas = []; S.stats = null; render(); toast("ربات وارد شد"); }),
+  health: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/health`); S.sheet = {kind: "info"};
+    const row = i => { const h = HEALTH_FA.find(([k]) => i.startsWith(k)); return `<div class="hl"><b>${h ? h[1] : "هشدار"}</b><br><span class="muted ltr">${esc(i.split(": ").pop())}</span></div>`; };
+    showSheet(head("بررسی مسیرها") + (d.issues.length ? d.issues.map(row).join("") + `<p class="muted" style="margin-top:8px">برای رفع خودکار، از بالای صفحه به هوش مصنوعی بگو «مشکلات مسیر رو درست کن».</p>` : `<div class="hl ok">مشکلی پیدا نشد؛ ${N(d.nodes)} بخش بررسی شد.</div>`)); }),
+  export: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "این متن رو نگه دار؛ هر وقت خواستی از «ورود ربات از JSON» برگردونش."); }),
+  dup: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/duplicate`, "POST"); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.open = new Set(); S.stats = null; render(); scrollTo(0, 0); toast("کپی ساخته شد"); }),
+  subs: () => openSubs(),
+  csv: () => textSheet("خروجی CSV", csvOf(S.subs || []), "آخرین ۵۰ پاسخ. توی اکسل یا گوگل‌شیت پیست کن."),
+  copyout: () => { const t = $("#tx-out"); t.select(); navigator.clipboard?.writeText(t.value).then(() => toast("کپی شد"), () => toast("متن رو دستی کپی کن")); },
+  openbot: () => openLink(`https://t.me/${S.cur.username}?start=test`),
+  sharebot: () => openLink("https://t.me/share/url?url=" + encodeURIComponent(`https://t.me/${S.cur.username}`) + "&text=" + encodeURIComponent(S.cur.name)),
+  coupon: el => { const v = ($("#cpn")?.value || "").trim(); if(!v) return toast("کد رو وارد کن");
+    busy(el, async () => { const d = await api("/api/coupon", "POST", {code: v}); S.wallet = d.wallet; render(); bumpTokens(); toast(`${d.got} توکن اضافه شد`); haptic("ok"); }); },
+  copyid: el => navigator.clipboard?.writeText(el.dataset.id).then(() => toast("شناسه کپی شد"), () => toast(el.dataset.id)),
+  agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید کاربر: ${d.bal}`); }),
+  acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
+    toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
+  astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
+    $("#astats").innerHTML = `کاربران: ${N(d.users)} (آنلاین ${N(d.online)}، جدید ۲۴ساعته ${N(d.new24)})<br>ربات‌ها: ${N(d.bots)} (فعال ${N(d.active)}، اکسپلور ${N(d.explore)})<br>مخاطب ربات‌ها: ${N(d.bot_users)} • فرم‌ها: ${N(d.forms)}<br>توکنِ در گردش: ${N(d.circulation)} • دعوت موفق: ${N(d.referrals)}`; }),
+  aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان رو بنویس");
+    confirmQ("این اعلان برای همه‌ی کاربرهای ربات‌ساز فرستاده بشه؟", ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
+  ausers: () => openUsers(),
+});
+document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
+
+function couponCard(){
+  return `<div class="card"><h2>کد هدیه</h2><div style="height:8px"></div><div class="row" style="align-items:stretch"><input id="cpn" placeholder="CODE" autocomplete="off" style="flex:3"><button data-a="coupon" style="flex:1">ثبت</button></div></div>`;
+}
+function adminCard(){
+  if(!S.admin) return "";
+  return `<div class="card"><h2>${IC.shield.replace("<svg", '<svg style="width:16px;height:16px;vertical-align:-3px;margin-left:6px"')}پنل ادمین</h2>
+    <span class="lbl">افزودن/کم‌کردن توکن کاربر</span><div class="row"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric"><input id="ag-amt" placeholder="مقدار (منفی = کسر)" inputmode="numeric"></div>
+    <div style="height:6px"></div><button class="ghost" data-a="agrant">اعمال</button>
+    <span class="lbl">ساخت کد هدیه</span><div class="row"><input id="ac-code" placeholder="کد (خالی = خودکار)"><input id="ac-tok" placeholder="توکن" inputmode="numeric"></div>
+    <div style="height:6px"></div><div class="row"><input id="ac-max" placeholder="ظرفیت (تعداد نفر)" inputmode="numeric"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric"></div>
+    <div style="height:6px"></div><button class="ghost" data-a="acoupon">ساخت کد</button>
+    <span class="lbl">اعلان همگانی به همه‌ی کاربران</span><textarea class="fa" id="an-text" maxlength="3500" style="min-height:70px" placeholder="متن اعلان"></textarea>
+    <div style="height:6px"></div><button class="ghost" data-a="aannounce">ارسال اعلان</button>
+    <div style="height:10px"></div><div class="row"><button class="ghost" data-a="ausers">کاربران</button><button class="ghost" data-a="astats">آمار سیستم</button></div><div id="astats" class="muted" style="margin-top:8px;line-height:2"></div></div>`;
+}
+
+/* ───── کاربران آنلاین (ادمین) ───── */
+let UQ = "";
+const ago = t => { if(!t) return "—"; const m = Math.max(0, (Date.now() - new Date(t)) / 60000); return m < 1 ? "همین الان" : m < 60 ? Math.floor(m) + " دقیقه پیش" : m < 1440 ? Math.floor(m / 60) + " ساعت پیش" : Math.floor(m / 1440) + " روز پیش"; };
+function userRow(r){
+  const nm = r.name || (r.un ? "@" + r.un : "—");
+  const bots = r.bots.map(b => `<span class="ub${b.on ? " on" : ""}">${b.on ? "@" + esc(b.un) : esc(b.name)}</span>`).join("");
+  return `<div class="urow"><span class="dot${r.online ? " on" : ""}"></span><div class="ui"><div class="u1"><b>${esc(nm)}</b>${r.un && r.name ? `<span class="muted ltr">@${esc(r.un)}</span>` : ""}</div>
+    <div class="u2"><span class="cpy" data-pf="copyid" data-id="${r.id}">${r.id}</span><span class="muted">${r.online ? "آنلاین" : ago(r.seen)}</span><span class="muted">${N(r.tokens)} توکن</span></div>${bots ? `<div class="u3">${bots}</div>` : ""}</div><span class="ucnt n">${r.bots.length}</span></div>`;
+}
+const uSum = d => `<span class="dot on"></span><b>${N(d.online)}</b> آنلاین<span class="muted"> / ${N(d.total)} کاربر</span>`;
+function uList(d){
+  const q = UQ.trim().toLowerCase().replace(/^@/, "");
+  return d.items.filter(r => !q || String(r.id).includes(q) || (r.un || "").toLowerCase().includes(q) || (r.name || "").toLowerCase().includes(q) || r.bots.some(b => (b.un || "").toLowerCase().includes(q))).map(userRow).join("") || '<p class="muted">موردی پیدا نشد</p>';
+}
+async function openUsers(){
+  S.sheet = {kind: "info"}; UQ = ""; clearInterval(window.__ut);
+  showSheet(head("کاربران ربات‌ساز") + `<p class="muted">در حال بارگذاری…</p>`);
+  const tick = async () => {
+    if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return clearInterval(window.__ut);
+    try{
+      const d = await api("/api/admin/users"); openUsers.d = d;
+      if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); return; }
+      showSheet(head("کاربران ربات‌ساز") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" style="margin-bottom:6px"><div id="ulist">${uList(d)}</div>`);
+    }catch(e){ closeSheet(); toast(e.message); }
+  };
+  await tick(); window.__ut = setInterval(tick, 10000);
+}
+document.addEventListener("input", e => { if(e.target.id === "uq" && openUsers.d){ UQ = e.target.value; $("#ulist").innerHTML = uList(openUsers.d); } });
+
+/* حضور آنلاین */
+if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); }; setInterval(ping, 25000); document.addEventListener("visibilitychange", ping); }
 
 load();
 </script>
