@@ -651,9 +651,9 @@ const IC = {
 };
 const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g>', 1.7);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
-const why = {signup:"هدیه‌ی ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"پیام همگانی", daily:"جایزه‌ی روزانه",
-  referral:"دعوت موفق", invited:"هدیه‌ی دعوت", milestone:"پاداش ویژه‌ی دعوت", buy:"خرید توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد هدیه", template:"قالب آماده"};
+const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
+  referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب های ساده برای یادگیری و روع سریع"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -821,7 +821,7 @@ function dailyCard(){
 function tplBlock(){
   const full = S.bots.length >= (S.cfg.max_bots || 10);
   let h = "";
-  if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}ویرایش کن</div><div>${N(3)}فعالش کن</div></div>`;
+  if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}Ai میسازه</div><div>${N(3)}فعال و متصلش کن</div></div>`;
   if((S.templates || []).length && !full){
     h += `<div class="sec"><h2>قالب آماده</h2></div>
       <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${goIc}</button>`).join("")}</div>
@@ -832,7 +832,7 @@ function tplBlock(){
 function renderCreate(){
   const c = S.cfg, full = S.bots.length >= (c.max_bots || 10);
   $("#app").innerHTML = `
-    <section class="hero-t"><h1>ایده‌ات را بنویس</h1><p>چند جمله کافی است؛ ساختنش با ما.</p></section>
+    <section class="hero-t"><h1>تو بنویس </h1><p>من برات میسازمو طبق نیازت توسعه میدم.</p></section>
     ${full ? `<div class="panel"><h2>به سقف ${N(c.max_bots)} ربات رسیدی</h2><p class="muted">یکی را حذف کن یا با هوش مصنوعی ارتقا بده.</p><div class="fgap"></div><button class="b o" data-go="bots">ربات‌های من</button></div>` : `
     <div class="console">
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="توضیح ربات" placeholder="${esc(EXAMPLES[0][1])}"></textarea>
@@ -1060,11 +1060,11 @@ function packRows(){
 function inviteCard(){
   const c = S.cfg, n = S.ref.count;
   return `<div class="panel"><h2>دعوت دوستان</h2>
-    <p class="muted">هر دوستی که با لینک تو بیاید و اولین رباتش را بسازد، تو ${N(c.ref_inviter)} توکن می‌گیری و او ${N(c.ref_invitee)} توکن هدیه می‌گیرد.</p>
+    <p class="muted">هر شخصی که از طریق لیتک شما اولین رباتشو بسازه ${N(c.ref_inviter)} توکن پاداش شما و ${N(c.ref_invitee)} توکن پاداش طرف مقابل خواهد بود و همچنین ربات شما بیشتر دیده خواهد شد.</p>
     ${S.ref.link ? `<div class="reflink"><code>${esc(S.ref.link)}</code><button class="b o sm" data-a="copyref">کپی</button></div><button class="b" data-a="shareref">ارسال لینک دعوت</button>`
       : `<p class="muted mt">لینک دعوت هنوز آماده نیست. از ادمین بخواه MOTHER_USERNAME را تنظیم کند.</p>`}
     <div class="ms">${(c.milestones || []).map(([k, v]) => `<div class="${n >= k ? "hit" : ""}">${N(k)} دعوت<span class="n">+${v}</span></div>`).join("")}</div>
-    <p class="muted mt">تا الان ${N(n)} نفر با لینک تو آمده‌اند${S.ref.earned ? `؛ ${N(S.ref.earned)} توکن درآمد داشته‌ای` : ""}.</p></div>`;
+    <p class="muted mt">تا الان ${N(n)} نفر به ناوگان شما پیوسته اند${S.ref.earned ? `؛ ${N(S.ref.earned)} توکن درآمد ` : ""}.</p></div>`;
 }
 function couponCard(){
   return `<div class="sec"><h2>کد هدیه</h2></div><div class="cpn"><input id="cpn" placeholder="CODE" autocomplete="off" aria-label="کد هدیه"><button class="b" data-a="coupon">ثبت</button></div>`;
@@ -1075,9 +1075,9 @@ function tabWallet(){
       <div class="cells" title="تعداد رباتی که با این موجودی می‌توانی بسازی">${cellsHTML(buildsLeft())}</div>
       <span class="muted">برای حدود ${N(Math.floor(w.tokens / per))} ربات جدید کافی است</span>
       <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div>`
-        : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>پخش همگانی<span class="n">1/${c.bc_per}</span></div>`}</div></div>
+        : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>اطلاعیه ویژه<span class="n">1/${c.bc_per}</span></div>`}</div></div>
     ${dailyCard()}
-    <div class="sec"><h2>خرید توکن</h2><span class="muted">با ستاره‌ی تلگرام</span></div>
+    <div class="sec"><h2>شارژ توکن  Ai</h2><span class="muted">با استارس تلگرام</span></div>
     <div class="group">${packRows() || '<div class="gi static"><span class="muted">فعلاً بسته‌ای تعریف نشده.</span></div>'}</div>
     ${couponCard()}`;
 }
@@ -1098,7 +1098,7 @@ function loadLedger(){
 function renderAccount(){
   const u = tg?.initDataUnsafe?.user || {};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const tabs = [["wallet", "توکن"], ["invite", "دعوت"], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
+  const tabs = [["wallet", "توکن"], ["invite", "پاداش +"], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
   const body = ({wallet: tabWallet, invite: inviteCard, history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
