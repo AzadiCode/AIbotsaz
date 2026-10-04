@@ -7,15 +7,15 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@500;700;800&family=Orbitron:wght@700;800;900&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#E9EEF5; --sf:#FFFFFF; --sf2:#F1F4F9; --ink:#0E1B33; --mut:#5F6E8C; --line:#CFD8E6;
+  --bg:#F3F5F4; --sf:#FFFFFF; --sf2:#F1F4F9; --ink:#0E1B33; --mut:#5F6E8C; --line:#CFD8E6;
   --ac:#1F5BFF; --acx:#FFFFFF; --acs:rgba(31,91,255,.09); --tok:#E67A00; --toks:rgba(230,122,0,.12);
   --ok:#14915A; --bad:#D6344A; --cell:#C4CFE2;
 }
 :root[data-theme=dark]{
-  --bg:#0B1322; --sf:#121C31; --sf2:#18243D; --ink:#E7ECF8; --mut:#8D9BBA; --line:#243252;
+  --bg:#0A1010; --sf:#121C31; --sf2:#18243D; --ink:#E7ECF8; --mut:#8D9BBA; --line:#243252;
   --ac:#5B93FF; --acx:#071022; --acs:rgba(91,147,255,.14); --tok:#FFB547; --toks:rgba(255,181,71,.14);
   --ok:#3DCB8A; --bad:#FF6B7F; --cell:#26365A;
 }
@@ -349,6 +349,49 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .cf{position:fixed;top:-10px;width:8px;height:12px;border-radius:2px;z-index:98;pointer-events:none;animation:cf 1.6s ease-in forwards}
 @keyframes cf{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
 @media (prefers-reduced-motion:reduce){.cf{display:none}.spark i{transition:none}}
+
+/* ═════════ طراحی جدید: «شب‌نما» ═════════ */
+:root{--bg:#F3F5F4;--sf:#FFFFFF;--sf2:#EEF1F0;--ink:#0F1A1A;--mut:#6B7A7A;--line:#E1E7E6;--ac:#0F9D8A;--acx:#fff;--acs:rgba(15,157,138,.1);--ac2:#0F9D8A;--tok:#D98200;--toks:rgba(217,130,0,.12);--ok:#12945C;--bad:#D63B4B;--cell:#D5DDDC;--glow:transparent;--r:20px}
+:root[data-theme=dark]{--bg:#0A1010;--sf:#111A1A;--sf2:#182323;--ink:#E8F1EF;--mut:#8AA09C;--line:#1F2E2D;--ac:#4FD8C2;--acx:#04201C;--acs:rgba(79,216,194,.12);--ac2:#4FD8C2;--tok:#FFB84D;--toks:rgba(255,184,77,.13);--ok:#4ADE9A;--bad:#FF7A88;--cell:#233332}
+body{font-size:14.5px;background:var(--bg);background-image:none;padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+h1,h2,h3,.ttl,.brand,.botrow b,.nd .nt b,.xn b,button.tpl b,.console .ch b,.build .bh b,.daily .dt b,.sech,.av{font-family:"Lalezar","Vazirmatn",sans-serif;font-weight:400;letter-spacing:0}
+h2,.sech{font-size:17px!important}
+.n{font-family:"Space Grotesk","Vazirmatn",sans-serif!important;font-weight:600;letter-spacing:0}
+.top{background:color-mix(in srgb,var(--bg) 86%,transparent)}
+.brand{font-size:22px}.brand svg{width:26px;height:26px}
+.tokpill{border:0;background:var(--toks);border-radius:99px;padding:6px 14px}.tokpill small{display:none}
+.card,.console,.build,.xc,.tile,.pack,button.tpl{border:0;border-radius:var(--r);background:var(--sf)}
+.card{padding:16px}.console{box-shadow:0 0 0 1.5px var(--ac) inset}
+.console .ch{background:transparent;border:0;padding:14px 16px 0}
+.console textarea{font-size:15.5px;min-height:96px}
+button{border-radius:14px;font-weight:500;padding:12px 16px}
+button:not(.ghost):not(.danger):not(.back):not(.sm):not(.kb):not(.x):not(.danger-b):not(.dn):not(.ch2):not(.tokpill):not(.tile):not(.xb):not(.tpl):not(.chip2),:root[data-theme=dark] button:not(.ghost):not(.danger):not(.back):not(.sm):not(.kb):not(.x):not(.danger-b):not(.dn):not(.ch2):not(.tokpill):not(.tile):not(.xb):not(.tpl):not(.chip2){background:var(--ac);color:var(--acx);font-weight:600}
+button.ghost,button.kb,.xlike,.xref{background:var(--sf2);border:0;color:var(--ink)}
+.ch2{border-radius:99px;background:var(--sf2);color:var(--ink);font-weight:400}
+textarea,input,select{border:1.5px solid transparent;border-radius:14px;background:var(--sf2)}
+textarea:focus,input:focus,select:focus{border-color:var(--ac);background:var(--sf)}
+.console textarea,.console textarea:focus{background:transparent;border:0}
+.tag,.ub,.ucnt{border:0;background:var(--sf2);border-radius:99px}
+.botrow{padding:14px 16px}.botrow:hover,.tpl:hover{border-color:transparent}
+.nd .nh{padding:14px 16px}.nbi{border-top:0;padding:2px 16px 16px}
+.bubble{border:0;background:var(--sf2);border-radius:16px 16px 16px 4px}
+.mthumb,.tray,.rl,.stat,.costs div,.ms div,.steps3 div{border:0;background:var(--sf2)}
+.hero{background:var(--acs);border-radius:var(--r)}
+.wallet .big .n{font-size:48px}
+.pack{background:var(--sf2)}.pack.best{box-shadow:0 0 0 1.5px var(--tok) inset}
+.sp{border:0;border-radius:28px 28px 0 0}.sp::before{content:"";display:block;width:38px;height:4px;border-radius:2px;background:var(--cell);margin:-4px auto 14px}
+.dock{padding:0 14px calc(12px + env(safe-area-inset-bottom));pointer-events:none}
+.dpanel{pointer-events:auto;max-width:440px;margin:0 auto;padding:6px;gap:2px;border:0;border-radius:99px;background:color-mix(in srgb,var(--sf) 90%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 8px 30px rgba(0,0,0,.18),0 0 0 1px var(--line)}
+.dn{flex-direction:row;justify-content:center;gap:0;border-radius:99px;padding:11px 0;transition:flex .3s,background .2s,color .2s}
+.dn span{display:none;font-size:12.5px;font-weight:600;margin-right:7px}
+.dn.on{flex:2.1;background:var(--ac);color:var(--acx)}.dn.on span{display:inline}
+.xtabs .xb{border:0;background:var(--sf2)}.xtabs .xb.on{background:var(--ac);color:var(--acx)}
+.xc.feat{background:var(--acs);border:0}.xc.feat .xbd{background:var(--ac);color:var(--acx)}
+.xav{background:hsl(var(--h,170) 45% 45%)}
+.spark i,.topn .bar2 i{background:var(--ac)}
+.cells i.on,.bl div.cur i{background:var(--ac)}
+.dropbtn{border-radius:var(--r);border-color:var(--ac)}
+#toast{border-radius:99px;bottom:calc(96px + env(safe-area-inset-bottom))}
 </style>
 </head>
 <body>
@@ -385,7 +428,7 @@ const haptic = k => { try{ k === "ok" ? tg?.HapticFeedback?.notificationOccurred
 function applyTheme(){
   const dark = (tg?.colorScheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
   document.documentElement.dataset.theme = dark ? "dark" : "light";
-  try{ tg?.setHeaderColor?.(dark ? "#0B1322" : "#E9EEF5"); tg?.setBackgroundColor?.(dark ? "#0B1322" : "#E9EEF5"); }catch(_){}
+  try{ tg?.setHeaderColor?.(dark ? "#0A1010" : "#F3F5F4"); tg?.setBackgroundColor?.(dark ? "#0A1010" : "#F3F5F4"); }catch(_){}
 }
 applyTheme(); tg?.onEvent?.("themeChanged", applyTheme);
 
