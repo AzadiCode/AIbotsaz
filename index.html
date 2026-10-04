@@ -7,8 +7,10 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+:root{--bg:#F6F6F3;--sf:#FFFFFF;--sf2:#EFEFEA;--ink:#141414;--mut:#77776F;--line:#DEDED6;--ac:#141414;--acx:#FFFFFF;--acs:rgba(20,20,20,.06);--hl:#D4F54A;--tok:#D9560B;--toks:rgba(217,86,11,.1);--ok:#118A4E;--bad:#D32F3F;--cell:#D6D6CD;--ac2:#141414}
+:root[data-theme=dark]{--bg:#0D0D0C;--sf:#171716;--sf2:#212120;--ink:#F2F2EC;--mut:#8E8E85;--line:#2A2A28;--ac:#D4F54A;--acx:#0D0D0C;--acs:rgba(212,245,74,.1);--tok:#FF9A4D;--toks:rgba(255,154,77,.12);--ok:#5BDB95;--bad:#FF7480;--cell:#33332F}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 body{font-family:"Vazirmatn",Tahoma,sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.7;padding:0 16px calc(86px + env(safe-area-inset-bottom));min-height:100vh}
@@ -48,6 +50,7 @@ input[type=checkbox]{width:auto}input[type=file]{display:none}
 .sech{font-size:15px;margin:22px 0 8px;display:flex;justify-content:space-between;align-items:center}
 /* ساخت */
 .console{background:var(--sf);border:2px solid var(--ink);border-radius:12px;margin-bottom:14px;overflow:hidden}
+:root[data-theme=dark] .console{border-color:var(--ac)}
 .console .ch{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0}.console .ch b{font-size:15px;font-weight:800}
 .cells{display:flex;gap:3px}.cells i{width:6px;height:12px;border-radius:1px;background:var(--cell);display:block}.cells i.on{background:var(--ink)}:root[data-theme=dark] .cells i.on{background:var(--ac)}
 .console textarea{border:0;border-radius:0;background:transparent;min-height:100px;padding:10px 14px;font-size:15px}
@@ -127,11 +130,15 @@ details.adv>summary::-webkit-details-marker{display:none}details.adv>summary::af
 .dpanel{display:flex;padding:0 8px env(safe-area-inset-bottom);background:var(--bg);border-top:1.5px solid var(--line)}
 .dn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:10px 4px 8px;background:transparent;color:var(--mut);font-size:11.5px;border-radius:0;font-weight:600;position:relative}
 .dn svg{width:22px;height:22px}.dn.on{color:var(--ink)}.dn.on::before{content:"";position:absolute;top:-1.5px;left:22%;right:22%;height:3px;background:var(--ink);border-radius:0 0 3px 3px}
+:root[data-theme=dark] .dn.on{color:var(--ac)}:root[data-theme=dark] .dn.on::before{background:var(--ac)}
 /* تب‌ها */
 .tp{display:none}.tp.on{display:block}
 .xtabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}.xtabs::-webkit-scrollbar{display:none}
 .xb{width:auto;font-weight:600}
 .xtabs .xb{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 13px;font-size:13px;background:transparent;color:var(--ink);border:1.5px solid var(--line);border-radius:8px}.xtabs .xb svg{width:15px;height:15px}.xtabs .xb.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+:root[data-theme=dark] .xtabs .xb.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+.ptabs{gap:0;border-bottom:1.5px solid var(--line);margin:4px 0 14px}.ptabs .xb{flex:1;justify-content:center;border:0;border-radius:0;padding:10px 0;color:var(--mut);margin-bottom:-1.5px;border-bottom:3px solid transparent}
+.ptabs .xb.on,:root[data-theme=dark] .ptabs .xb.on{background:transparent;color:var(--ink);border-color:transparent;border-bottom-color:var(--ink);font-weight:800}:root[data-theme=dark] .ptabs .xb.on{border-bottom-color:var(--ac);color:var(--ac)}
 /* قالب‌ها و ابزار */
 .hero{background:var(--hl);color:#141414;border-color:var(--hl)}.hero h2{font-size:16px}.hero .muted{color:#3b3b30}
 .steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.steps3 div{background:rgba(255,255,255,.55);border-radius:8px;padding:8px 6px;text-align:center;font-size:11.5px;line-height:1.55}.steps3 div .n{display:block;font-size:16px}
@@ -179,63 +186,6 @@ textarea.code{direction:ltr;text-align:left;font-family:"IBM Plex Mono",monospac
 .wallet .big>span:not(.n){color:var(--mut)}
 .daily{background:var(--sf);border:1.5px solid var(--line)}.daily .dt .n{color:var(--ink);font-weight:600}.daily button{background:var(--ac)!important;color:var(--acx)!important}
 #prompt+.chips,.console.slim textarea{min-height:64px}
-
-:root{--bg:#F4F5FA;--sf:#FFFFFF;--sf2:#EEF0F7;--ink:#161A2B;--mut:#7B8197;--line:#E6E8F0;--ac:#4F5BD5;--acx:#FFFFFF;--acs:rgba(79,91,213,.1);--ac2:#7B6CF0;--tok:#E8890C;--toks:rgba(232,137,12,.12);--ok:#15A06E;--bad:#E5484D;--cell:#DFE2EC;--hl:#4F5BD5;--sh:0 1px 2px rgba(22,26,60,.04),0 8px 24px rgba(22,26,60,.06)}
-:root[data-theme=dark]{--bg:#0D0F16;--sf:#171A23;--sf2:#1F232E;--ink:#ECEEF7;--mut:#8B91A8;--line:#262B38;--ac:#8E9BFF;--acx:#0D0F16;--acs:rgba(142,155,255,.14);--ac2:#B49BFF;--tok:#FFB347;--toks:rgba(255,179,71,.13);--ok:#4FD9A0;--bad:#FF7A80;--cell:#2C3140;--hl:#8E9BFF;--sh:none}
-body{font-size:14.5px;padding-bottom:calc(104px + env(safe-area-inset-bottom))}
-.n{font-family:inherit;font-weight:700;font-size:1em;font-variant-numeric:tabular-nums}
-textarea.code{font-family:ui-monospace,Menlo,monospace}
-.top{border-bottom:0;background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
-.brand{font-size:19px;font-weight:800}.brand svg{color:var(--ac)}
-.tokpill{background:var(--sf);color:var(--ink);box-shadow:var(--sh);border-radius:99px;padding:6px 14px;font-weight:600;border:1px solid var(--line)}.tokpill .n{color:var(--tok)}.tokpill small{color:var(--mut);font-weight:500}
-button{border-radius:14px;padding:13px 18px;font-weight:700}
-button.ghost,button.kb,.xlike,.xref{background:var(--acs);color:var(--ac);border:0;font-weight:600}
-button.kb{background:var(--sf2);color:var(--ink);font-weight:600}
-button.back{color:var(--ac)}button.danger{color:var(--bad)}button.danger-b{border:0;background:rgba(229,72,77,.1);color:var(--bad)}
-.card,.build,.xc,.tile,button.tpl,.stat{border:0;border-radius:20px;background:var(--sf);box-shadow:var(--sh)}
-:root[data-theme=dark] .card,:root[data-theme=dark] .build,:root[data-theme=dark] .xc,:root[data-theme=dark] .tile,:root[data-theme=dark] button.tpl,:root[data-theme=dark] .stat{border:1px solid var(--line)}
-.card{padding:16px}.card h2{font-size:16px}.sech{font-size:16px;margin:24px 2px 10px}
-textarea,input,select{background:var(--sf2);border:1.5px solid transparent;border-radius:14px}textarea:focus,input:focus,select:focus{border-color:var(--ac);background:var(--sf)}
-.console{border:0;border-radius:24px;box-shadow:0 12px 32px rgba(79,91,213,.14)}:root[data-theme=dark] .console{border:1px solid var(--line);box-shadow:none}
-.console .ch{padding:16px 18px 0}.console .ch b{font-size:16px}.console textarea,.console textarea:focus{background:transparent;border:0;padding:10px 18px;min-height:110px;font-size:15.5px}
-.console .chips{padding:0 18px 12px}.console .cta{padding:0 18px 18px}.console.slim textarea{min-height:70px}
-.ch2{border-radius:99px;background:var(--sf2);color:var(--ink);padding:5px 12px;font-weight:500}
-.cells i{border-radius:3px}.cells i.on,:root[data-theme=dark] .cells i.on{background:var(--ac)}
-.tag{border-radius:99px;padding:0 9px}.nd .tag.cnt{background:var(--acs);color:var(--ac)}
-.botrow{padding:15px 16px}.botrow .dot.on{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
-.nbi{border-top:0;padding:0 16px 16px}.bubble{background:var(--sf2);border-radius:16px 16px 16px 4px}
-.mthumb,.tray,.rl,.costs div,.ms div,.pack,.xbig div,.upl,details.adv{border:0;background:var(--sf2)}
-.pack.best{background:var(--acs);box-shadow:0 0 0 1.5px var(--ac) inset;color:var(--ink)}.pack.best .pr,.pack.best .pt span{color:var(--mut)}
-.ms div.hit{background:var(--ok);color:#fff}.ms div.hit .n{color:#fff}
-.daily{background:var(--toks);box-shadow:none;border:0}.daily .dt .n{color:var(--tok)}.daily button{background:var(--tok)!important;color:#fff!important}
-.build .meter::after,.bl div.cur i{border-color:var(--ac)}.build .meter::after{background:var(--ac)}.bl div.cur i{border-top-color:transparent}
-.spark i,.topn .bar2 i,.meter2 i,.upl .pb i{background:var(--ac)}
-.dropbtn{border:1.5px dashed var(--ac);color:var(--ac);background:var(--acs);border-radius:20px}
-.av{background:var(--acs);color:var(--ac)}.wallet .big .n{font-size:48px;color:var(--ink)}
-.hero{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;box-shadow:0 12px 28px rgba(79,91,213,.25)}:root[data-theme=dark] .hero{border:0;color:#0D0F16}
-.hero h2{font-size:18px}.steps3 div{background:rgba(255,255,255,.18);color:inherit;border-radius:12px}:root[data-theme=dark] .steps3 div{background:rgba(0,0,0,.12)}
-button.tpl{padding:14px}button.tpl .tic{background:var(--acs);color:var(--ac);border-radius:12px}
-.sp{background:var(--sf);border:0;border-radius:28px 28px 0 0}.sp::before{content:"";display:block;width:38px;height:4px;border-radius:2px;background:var(--cell);margin:-4px auto 14px}
-.seg button.on{border-color:var(--ac);background:var(--acs)}.mpick button.on{border-color:var(--ac)}
-.tile .mk{background:rgba(0,0,0,.6);color:#fff}
-/* نوار پایین شناور */
-#toast{bottom:calc(96px + env(safe-area-inset-bottom));border-radius:99px;padding:10px 18px}
-.dock{padding:0 14px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
-.dpanel{pointer-events:auto;max-width:460px;margin:0 auto;padding:6px;gap:2px;border:0;border-radius:26px;background:color-mix(in srgb,var(--sf) 86%,transparent);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);box-shadow:0 10px 34px rgba(22,26,60,.18),0 0 0 1px var(--line)}
-.dn{border-radius:20px;padding:8px 4px 6px}.dn.on{color:var(--ac);background:var(--acs)}.dn.on::before{display:none}
-/* تب‌ها: سگمنت مرتب */
-.xtabs.ptabs{background:var(--sf2);padding:4px;border-radius:16px;gap:4px;border:0;margin:4px 0 14px}
-.ptabs .xb{flex:1;justify-content:center;padding:9px 0;border:0;border-bottom:0;margin:0;border-radius:12px;background:transparent;color:var(--mut);font-weight:600}
-.ptabs .xb.on{background:var(--sf);color:var(--ink);box-shadow:0 1px 4px rgba(22,26,60,.12);font-weight:800}
-.xtabs:not(.ptabs) .xb{border:0;border-radius:99px;background:var(--sf);box-shadow:var(--sh);color:var(--ink)}
-.xtabs:not(.ptabs) .xb.on{background:var(--ac);color:var(--acx);box-shadow:none}
-.xhd h2 svg{color:var(--ac)}
-.xc.hot{box-shadow:0 0 0 1.5px var(--ac) inset}.xav{border-radius:50%;background:hsl(var(--h,230) 55% 52%)}
-.xbd,.xbd.n,.xbd.m{background:var(--acs);color:var(--ac)}.xbd.n{color:var(--ok)}.xbd.m{color:var(--mut)}
-.xc.feat{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border:0}:root[data-theme=dark] .xc.feat{color:#0D0F16}
-.xc.feat .xd,.xc.feat .xs,.xc.feat .xn .un{color:inherit;opacity:.85}.xc.feat .xbd{background:#fff;color:var(--ac)}
-.xlike.on{color:var(--bad);background:rgba(229,72,77,.1);border:0}
-.xlinks .xb{border:0;background:var(--sf2)}
 </style>
 </head>
 <body>
@@ -1220,11 +1170,11 @@ const confirmQ = (q, go) => tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm
 /* ───── قالب‌ها و آموزش صفحه‌ی اصلی ───── */
 function tplBlock(){
   const full = S.bots.length >= (S.cfg.max_bots || 10);
-  return `${S.bots.length ? "" : `<div class="card hero"><h2>شروع سریع</h2>
-      <div class="steps3"><div>${N(1)}توضیح بده</div><div>${N(2)}AI می‌سازه</div><div>${N(3)}فعالش کن</div></div></div>`}
-    ${(S.templates || []).length && !full ? `<div class="sech"><span>قالب‌ها</span><span class="muted">رایگان</span></div>
+  return `${S.bots.length ? "" : `<div class="card hero"><h2>سه قدم تا ربات خودت</h2><p class="muted">اینجا لازم نیست کد بنویسی.</p>
+      <div class="steps3"><div>${N(1)}توضیح بده چی می‌خوای</div><div>${N(2)}هوش مصنوعی می‌سازه، خودت ویرایش کن</div><div>${N(3)}توکن BotFather رو بزن و فعالش کن</div></div></div>`}
+    ${(S.templates || []).length && !full ? `<div class="sech"><span>قالب آماده (رایگان)</span><span class="muted">بدون مصرف توکن</span></div>
       <div class="tplg">${S.templates.map(t => `<button class="tpl" data-a="tpl" data-id="${t.id}"><span class="tic">${IC[t.icon] || IC.bot}</span><b>${esc(t.title)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
-      <button class="ghost ibtn" data-a="import" style="margin-bottom:12px">${IC.upload}ورود از JSON</button>` : ""}`;
+      <button class="ghost ibtn" data-a="import" style="margin-bottom:12px">${IC.upload}ورود ربات از JSON</button>` : ""}`;
 }
 
 /* ───── آمار: نمودار هفتگی و پربازدیدترین بخش‌ها ───── */
@@ -1341,11 +1291,11 @@ function xPrev(b, desc){
 function xoHTML(b){
   const x = b.explore || {}, mx = S.cfg.xp_desc || 90;
   return `<div class="card xo" id="xo"><h2>اکسپلور${x.on ? ` <span class="tag" style="color:var(--ok)">فعال</span>` : ""}</h2>
-    <p class="muted" style="margin-bottom:12px">${x.hidden ? "از اکسپلور برداشته شده." : "ربات رو توی ویترین عمومی بذار."}</p>
+    <p class="muted" style="margin-bottom:12px">${x.hidden ? "این ربات توسط ادمین از اکسپلور برداشته شده." : "ربات رو با یه کارت ظریف توی ویترین عمومی بذار تا بقیه ببیننش، لایک کنن و استارتش بزنن."}</p>
     ${x.hidden ? "" : `<div class="xprev">${xPrev(b, x.desc || xDefault(b) || "—")}</div>
-      <textarea class="fa" id="xdesc" maxlength="${mx}" placeholder="توضیح کوتاه">${esc(x.desc || "")}</textarea>
+      <textarea class="fa" id="xdesc" maxlength="${mx}" placeholder="توضیح کوتاه برای کارت (لینک و آیدی حذف می‌شن)">${esc(x.desc || "")}</textarea>
       <div class="xcnt"><span id="xcn">${fa((x.desc || "").length)}/${fa(mx)}</span></div>
-      <button id="xsave">${x.on ? "ذخیره" : "اضافه به اکسپلور"}</button>
+      <button id="xsave">${x.on ? "ذخیره و به‌روزرسانی عکس" : "اضافه به اکسپلور"}</button>
       ${x.on ? `<button class="ghost" id="xoff" style="margin-top:8px">برداشتن از اکسپلور</button>` : ""}`}</div>`;
 }
 function bindXo(){
