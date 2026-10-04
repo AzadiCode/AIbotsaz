@@ -53,6 +53,37 @@ svg{display:block}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px}
 .brand{gap:8px;font-size:17px}
 .brand svg{width:40px;height:40px;color:var(--ac);overflow:visible}
+
+/* ── Azadi wordmark: جمع‌شدن از دو طرف تا «Ai» و بازشدن ── */
+.wm{direction:ltr;unicode-bidi:isolate;display:inline-flex;align-items:center;font-family:"Oxanium",monospace;font-weight:800;font-size:21px;line-height:1;letter-spacing:.07em;user-select:none;white-space:nowrap;position:relative;padding:2px 0}
+.wm .wl{display:inline-flex;justify-content:center;white-space:nowrap;color:var(--ink)}
+.wm .wl.k{color:var(--ac)}
+.wm::after{content:"";position:absolute;left:0;right:0;bottom:-3px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);opacity:.0;transform:scaleX(.2)}
+.wm.on .wl.k{animation:wmGlow 10s ease-in-out infinite}
+.wm.on .z,.wm.on .d{animation:wmSide 10s infinite}
+.wm.on .m{animation:wmMid 10s infinite}
+.wm.on::after{animation:wmBar 10s ease-in-out infinite}
+@keyframes wmSide{
+  0%,36%{width:var(--w);opacity:1;filter:blur(0);transform:scaleX(1);animation-timing-function:cubic-bezier(.65,0,.25,1)}
+  47%,84%{width:0;opacity:0;filter:blur(5px);transform:scaleX(.2);animation-timing-function:cubic-bezier(.65,0,.25,1)}
+  95%,100%{width:var(--w);opacity:1;filter:blur(0);transform:scaleX(1)}
+}
+@keyframes wmMid{
+  0%,40%{width:var(--w);opacity:1;filter:blur(0);transform:scaleX(1);animation-timing-function:cubic-bezier(.65,0,.25,1)}
+  50%,80%{width:0;opacity:0;filter:blur(5px);transform:scaleX(.2);animation-timing-function:cubic-bezier(.65,0,.25,1)}
+  91%,100%{width:var(--w);opacity:1;filter:blur(0);transform:scaleX(1)}
+}
+@keyframes wmGlow{
+  0%,44%{text-shadow:0 0 0 transparent}
+  54%,76%{text-shadow:0 0 10px color-mix(in srgb,var(--ac) 70%,transparent),0 0 22px color-mix(in srgb,var(--ac) 35%,transparent)}
+  90%,100%{text-shadow:0 0 0 transparent}
+}
+@keyframes wmBar{
+  0%,44%{opacity:0;transform:scaleX(.2)}
+  54%,76%{opacity:.9;transform:scaleX(1)}
+  90%,100%{opacity:0;transform:scaleX(.2)}
+}
+@media (prefers-reduced-motion:reduce){.wm.on .wl,.wm.on::after{animation:none!important}}
 .eyes{animation:look 8s ease-in-out infinite}
 .eye{transform-box:fill-box;transform-origin:center;animation:blink 8s infinite}
 .ant{transform-box:fill-box;transform-origin:50% 100%;animation:ant 8s ease-in-out infinite}
@@ -644,9 +675,24 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("keydown", e => { if(e.key === "Escape") setDock(false); });
 
+const WORDMARK = `<span class="wm" dir="ltr" aria-label="Azadi"><span class="wl k a1">A</span><span class="wl z">z</span><span class="wl m">a</span><span class="wl d">d</span><span class="wl k i1">i</span></span>`;
+function initWordmark(){
+  const wm = document.querySelector(".wm"); if(!wm) return;
+  const go = () => {
+    wm.querySelectorAll(".wl").forEach(el => { el.style.setProperty("--w", el.getBoundingClientRect().width + "px"); });
+    wm.classList.add("on");
+  };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(go));
+}
+function tokPillHTML(){
+  return `<button class="tokpill${S.wallet.can_claim ? " gift" : ""}" data-go="account" aria-label="${S.wallet.can_claim ? "موجودی توکن، جایزه‌ی امروز آماده است" : "موجودی توکن"}">${IC.coin}${N(S.wallet.tokens)}</button>`;
+}
 function renderTop(){
-  $("#top").innerHTML = `<div class="top-in"><div class="brand">${LOGO}<span>ابر رباتساز</span></div>
-    <button class="tokpill${S.wallet.can_claim ? " gift" : ""}" data-go="account" aria-label="${S.wallet.can_claim ? "موجودی توکن، جایزه‌ی امروز آماده است" : "موجودی توکن"}">${IC.coin}${N(S.wallet.tokens)}</button></div>`;
+  const top = $("#top");
+  const pill = top.querySelector(".tokpill");
+  if(pill){ pill.outerHTML = tokPillHTML(); return; } // لوگو و انیمیشن دست نمی‌خورن تا ری‌استارت نشن
+  top.innerHTML = `<div class="top-in"><div class="brand">${LOGO}${WORDMARK}</div>${tokPillHTML()}</div>`;
+  initWordmark();
 }
 function render(){
   renderTop();
