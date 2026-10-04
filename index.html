@@ -392,6 +392,11 @@ textarea:focus,input:focus,select:focus{border-color:var(--ac);background:var(--
 .cells i.on,.bl div.cur i{background:var(--ac)}
 .dropbtn{border-radius:var(--r);border-color:var(--ac)}
 #toast{border-radius:99px;bottom:calc(96px + env(safe-area-inset-bottom))}
+
+.tp{display:none}.tp.on{display:block}
+.ptabs{margin:2px 0 14px;background:var(--sf);padding:4px;border-radius:99px;gap:2px}
+.ptabs .xb{flex:1;justify-content:center;background:transparent!important;padding:9px 0;color:var(--mut)}
+.ptabs .xb.on{background:var(--ac)!important;color:var(--acx)!important;font-weight:600}
 </style>
 </head>
 <body>
@@ -404,7 +409,7 @@ textarea:focus,input:focus,select:focus{border-color:var(--ac);background:var(--
   <button class="dn" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/></svg><span>ربات‌ها</span></button>
   <button class="dn" data-go="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg><span>اکسپلور</span></button>
   <button class="dn" data-go="media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.7"/><path d="M4 17l4.5-4.5 3.5 3.5 3-3 5 5"/></svg><span>رسانه</span></button>
-  <button class="dn" data-go="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17"/><circle cx="16.5" cy="14.5" r="1" fill="currentColor"/></svg><span>حساب و توکن</span></button>
+  <button class="dn" data-go="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17"/><circle cx="16.5" cy="14.5" r="1" fill="currentColor"/></svg><span>حساب</span></button>
 </div></nav>
 <script>
 const tg = window.Telegram?.WebApp;
@@ -504,7 +509,7 @@ async function load(){
     Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin });
   }catch(e){
     $("#dock").hidden = true;
-    $("#app").innerHTML = `<div class="card empty"><p>این برنامه فقط داخل تلگرام کار می‌کنه.<br><span class="muted">از ربات مادر دکمه‌ی «ساخت ربات» رو بزن.</span></p></div>`;
+    $("#app").innerHTML = `<div class="card empty"><p>فقط داخل تلگرام باز می‌شه</p></div>`;
     return;
   }
   render();
@@ -584,8 +589,8 @@ const EXAMPLES = [
 ];
 function dailyCard(){
   const w = S.wallet;
-  if(w.can_claim) return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز آماده‌ست</b>${N("+" + w.next_reward)} توکن${w.streak ? ` — ${N(w.streak)} روز پشت‌سرهم` : ""}</div><button data-a="daily">دریافت</button></div>`;
-  return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز گرفته شد</b><span class="muted">${w.streak ? `${N(w.streak)} روز پشت‌سرهم. فردا ${N("+" + w.next_reward)} توکن` : "فردا دوباره بیا"}</span></div></div>`;
+  if(w.can_claim) return `<div class="card daily"><div class="dt"><b>جایزه‌ی امروز</b>${N("+" + w.next_reward)} توکن${w.streak ? ` — ${N(w.streak)} روز پشت‌سرهم` : ""}</div><button data-a="daily">دریافت</button></div>`;
+  return `<div class="card daily"><div class="dt"><b>جایزه گرفته شد</b><span class="muted">${w.streak ? `${N(w.streak)} روز پشت‌سرهم. فردا ${N("+" + w.next_reward)} توکن` : "فردا بیا"}</span></div></div>`;
 }
 function renderHome(){
   const w = S.wallet, c = S.cfg, full = S.bots.length >= (c.max_bots || 10), cost = costOf(false) || 6;
@@ -594,17 +599,17 @@ function renderHome(){
       <span class="dot ${b.active ? "on" : ""}"></span>
       <div><b>${esc(b.name)}</b><span class="muted ltr">${b.active ? "@" + esc(b.username) : ""}</span>${b.active ? "" : `<span class="muted">هنوز فعال نشده</span>`}</div>${IC.go.replace("<svg", '<svg class="go"')}</div>`).join("");
   $("#app").innerHTML = `
-    ${full ? `<div class="card"><h2>به سقف ${N(c.max_bots)} ربات رسیدی</h2><p class="muted">برای ساخت ربات جدید یکی از ربات‌ها رو حذف کن، یا همون‌ها رو با هوش مصنوعی ارتقا بده.</p></div>` : `
+    ${full ? `<div class="card"><h2>سقف ${N(c.max_bots)} ربات پر شد</h2><p class="muted">یکی حذف کن یا ربات‌هات رو ارتقا بده.</p></div>` : `
     <div class="console">
-      <div class="ch"><b>چه رباتی می‌خوای؟</b><div class="cells" title="تعداد رباتی که با موجودی فعلی می‌تونی بسازی">${cellsHTML(builds)}</div></div>
-      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="هر رباتی که لازم داری رو توضیح بده. مثلاً: ربات رزرو نوبت برای آرایشگاه، با لیست خدمات و قیمت، فرم رزرو و دستیار هوشمند."></textarea>
-      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px;margin-left:4px"')}بهینه‌سازی با AI</button></div>
-      <div class="cta"><span class="cost">هزینه ${costTxt(false)}</span><button id="gen" data-a="gen">بساز</button></div>
+      <div class="ch"><b>ربات جدید</b><div class="cells" title="تعداد رباتی که با موجودی فعلی می‌تونی بسازی">${cellsHTML(builds)}</div></div>
+      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="رباتت رو توضیح بده…"></textarea>
+      <div class="chips">${EXAMPLES.map((e, i) => `<button class="ch2" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="ch2" data-a="enhance" style="background:var(--toks);color:var(--tok)">${IC.spark.replace("<svg", '<svg style="width:13px;height:13px;vertical-align:-2px;margin-left:4px"')}بهتر کن</button></div>
+      <div class="cta"><span class="cost">${costTxt(false)}</span><button id="gen" data-a="gen">بساز</button></div>
     </div>`}
     <div id="live"></div>
     ${dailyCard()}
     <div class="sech"><span>ربات‌های من</span><span class="muted">${N(S.bots.length)} از ${N(c.max_bots || 10)}</span></div>
-    ${list || `<div class="card empty"><p>هنوز رباتی نساختی.<br><span class="muted">بالا توضیح بده، ربات آماده می‌شه.</span></p></div>`}
+    ${list || `<div class="card empty"><p>هنوز رباتی نداری</p></div>`}
     ${tplBlock()}`;
 }
 
@@ -670,29 +675,30 @@ function renderBot(){
   const b = S.cur, c = S.cfg;
   const prompt = `
     <div class="console">
-      <div class="ch"><b>چی رو تغییر بدم؟</b><span class="cost muted">ارتقا ${costTxt(true)}</span></div>
-      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="مثلاً: یه بخش سوالات متداول اضافه کن. یا: عکس لوگو رو بذار صفحه‌ی شروع. یا: یه بخش دستیار هوشمند اضافه کن."></textarea>
+      <div class="ch"><b>ویرایش با AI</b><span class="cost muted">${costTxt(true)}</span></div>
+      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" placeholder="چی تغییر کنه؟"></textarea>
       <div class="cta"><button id="gen" data-a="gen">ارتقا بده</button></div>
     </div>
     <div id="live"></div>`;
-  let body = `<div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
+  let body = `<div class="tp on" data-tg="bot" data-p="a"><div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
   if(S.ideas.length) body += `<div class="ideas">${S.ideas.map((t, i) => `<button class="ch2" data-a="idea" data-i="${i}">${esc(t)}</button>`).join("")}</div>`;
-  body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">پیش‌نمایش ربات</h2><button class="sm ghost" data-sa="bot">تنظیمات ربات</button></div>
-    <div class="pvhd"><span class="muted">هر بخش رو باز کن، بعد روی متن یا دکمه بزن تا ویرایشش کنی.</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
+  body += `<div class="hd" style="padding:2px 2px 8px"><h2 style="font-size:14px">ربات</h2><button class="sm ghost" data-sa="bot">تنظیمات</button></div>
+    <div class="pvhd"><span class="muted">برای ویرایش، بخش رو باز کن</span><button class="sm ghost" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>`;
   body += Object.keys(b.config.nodes).map((id, i) => nodeCard(b.config, id, i, S.fresh)).join("");
   body += `<button class="ghost" data-sa="addnode" style="margin-bottom:12px">+ بخش جدید</button>`;
   if(b.versions) body += `<button class="ghost" id="undo" data-a="undo" style="margin-bottom:12px">برگشت به نسخه‌ی قبلی</button>`;
-  body += botTools(b);
+  body += '</div><div class="tp" data-tg="bot" data-p="b">'; body += botTools(b); body += '</div><div class="tp" data-tg="bot" data-p="c">';
   body += b.active ? `
-    <div class="card"><div class="hd"><h2>فعاله: <span class="ltr">@${esc(b.username)}</span></h2></div>
+    <div class="card"><div class="hd"><h2>فعال: <span class="ltr">@${esc(b.username)}</span></h2></div>
       <div class="stats" id="stats"><div class="stat"><div class="k">کاربرها</div>${N("–")}</div><div class="stat"><div class="k">فعال در هفته</div>${N("–")}</div>
         <div class="stat"><div class="k">جدید در ۲۴ ساعت</div>${N("–")}</div><div class="stat"><div class="k">ربات رو بلاک کردن</div>${N("–")}</div></div>
       <div class="row"><button data-a="bc">پیام همگانی</button><button class="ghost" id="off" data-a="off">غیرفعال کردن</button></div>
-      <p class="muted" style="margin-top:8px">تغییرات بلافاصله روی ربات اعمال می‌شن. برای دریافت پیام کاربرها، یک بار ربات خودت رو استارت کن و به پیام‌هاشون با Reply جواب بده.</p></div>`
-    : `<div class="card"><h2>فعال‌سازی</h2><p class="muted" style="margin-bottom:10px">ربات رو از @BotFather بساز و توکنش رو اینجا بذار.</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act" data-a="act">فعال کن</button></div>`;
+      </div>`
+    : `<div class="card"><h2>انتشار</h2><p class="muted" style="margin-bottom:10px">توکن @BotFather رو بذار</p><input id="token" placeholder="123456:ABC..." autocomplete="off"><div style="height:10px"></div><button id="act" data-a="act">فعال کن</button></div>`;
   if(b.active) body += xoHTML(b);
+  body += "</div>";
   body += `<button class="danger" data-a="del">حذف ربات</button>`;
-  $("#app").innerHTML = `<button class="back" data-a="back">بازگشت</button><div class="ttl" style="font-size:17px;margin:0 2px 10px">${esc(b.name)}</div>${prompt}${body}`;
+  $("#app").innerHTML = `<button class="back" data-a="back">بازگشت</button><div class="ttl" style="font-size:17px;margin:0 2px 10px">${esc(b.name)}</div>${prompt}<div class="xtabs ptabs"><button class="xb on" data-a="tab" data-g="bot" data-v="a">بخش‌ها</button><button class="xb" data-a="tab" data-g="bot" data-v="b">ابزارها</button><button class="xb" data-a="tab" data-g="bot" data-v="c">انتشار</button></div>${body}`;
   syncAll();
   if(S.fresh && b.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior: "smooth", block: "nearest"}); }
   S.fresh = false;
@@ -723,14 +729,14 @@ typeText.id = 0;
 function renderMedia(){
   const c = S.cfg, pct = Math.min(100, Math.round(S.used / (c.media_quota_mb * 1048576) * 100));
   $("#app").innerHTML = `
-    <div class="card"><div class="hd"><h2>رسانه‌های من</h2><span class="muted">${N(S.media.length)} از ${N(c.max_media)} فایل</span></div>
+    <div class="card"><div class="hd"><h2>رسانه</h2><span class="muted">${N(S.media.length)} از ${N(c.max_media)} فایل</span></div>
       <div class="usage"><div class="meter2"><i style="width:${pct}%"></i></div><span class="n">${(S.used / 1048576).toFixed(1)} / ${c.media_quota_mb} MB</span></div>
-      <p class="muted" style="margin-top:8px">عکس، ویدیو، گیف، موسیقی، ویس و فایل (تا ${N(c.media_max_mb)} مگابایت) آپلود کن. بعد توی ویرایش هر بخش انتخابش کن، یا به هوش مصنوعی بگو کجا بذارتش.</p></div>
+      <p class="muted" style="margin-top:8px">حداکثر ${N(c.media_max_mb)} MB برای هر فایل</p></div>
     <button class="dropbtn" data-a="upload">${IC.upload}<span>آپلود فایل</span></button>
     <div id="uplist">${S.uploads.map(uploadRow).join("")}</div>
     ${S.media.length ? `<div class="mgrid">${S.media.map(m => `<button class="tile" data-a="mdet" data-id="${m.id}"><div class="mi">${miInner(m)}<span class="mk">${KIND_FA[m.kind]}</span></div>
       <div class="tn"><b>${esc(m.name)}</b><span>${sizeHTML(m.size)}</span></div></button>`).join("")}</div>`
-      : `<div class="card empty"><p>هنوز فایلی آپلود نکردی.</p></div>`}`;
+      : `<div class="card empty"><p>فایلی نیست</p></div>`}`;
 }
 const uploadRow = u => `<div class="upl" data-u="${u.id}">${esc(u.name)}<div class="pb"><i style="width:${Math.round(u.p * 100)}%"></i></div></div>`;
 async function handleFiles(files, pickKey){
@@ -759,41 +765,40 @@ function packRows(){
 function inviteCard(){
   const c = S.cfg, n = S.ref.count;
   return `<div class="card"><h2>دعوت دوستان</h2>
-    <p class="muted">هر دوستی که با لینک تو بیاد و اولین رباتش رو بسازه، ${N(c.ref_inviter)} توکن می‌گیری و خودش ${N(c.ref_invitee)} توکن هدیه می‌گیره.</p>
+    <p class="muted">هر دعوت موفق: ${N(c.ref_inviter)} توکن برای تو، ${N(c.ref_invitee)} برای دوستت</p>
     ${S.ref.link ? `<div class="reflink"><code>${esc(S.ref.link)}</code><button class="ghost" data-a="copyref">کپی</button></div><button data-a="shareref">ارسال لینک دعوت</button>`
-      : `<p class="muted" style="margin-top:8px">لینک دعوت هنوز آماده نیست. از ادمین بخواه MOTHER_USERNAME رو تنظیم کنه.</p>`}
+      : `<p class="muted" style="margin-top:8px">لینک دعوت آماده نیست</p>`}
     <div class="ms">${(c.milestones || []).map(([k, v]) => `<div class="${n >= k ? "hit" : ""}">${N(k)} دعوت<span class="n">+${v}</span></div>`).join("")}</div>
-    <p class="muted" style="margin-top:8px">تا الان ${N(n)} نفر با لینک تو اومدن و رباتشون رو ساختن${S.ref.earned ? `؛ ${N(S.ref.earned)} توکن درآمد داشتی` : ""}.</p></div>`;
+    <p class="muted" style="margin-top:8px">${N(n)} دعوت موفق${S.ref.earned ? ` • ${N(S.ref.earned)} توکن` : ""}</p></div>`;
 }
 function renderAccount(){
   const u = tg?.initDataUnsafe?.user || {}, w = S.wallet, c = S.cfg;
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
   const builds = Math.min(10, Math.floor(w.tokens / (costOf(false) || 6)));
   $("#app").innerHTML = `
-    <div class="card pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
+    <div class="xtabs ptabs"><button class="xb on" data-a="tab" data-g="acc" data-v="a">حساب</button><button class="xb" data-a="tab" data-g="acc" data-v="b">توکن</button><button class="xb" data-a="tab" data-g="acc" data-v="c">دعوت</button></div><div class="tp on" data-tg="acc" data-p="a"><div class="card pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
       <div><h2>${esc(name)}</h2>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}</div></div>
     <div class="card wallet"><div class="big">${N(w.tokens)}<span>توکن</span></div>
       <div class="cells" title="تعداد رباتی که با این موجودی می‌تونی بسازی">${cellsHTML(builds)}</div>
-      <span class="muted">موجودی برای حدود ${N(Math.floor(w.tokens / (costOf(false) || 6)))} ربات جدید کافیه</span>
+      <span class="muted">کافی برای ~${N(Math.floor(w.tokens / (costOf(false) || 6)))} ربات</span>
       <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div>` : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>پخش همگانی<span class="n">1/${c.bc_per}</span></div>`}</div></div>
-    ${dailyCard()}
-    <div class="card"><h2>خرید توکن</h2>${packRows() || '<p class="muted">فعلاً بسته‌ای تعریف نشده.</p>'}<p class="muted">پرداخت با ستاره‌ی تلگرام انجام می‌شه و توکن بلافاصله اضافه می‌شه.</p></div>
-    ${inviteCard()}
-    ${couponCard()}
+    </div><div class="tp" data-tg="acc" data-p="b">${dailyCard()}
+    <div class="card"><h2>خرید توکن</h2>${packRows() || '<p class="muted">بسته‌ای نیست</p>'}<p class="muted">پرداخت با ستاره‌ی تلگرام</p></div>
+    ${couponCard()}</div><div class="tp" data-tg="acc" data-p="c">${inviteCard()}</div><div class="tp on" data-tg="acc" data-p="a">
     <div class="stats"><div class="stat"><div class="k">ربات‌ها</div>${N(S.bots.length)}</div><div class="stat"><div class="k">ربات‌های فعال</div>${N(S.bots.filter(b => b.active).length)}</div>
       <div class="stat"><div class="k">توکن مصرف‌شده</div>${N(w.spent || 0)}</div><div class="stat"><div class="k">رسانه</div>${N(S.media.length)}</div></div>
     ${adminCard()}
-    <div class="card"><h2>آخرین تراکنش‌ها</h2><div id="ledger"><span class="muted">در حال بارگذاری…</span></div></div>`;
+    <div class="card"><h2>تراکنش‌ها</h2><div id="ledger"><span class="muted">…</span></div></div></div>`;
   api("/api/ledger").then(d => {
     const el = $("#ledger"); if(!el) return;
     el.innerHTML = d.items.length ? d.items.map(x => `<div class="led"><div>${why[x.why] || x.why}<small>${new Date(x.t).toLocaleDateString("fa-IR-u-nu-latn", {month: "long", day: "numeric"})}</small></div>
-      <span class="n ${x.n > 0 ? "pos" : "neg"}">${x.n > 0 ? "+" : ""}${x.n}</span></div>`).join("") : '<span class="muted">هنوز تراکنشی نداری.</span>';
+      <span class="n ${x.n > 0 ? "pos" : "neg"}">${x.n > 0 ? "+" : ""}${x.n}</span></div>`).join("") : '<span class="muted">خالی</span>';
   }).catch(() => {});
 }
 function buySheet(){
   const m = S.sheet.msg, w = S.wallet, c = S.cfg;
   return head("توکن بیشتر") + `<p class="muted" style="margin-bottom:10px">${digitsHTML(m || "")}</p>
-    ${w.can_claim ? `<div class="card daily" style="margin-bottom:10px"><div class="dt"><b>جایزه‌ی امروز آماده‌ست</b>${N("+" + w.next_reward)} توکن</div><button data-a="daily">دریافت</button></div>` : ""}
+    ${w.can_claim ? `<div class="card daily" style="margin-bottom:10px"><div class="dt"><b>جایزه‌ی امروز</b>${N("+" + w.next_reward)} توکن</div><button data-a="daily">دریافت</button></div>` : ""}
     ${packRows()}
     ${S.ref.link ? `<button class="ghost" data-a="shareref" style="margin-top:4px">دعوت دوستان: ${N("+" + c.ref_inviter)} توکن برای هر نفر</button>` : ""}`;
 }
@@ -825,7 +830,7 @@ function mediaSheet(){
   const m = mediaById(S.sheet.id);
   return head("رسانه") + ((m.kind === "photo" || m.kind === "animation") ? `<img class="prev" src="${API_BASE + esc(m.url)}" alt="">` : `<div class="prevbox">${IC[m.kind]}</div>`) + `
     <span class="muted">${KIND_FA[m.kind]} — ${sizeHTML(m.size)}</span>
-    <span class="lbl">اسم فایل (هوش مصنوعی از روی اسم می‌فهمه کجا بذارتش)</span><input class="fa" id="m-name" value="${esc(D.name)}" maxlength="80">
+    <span class="lbl">نام فایل</span><input class="fa" id="m-name" value="${esc(D.name)}" maxlength="80">
     <div class="bar"><button data-sh="save">ذخیره</button><button class="ghost danger-b" data-sh="del">حذف</button></div>`;
 }
 const readMedia = () => { D.name = $("#m-name")?.value ?? D.name; };
@@ -870,6 +875,7 @@ function goTo(where){
   scrollTo({top: 0, behavior: "smooth"}); haptic();
 }
 const A = {
+  tab: el => { const g = el.dataset.g, v = el.dataset.v; document.querySelectorAll(`[data-tg="${g}"]`).forEach(x => x.classList.toggle("on", x.dataset.p === v)); el.parentElement.querySelectorAll(".xb").forEach(b => b.classList.toggle("on", b === el)); haptic(); },
   gen: () => submitPrompt(),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
   idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
