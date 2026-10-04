@@ -73,6 +73,8 @@ GEN_COST          = _int("GEN_COST", 12)            # ساخت ربات جدید
 EDIT_COST         = _int("EDIT_COST", 6)            # ارتقای ربات (حالت fixed)
 AI_MSGS_PER_TOKEN = max(1, _int("AI_MSGS_PER_TOKEN", 3))        # حالت fixed: هر چند پیام هوشمند = ۱ توکن
 ENHANCE_COST      = _int("ENHANCE_COST", 1)         # بهینه‌سازی توضیحِ ربات با هوش مصنوعی
+TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.5)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق = ۱، گفتگوی هوشمند = ۲)
+TEMPLATE_MIN_COST = _int("TEMPLATE_MIN_COST", 1)         # حداقل هزینه‌ی قالب آماده (۰ = رایگان)
 BROADCAST_PER_TOKEN = max(1, _int("BROADCAST_PER_TOKEN", 50))   # پخش همگانی: هر چند گیرنده = ۱ توکن
 BROADCAST_MAX     = _int("BROADCAST_MAX", 5000)
 START_TOKENS      = _int("START_TOKENS", _int("WELCOME_TOKENS", 100))   # هدیه‌ی ثبت‌نام
@@ -1293,7 +1295,7 @@ def tg_media(token, bot_id, chat_id, mid, caption="", markup=None):
     return True
 
 
-# ───────────────────────── قالب‌های آماده (رایگان، بدون مصرف توکن) ─────────────────────────
+# ───────────────────────── قالب‌های آماده (هزینه‌ی کم، متناسب با اندازه‌ی قالب) ─────────────────────────
 def _b(text, goto=None, **kw):
     d = {"text": text}
     if goto:
@@ -1439,6 +1441,22 @@ def media_used(uid):
     return sum(int(m.get("size", 0)) for m in db.media.find({"owner": uid}, {"size": 1}))
 
 
+def template_cost(t):
+    """هزینه‌ی قالب آماده: بر اساس اندازه‌ی کار (تعداد بخش‌ها + فرم، منطق و هوش مصنوعی)"""
+    nodes = t["config"]["nodes"]
+    work = len(nodes)
+    for n in nodes.values():
+        if n.get("ai"):
+            work += 2
+        if n.get("fields"):
+            work += 1
+        if n.get("do") or n.get("route") or n.get("alt"):
+            work += 1
+    if TEMPLATE_UNIT_COST <= 0 and TEMPLATE_MIN_COST <= 0:
+        return 0
+    return max(TEMPLATE_MIN_COST, math.ceil(work * TEMPLATE_UNIT_COST))
+
+
 def client_cfg():
     return {"billing": BILLING, "gen": GEN_COST, "edit": EDIT_COST, "typical": typical_cost(), "min": TOKEN_MIN_COST,
             "ai_per": AI_MSGS_PER_TOKEN, "bc_per": BROADCAST_PER_TOKEN, "enhance": ENHANCE_COST,
@@ -1489,7 +1507,7 @@ def api_me(uid):
                    used=sum(i["size"] for i in items), admin=uid in ADMIN_IDS,
                    ref={"link": mother_link(uid), "count": int(d.get("refs", 0)), "earned": int(d.get("ref_earned", 0))},
                    joined=aware(d.get("created") or now()).isoformat(),
-                   templates=[{"id": k, "icon": t["icon"], "title": t["title"], "desc": t["desc"]} for k, t in TEMPLATES.items()])
+                   templates=[{"id": k, "icon": t["icon"], "title": t["title"], "desc": t["desc"], "cost": template_cost(t)} for k, t in TEMPLATES.items()])
 
 
 @app.post("/api/ping")
@@ -1674,10 +1692,19 @@ def api_template_create(uid, tid):
     ensure_user(uid)
     if db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
         return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
-    bot = new_bot_doc(uid, sanitize(t["config"]), t["note"])
+    cost = template_cost(t)
+    cfg = sanitize(t["config"])
+    if cost and not spend(uid, cost, "template"):
+        return jsonify(error=f"توکن کافی نداری. این قالب {cost} توکن می‌خواهد.", need=cost, wallet=wallet_info(uid)), 402
+    try:
+        bot = new_bot_doc(uid, cfg, t["note"])
+    except Exception:
+        if cost:
+            refund(uid, cost)
+        raise
     if REF_ON == "create":
         settle_referral(uid)
-    return jsonify(bot=public(bot), wallet=wallet_info(uid))
+    return jsonify(bot=public(bot), wallet=wallet_info(uid), cost=cost)
 
 
 @app.post("/api/bots/import")

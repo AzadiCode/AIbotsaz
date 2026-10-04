@@ -35,6 +35,7 @@ body{font-family:"Vazirmatn",Tahoma,system-ui,sans-serif;font-size:15px;line-hei
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit}
 button:disabled{opacity:.5;cursor:default}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:none}
 h1{font-size:24px;font-weight:800;line-height:1.5}
 h2{font-size:15px;font-weight:700;line-height:1.6}
 a{color:var(--ac)}
@@ -50,9 +51,17 @@ svg{display:block}
 .top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .top-in{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px}
-.brand svg{width:26px;height:26px;color:var(--ac)}
-.tokpill{display:flex;align-items:center;gap:7px;padding:4px 12px 4px 10px;border-radius:99px;background:var(--toks);color:var(--tok);transition:transform .15s}
+.brand{gap:8px;font-size:17px}
+.brand svg{width:40px;height:40px;color:var(--ac);overflow:visible}
+.eyes{animation:look 8s ease-in-out infinite}
+.eye{transform-box:fill-box;transform-origin:center;animation:blink 8s infinite}
+.ant{transform-box:fill-box;transform-origin:50% 100%;animation:ant 8s ease-in-out infinite}
+@keyframes look{0%,10%{transform:translate(0,0)}15%,27%{transform:translate(-1.5px,0)}33%,45%{transform:translate(1.5px,0)}51%,63%{transform:translate(0,1px)}70%,100%{transform:translate(0,0)}}
+@keyframes blink{0%,38%,42%,86%,90%,100%{transform:scaleY(1)}40%,88%{transform:scaleY(.08)}}
+@keyframes ant{0%,60%,100%{transform:rotate(0)}66%{transform:rotate(14deg)}72%{transform:rotate(-10deg)}78%{transform:rotate(0)}}
+.tokpill{position:relative;display:flex;align-items:center;gap:7px;padding:4px 12px 4px 10px;border-radius:99px;background:var(--toks);color:var(--tok);transition:transform .15s}
 .tokpill svg{width:17px;height:17px}
+.tokpill.gift::after{content:"";position:absolute;top:-1px;left:-1px;width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
 .tokpill .n{font-size:15px}
 .tokpill:active{transform:scale(.96)}
 .tokpill.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
@@ -100,26 +109,28 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .fgap{height:10px}
 
 /* ── کنسول ساخت (نقطه‌ی اصلی صفحه) ── */
-.hero-t{margin:12px 2px 18px}
-.hero-t h1{font-size:30px;line-height:1.4}
-.hero-t p{color:var(--mut);margin-top:4px}
-.console{background:var(--sf);border:1px solid var(--line);border-radius:22px;overflow:hidden;transition:border-color .15s,box-shadow .2s}
-.console:focus-within{border-color:var(--ac);box-shadow:0 0 0 4px var(--acs)}
-.console textarea{display:block;border:0;border-radius:0;background:transparent;box-shadow:none;min-height:136px;padding:18px 18px 8px;font-size:16px;line-height:1.9}
-.console.slim textarea{min-height:78px;font-size:15px;padding:14px 16px 4px}
-.chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:99px;font-size:12.5px;font-weight:500;color:var(--mut);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,box-shadow .15s}
+.hero-t{margin:6px 2px 14px}
+.hero-t h1{font-size:18px;font-weight:700;line-height:1.5}
+.hero-t p{color:var(--mut);font-size:12.5px;line-height:1.7;margin-top:1px}
+.console{background:var(--sf);border:1px solid var(--line);border-radius:18px;overflow:hidden;transition:border-color .15s,box-shadow .2s}
+.console:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
+.console textarea{display:block;border:0;border-radius:0;background:transparent;box-shadow:none;min-height:96px;padding:14px 16px 4px;font-size:15px;line-height:1.85}
+.console textarea:focus,.console textarea:focus-visible{outline:none;border:0;box-shadow:none}
+.console.slim textarea{min-height:64px;font-size:14.5px;padding:12px 16px 2px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;padding:0 12px 10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 10px;border-radius:99px;font-size:11.5px;font-weight:500;color:var(--mut);box-shadow:inset 0 0 0 1px var(--line);transition:color .15s,box-shadow .15s}
 .chip:active{color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
-.chip svg{width:13px;height:13px}
+.chip svg{width:12px;height:12px}
 .chip.ai{color:var(--tok);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tok) 45%,transparent)}
-.cfoot{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px dashed var(--line);background:var(--sf2)}
+.cfoot{display:flex;align-items:center;gap:12px;padding:8px 10px 8px 12px;border-top:1px dashed var(--line);background:var(--sf2)}
 .gauge{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .cells{display:flex;gap:3px}
-.cells i{width:8px;height:14px;border-radius:2px;background:var(--cell);display:block}
+.cells i{width:6px;height:11px;border-radius:2px;background:var(--cell);display:block}
 .cells i.on{background:var(--ac)}
-.cost{font-size:12.5px;color:var(--mut);white-space:nowrap}
+.cost{font-size:12px;color:var(--mut);white-space:nowrap}
 .cost .n{color:var(--tok);font-size:14px}
-.cfoot .b{width:auto;min-width:128px}
+.cfoot .b{width:auto;min-width:112px;min-height:40px;font-size:14px;border-radius:12px;padding:0 16px}
+.cfoot .b svg{width:16px;height:16px}
 
 /* ── انیمیشن ساخت ── */
 .build{background:var(--sf);border:1px solid var(--ac);border-radius:18px;padding:14px 16px;margin-top:12px}
@@ -435,6 +446,8 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 
 /* ── تکمیلی ── */
 .mt{margin-top:12px}
+.ctag{flex:none;font-size:11.5px;line-height:1.8;padding:0 9px;border-radius:99px;background:var(--toks);color:var(--tok);white-space:nowrap}
+.ctag .n{font-size:12.5px}
 .mt2{margin-top:22px}
 .panel+.panel{margin-top:12px}
 .gi .gt span.ltr,.bh2 .muted.ltr,.pf .muted.ltr{text-align:right}
@@ -585,11 +598,11 @@ const IC = {
   key: svg('<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H20M17 12v3M14.5 12v2"/>'),
   stats: svg('<path d="M4 19h16M7 16v-5M12 16V6M17 16v-8"/>'),
 };
-const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><path d="M9 14h.01M15 14h.01" stroke-width="3"/>', 1.9);
+const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g>', 1.7);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"هدیه‌ی ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"پیام همگانی", daily:"جایزه‌ی روزانه",
   referral:"دعوت موفق", invited:"هدیه‌ی دعوت", milestone:"پاداش ویژه‌ی دعوت", buy:"خرید توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد هدیه"};
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد هدیه", template:"قالب آماده"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -633,7 +646,7 @@ $("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="$
 
 function renderTop(){
   $("#top").innerHTML = `<div class="top-in"><div class="brand">${LOGO}<span>ابر رباتساز</span></div>
-    <button class="tokpill" data-go="account" aria-label="موجودی توکن">${IC.coin}${N(S.wallet.tokens)}</button></div>`;
+    <button class="tokpill${S.wallet.can_claim ? " gift" : ""}" data-go="account" aria-label="${S.wallet.can_claim ? "موجودی توکن، جایزه‌ی امروز آماده است" : "موجودی توکن"}">${IC.coin}${N(S.wallet.tokens)}</button></div>`;
 }
 function render(){
   renderTop();
@@ -724,8 +737,6 @@ function bumpTokens(){ const p = $(".tokpill"); if(p){ p.classList.remove("bump"
 const EXAMPLES = [
   ["فروشگاه", "یه ربات فروشگاه لوازم جانبی موبایل با منوی دسته‌بندی، صفحه‌ی هر محصول و فرم سفارش"],
   ["دستیار هوشمند", "یه ربات با دستیار هوشمند که به سوال‌های مشتری‌های فروشگاه من جواب بده و دکمه‌ی پشتیبانی هم داشته باشه"],
-  ["کوییز", "یه ربات کوییز چندمرحله‌ای با امتیازدهی و نتیجه‌ی نهایی برای هر کاربر"],
-  ["دعوت و جایزه", "یه ربات که کاربرها دوستاشون رو دعوت کنن و برای هر دعوت سکه بگیرن"],
 ];
 const goIc = IC.go.replace("<svg", '<svg class="go"');
 
@@ -739,8 +750,8 @@ function tplBlock(){
   let h = "";
   if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}ویرایش کن</div><div>${N(3)}فعالش کن</div></div>`;
   if((S.templates || []).length && !full){
-    h += `<div class="sec"><h2>قالب آماده</h2><span class="muted">رایگان، بدون مصرف توکن</span></div>
-      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${goIc}</button>`).join("")}</div>
+    h += `<div class="sec"><h2>قالب آماده</h2><span class="muted">ارزان‌تر از ساخت با هوش مصنوعی</span></div>
+      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${t.cost ? `<span class="ctag">${N(t.cost)} توکن</span>` : ""}${goIc}</button>`).join("")}</div>
       <button class="b t mt" data-a="import">${IC.upload}ورود از JSON</button>`;
   }
   return h;
@@ -748,7 +759,7 @@ function tplBlock(){
 function renderCreate(){
   const c = S.cfg, full = S.bots.length >= (c.max_bots || 10);
   $("#app").innerHTML = `
-    <section class="hero-t"><h1>چه رباتی بسازیم؟</h1><p>توضیح بده، هوش مصنوعی می‌سازدش.</p></section>
+    <section class="hero-t"><h1>ایده‌ات را بنویس</h1><p>چند جمله کافی است؛ ساختنش با ما.</p></section>
     ${full ? `<div class="panel"><h2>به سقف ${N(c.max_bots)} ربات رسیدی</h2><p class="muted">یکی را حذف کن یا با هوش مصنوعی ارتقا بده.</p><div class="fgap"></div><button class="b o" data-go="bots">ربات‌های من</button></div>` : `
     <div class="console">
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="توضیح ربات" placeholder="${esc(EXAMPLES[0][1])}"></textarea>
@@ -759,7 +770,6 @@ function renderCreate(){
       </div>
     </div>`}
     <div id="live"></div>
-    ${dailyCard()}
     ${tplBlock()}`;
   startTyper();
 }
@@ -1704,7 +1714,16 @@ Object.assign(A, {
   enhance: el => { const t = $("#prompt"), p = t?.value.trim() || ""; if(p.length < 5) return toast("اول یک توضیح کوتاه بنویس");
     if(S.wallet.tokens < (S.cfg.enhance || 1)) return openBuy("برای کامل‌تر کردن توضیح، توکن کافی نداری.");
     busy(el, async () => { const d = await api("/api/enhance", "POST", {prompt: p}); t.value = d.prompt; S.wallet = d.wallet; renderTop(); bumpTokens(); toast("توضیح کامل‌تر شد؛ بخوان و اگر خوب بود بساز"); haptic("ok"); }); },
-  tpl: el => busy(el, async () => { const d = await api(`/api/templates/${el.dataset.id}/create`, "POST"); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "nodes"; S.fresh = true; S.open = new Set(); S.ideas = []; S.stats = null; render(); celebrate(); toast("قالب آماده شد"); scrollTo(0, 0); }),
+  tpl: el => { const t = S.templates.find(x => x.id === el.dataset.id), c = t?.cost || 0;
+    if(S.wallet.tokens < c) return openBuy(`این قالب ${c} توکن می‌خواهد و موجودی تو ${S.wallet.tokens} توکن است.`);
+    busy(el, async () => {
+      try{
+        const d = await api(`/api/templates/${el.dataset.id}/create`, "POST");
+        if(d.wallet) S.wallet = d.wallet;
+        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "nodes"; S.fresh = true; S.open = new Set(); S.ideas = []; S.stats = null;
+        render(); bumpTokens(); celebrate(); toast("قالب آماده شد" + (d.cost ? `، ${d.cost} توکن` : "")); scrollTo(0, 0);
+      }catch(e){ if(e.status === 402){ if(e.data?.wallet){ S.wallet = e.data.wallet; renderTop(); } openBuy(e.message); } else throw e; }
+    }); },
   import: () => { S.sheet = {kind: "info"}; showSheet(head("ورود از JSON") + `<p class="muted" style="margin:6px 0 10px">خروجی JSON یک ربات را اینجا بچسبان تا به‌عنوان ربات جدید ساخته شود.</p><textarea id="im-text" class="code" placeholder='{"name": "...", "nodes": {...}}'></textarea><div class="fgap"></div><button data-a="importgo" class="b">${IC.upload}ساخت ربات</button><div class="fgap"></div><div class="fgap"></div>`); },
   importgo: el => busy(el, async () => { let c; try{ c = JSON.parse($("#im-text").value); }catch(_){ return toast("JSON معتبر نیست"); }
     const d = await api("/api/bots/import", "POST", {config: c.config || c}); closeSheet(); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "nodes"; S.open = new Set(); S.ideas = []; S.stats = null; render(); toast("ربات وارد شد"); scrollTo(0, 0); }),
