@@ -893,10 +893,10 @@ function renderBots(){
 const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
 const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
 const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text || "").replace(/\s+/g, " ").slice(0, 24) || id) : "؟"; };
-const kindOf = b => b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.share !== undefined ? "share" : CH_RE.test(b.url || "") ? "channel" : "url";
+const kindOf = b => b.pay ? "pay" : b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.share !== undefined ? "share" : CH_RE.test(b.url || "") ? "channel" : "url";
 const btnInfo0 = (cfg, b) => {
   const k = kindOf(b);
-  return k === "goto" ? "به: " + esc(titleOf(cfg, b.goto)) : k === "channel" ? "کانال @" + esc(CH_RE.exec(b.url)[1])
+  return k === "pay" ? "پرداخت " + N(b.pay.stars) + " ستاره" : k === "goto" ? "به: " + esc(titleOf(cfg, b.goto)) : k === "channel" ? "کانال @" + esc(CH_RE.exec(b.url)[1])
     : k === "alert" ? "پیام پاپ‌آپ" : k === "copy" ? "کپی متن" : k === "share" ? "اشتراک لینک دعوت" : "لینک " + esc((b.url || "").replace(/^https:\/\//, "").slice(0, 22));
 };
 const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " (شرطی)" : "") + (b.do?.length ? " (اکشن)" : "");
@@ -906,8 +906,9 @@ function nodeCard(cfg, id){
   if(id === cfg.start) tags.push('<span class="tag st">شروع</span>');
   if(id === cfg.fallback) tags.push('<span class="tag">پیام ناشناس</span>');
   if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">دریافت پیام</span>');
-  if(n.reply_btn) tags.push('<span class="tag st">دکمه پاسخ</span>');
   if(n.ai) tags.push('<span class="tag ai">هوش مصنوعی</span>');
+  if(n.ticket) tags.push('<span class="tag ai">تیکت' + (n.tag ? " · " + esc(n.tag) : "") + '</span>');
+  if(n.board) tags.push('<span class="tag">جدول برترین‌ها</span>');
   if(isRk) tags.push('<span class="tag">کیبورد چت</span>');
   if(n.media) tags.push('<span class="tag">رسانه</span>'); else if(n.photo) tags.push('<span class="tag">عکس</span>');
   if(n.do?.length || n.route?.length || n.alt?.length) tags.push('<span class="tag">منطق</span>');
@@ -1197,7 +1198,7 @@ async function commit(fn, msg = "ذخیره شد"){
   setBot(d.bot);
   closeSheet(); renderBot(); toast(msg); haptic("ok");
 }
-function closeSheet(){ clearInterval(window.__ut); clearInterval(window.__gp); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function closeSheet(){ clearInterval(window.__ut); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
 function showSheet(html){
   const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
   sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp" role="dialog" aria-modal="true">${html}</div>`;
@@ -1208,17 +1209,18 @@ const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button 
 
 /* ── منطق: متغیر، شرط و اکشن ── */
 const OPS = [["==","مساوی باشد با"],["!=","مساوی نباشد با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشد"],["empty","خالی باشد"],["filled","پر باشد"]];
-const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"],["send_channel","پست به کانال"]];
-const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود"};const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
+const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"],["remind","یادآوری بعد از چند دقیقه"]];
+const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود", remind:"متن یادآوری برای همین کاربر (اختیاری اگر بخش انتخاب کنی)"};
+const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
-  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],["last_msg","پیام قبلی ادمین (برای پست کانال)"],["channel","کانال پست (از تنظیمات)"],["post_at","ساعت پست (از تنظیمات)"],
-  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],
+  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["ticket_no","شماره‌ی آخرین تیکت کاربر"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
 const BUILTIN = BUILTIN_HELP.map(x => x[0]);
 const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
 const simpleCond = c => !!c && typeof c.var === "string" && !c.all && !c.any && !c.not;
 const blankCond = () => ({var:"", op:"==", value:""});
 const newRule = l => l === "do" ? {op:"set", var:"", value:""} : l === "route" ? {c:blankCond(), goto:S.cur.config.start} : l === "alt" ? {c:blankCond(), text:""} : {c:blankCond()};
-const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
+const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...Object.keys(S.cur.config.globals || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
 
 function condHTML(c){
   if(c && !simpleCond(c)) return `<div class="muted">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شود</div>`;
@@ -1232,12 +1234,9 @@ function ruleHTML(list, o, i, cfg){
   let inner;
   if(list === "do"){
     inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v, l]) => `<option value="${v}"${v === o.op ? " selected" : ""}>${l}</option>`).join("")}</select>
-      ${o.op === "notify" ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
-      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op] || "")}" maxlength="${o.op === "notify" ? 500 : 100}">`}
-      ${o.op === "send_channel" ? `<input class="a-ch" list="vdl" value="${esc(o.channel || "")}" placeholder="@کانال یا https://t.me/کانال (می‌توانی {متغیر} بگذاری)" maxlength="200" autocomplete="off" style="margin-top:6px">
-        <input class="a-at" value="${esc(o.at || "")}" placeholder="زمان ارسال: 21:30 یا 1405/07/15 18:00" maxlength="40" style="margin-top:6px" dir="ltr">
-        <input class="fa a-tx" value="${esc(o.text || "")}" placeholder="متن پست — خالی بگذاری، آخرین پیام خودت استفاده می‌شود" maxlength="3500" style="margin-top:6px">
-        <p class="muted" style="margin-top:4px">ربات باید در آن کانال ادمین باشد. بعد از زمان‌بندی، دکمهٔ حذف هم می‌آید.</p>` : ""}`;
+      ${o.op === "notify" || o.op === "remind" ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
+      ${o.op === "remind" ? `<div class="cmd"><input class="a-min" type="number" min="1" max="43200" value="${esc(o.minutes || 60)}" placeholder="چند دقیقه بعد؟"><select class="a-rg">${nodeOpts(cfg, o.goto || "", '<option value="">فقط پیام</option>')}</select></div>` : ""}
+      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op])}" maxlength="${o.op === "notify" || o.op === "remind" ? 500 : 100}">`}`;
   } else {
     inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگر…"}</span>${del}</div>${condHTML(o.c)}`;
     if(list === "route") inner += `<span class="lbl">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
@@ -1262,7 +1261,8 @@ function readRl(list){
       o.op = q(".a-op").value;
       o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
       o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
-      if(q(".a-ch")){ o.channel = q(".a-ch").value; o.at = q(".a-at").value; o.text = q(".a-tx").value; }
+      if(q(".a-min")) o.minutes = parseInt(q(".a-min").value) || 0;
+      if(q(".a-rg")) o.goto = q(".a-rg").value;
     }
     return o;
   });
@@ -1271,12 +1271,10 @@ function ruleErr(){
   const empty = c => c && simpleCond(c) && !c.var;
   for(const a of D.do || []){
     if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلانِ اکشن «به من خبر بده» را بنویس"; }
-    if(a.op === "send_channel"){
-      const ch = (r.querySelector(".a-ch")?.value || "").trim();
-      const at = (r.querySelector(".a-at")?.value || "").trim();
-      if(!ch) return "کانالِ اکشن «پست به کانال» را بنویس (مثل @mychannel)";
-      if(!at) return "زمان ارسال را بنویس (مثل 21:30 یا 1405/07/15 18:00)";
-      if(!/^(\{[^}]+\}|@?[\w]{4,32}|https?:\/\/[^\s]+)$/.test(ch)) return "کانال معتبر نیست. @نام یا لینک https://t.me/نام بنویس";
+    else if(a.op === "remind"){
+      const mm = a.minutes === undefined ? 60 : +a.minutes;
+      if(!(mm >= 1 && mm <= 43200)) return "زمان یادآوری باید بین ۱ تا ۴۳۲۰۰ دقیقه (۳۰ روز) باشد";
+      if(!(a.value || "").trim() && !a.goto) return "برای یادآوری، متن بنویس یا یک بخش انتخاب کن";
     }
     else if(!a.var) return "اسم متغیرِ اکشن را بنویس";
   }
@@ -1288,9 +1286,7 @@ function ruleErr(){
   for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط را بنویس";
   return null;
 }
-const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""}
-  : a.op === "send_channel" ? {op:"send_channel", channel:a.channel || "", at:a.at || "", text:a.text || ""}
-  : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
+const outActs = l => l.map(a => a.op === "remind" ? {op:"remind", minutes:Math.max(1, Math.min(43200, parseInt(a.minutes) || 60)), ...((a.value || "").trim() ? {value:a.value.trim()} : {}), ...(a.goto ? {goto:a.goto} : {}), ...(a.key ? {key:a.key} : {})} : a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
 
 /* ── ویرایش بخش ── */
 function openNode(id){
@@ -1298,9 +1294,10 @@ function openNode(id){
   S.sheet = {kind: "node", id};
   D = { title: n.title || "", text: n.text, photo: n.photo || "", media: n.media || "", doneMedia: n.done_media || "", done: n.done || "", next: n.next || "",
         fields: n.fields ? n.fields.map((q, i) => ({q, v: (n.save || [])[i] || "", t: (n.types || [])[i] || "text"})) : [{q: "", v: "", t: "text"}],
-        silent: !!n.silent, reply_btn: !!n.reply_btn, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
+        silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
         aip: n.ai?.prompt || "", aid: n.ai?.daily || 15, aim: n.ai?.memory ?? 3,
         start: id === cfg.start, fb: id === cfg.fallback,
+        ticket: !!n.ticket, tag: n.tag || "", bvar: n.board?.var || "", btop: n.board?.top || 10,
         do: cp(n.do || []), route: (n.route || []).map(r => ({c: cp(r.when), goto: r.goto})), alt: (n.alt || []).map(r => ({c: cp(r.when), text: r.text})), adv: false };
   renderSheet();
 }
@@ -1316,7 +1313,7 @@ function kbPicker(cur){
 }
 function nodeSheet(){
   const cfg = S.cur.config, d = D;
-  const advOpen = d.adv || d.do.length || d.route.length || d.alt.length;
+  const advOpen = d.adv || d.do.length || d.route.length || d.alt.length || d.bvar;
   return head("ویرایش بخش") + `
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
@@ -1342,15 +1339,18 @@ function nodeSheet(){
         <select class="ft">${TYPES.map(([v, l]) => `<option value="${v}"${v === f.t ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>`).join("")}
       ${d.fields.length < 6 ? `<button class="b o sm" data-sh="addfld">${IC.plus}سؤال</button>` : ""}
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent ? " checked" : ""}> نتیجه‌ی فرم برای من فرستاده نشود</label>` : ""}
-    ${d.mode === "ask" || d.mode === "form" ? `<label class="chk"><input type="checkbox" id="f-replybtn"${d.reply_btn ? " checked" : ""}> زیر هر پیام/فرم دکمه «پاسخ به کاربر» بیاید تا بتوانم مستقیم جواب بدهم</label>` : ""}
     ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
       <span class="lbl">رسانه‌ی پیام تشکر (اختیاری)</span>${mediaPicker("doneMedia", d.doneMedia)}
       <span class="lbl">بعد از ثبت، کدام بخش نشان داده شود؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
-      <p class="muted mt">پیام کاربرها برای تو فرستاده می‌شود. داخل ربات با Reply روی هر کدام، جوابت به خودش می‌رسد.</p>` : ""}
+      <label class="chk"><input type="checkbox" id="f-ticket"${d.ticket ? " checked" : ""}> هر پیام یک تیکت شماره‌دار شود (دکمه‌ی «پاسخ» برای من و پشتیبان‌ها)</label>
+      ${d.ticket ? `<span class="lbl">برچسب تیکت (اختیاری، مثلاً فروش یا فنی)</span><input class="fa" id="f-tag" value="${esc(d.tag)}" maxlength="20">` : ""}
+      <p class="muted mt">${d.ticket ? "پیام کاربر با شماره‌ی تیکت برایت می‌آید و زیرش دکمه‌های پاسخ، سابقه، بستن و مسدود کردن است. با /tickets تیکت‌های باز را می‌بینی." : "پیام کاربرها برای تو فرستاده می‌شود. داخل ربات با Reply روی هر کدام، جوابت به خودش می‌رسد."}</p>` : ""}
     <details class="adv"${advOpen ? " open" : ""}><summary>متغیر و شرط (پیشرفته)</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقداری ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
       ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
       ${ruleSection("متن جایگزین شرطی", "اگر شرط درست بود، به‌جای متن اصلی نشان داده می‌شود", "alt", cfg, 4)}
+      <div class="sub"><span>جدول برترین‌ها</span></div><p class="muted" style="margin:-3px 0 8px">زیر متن این بخش رتبه‌بندی کاربرها بر اساس یک متغیر عددی (یا refs برای دعوت‌ها) نشان داده می‌شود. خالی یعنی غیرفعال.</p>
+      <div class="cmd"><input class="ltr" id="f-bvar" list="vdl" value="${esc(d.bvar)}" placeholder="متغیر عددی، مثلاً coins" maxlength="20" autocomplete="off"><input id="f-btop" type="number" min="3" max="20" value="${esc(d.btop)}" placeholder="چند نفر؟"></div>
     </div></details>${dlist()}
     <label class="chk"><input type="checkbox" id="f-start"${d.start ? " checked disabled" : ""}> صفحه‌ی شروع (/start)</label>
     <label class="chk"><input type="checkbox" id="f-fb"${d.fb ? " checked disabled" : ""}> جواب پیام‌های نامفهوم کاربر</label>
@@ -1364,7 +1364,9 @@ function readNode(){
   const fq = [...document.querySelectorAll(".fq")];
   if(fq.length) D.fields = fq.map(r => ({q: r.querySelector(".fld").value, v: cleanVar(r.querySelector(".fv").value), t: r.querySelector(".ft").value}));
   if($("#f-silent")) D.silent = $("#f-silent").checked;
-  if($("#f-replybtn")) D.reply_btn = $("#f-replybtn").checked;
+  if($("#f-ticket")) D.ticket = $("#f-ticket").checked;
+  if($("#f-tag")) D.tag = $("#f-tag").value;
+  if($("#f-bvar")){ D.bvar = cleanVar($("#f-bvar").value); D.btop = $("#f-btop").value; }
   if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
   if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
   if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
@@ -1382,8 +1384,9 @@ function saveNode(){
   }
   const err = ruleErr(); if(err) return toast(err);
   busy($('[data-sh="save"]'), () => commit(cfg => {
-    const n = cfg.nodes[id];
-    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "reply_btn", "done", "next", "kb", "do", "route", "alt"]) delete n[k];
+    const n = cfg.nodes[id], ob = n.board;
+    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "done", "next", "kb", "do", "route", "alt", "ticket", "tag", "board"]) delete n[k];
+    if(D.bvar) n.board = {var: D.bvar, top: Math.max(3, Math.min(20, parseInt(D.btop) || 10)), ...(ob?.label ? {label: ob.label} : {})};
     if(D.mode === "show" && D.kb === "reply") n.kb = "reply";
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
@@ -1399,7 +1402,7 @@ function saveNode(){
       if(D.silent) n.silent = true;
     }
     if(D.mode === "ask" || D.mode === "form"){
-      if(D.reply_btn) n.reply_btn = true;
+      if(D.ticket){ n.ticket = true; if((D.tag || "").trim()) n.tag = D.tag.trim(); }
       if(D.done.trim()) n.done = D.done.trim();
       if(D.doneMedia && mediaById(D.doneMedia)) n.done_media = D.doneMedia;
       if(D.next) n.next = D.next;
@@ -1440,16 +1443,17 @@ function addNode(){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind: "btn", n: nid, r, c};
-  if(c === null) D = {text: "دکمه‌ی جدید", kind: "goto", goto: cfg.start, val: "", when: [], do: [], adv: false};
+  if(c === null) D = {text: "دکمه‌ی جدید", kind: "goto", goto: cfg.start, val: "", when: [], do: [], adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
     D = {text: b.text, kind: k, goto: b.goto || cfg.start,
          val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || b.share || "",
-         when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false};
+         when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
+         stars: b.pay?.stars || 50, ptitle: b.pay?.title || "", pdesc: b.pay?.desc || "", ptext: b.pay?.text || "", pgoto: b.pay?.goto || ""};
   }
   renderSheet();
 }
-const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه"], ["url", "لینک"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک لینک دعوت"]];
+const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه"], ["url", "لینک"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"]];
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
@@ -1458,9 +1462,15 @@ function btnSheet(){
     url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
     alert: `<span class="lbl">متنی که کاربر در پاپ‌آپ می‌بیند</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌توانی از <b dir="ltr">{coins}</b> یا هر متغیر دیگری استفاده کنی؛ بعد از اجرای اکشن‌ها محاسبه می‌شود.</p>`,
     copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شود</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`,
-    share: `<span class="lbl">متنی که همراه لینک دعوت فرستاده می‌شود</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="200" placeholder="بیا این ربات را ببین"><p class="muted">با لمس این دکمه، پنجره‌ی ارسال تلگرام با لینک دعوت شخصیِ همان کاربر باز می‌شود. برای پاداش دعوت، در تنظیمات ربات «پاداش دعوت» را پر کن.</p>`
+    share: `<span class="lbl">متنی که همراه لینک دعوت فرستاده می‌شود</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="200" placeholder="بیا این ربات را ببین"><p class="muted">با لمس این دکمه، پنجره‌ی ارسال تلگرام با لینک دعوت شخصیِ همان کاربر باز می‌شود. برای پاداش دعوت، در تنظیمات ربات «پاداش دعوت» را پر کن.</p>`,
+    pay: `<span class="lbl">قیمت (ستاره‌ی تلگرام، ۱ تا ۱۰٬۰۰۰)</span><input id="b-stars" type="number" min="1" max="10000" value="${esc(d.stars)}">
+      <span class="lbl">عنوان فاکتور</span><input class="fa" id="b-ptitle" value="${esc(d.ptitle)}" maxlength="32" placeholder="مثلاً اشتراک ویژه">
+      <span class="lbl">توضیح فاکتور (اختیاری)</span><input class="fa" id="b-pdesc" value="${esc(d.pdesc)}" maxlength="255">
+      <span class="lbl">پیام بعد از پرداخت موفق</span><input class="fa" id="b-ptext" value="${esc(d.ptext)}" maxlength="300" placeholder="پرداخت انجام شد، ممنون!">
+      <span class="lbl">بعد از پرداخت کدام بخش نشان داده شود؟</span><select id="b-pgoto">${nodeOpts(cfg, d.pgoto, '<option value="">هیچ‌کدام</option>')}</select>
+      <p class="muted mt">ستاره‌ها به حساب تلگرامِ تو می‌رود. اکشن‌های این دکمه فقط بعد از پرداختِ موفق اجرا می‌شوند (مثلاً فعال کردن متغیر vip). پرداخت‌ها با /payments دیده می‌شوند و با /refund کد برگشت می‌خورند.</p>`
   }[d.kind];
-  const canDo = d.kind === "goto" || d.kind === "alert";
+  const canDo = d.kind === "goto" || d.kind === "alert" || d.kind === "pay";
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
     <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
     <span class="lbl">با لمس دکمه چه شود؟</span>
@@ -1469,7 +1479,7 @@ function btnSheet(){
     <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اکشن (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشان دادن پیام اجرا می‌شوند", "do", cfg, 6)
-              : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یک بخش» و «پیام پاپ‌آپ» کار می‌کند.</p>`}
+              : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یک بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کند.</p>`}
     </div></details>${dlist()}
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف دکمه</button>`}</div>`;
 }
@@ -1477,22 +1487,30 @@ function readBtn(){
   D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
   if($("#b-goto")) D.goto = $("#b-goto").value;
   if($("#b-val")) D.val = $("#b-val").value;
+  if($("#b-stars")){ D.stars = $("#b-stars").value; D.ptitle = $("#b-ptitle").value; D.pdesc = $("#b-pdesc").value; D.ptext = $("#b-ptext").value; D.pgoto = $("#b-pgoto").value; }
   readRl("when"); readRl("do");
   const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
 }
 function saveBtn(){
   const {n: nid, r, c} = S.sheet, d = D;
   if(!d.text.trim()) return toast("متن دکمه را بنویس");
-  if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه را وارد کن");
+  if(d.kind === "pay"){ const st = parseInt(d.stars); if(!(st >= 1 && st <= 10000)) return toast("قیمت باید عددی بین ۱ تا ۱۰٬۰۰۰ ستاره باشد"); }
+  else if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه را وارد کن");
   const err = ruleErr(); if(err) return toast(err);
   const btn = {text: d.text.trim()};
   if(d.kind === "goto") btn.goto = d.goto;
   else if(d.kind === "alert") btn.alert = d.val.trim();
   else if(d.kind === "copy") btn.copy = d.val.trim();
   else if(d.kind === "share") btn.share = d.val.trim() || "بیا این ربات را ببین";
+  else if(d.kind === "pay"){
+    btn.pay = {stars: parseInt(d.stars), title: (d.ptitle.trim() || d.text.trim()).slice(0, 32)};
+    if(d.pdesc.trim()) btn.pay.desc = d.pdesc.trim();
+    if(d.ptext.trim()) btn.pay.text = d.ptext.trim();
+    if(d.pgoto) btn.pay.goto = d.pgoto;
+  }
   else btn.url = d.val.trim();
   if(d.when.length) btn.when = d.when[0].c;
-  if(d.do.length && (d.kind === "goto" || d.kind === "alert")) btn.do = outActs(d.do);
+  if(d.do.length && (d.kind === "goto" || d.kind === "alert" || d.kind === "pay")) btn.do = outActs(d.do);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const rows = cfg.nodes[nid].buttons;
     if(c !== null) rows[r][c] = btn;
@@ -1512,9 +1530,9 @@ function openBot(){
   const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
   S.sheet = {kind: "bot"};
   D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
-        cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}),
-        refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "",
-        cpChannel: cfg.channel_post?.channel || "", cpAt: cfg.channel_post?.at || "" };
+        cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}), globs: Object.entries(cfg.globals || {}),
+        staff: (cfg.desk?.staff || []).join(" "), dclosed: cfg.desk?.closed || "", drbtn: cfg.desk?.reply_btn || "",
+        refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "" };
   renderSheet();
 }
 function botSheet(){
@@ -1524,12 +1542,6 @@ function botSheet(){
     <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
     <p class="muted mt">تا ${N(3)} کانال، با فاصله جدا کن. ربات باید در آن کانال‌ها ادمین باشد. خالی یعنی غیرفعال.</p>
-    <details class="adv"><summary>پست زمان‌بندی‌شده به کانال</summary><div class="box">
-      <p class="muted" style="margin-top:8px">اگر ربات بخشی برای زمان‌بندی پست دارد، کانال و ساعت پیش‌فرض را اینجا بگذار تا همه‌ی دکمه‌ها از همین استفاده کنند.</p>
-      <span class="lbl">کانال مقصد</span><input id="s-cpch" value="${esc(d.cpChannel)}" placeholder="@mychannel یا https://t.me/mychannel یا -1001234567890" autocomplete="off">
-      <span class="lbl">ساعت پیش‌فرض ارسال</span><input id="s-cpat" value="${esc(d.cpAt)}" placeholder="21:30 یا 1405/07/15 18:00" maxlength="40">
-      <p class="muted mt">ربات باید در آن کانال ادمین با دسترسی «ارسال پیام» باشد. خالی یعنی کاربر داخل ربات باید کانال را در هر دکمه وارد کند.</p>
-    </div></details>
     <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال شوی.">${esc(d.jtext)}</textarea>
     <div class="rowh"><span class="lbl">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="b o sm" data-sh="addcmd">${IC.plus}دستور</button>` : ""}</div>
     <div class="fgap"></div>
@@ -1537,6 +1549,15 @@ function botSheet(){
     <div class="rowh"><span class="lbl">متغیرهای ربات</span>${d.vars.length < 40 ? `<button class="b o sm" data-sh="addvar">${IC.plus}متغیر</button>` : ""}</div>
     <p class="muted" style="margin:2px 0 8px">هر کاربر مقدار مخصوص خودش را دارد (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع را بنویس.</p>
     ${d.vars.map(([k, v], i) => `<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="iconb sm" data-sh="delvar" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+    <div class="rowh"><span class="lbl">متغیرهای مشترک (بین همه‌ی کاربرها)</span>${d.globs.length < 20 ? `<button class="b o sm" data-sh="addglob">${IC.plus}مشترک</button>` : ""}</div>
+    <p class="muted" style="margin:2px 0 8px">یک مقدار برای کل ربات: شمارنده‌ی رأی‌ها، موجودی محدود، هدف جمعیِ جامعه. مثل متغیر عادی در متن‌ها و اکشن‌ها استفاده می‌شود.</p>
+    ${d.globs.map(([k, v], i) => `<div class="cmd"><input class="gn" value="${esc(k)}" placeholder="stock" maxlength="20" autocomplete="off"><input class="fa gd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="iconb sm" data-sh="delglob" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">متغیر مشترکی تعریف نشده.</p>'}
+    <details class="adv"${d.staff || d.dclosed || d.drbtn ? " open" : ""}><summary>پشتیبانی و تیکت</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">تیکت‌ها همیشه برای خودت می‌آیند. اگه می‌خوای همکارها هم ببینند و جواب بدهند، آیدی عددی تلگرامشان را بنویس (تا ${N(5)} نفر، با فاصله).</p>
+      <span class="lbl">آیدی عددی پشتیبان‌ها</span><input class="ltr" id="s-staff" value="${esc(d.staff)}" placeholder="123456789 987654321" inputmode="numeric" autocomplete="off">
+      <span class="lbl">پیام بسته شدن تیکت (می‌تواند {ticket_no} داشته باشد)</span><input class="fa" id="s-dclosed" value="${esc(d.dclosed)}" maxlength="300" placeholder="تیکت #{ticket_no} بسته شد.">
+      <span class="lbl">متن دکمه‌ی پاسخ کاربر</span><input class="fa" id="s-drbtn" value="${esc(d.drbtn)}" maxlength="30" placeholder="پاسخ به پشتیبانی">
+    </div></details>
     <details class="adv"${d.refVar ? " open" : ""}><summary>پاداش دعوت</summary><div class="box">
       <p class="muted" style="margin-bottom:8px">وقتی کسی با لینک دعوتِ یکی از کاربرهای ربات تو وارد شود، آن کاربر (دعوت‌کننده) این مقدار را می‌گیرد. لینک و تعداد دعوت‌ها با <b dir="ltr">{ref_link}</b> و <b dir="ltr">{refs}</b> در متن‌ها قابل نمایش است.</p>
       <div class="cmd"><input class="ltr" id="s-rv" list="vdl" value="${esc(d.refVar)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off"><input id="s-ra" value="${esc(d.refAmt)}" placeholder="مقدار (مثلاً 5)" maxlength="10" inputmode="numeric"></div>
@@ -1556,6 +1577,8 @@ function readBot(){
   if(document.querySelector("#s-name")){
     const vn = [...document.querySelectorAll(".vn")], vd = [...document.querySelectorAll(".vd")];
     D.vars = vn.map((n, i) => [cleanVar(n.value), vd[i].value]);
+    D.globs = [...document.querySelectorAll(".gn")].map((n, i) => [cleanVar(n.value), document.querySelectorAll(".gd")[i].value]);
+    D.staff = $("#s-staff")?.value ?? D.staff; D.dclosed = $("#s-dclosed")?.value ?? D.dclosed; D.drbtn = $("#s-drbtn")?.value ?? D.drbtn;
     D.refVar = cleanVar($("#s-rv")?.value ?? D.refVar); D.refAmt = $("#s-ra")?.value ?? D.refAmt; D.refText = $("#s-rt")?.value ?? D.refText;
   }
 }
@@ -1563,19 +1586,23 @@ function saveBot(){
   const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
   const amt = String(d.refAmt).trim();
   if(d.refVar && !/^-?\d+(\.\d+)?$/.test(amt)) return toast("مقدار پاداش دعوت باید عدد باشد");
+  const staff = d.staff.split(/[\s,،]+/).filter(Boolean).map(x => x.replace(/[۰-۹]/g, c => "۰۱۲۳۴۵۶۷۸۹".indexOf(c)));
+  if(staff.some(x => !/^\d{5,15}$/.test(x)) || staff.length > 5) return toast("آیدی پشتیبان‌ها باید عددی باشد (حداکثر ۵ نفر)");
+  const gnames = d.globs.map(g => g[0]).filter(Boolean);
+  if(new Set(gnames).size !== gnames.length || gnames.some(g => d.vars.some(v => v[0] === g) || BUILTIN.includes(g))) return toast("اسم متغیر مشترک نباید تکراری یا هم‌نام متغیرهای دیگر باشد");
   busy($('[data-sh="save"]'), () => commit(cfg => {
     cfg.name = d.name.trim() || "ربات من";
     if(chs.length) cfg.join = {channels: chs, text: d.jtext.trim()}; else delete cfg.join;
-    const cpCh = (g("#s-cpch") || "").trim(), cpAt = (g("#s-cpat") || "").trim();
-    if(cpCh || cpAt){
-      cfg.channel_post = {}; if(cpCh) cfg.channel_post.channel = cpCh; if(cpAt) cfg.channel_post.at = cpAt;
-    } else delete cfg.channel_post;
     cfg.commands = {};
     d.cmds.forEach(([k, v]) => { k = k.trim().replace(/^\//, "").toLowerCase(); if(k) cfg.commands[k] = v; });
     const vars = {};
     d.vars.forEach(([k, v]) => { if(k) vars[k] = v.trim(); });
     if(d.refVar && !(d.refVar in vars)) vars[d.refVar] = "0";
     if(Object.keys(vars).length) cfg.vars = vars; else delete cfg.vars;
+    const gl = {}; d.globs.forEach(([k, v]) => { if(k) gl[k] = v.trim(); });
+    if(Object.keys(gl).length) cfg.globals = gl; else delete cfg.globals;
+    const dk = {}; if(staff.length) dk.staff = staff.map(Number); if(d.dclosed.trim()) dk.closed = d.dclosed.trim(); if(d.drbtn.trim()) dk.reply_btn = d.drbtn.trim();
+    if(Object.keys(dk).length) cfg.desk = dk; else delete cfg.desk;
     if(d.refVar){ cfg.on_ref = [{op: "add", var: d.refVar, value: amt}]; } else delete cfg.on_ref;
     if(d.refText.trim()) cfg.ref_text = d.refText.trim(); else delete cfg.ref_text;
   }));
@@ -1684,6 +1711,8 @@ function shAction(a, ds){
   else if(a === "delcmd") D.cmds.splice(+ds.i, 1);
   else if(a === "addvar") D.vars.push(["", ""]);
   else if(a === "delvar") D.vars.splice(+ds.i, 1);
+  else if(a === "addglob") D.globs.push(["", ""]);
+  else if(a === "delglob") D.globs.splice(+ds.i, 1);
   else if(a === "addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
   else if(a === "delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
   renderSheet();
@@ -1865,7 +1894,6 @@ Object.assign(A, {
   aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان را بنویس");
     confirmQ("این اعلان برای همه‌ی کاربرهای ربات‌ساز فرستاده شود؟", ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
   ausers: () => openUsers(),
-  agaps: el => busy(el, async () => { const d = await api("/api/admin/gaps"); openGaps(d); }),
 });
 document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
 
@@ -1882,7 +1910,6 @@ function adminCard(){
       <textarea class="fa" id="an-text" maxlength="3500" style="min-height:76px" placeholder="متن اعلان برای همه‌ی کاربران" aria-label="متن اعلان"></textarea><div class="fgap"></div>
       <button class="b o" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
     <div class="two"><button class="b o" data-a="ausers">${IC.users}کاربران</button><button class="b o" data-a="astats">${IC.chart}آمار سیستم</button></div>
-    <button class="b o mt" data-a="agaps">${IC.inbox}قابلیت‌های درخواست‌شده</button>
     <div class="stats mt" id="astats" style="border:0"></div>`;
 }
 let UQ = "";
@@ -1912,29 +1939,6 @@ async function openUsers(){
   await tick(); window.__ut = setInterval(tick, 10000);
 }
 document.addEventListener("input", e => { if(e.target.id === "uq" && openUsers.d){ UQ = e.target.value; $("#ulist").innerHTML = uList(openUsers.d); } });
-
-/* ── قابلیت‌های درخواست‌شده که موتور پشتیبانی نمی‌کند ── */
-function gapRow(r){
-  const who = r.un ? `@${esc(r.un)}` : (r.uid || "—");
-  return `<div class="rl"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-      <b style="font-size:13px">${esc(r.feature)}</b><span class="muted">${N(r.n)} بار · ${ago(r.t)}</span></div>
-    <p class="muted" style="margin-top:4px">خواسته: ${esc(r.want)}</p>
-    <p class="muted" style="margin-top:2px">چرا نشد: ${esc(r.why)}</p>
-    <p style="margin-top:4px;font-size:12.5px;line-height:1.75"><b>ارتقا:</b> ${esc(r.upgrade)}</p>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-      <span class="muted ltr">${who}</span>
-      <button class="b sm o" data-a="agapdone" data-id="${esc(r.id)}">انجام شد</button></div></div>`;
-}
-function openGaps(d){
-  S.sheet = {kind: "info"};
-  const body = d.items.length ? d.items.map(gapRow).join("")
-    : '<p class="muted">فعلاً هیچ قابلیت پیاده‌نشده‌ای گزارش نشده.</p>';
-  showSheet(head("قابلیت‌های درخواست‌شده") + `<p class="muted">این‌ها را هوش مصنوعی از درخواست کاربرها تشخیص داده و فرستاده.</p><div class="fgap"></div>${body}<div class="fgap"></div>`);
-}
-document.addEventListener("click", e => {
-  const b = e.target.closest('[data-a="agapdone"]');
-  if(b) busy(b, async () => { await api("/api/admin/gaps/done", "POST", {id: b.dataset.id}); b.closest(".rl").remove(); toast("ثبت شد"); });
-});
 
 /* حضور آنلاین */
 if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); }; setInterval(ping, 25000); document.addEventListener("visibilitychange", ping); }

@@ -14,6 +14,16 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
 موتور ثابت و امن (send_node / run_actions)
   متغیر، شرط، اکشن، فرم‌های اعتبارسنجی‌شده، گفتگوی هوشمند با حافظه، دعوت و پاداش، عضویت اجباری،
   رسانه‌ی کتابخونه یا لینکی، کیبورد زیر چت، دکمه‌ی کپی و اشتراک — هیچ کد تولیدشده‌ای اجرا نمی‌شه
+قابلیت‌های حرفه‌ای موتور (نسخه‌ی ارتقایافته)
+  • میزکار پشتیبانی (تیکت): هر پیام/فرم تیکتی شماره می‌گیره و برای صاحب ربات و پشتیبان‌ها (desk.staff) می‌آد؛ زیرش دکمه‌ی
+    «پاسخ / سابقه / بستن / مسدود کردن». پاسخ (متن، عکس، فایل، صدا) با دکمه یا reply به کاربر می‌رسه و کاربر دکمه‌ی «پاسخ به
+    پشتیبانی» می‌گیره تا گفتگو توی همون تیکت ادامه پیدا کنه. دستورها: /tickets  (+ /payments /refund برای صاحب)  /paysupport (کاربر)
+  • متغیر مشترک بین همه‌ی کاربرها (globals): شمارنده، رأی‌گیری، موجودی محدود، هدف جمعیِ جامعه — افزایش اتمیک
+  • جدول برترین‌ها (board) بر اساس هر متغیر عددی یا تعداد دعوت‌ها
+  • یادآور و پیام زمان‌بندی‌شده (اکشن remind، تا ۳۰ روز) با پردازشگر پس‌زمینه — انقضای اشتراک، پیگیری سفارش، یادآوری نوبت
+  • پرداخت با ستاره‌ی تلگرام داخل رباتا (دکمه‌ی pay): فاکتور XTR، اعتبارسنجی pre_checkout، ثبت یک‌باره، اکشن بعد از پرداخت موفق
+  • هوش ساخت: پرامپت چندمرحله‌ای (تحلیل نقش‌ها ← نگاشت به قابلیت‌ها ← بازبینی) + بازخورد خودکار چیزهایی که اعتبارسنج حذف کرده
+Environment اختیاری تازه: PAYMENTS (۰ = خاموش کردن دکمه‌ی پرداخت) SCHED (۰ = خاموش کردن یادآورها)
 
 Environment: MOTHER_TOKEN BASE_URL AI_BASE_URL AI_API_KEY AI_MODEL (الزامی) | MONGO_URI SECRET_KEY ADMIN_IDS
 MOTHER_USERNAME AI_CHAT_MODEL BILLING(usage|fixed) START_TOKENS DAILY_BONUS REF_* PACKS MAX_BOTS ... (پایین‌تر)
@@ -108,13 +118,17 @@ MAX_PROMPT   = 4000
 MAX_VERSIONS = 6
 MAX_NODES    = 60
 JOB_TIMEOUT  = 240
+PAYMENTS     = os.environ.get("PAYMENTS", "1").strip() != "0"       # دکمه‌ی پرداخت با ستاره‌ی تلگرام داخل رباتا (۰ = خاموش)
+SCHED_ON     = os.environ.get("SCHED", "1").strip() != "0"          # پیام‌های زمان‌بندی‌شده (یادآور)
+MAX_STAFF    = 5            # حداکثر پشتیبان علاوه بر صاحب ربات
+MAX_GLOBALS  = 20           # حداکثر متغیر مشترک بین همه‌ی کاربرها
+MAX_PENDING_REMIND = 5      # حداکثر یادآورِ منتظرِ هر کاربر در هر ربات
+MAX_STARS    = 10000        # سقف قیمت هر دکمه‌ی پرداخت (ستاره)
+BOARD_SCAN   = 3000         # حداکثر کاربری که برای جدول برترین‌ها بررسی می‌شه
 ONLINE_SECS  = 70           # کاربری که توی این بازه پینگ داده باشه «آنلاین» حساب می‌شه
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("aibot")
-
-if not ADMIN_IDS:
-    log.warning("ADMIN_IDS تنظیم نشده؛ گزارش قابلیت‌های شدنی‌نبود و پنل مدیریت کار نمی‌کند")
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = (MEDIA_MAX_MB + 1) * 1024 * 1024
@@ -146,8 +160,13 @@ _index(db.jobs, "t", expireAfterSeconds=86400)
 _index(db.relay, "t", expireAfterSeconds=30 * 86400)
 _index(db.xp_views, "t", expireAfterSeconds=3 * 86400)    # رویداد بازدیدِ روزانه بعد از ۳ روز پاک می‌شه
 _index(db.nvis, "bot")
-_index(db.gaps, "t")
-_index(db.gaps, "status")
+_index(db.tickets, "bot")
+_index(db.tickets, [("bot", 1), ("uid", 1)])
+_index(db.sched, "due")
+_index(db.uvars, "bot")
+_index(db.payments, "charge", unique=True, sparse=True)
+_index(db.payments, "bot")
+_index(db.blocked, "bot")
 
 fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest()))
 MOTHER_SECRET = hashlib.sha256(("mother" + SECRET_KEY).encode()).hexdigest()[:32]
@@ -273,10 +292,20 @@ def public(b):
 
 
 def sync_commands(bot, cfg):
-    """منوی دستورهای ربات فرزند رو با کانفیگ هم‌گام می‌کنه (فقط اگه فعاله)"""
+    """منوی دستورهای ربات فرزند رو با کانفیگ هم‌گام می‌کنه (فقط اگه فعاله)؛ برای صاحب ربات و پشتیبان‌ها دستورهای مدیریتی هم اضافه می‌شه"""
     if bot.get("active") and bot.get("token_enc"):
-        tg(dec(bot["token_enc"]), "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
-            {"command": c, "description": c} for c in cfg["commands"]])
+        token = dec(bot["token_enc"])
+        base = [{"command": "start", "description": "شروع"}] + [{"command": c, "description": c} for c in cfg["commands"]]
+        tg(token, "setMyCommands", commands=base)
+        try:
+            staff_cmds = base + [{"command": "tickets", "description": "تیکت‌های باز"}]
+            owner_cmds = staff_cmds + ([{"command": "payments", "description": "آخرین پرداخت‌ها"}] if has_pay(cfg) else [])
+            for sid in [bot["owner"]] + [x for x in (cfg.get("desk") or {}).get("staff", []) if x != bot["owner"]]:
+                tg(token, "setMyCommands", commands=owner_cmds if sid == bot["owner"] else staff_cmds,
+                   scope={"type": "chat", "chat_id": sid})
+            ensure_webhook(bot, cfg)
+        except Exception:
+            log.exception("staff commands failed")
 
 
 def touch_user(u):
@@ -513,7 +542,7 @@ def low_balance_notice(owner):
 
 
 # ───────────────────────── هوش مصنوعی: دستورالعمل طراحی ─────────────────────────
-SYSTEM_PROMPT = """You design Telegram bots as a JSON config that a fixed, safe engine executes. You think like a senior product designer AND a bot-logic engineer, not a form-filler. Your goal: whatever bot the user imagines, build the closest excellent working version with the engine features below.
+_SP_BASE = """You design Telegram bots as a JSON config that a fixed, safe engine executes. You think like a senior product designer AND a bot-logic engineer, not a form-filler. Your goal: whatever bot the user imagines, build the closest excellent working version with the engine features below.
 
 LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking", "ideas" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural, simple Persian (فارسی) and NEVER English, even though this prompt, the JSON keys, node_ids and variable names are English.
 
@@ -544,6 +573,8 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "commands": {"help": "<node_id>"},
  "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional)
  "vars": {"coins": "0", "city": ""},                                                 (optional, declare EVERY custom variable with its default value)
+ "globals": {"votes_a": "0"},                                                       (optional, variables SHARED by all users, see GLOBALS)
+ "desk": {"staff": [123456789], "closed": "text sent when a ticket is closed", "reply_btn": "label"},   (optional, see SUPPORT DESK)
  "on_ref": [ ...actions... ],                                                        (optional, see REFERRALS)
  "ref_text": "message sent to the inviter",                                          (optional, see REFERRALS)
  "nodes": {
@@ -558,8 +589,7 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
                    {"text": "label", "copy": "text copied to clipboard when tapped"},
                    {"text": "label", "share": "message sent along with the user's invite link"} ]],
      "ask": false,
-     "reply_btn": false,                                                           (optional, only on "ask"/"fields" nodes, see REPLY BUTTON)
-      "kb": "reply",                                                                 (optional)
+     "kb": "reply",                                                                 (optional)
      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
      "save": ["city", ""],                                                           (optional, see FORMS)
      "types": ["text", "number"],                                                    (optional, see FORMS)
@@ -568,6 +598,8 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
      "done_media": "<media_id>",                                                    (optional, sent with the done message)
      "next": "<node_id shown after finishing>",                                      (optional, default start)
      "ai": {"prompt": "instructions for the AI assistant", "daily": 15, "memory": 3},             (optional, see AI CHAT)
+     "ticket": true,  "tag": "فروش",                                                 (optional, on ask/fields nodes only, see SUPPORT DESK)
+     "board": {"var": "coins", "top": 10, "label": "برترین‌ها"},                       (optional, see LEADERBOARD)
      "do": [ ...actions... ],                                                        (optional, see LOGIC)
      "route": [ {"when": <cond>, "goto": "<node_id>"} ],                             (optional, see LOGIC)
      "alt": [ {"when": <cond>, "text": "..."} ]                                      (optional, see LOGIC)
@@ -577,29 +609,11 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 
 BASIC ENGINE FEATURES
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (promo code, card number), share (opens Telegram's share dialog with the user's personal invite link of this bot plus your message).
-- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner, who can reply to that exact user (by using Telegram's reply, and by tapping the "پاسخ به کاربر" button if you also set "reply_btn": true on the node). Good for support, feedback, orders with receipts. Do NOT use "ask" for simple data collection that a fixed set of questions can cover — use "fields" for that.
+- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner. The owner can answer by replying to it inside the bot chat and the answer reaches the user. Good for simple one-way notes. For anything where the owner must answer users personally, add "ticket": true (see SUPPORT DESK), which gives numbered tickets and a Reply button.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary (the owner can reply to it too). Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
 - "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of buttons under the message. Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on nodes with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
-
-REPLY BUTTON ("reply_btn": true on an "ask" or "fields" node) — READ CAREFULLY
-What it does: when the user sends their message/form there, the owner receives it in his own chat with a «پاسخ به کاربر» button attached. Tapping it puts the owner in reply mode; the owner's next message (text, photo, anything) is delivered straight to that one user. It is OFF by default.
-
-Set "reply_btn": true ONLY when the user explicitly wants to answer users one-by-one in Telegram, e.g.:
-- "when a user sends a support message it must have a reply button so I can answer it"
-- "تیکت‌ها با دکمه پاسخ برام بیاد", "روی هر پیام کاربر دکمه پاسخ باشه", "پشتیبانی آنلاین می‌خوام"
-- order requests / complaints must come with a reply button
-- a human support, consultation or helpdesk bot where the owner personally replies
-- the user says "I want to reply to users", "let me answer them", "so I can respond to each person"
-
-Leave it OFF (do not write the key, or write false) when:
-- the user says "no reply button", "don't add a reply button", "فقط دریافت کنه", "بدون دکمه پاسخ", "جواب نده", "فقط ثبت کنه"
-- the section only collects data (a form, registration, order) and nobody answers individually
-- the user never mentions answering people; it is a plain menu, shop, quiz, channel promoter or AI assistant
-- the owner answers rarely, outside Telegram, or in bulk
-
-Do not invent the button for bots that don't need per-user conversation, and do not add it to nodes without "ask" or "fields" (the engine ignores it there). When you set it, mention in "thinking" that each ticket arrives with a reply button. When you leave it off while the user asked for something similar, say in "thinking" that tickets still arrive but without the button.
 
 MEDIA
 - The request may contain a MEDIA LIBRARY: files the user uploaded, each with id, kind (photo, video, animation, audio, voice, document) and name. Attach them with "media": "<id>" on a node (shown above/with the node text; node text becomes the caption) or "done_media" (sent with the thank-you message).
@@ -636,8 +650,7 @@ ACTIONS ("action" object, max 6 per list)
 - {"op": "clear", "var": "city"}                            back to the default
 - {"op": "random", "var": "dice", "value": "1-6"}           random whole number in a range
 - {"op": "notify", "value": "text"}                         sends a message to the bot owner (may use {placeholders}; the user's name and id are appended; the owner can reply to it)
-- {"op": "send_channel", "channel": "@channel", "text": "post text", "at": "HH:MM", "media": "<media_id>"}
-                                                queue this message to be posted to a channel at a chosen time (see SCHEDULED CHANNEL POSTS).
+- {"op": "remind", "minutes": 60, "value": "text", "goto": "<node_id>", "key": "cart"}   schedule a message for later, see REMINDERS
 
 WHERE LOGIC GOES
 - node "do": [actions] runs every time a user enters the node, before anything is shown.
@@ -658,57 +671,51 @@ WHEN TO USE LOGIC
   {"text": "سلام {name}", "alt": [{"when": {"var": "visits", "op": ">", "value": "1"}, "text": "خوش برگشتی {name}"}]}
   {"title": "دستیار", "text": "هر سوالی داری بپرس.", "ai": {"prompt": "تو دستیار فروشگاه ... هستی. ...", "daily": 15}, "buttons": [[{"text": "بازگشت", "goto": "home"}]]}
 
+SUPPORT DESK (tickets with a Reply button; use it for every support, contact, complaint, feedback, ticket, order-with-receipt flow, or any request where the owner must answer users personally)
+- Add "ticket": true to a node that has "ask": true or "fields". Every message or finished form becomes a numbered ticket (#1, #2, ...). The owner (and optional staff) receive it inside the bot chat with buttons under it: Reply, History, Close ticket, Block user. Tapping Reply puts them in reply mode: the next message they send (text, photo, voice, file) is delivered to the user. Under that answer the user gets a "reply to support" button, so the conversation continues inside the same ticket. The owner can also list open tickets with /tickets.
+- Optional "tag" (max 20 chars) is shown on the ticket. For departments make one ask node per department with its own tag, e.g. "فروش", "فنی", "پرداخت".
+- {ticket_no} is the number of the user's latest ticket. Use it in "done", e.g. "پیامت ثبت شد (تیکت #{ticket_no}). به‌زودی جواب می‌دیم." If "done" is missing a good default is used.
+- Config "desk": {"staff": [numeric telegram ids], "closed": "text sent to the user when a ticket is closed", "reply_btn": "label of the user's reply button"}. Add "staff" ONLY with numeric ids the user gave; never invent ids. Otherwise just mention in "thinking" that extra support staff ids can be added with manual edit (the owner always receives tickets).
+- Always prefer "ticket": true over plain "ask" when a human answers. A ticket form ("fields") is the best way to take orders, bookings, applications and complaints: the owner gets one clean message and can reply to the customer right there.
+- A good support bot: FAQ sections for common questions, a "contact support" ask node with ticket, a cancel button, and optionally an AI section for free questions. In "thinking" tell the owner they will see tickets in the bot chat with a Reply button and can use /tickets.
+
+GLOBALS (data shared by ALL users)
+- config "globals": {"votes_a": "0", "stock": "20"} declares variables that exist once per bot and are shared by every user: counters, polls, limited stock, raffle entries, community goals. Use them exactly like normal variables in texts ({votes_a}), conditions and actions (add/set/clear). "add" on a global is atomic, so simultaneous users are counted correctly.
+- Never list the same name in "vars" too. Max 20 globals.
+- Poll: buttons with "do": [{"op":"add","var":"votes_a","value":"1"}] plus a results node that shows {votes_a}. One vote per user: a normal variable "voted" set to "1" by the vote buttons, and the vote buttons get "when": voted == 0.
+- Limited stock: global "stock" starts at the real number; the buy button has "when": stock > 0 and "do" add -1; show {stock} left.
+- Community goal: show "{total} از ۱۰۰۰" and add to it from a button or form completion node.
+
+LEADERBOARD
+- node "board": {"var": "coins", "top": 10, "label": "برترین‌ها"} appends a ranking (name — value) and the viewer's own rank under the node text. "var" is a normal numeric per-user variable that some action increases, or the built-in "refs" (top inviters). top is 3-20. Use it for contests, points, quizzes, referral competitions.
+
+REMINDERS AND FOLLOW-UPS
+- Action {"op": "remind", "minutes": 60, "value": "text", "goto": "<node_id>", "key": "cart"} schedules something for later: after N minutes (1-43200 = up to 30 days) the bot sends "value" to the same user and, if "goto" is set, shows that node (its "do" actions run, so a node can expire a perk). "key" prevents duplicates while one is waiting. Max 5 waiting per user. {placeholders} in "value" are filled when scheduled.
+- Use for: follow-up after an order or form, "complete your registration" nudges, appointment reminders, trial-end offers, daily-habit nudges, and subscription expiry (pay button "do" sets vip=1 and remind 43200 minutes with goto an "expired" node whose "do" clears vip).
+@@PAY@@
 PATTERNS (pick what fits, combine freely)
-- Shop/catalog: home, categories, product pages with media, order form, contact. Store/service business: services, prices (placeholders if unknown), booking form, location, support.
-- Support/helpdesk: FAQ sections, "ask" for contacting the owner, optional AI assistant for free questions. Add "reply_btn": true ONLY if the user wants to personally answer each person as tickets arrive; otherwise the owner just reads them.
+- Shop/catalog: home, categories, product pages with media, order form with ticket (owner replies to the customer inside the ticket), contact. Store/service business: services, prices (placeholders if unknown), booking form with ticket, location, support.
+- Support/helpdesk: FAQ sections, contact node with "ticket": true (departments via tags), optional AI assistant for free questions, closing message in desk.closed.
 - Content/channel promoter: welcome with media, forced join, latest content links, share button.
-- Quiz/game/loyalty: variables + route + alt, scores, levels, daily-style rewards via {date}.
-- Community/viral: invites with {refs}, {ref_link}, on_ref rewards, leaderboard-like messages per user.
+- Quiz/game/loyalty/contest: variables + route + alt, scores, levels, daily-style rewards via {date}, a "board" for the ranking, globals for community goals.
+- Community/viral: invites with {refs}, {ref_link}, on_ref rewards, a "board" on "refs" for top inviters.
 - AI products: assistant, tutor, translator, writer, consultant, character chat: AI section(s) with a strong prompt plus a small menu around it.
+- Sales funnel: lead form with ticket, remind-based follow-up, offers; owner replies personally.
+- Polls, votes, raffles, limited-stock drops: globals + per-user guard variable.
 
 ENGINE LIMITS (be honest about them in "thinking" and build the closest working approximation)
-- CANNOT do: online payments, real inventory/databases, calling external APIs on a schedule (recurring/daily cron rules), data shared BETWEEN users except invite counts (no global counters or real leaderboards; variables are per user), reading the content of files or photos users send.
-- CAN do: posting to a channel at a chosen time (see SCHEDULED CHANNEL POSTS) — do not report that as impossible.
-- Example approximation: an order form whose answers (and photo of a receipt via an "ask" section) are sent to the owner instead of online payment.
-- When one of these limits blocks a core requirement, you MUST also report it in the "limits" array described in the next section.
+- CANNOT do: card or bank-gateway payments @@PAYLIM@@, calling external APIs or websites, real database tables or per-item records (only per-user variables, globals and the leaderboard), reading the CONTENT of files or photos users send (they can be forwarded to the owner), managing groups/channels, inline mode, calls.
+- CAN approximate: orders and bookings (form + ticket), stock and quotas (globals), polls and votes (globals), rankings (board), delayed messages and expiry (remind), human support (ticket), subscriptions and paid access (pay + vip flag + remind).
+- Example approximation: an order form with ticket (the owner sees the order and replies to the customer with the payment instructions) instead of an online checkout.
 
-IMPOSSIBLE REQUESTS → "limits" (you are helping the platform owner build new engine features)
-Some requests cannot be genuinely done by this engine no matter how you structure the config. For every such requirement, add an item to the top-level "limits" array. This goes ONLY to the platform developer, never to the end user.
+REASONING PROTOCOL (think through this silently before you write the JSON)
+1. Actors: end user, owner, optional staff. What does each of them need from this bot?
+2. List every requirement the user stated, then add what a professional would add without being asked: a way back, a way to reach a human, an owner notification, confirmation messages, clear errors.
+3. Map each requirement to the engine feature that implements it: ticket for human answers, forms+types for data, vars/route/alt/when for logic, globals for shared counters, board for rankings, remind for follow-ups, ai for free-form questions@@PAYMAP@@.
+4. If something is impossible, pick the closest honest approximation and say so in "thinking".
+5. Verify before answering: every goto/next/route/remind/pay target exists; every {placeholder} is declared; every ask/form/ticket node has a cancel or home button; texts are in the output language; no invented facts; the JSON is valid and complete.
 
-"limits": [ {"feature": "english_snake_case_slug", "want": "...", "why": "...", "upgrade": "..."} ]   (omit the key entirely when nothing is impossible)
-
-Rules for "limits":
-- MAX 3 items. Report only the CORE of the request being impossible, not every small wish.
-- "feature": a short english slug naming the missing capability, e.g. payment, database, schedule, external_api, multi_user_data, global_counters, file_understanding, webhook, rich_list_pagination, ban_user, team_roles.
-- "want": what the user asked for, in the user's OWN words (OUTPUT LANGUAGE), quoted or closely paraphrased. Keep it under 300 characters.
-- "why": 1-2 sentences on the concrete technical reason this fixed engine can't do it (per-user variables only, no shared state, no outbound calls, no timers, no money handling...).
-- "upgrade": what infrastructure would have to be built so this becomes possible, phrased as an actionable engineering note (e.g. "add per-bot key-value store with admin API", "add job scheduler with cron-like triggers", "add shared counter collections for leaderboards").
-- WRITE IN THE OUTPUT LANGUAGE for "want", "why" and "upgrade"; only "feature" stays english.
-- Do NOT use "limits" as an excuse: if an approximation exists, BUILD the approximation and stay silent. Report only what you truly cannot deliver at all, even approximately.
-- Do NOT report: missing user information (ask for it in "thinking" instead), things outside a Telegram bot's nature, content policies, or anything the engine actually supports.
-- NEVER put this report in "thinking", "ideas", node texts or anywhere the end user can see. "thinking" may mention the limitation to the user in one short honest sentence, but the "limits" array is for the developer only.
-- If the whole request is impossible, still build the most useful nearby bot AND report it.
-
-SCHEDULED CHANNEL POSTS ("send_channel" action)
-Use this when the user wants the bot to post content to a Telegram channel at a chosen time. This capability EXISTS — do not report it in "limits".
-
-How it works: the action runs when the OWNER (is_owner == "1") reaches that node inside the bot, taps the button that carries the action, and the engine queues the text for the requested time. The bot must be an ADMIN of the channel with "post messages" rights.
-
-- {"op": "send_channel", "channel": "@mychannel", "text": "the post text (may use {placeholders})", "at": "21:30", "media": "<media_id>"}
-- "channel": @username, a t.me link, a numeric -100… id, or a joinchat link. BEST PRACTICE: put "{channel}" (not a literal id) so the owner can change the channel later in the bot settings without touching any button. If the user gave a real channel, also set the bot-level "channel_post": {"channel": "...", "at": "..."} so it appears in the settings screen. If they gave none, set it to "@your_channel" and say in "thinking" that the real channel must be set via manual edit, and that the bot must be an admin there.
-  - "at": the schedule. Accept "HH:MM" (today if still ahead, otherwise tomorrow) or "YYYY/MM/DD HH:MM" (Jalali, OUTPUT-LANGUAGE users write 1405/07/15 18:00) or "MM/DD HH:MM". Prefer "{post_at}" so the owner can change it in settings. Always in Tehran time.
-  - "text": the post. Keep it under 1000 characters if you attach "media" so it fits as the caption.
-  - "media": optional, from the MEDIA LIBRARY.
-- Put it on a "goto" button inside an owner-only section, because only the owner should schedule posts. Pattern:
-  {"title": "پنل مدیر", "text": "مدیریت پست‌ها", "buttons": [[{"text": "پنل مدیر", "goto": "admin", "when": {"var": "is_owner", "op": "==", "value": "1"}}]]}
-  {"title": "ارسال پست", "text": "متن پست رو اینجا بنویس و بفرست.", "ask": true, "reply_btn": true, "next": "admin"}
-  {"text": "پست زمان‌بندی شد", "buttons": [[{"text": "ارسال فردا ساعت ۹", "goto": "admin", "do": [{"op": "send_channel", "channel": "@mychannel", "text": "{last_msg}", "at": "09:00"}]}]]}
-- Keep it simple: one "ask" node to collect the text, one button that schedules it, and a confirmation node. The engine already shows the owner a "حذف از صف" button.
-- IMPORTANT: "text" MUST be "{last_msg}" — it is the owner's last message, still available when they tap the button. "{text}" is EMPTY on a button tap, so never use it here.
-- After queuing, the owner is told when it will be posted and gets a delete button. Mention this in "thinking" so they know they can cancel.
-- Do NOT use this for posting to a group, for user-to-user messages, or for anything the engine cannot schedule (recurring/daily cron rules are NOT supported — each post is scheduled once at one specific time).
-
-DESIGN: think before you structure
+Design rules:
 - Think before you structure: identify the bot's real purpose, the natural user journeys, and the minimum set of nodes that cover them well. Don't pad with filler, but don't skip an obviously needed part (a shop bot needs a way to order, a business bot needs contact/support).
 - node_id: lowercase english letters, digits, underscore. Max 60 nodes, max 3 buttons per row, max 6 rows per node.
 - A button has exactly one of: "goto" (an existing node_id), "url" (https only), "alert", "copy", "share".
@@ -720,6 +727,15 @@ DESIGN: think before you structure
 - Write all user-facing text in the OUTPUT LANGUAGE.
 - When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text, media, button, variable and rule exactly as it was (the user may have edited them by hand).
 - Plain text only, no Markdown/HTML formatting characters in node texts."""
+SYSTEM_PROMPT = (_SP_BASE.replace("@@PAY@@", ("\n" + """
+PAYMENTS (Telegram Stars)
+- A button can take payment in Telegram Stars (digital goods, VIP access, paid content, tips, donations, credits inside the bot): {"text": "خرید اشتراک", "pay": {"stars": 50, "title": "اشتراک ویژه", "desc": "دسترسی یک‌ماهه", "text": "پرداخت انجام شد، ممنون!", "goto": "vip_home"}, "do": [{"op": "set", "var": "vip", "value": "1"}]}
+- "stars": whole number 1-10000. "do" runs ONLY after the payment succeeded (set a vip flag, add credits...). "text" is shown after success, "goto" is the node shown next. A pay button has no goto/url of its own. Use "when" on content and buttons so only paid users see them. Each product or plan is one pay button.
+- Use the price the user gave; if none, use a placeholder number and say so in "thinking". In "thinking" mention that Stars go to the owner's Telegram balance, that the owner sees every payment in the bot chat, can list them with /payments and refund with /refund CODE, and that users reach payment support with /paysupport.
+- Do not use pay buttons for physical goods; for those use an order form with ticket.
+""") if PAYMENTS else "")
+                 .replace("@@PAYLIM@@", "(only Telegram Stars)" if PAYMENTS else "of any kind")
+                 .replace("@@PAYMAP@@", ", pay for Telegram Stars payments" if PAYMENTS else ""))
 
 
 ID_RE = re.compile(r"^[a-z0-9_]{1,30}$")
@@ -733,11 +749,10 @@ MAX_VARS = 40
 MAX_HOPS = 5
 # متغیرهای آماده‌ی تلگرام (فقط‌خواندنی)
 BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner",
-            "bot_name", "bot_username", "text", "last_msg", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday",
-            "channel", "post_at")
+            "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday", "ticket_no")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
-ACT_OPS = ("set", "add", "clear", "random", "notify", "send_channel")
+ACT_OPS = ("set", "add", "clear", "random", "notify", "remind")
 F_TYPES = ("text", "number", "phone", "email")
 _DIG = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
@@ -751,29 +766,6 @@ def norm_url(v):
         v = "https://" + v
     if v.startswith("https://") and len(v) > 12 and not re.search(r"\s", v):
         return v[:500]
-    return None
-
-
-def norm_channel(v):
-    """شناسه/لینک کانال → چیزی که sendMessage قبول می‌کند (@name / -100123 / joinchat)"""
-    v = str(v or "").strip()
-    if not v:
-        return None
-    # لینک دعوت خصوصی: t.me/joinchat/XXX یا t.me/+XXXX یا t.me/XXXXXXXXXXXX
-    m = re.search(r"(?:t\.me|telegram\.me|\+)\s*/?\s*(joinchat/[A-Za-z0-9_-]{5,}|[A-Za-z0-9_-]{16,})", v, re.I)
-    if m:
-        return "https://t.me/" + m.group(1)
-    # آیدی عددی کانال (-1001234567890)
-    digits = re.sub(r"[^\d-]", "", v)
-    if re.fullmatch(r"-100\d{6,}", digits):
-        return digits
-    # @name یا t.me/name یا https://t.me/name
-    s = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", v, flags=re.I).lstrip("@").strip().rstrip("/")
-    s = s.split("?")[0].split("#")[0].strip()
-    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{3,31}", s):
-        return "@" + s
-    if re.fullmatch(r"-?\d{6,}", s):
-        return s
     return None
 
 
@@ -822,7 +814,7 @@ def clean_cond(c, used, nums, bad, depth=0):
     return out
 
 
-def clean_actions(lst, used, nums, bad):
+def clean_actions(lst, used, nums, bad, valid=None):
     out = []
     for a in (lst if isinstance(lst, list) else [])[:6]:
         if not isinstance(a, dict):
@@ -838,26 +830,30 @@ def clean_actions(lst, used, nums, bad):
             else:
                 bad("متن اعلان (notify) خالیه")
             continue
-        if op == "send_channel":
-            raw_ch = str(a.get("channel") or a.get("value") or "").strip()
-            body = str(a.get("text") or "").strip()[:3500]
-            at = str(a.get("at") or a.get("when") or "").strip()[:40]
-            if PH_RE.search(raw_ch):                  # کانال می‌تونه متغیر باشه (مثلاً @{mychan})
-                ch = raw_ch[:200]
-                for m in PH_RE.finditer(raw_ch):
-                    if m.group(1) not in BUILTINS:
-                        used.add(m.group(1))
-            else:
-                ch = norm_channel(raw_ch)
-            if not (ch and at):
-                bad("اکشن send_channel به «کانال» و «زمان ارسال» نیاز دارد")
+        if op == "remind":
+            v = str(a.get("value") or "").strip()[:500]
+            try:
+                mins = int(str(a.get("minutes", a.get("after", 60))).translate(_DIG))
+            except (TypeError, ValueError):
+                mins = 0
+            if not 1 <= mins <= 43200:
+                bad("زمان یادآور (minutes) باید بین ۱ تا ۴۳۲۰۰ دقیقه (۳۰ روز) باشه")
                 continue
-            if not body:
-                body = "{last_msg}"          # آخرین پیام ادمین
-            item = {"op": "send_channel", "channel": ch, "text": body, "at": at}
-            mi = str(a.get("media") or "").strip()
-            if mi:
-                item["media"] = mi
+            g = str(a.get("goto") or "")
+            if g and not (valid and g in valid):
+                bad(f"بخش مقصد یادآور «{g}» وجود نداره")
+                g = ""
+            if not v and not g:
+                bad("یادآور باید متن یا بخش مقصد داشته باشه")
+                continue
+            item = {"op": "remind", "minutes": mins}
+            if v:
+                item["value"] = v
+            if g:
+                item["goto"] = g
+            key = re.sub(r"[^a-z0-9_]", "", str(a.get("key") or "").lower())[:20]
+            if key:
+                item["key"] = key
             out.append(item)
             continue
         name = str(a.get("var") or "").strip().lower()
@@ -886,7 +882,33 @@ def clean_actions(lst, used, nums, bad):
         out.append(item)
     return out
 
-def sanitize(cfg, strict=False, media=None):
+def clean_pay(pay, label, valid, bad):
+    """دکمه‌ی پرداخت با ستاره‌ی تلگرام (XTR)؛ نامعتبر = None"""
+    if not PAYMENTS:
+        bad("پرداخت با ستاره در این سرویس فعال نیست")
+        return None
+    try:
+        stars = int(str(pay.get("stars", 0)).translate(_DIG))
+    except (TypeError, ValueError):
+        stars = 0
+    if not 1 <= stars <= MAX_STARS:
+        bad(f"مبلغ دکمه‌ی پرداخت «{label}» باید عدد صحیح بین ۱ تا {MAX_STARS} ستاره باشه")
+        return None
+    title = (str(pay.get("title") or "").strip() or label)[:32]
+    p = {"stars": stars, "title": title, "desc": (str(pay.get("desc") or "").strip() or title)[:255]}
+    tx = str(pay.get("text") or "").strip()[:300]
+    if tx:
+        p["text"] = tx
+    g = str(pay.get("goto") or "")
+    if g:
+        if g in valid:
+            p["goto"] = g
+        else:
+            bad(f"بخش بعد از پرداختِ «{label}» وجود نداره")
+    return {"text": label, "pay": p}
+
+
+def sanitize(cfg, strict=False, media=None, warns=None):
     """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه.
     media = مجموعه‌ی شناسه‌ی رسانه‌هایی که مال خود کاربره؛ بقیه بی‌صدا حذف می‌شن"""
     media = media or set()
@@ -899,6 +921,18 @@ def sanitize(cfg, strict=False, media=None):
     def bad(msg):
         if strict:
             raise ValueError(msg)
+        if warns is not None and len(warns) < 12 and msg not in warns:
+            warns.append(msg)            # چیزی که بی‌صدا حذف/اصلاح شد؛ برای بازخورد به هوش مصنوعی
+
+    # متغیرهای مشترک بین همه‌ی کاربرها (شمارنده‌ها، رأی‌گیری، موجودی مشترک)
+    gl = {}
+    gd = cfg.get("globals")
+    for k, v in (gd.items() if isinstance(gd, dict) else []):
+        k = str(k).strip().lower()
+        if VAR_RE.match(k) and k not in BUILTINS and len(gl) < MAX_GLOBALS:
+            gl[k] = str(v if v is not None else "")[:100]
+        else:
+            bad(f"نام یا تعداد متغیر مشترک «{k}» معتبر نیست (حروف انگلیسی کوچک، عدد و _، حداکثر {MAX_GLOBALS} تا)")
 
     used, nums = set(), set()      # متغیرهایی که جایی استفاده شدن / مقدار عددی دارن
     valid = {}
@@ -926,7 +960,9 @@ def sanitize(cfg, strict=False, media=None):
                     bad(f"بخش «{nid}» یه دکمه‌ی بدون متن داره"); continue
                 it = None
                 g = str(b.get("goto") or "")
-                if g:
+                if isinstance(b.get("pay"), dict):
+                    it = clean_pay(b["pay"], label, valid, bad)
+                elif g:
                     if g in valid:
                         it = {"text": label, "goto": g}
                     else:
@@ -952,12 +988,12 @@ def sanitize(cfg, strict=False, media=None):
                     if w:
                         it["when"] = w
                 if b.get("do"):
-                    if "goto" in it or "alert" in it:
-                        acts = clean_actions(b["do"], used, nums, bad)
+                    if "goto" in it or "alert" in it or "pay" in it:
+                        acts = clean_actions(b["do"], used, nums, bad, valid)
                         if acts:
                             it["do"] = acts
                     else:
-                        bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش» و «پیام پاپ‌آپ» کار می‌کنه (دکمه‌ی «{label}»)")
+                        bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنه (دکمه‌ی «{label}»)")
                 r.append(it)
             if r:
                 rows.append(r)
@@ -1021,6 +1057,34 @@ def sanitize(cfg, strict=False, media=None):
                 except (TypeError, ValueError):
                     mem = 3
                 node["ai"] = {"prompt": str(ai["prompt"]).strip()[:1500], "daily": max(1, min(100, dly)), "memory": mem}
+        # تیکت: هر پیام/فرم این بخش یک تیکت شماره‌دار می‌شه با دکمه‌ی «پاسخ» برای صاحب ربات و پشتیبان‌ها
+        tk = n.get("ticket")
+        if tk:
+            if node.get("fields") or node["ask"]:
+                node["ticket"] = True
+                tag = str(n.get("tag") or (tk if isinstance(tk, str) and tk.strip().lower() != "true" else "")).strip()[:20]
+                if tag:
+                    node["tag"] = tag
+            else:
+                bad(f"بخش «{nid}» تیکت می‌خواد ولی «دریافت پیام» (ask) یا فرم (fields) نداره")
+        # جدول برترین‌ها زیر متن بخش
+        bd = n.get("board")
+        if isinstance(bd, dict):
+            bv = str(bd.get("var") or "").strip().lower()
+            if bv == "refs" or (VAR_RE.match(bv) and bv not in BUILTINS and bv not in gl):
+                try:
+                    topn = max(3, min(20, int(bd.get("top", 10))))
+                except (TypeError, ValueError):
+                    topn = 10
+                node["board"] = {"var": bv, "top": topn}
+                lab = str(bd.get("label") or "").strip()[:30]
+                if lab:
+                    node["board"]["label"] = lab
+                if bv != "refs":
+                    used.add(bv)
+                    nums.add(bv)
+            else:
+                bad(f"متغیر جدول برترین‌ها در بخش «{nid}» باید یه متغیر شخصیِ عددی (یا refs) باشه")
         if n.get("kb") == "reply" and rows and not node.get("fields") and not node["ask"] and not node.get("ai"):
             node["kb"] = "reply"          # کیبورد زیر صفحه‌ی چت (فقط برای بخش‌های بدون ask/form)
         done = str(n.get("done") or "").strip()[:500]
@@ -1036,16 +1100,8 @@ def sanitize(cfg, strict=False, media=None):
             else:
                 bad(f"بخش بعدیِ «{nid}» وجود نداره")
 
-        # دکمه «پاسخ به کاربر» روی پیام‌های این بخش: فقط وقتی خود کاربر خواسته باشه
-        if node.get("ask") or node.get("fields"):
-            rb = n.get("reply_btn", None)
-            if isinstance(rb, bool):
-                node["reply_btn"] = rb
-            elif rb is not None:
-                bad(f"مقدار reply_btn در بخش «{nid}» باید true (دکمه پاسخ بساز) یا false (نساز) باشه")
-
         # منطق: اکشن‌ها، هدایت شرطی، متن جایگزین
-        acts = clean_actions(n.get("do"), used, nums, bad)
+        acts = clean_actions(n.get("do"), used, nums, bad, valid)
         if acts:
             node["do"] = acts
         route = []
@@ -1090,19 +1146,6 @@ def sanitize(cfg, strict=False, media=None):
     out = {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
            "fallback": fallback, "commands": cmds, "nodes": nodes}
 
-    # تنظیمات پیش‌فرض پست کانال: هر ربات این دو را دارد و کاربر می‌تواند از تنظیمات عوضشان کند
-    ch_cfg = cfg.get("channel_post")
-    if isinstance(ch_cfg, dict):
-        cp = {}
-        cval = str(ch_cfg.get("channel") or "").strip()[:200]
-        if cval:
-            cp["channel"] = cval
-        atval = str(ch_cfg.get("at") or "").strip()[:40]
-        if atval:
-            cp["at"] = atval
-        if cp:
-            out["channel_post"] = cp
-
     # پاداش دعوت: اکشن‌هایی که برای دعوت‌کننده اجرا می‌شن
     on_ref = clean_actions(cfg.get("on_ref"), used, nums, bad)
     if on_ref:
@@ -1123,13 +1166,42 @@ def sanitize(cfg, strict=False, media=None):
         else:
             bad(f"نام متغیر «{k}» معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
     for k in sorted(used):
-        declared.setdefault(k, "0" if k in nums else "")
+        if k not in gl:
+            declared.setdefault(k, "0" if k in nums else "")
+    for k in list(declared):
+        if k in gl:
+            declared.pop(k)              # اسم مشترک، متغیر شخصی نیست
     if len(declared) > MAX_VARS:
         if strict:
             raise ValueError(f"حداکثر {MAX_VARS} متغیر می‌تونی داشته باشی")
         declared = dict(list(declared.items())[:MAX_VARS])
     if declared:
         out["vars"] = declared
+    if gl:
+        for k in gl:
+            if k in nums and gl[k] == "":
+                gl[k] = "0"
+        out["globals"] = gl
+
+    # میزکار پشتیبانی: پشتیبان‌های اضافه، پیام بستن تیکت و برچسب دکمه‌ی پاسخ کاربر
+    dk = cfg.get("desk")
+    if isinstance(dk, dict):
+        d, staff = {}, []
+        for x in (dk.get("staff") if isinstance(dk.get("staff"), list) else [])[:MAX_STAFF]:
+            sx = re.sub(r"\D", "", str(x).translate(_DIG))
+            if 5 <= len(sx) <= 15:
+                if int(sx) not in staff:
+                    staff.append(int(sx))
+            else:
+                bad(f"آیدی عددی پشتیبان «{x}» معتبر نیست")
+        if staff:
+            d["staff"] = staff
+        for key, lim in (("closed", 300), ("reply_btn", 30)):
+            v = str(dk.get(key) or "").strip()[:lim]
+            if v:
+                d[key] = v
+        if d:
+            out["desk"] = d
 
     j = cfg.get("join")
     if isinstance(j, dict):
@@ -1182,6 +1254,11 @@ def lint(cfg):
         stack += [r["goto"] for r in n.get("route", [])]
         if n.get("next"):
             stack.append(n["next"])
+        for d in _walk(n):                                   # مقصدِ یادآور و بعد از پرداخت هم مسیر حساب می‌شه
+            if d.get("op") == "remind" and d.get("goto"):
+                stack.append(d["goto"])
+            if isinstance(d.get("pay"), dict) and d["pay"].get("goto"):
+                stack.append(d["pay"]["goto"])
     lost = [i for i in nodes if i not in seen]
     if lost:
         out.append("unreachable nodes (link them from a goto button / route / next, or remove them): " + ", ".join(lost[:6]))
@@ -1201,16 +1278,23 @@ def lint(cfg):
             writes.add(d["var"])
         if isinstance(d.get("save"), list):
             writes.update(x for x in d["save"] if x)
-    unset = sorted((reads & set(cfg.get("vars", {}))) - writes)
+    unset = sorted((reads & (set(cfg.get("vars", {})) | set(cfg.get("globals", {})))) - writes)
+    for i, n in nodes.items():
+        bv = (n.get("board") or {}).get("var")
+        if bv and bv != "refs" and bv not in writes:
+            out.append(f"leaderboard variable '{bv}' in node '{i}' is never increased by any action (add an 'add'/'set' action that changes it, or remove the board)")
+    for i, n in nodes.items():
+        if n.get("ticket") and not any("goto" in b for row in n["buttons"] for b in row) and not n.get("next"):
+            out.append(f"ticket node '{i}' has no cancel/home button and no 'next' (users cannot leave it)")
     if unset:
         out.append("variables that are read but never set by any action or form 'save' (set them somewhere or remove them): " + ", ".join(unset[:6]))
     return out
 
 
 class ThinkLang(ValueError):
-    def __init__(self, cfg, ideas, limits=None):
+    def __init__(self, cfg, ideas):
         super().__init__("thinking language mismatch")
-        self.cfg, self.ideas, self.limits = cfg, ideas, limits or []
+        self.cfg, self.ideas = cfg, ideas
 
 
 def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
@@ -1234,52 +1318,26 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
     return txt, (pt, ct)
 
 
-def clean_limits(raw):
-    """گزارش «این قابلیت واقعاً شدنی نیست» که به ادمین رباتساز می‌ره؛ فقط ۳ مورد معتبر و کوتاه"""
-    out = []
-    for x in (raw if isinstance(raw, list) else [])[:3]:
-        if not isinstance(x, dict):
-            continue
-        feat = re.sub(r"[^a-z0-9_]", "", str(x.get("feature") or "").lower())[:30]
-        want = str(x.get("want") or "").strip()[:400]
-        why = str(x.get("why") or "").strip()[:500]
-        up = str(x.get("upgrade") or "").strip()[:600]
-        if not (feat and want and why and up):
-            continue
-        out.append({"feature": feat, "want": want, "why": why, "upgrade": up})
-    return out
-
-
-class BadOutput(ValueError):
-    """خروجی مدل معتبر نبود؛ متن خام برای گزارش به ادمین نگه داشته می‌شود"""
-    def __init__(self, msg, raw=""):
-        super().__init__(msg)
-        self.raw = str(raw)[:600]
-
-
 def _call_llm(user, lang, final, media_ids, acc):
     txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
-        raise BadOutput("پاسخ AI شامل JSON نبود", txt)
-    try:
-        raw = json.loads(m.group(0))
-    except ValueError:
-        raise BadOutput("JSON مدل ناقص/نامعتبر بود", txt)
+        raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
+    raw = json.loads(m.group(0))
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
-        raise BadOutput("پاسخ AI فاقد بخش config بود", txt)
-    cfg = sanitize(raw["config"], media=media_ids)
+        raise ValueError("پاسخ AI فاقد بخش config بود")
+    warns = []
+    cfg = sanitize(raw["config"], media=media_ids, warns=warns)
     thinking = str(raw.get("thinking") or "").strip()[:900]
     ideas = [str(x).strip()[:80] for x in (raw.get("ideas") if isinstance(raw.get("ideas"), list) else []) if str(x).strip()][:3]
-    limits = clean_limits(raw.get("limits"))
     if lang == "fa":
         fa, la = _count(thinking)
         if not thinking or la > fa:            # توضیح انگلیسی/خالی شده
             if not final:
-                raise ThinkLang(cfg, ideas, limits)
+                raise ThinkLang(cfg, ideas)
             thinking = FALLBACK_THINKING
-    return thinking, cfg, ideas, limits
+    return thinking, cfg, ideas, warns
 
 
 def media_brief(items):
@@ -1314,112 +1372,28 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
     best, last, feedback = None, None, ""
     for attempt in (0, 1):
         try:
-            thinking, cfg, ideas, limits = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc)
+            thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc)
         except ThinkLang as e:
-            best, last = best or ("", e.cfg, e.ideas, e.limits), e
+            best, last = best or ("", e.cfg, e.ideas), e
             feedback = "(Your previous answer used the wrong language for \"thinking\". Fix that now.)"
             log.warning("thinking in wrong language, retrying")
             continue
         except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
             last = e
-            raw = getattr(e, "raw", "")
-            hint = ""
-            if isinstance(e, BadOutput) and raw:
-                # مدل ظاهراً توضیح داده چرا نمی‌تواند → به صریح‌ترین شکل تکرار کن
-                hint = (f" (Your previous reply was NOT json. Your own words were: {raw[:300]!r}. "
-                        f"You MUST still return one valid JSON object. If you believe the request is "
-                        f"impossible, build the closest approximation and describe the gap in \"limits\".)")
-            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.{hint})"
+            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.)"
             log.warning("bad AI output, retrying once", exc_info=True)
             continue
-        problems = lint(cfg)
+        problems = lint(cfg) + [f"the validator dropped or changed something: {w}" for w in warns]
         if problems and attempt == 0:
-            best = (thinking, cfg, ideas, limits)
+            best = (thinking, cfg, ideas)
             feedback = "(Your previous config had logic problems, fix them and return the FULL config again: " + "; ".join(problems[:6]) + ")"
             log.info("lint problems, retrying: %s", problems)
             continue
-        return thinking, cfg, ideas, limits
+        return thinking, cfg, ideas
     if best:                        # کانفیگ سالمِ تلاش اول رو نگه می‌داریم
-        th, cfg, ideas, lim = best
-        return (th or FALLBACK_THINKING), cfg, ideas, (lim or [])
+        th, cfg, ideas = best
+        return (th or FALLBACK_THINKING), cfg, ideas
     raise last
-
-
-GAP_RESEND_DAYS = 14           # بعد از این مدت، گزارش تکراری دوباره فرستاده می‌شه
-
-
-def gap_key(feature, want):
-    """کلید ضدتکرار: همون قابلیت + خواسته‌ی مشابه"""
-    norm = re.sub(r"[^\w؀-ۿ]+", " ", str(want or "").lower()).strip()
-    return f"{feature}:{hashlib.sha1(norm.encode()).hexdigest()[:10]}"
-
-
-def gap_text(feature, want, why, upgrade, user_line, prompt, bot_line):
-    """متن گزارش برای ادمین رباتساز"""
-    p = str(prompt or "").strip()
-    p = (p[:900] + "…") if len(p) > 900 else p
-    return ("قابلیت درخواستی که موتور فعلی پشتیبانی نمی‌کند\n\n"
-            f"ویژگی: {feature}\n\n"
-            f"کاربر چی خواست:\n{want}\n\n"
-            f"متن درخواست (کامل):\n{p}\n\n"
-            f"چرا شدنی نیست:\n{why}\n\n"
-            f"برای ارتقا چه لازم است:\n{upgrade}\n\n"
-            f"{user_line}\n{bot_line}")
-
-
-def report_gaps(uid, user, bot, prompt, limits):
-    """گزارش «شدنی نبود» رو برای ادمین‌های رباتساز می‌فرسته (با ضدتکرار)"""
-    if not limits or not ADMIN_IDS:
-        return
-    uname = user.get("username") or "-"
-    user_line = f"سازنده: {user.get('first_name', '')} (@{uname}) — {uid}"
-    for lim in limits[:3]:
-        key = gap_key(lim["feature"], lim["want"])
-        today = tehran_day()
-        prev = db.gaps.find_one({"_id": key})
-        fresh = not prev
-        if not fresh and prev.get("status") == "done":
-            continue                                  # قبلاً بررسی و پیاده شده
-        if not fresh and prev.get("day") == today:
-            db.gaps.update_one({"_id": key}, {"$inc": {"n": 1}, "$set": {"seen": now()}})
-            continue                                  # امروز همین گزارش دیده شده
-        db.gaps.replace_one({"_id": key}, {
-            "_id": key, "feature": lim["feature"], "want": lim["want"], "why": lim["why"],
-            "upgrade": lim["upgrade"], "uid": uid, "un": uname, "day": today,
-            "n": int((prev or {}).get("n", 0)) + 1, "status": (prev or {}).get("status", "new"),
-            "t": now(), "seen": now()}, upsert=True)
-        if fresh or age_sec(prev.get("t", now())) > GAP_RESEND_DAYS * 86400:
-            bot_line = f"ربات: {bot.get('name', '')}" if bot else "ربات جدید"
-            txt = gap_text(lim["feature"], lim["want"], lim["why"], lim["upgrade"], user_line, prompt, bot_line)
-            markup = {"inline_keyboard": [[{"text": "دیدم ✓", "callback_data": f"gk:{key}"[:64]}]]}
-            for admin in ADMIN_IDS:
-                tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=txt, reply_markup=markup)
-            log.info("gap reported: %s (%s)", lim["feature"], key)
-
-
-def gap_ack(key):
-    """ادمین روی «دیدم» زده"""
-    db.gaps.update_one({"_id": key}, {"$set": {"status": "seen", "seen": now()}})
-
-
-@app.get("/api/admin/gaps")
-@admin_only
-def api_admin_gaps(uid):
-    st = request.args.get("status", "open")
-    q = {} if st == "all" else {"status": {"$ne": "done"}}
-    rows = list(db.gaps.find(q).sort("t", -1).limit(200))
-    return jsonify(items=[{"id": r["_id"], "feature": r.get("feature", ""), "want": r.get("want", ""),
-                           "why": r.get("why", ""), "upgrade": r.get("upgrade", ""), "un": r.get("un", ""),
-                           "uid": r.get("uid"), "n": int(r.get("n", 1)), "status": r.get("status", "new"),
-                           "t": aware(r["t"]).isoformat()} for r in rows])
-
-
-@app.post("/api/admin/gaps/done")
-@admin_only
-def api_admin_gap_done(uid):
-    gid = str((request.get_json(silent=True) or {}).get("id", ""))
-    db.gaps.update_one({"_id": gid}, {"$set": {"status": "done", "seen": now()}})
-    return jsonify(ok=True)
 
 
 ENHANCE_PROMPT = ("You are a product designer who briefs a Telegram-bot builder. Rewrite the user's rough bot idea into a clear, concrete brief "
@@ -1550,7 +1524,7 @@ HOME = [_b("منوی اصلی", "home")]
 
 TEMPLATES = {
     "shop": {"icon": "bag", "title": "فروشگاه و سفارش", "desc": "منوی محصولات + فرم ثبت سفارش که برای خودت می‌آد",
-        "note": "یه فروشگاه ساده ساختم. قیمت‌ها، شماره و آدرس جای‌نگه‌دارن؛ از «ویرایش دستی» عوضشون کن. سفارش‌ها هم برات می‌آد و توی «پاسخ فرم‌ها» ذخیره می‌شه.",
+        "note": "یه فروشگاه ساده ساختم. قیمت‌ها، شماره و آدرس جای‌نگه‌دارن؛ از «ویرایش دستی» عوضشون کن. هر سفارش یه تیکت می‌شه که با دکمه‌ی «پاسخ» زیرش به مشتری جواب می‌دی و توی «پاسخ فرم‌ها» هم ذخیره می‌شه.",
         "config": {"name": "فروشگاه من", "start": "home", "fallback": "home",
             "commands": {"products": "products", "order": "order", "contact": "contact"},
             "nodes": {
@@ -1560,11 +1534,11 @@ TEMPLATES = {
                              "buttons": [[_b("ثبت سفارش", "order")], HOME]},
                 "order": {"title": "ثبت سفارش", "text": "برای ثبت سفارش چند تا سؤال کوتاه ازت می‌پرسم ",
                           "fields": ["اسم و فامیلت؟", "شماره تماست؟", "چه محصولی می‌خوای؟ (تعداد و توضیحات)", "آدرس یا شهرت؟"],
-                          "types": ["text", "phone", "text", "text"], "done": "سفارشت ثبت شد. به‌زودی باهات تماس می‌گیریم.", "next": "home", "buttons": [], "reply_btn": True},
+                          "types": ["text", "phone", "text", "text"], "ticket": True, "tag": "سفارش", "done": "سفارشت ثبت شد (تیکت #{ticket_no}). به‌زودی باهات تماس می‌گیریم.", "next": "home", "buttons": []},
                 "contact": {"title": "تماس با ما", "text": "[شماره تماس]\n[آدرس]\n[ساعت کاری]",
                             "buttons": [[_b("کپی شماره", copy="[شماره تماس]")], HOME]}}}},
     "support": {"icon": "headset", "title": "پشتیبانی مشتری", "desc": "سؤال‌های پرتکرار + ارسال پیام به پشتیبان",
-        "note": "ربات پشتیبانی ساختم؛ پیام کاربرها مستقیم برات فوروارد می‌شه. جواب‌های سؤال‌های پرتکرار رو با ویرایش دستی عوض کن.",
+        "note": "ربات پشتیبانی ساختم. هر پیام کاربر یه تیکت شماره‌دار می‌شه و با دکمه‌ی «پاسخ» زیرش جواب می‌دی؛ با /tickets هم تیکت‌های باز رو می‌بینی. جواب‌های سؤال‌های پرتکرار رو با ویرایش دستی عوض کن.",
         "config": {"name": "پشتیبانی", "start": "home", "fallback": "home", "commands": {"help": "faq"},
             "nodes": {
                 "home": {"title": "منوی اصلی", "text": "سلام {name} \nبه پشتیبانی خوش اومدی. چی می‌خوای؟",
@@ -1573,7 +1547,7 @@ TEMPLATES = {
                         "buttons": [[_b("زمان پاسخگویی", alert="معمولاً ظرف چند ساعت کاری پاسخ می‌دیم.")],
                                     [_b("روش‌های پرداخت", alert="[روش‌های پرداخت رو اینجا بنویس]")], HOME]},
                 "ticket": {"title": "پیام به پشتیبان", "text": "مشکلت یا سؤالت رو بنویس؛ پیامت مستقیم برای پشتیبان ارسال می‌شه ",
-                           "ask": True, "reply_btn": True, "done": "پیامت رسید. به‌زودی جواب می‌دیم.", "next": "home",
+                           "ask": True, "ticket": True, "done": "پیامت ثبت شد (تیکت #{ticket_no}). به‌زودی همین‌جا جواب می‌دیم.", "next": "home",
                            "buttons": [[_b("انصراف", "home")]]}}}},
     "form": {"icon": "form", "title": "فرم ثبت‌نام", "desc": "جمع‌آوری اطلاعات با فرم چندمرحله‌ای و اعتبارسنجی",
         "note": "فرم ثبت‌نام با اعتبارسنجی شماره ساختم و شهر هر کاربر رو یادش می‌مونه. جواب‌ها توی «پاسخ فرم‌ها» جمع می‌شن.",
@@ -1642,7 +1616,7 @@ TEMPLATES.update({
                 "book": {"title": "رزرو نوبت", "text": "چند تا سؤال کوتاه ازت می‌پرسم تا نوبتت ثبت بشه.",
                          "fields": ["اسم و فامیلت؟", "شماره تماست؟", "کدوم خدمت رو می‌خوای؟", "چه روز و ساعتی برات مناسبه؟"],
                          "types": ["text", "phone", "text", "text"], "done": "درخواست نوبتت ثبت شد. برای تأیید باهات تماس می‌گیریم.",
-                         "next": "home", "buttons": [], "reply_btn": True},
+                         "next": "home", "buttons": []},
                 "location": {"title": "آدرس و ساعت کاری", "text": "[آدرس]\n[ساعت کاری]\n[شماره تماس]",
                              "buttons": [[_b("کپی شماره", copy="[شماره تماس]")], HOME]}}}},
     "referral": {"icon": "users", "title": "دعوت و جایزه", "desc": "کاربرها دوستاشون رو دعوت می‌کنن و سکه می‌گیرن",
@@ -1814,11 +1788,9 @@ def new_bot_doc(uid, cfg, thinking):
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: رزرو توکن از قبل کم شده؛ در پایان هزینه‌ی واقعی ثبت و باقی‌مونده برمی‌گرده"""
     acc = []
-    user, bot = {}, None
     try:
-        user = db.users.find_one({"_id": uid}) or {}
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
-        thinking, cfg, ideas, limits = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
+        thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
         cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc)))
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return                                  # کار منقضی شده و توکن‌ها برگشته؛ نتیجه رو دور می‌ریزیم
@@ -1834,10 +1806,6 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         release(uid, reserve - cost)
         settle(uid, cost, "edit" if bot_id else "gen")
         db.jobs.update_one({"_id": jid}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": cost}})
-        try:
-            report_gaps(uid, user, bot, prompt, limits)     # گزارش قابلیت‌های شدنی‌نبود به ادمین
-        except Exception:
-            log.exception("report_gaps failed")
         if REF_ON == "create":
             settle_referral(uid)
     except Exception as e:
@@ -1847,22 +1815,6 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         if db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}}):
             release(uid, reserve)
-        # ── گزارش شکست به ادمین: مدل نتونست جواب بده، پس بگو دقیقاً چه گفت ──
-        try:
-            raw = getattr(e, "raw", "")
-            reason = f"{type(e).__name__}: {str(e)[:200]}"
-            why = f"مدل نتونست کانفیگ معتبر برگردونه.\nخطا: {reason}"
-            if raw:
-                why += f"\n\nمتن خام مدل:\n{raw}"
-            report_gaps(uid, user, bot, prompt, [{
-                "feature": "ai_refused_or_bad_json",
-                "want": prompt[:300],
-                "why": why[:900],
-                "upgrade": ("پرامپت/مدل رو بررسی کن؛ شاید مدل درخواست رو رد کرده. "
-                            "راه‌حل: فعال کردن JSON Schema خروجی (response_format) تا مدل نتونه فرار نکنه.")
-                }])
-        except Exception:
-            log.exception("report_gaps on error failed")
 
 
 def recover_jobs():
@@ -2077,14 +2029,18 @@ def api_activate(uid, bot_id):
     if db.bots.find_one({"token_hash": th, "_id": {"$ne": bot["_id"]}}):
         return jsonify(error="این توکن قبلاً برای ربات دیگه‌ای ثبت شده"), 400
     r = tg(token, "setWebhook", url=f"{BASE_URL}/hook/{bot_id}", secret_token=bot["secret"],
-           allowed_updates=["message", "callback_query"], drop_pending_updates=True)
+           allowed_updates=["message", "callback_query", "pre_checkout_query"], drop_pending_updates=True)
     if not r.get("ok"):
         return jsonify(error="اتصال وبهوک ناموفق بود"), 502
     tg(token, "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
         {"command": c, "description": c} for c in bot["config"]["commands"]])
     db.bots.update_one({"_id": bot["_id"]}, {"$set": {
         "token_enc": enc(token), "token_hash": th, "username": me["result"]["username"],
-        "active": True, "updated": now()}})
+        "active": True, "wh_pay": True, "updated": now()}})
+    try:
+        sync_commands(db.bots.find_one({"_id": bot["_id"]}), bot["config"])
+    except Exception:
+        log.exception("sync after activate failed")
     if REF_ON == "activate":
         settle_referral(uid)
     return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
@@ -2115,7 +2071,7 @@ def api_delete(uid, bot_id):
     db.subs.delete_many({"bot": bot_id})
     db.submissions.delete_many({"bot_id": bot_id})
     db.nvis.delete_many({"bot": bot_id})
-    for col in (db.states, db.rk, db.uvars, db.relay, db.mfid, db.aiuse, db.xp_views, db.replymode):
+    for col in (db.states, db.rk, db.uvars, db.relay, db.mfid, db.aiuse, db.xp_views):
         col.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
     db.xp_ev.delete_many({"_id": {"$regex": f"^[lsr]:{bot_id}:"}})
     return jsonify(ok=True)
@@ -2652,7 +2608,8 @@ class Env:
         self.vars = {k: str(v) for k, v in (doc.get("v") or {}).items()}
         self.visits = int(doc.get("visits", 0))
         self.refs = int(doc.get("refs", 0))
-        self.last_msg = str(doc.get("lm", ""))[:3500]      # آخرین پیام متنی کاربر (برای زمان‌بندی پست)
+        self.ticket_no = str(doc.get("tk") or "")
+        self._g = None                      # متغیرهای مشترکِ این ربات (تنبل بارگذاری می‌شه)
         self.is_new = False
         self.dirty = False
         self._now = now() + timedelta(hours=3, minutes=30)      # ساعت تهران
@@ -2683,18 +2640,14 @@ class Env:
             return ("@" + self.bot["username"]) if self.bot.get("username") else ""
         if k == "text":
             return self.text
-        if k == "last_msg":
-            return self.last_msg or self.text
-        if k == "channel":
-            return str((self.cfg.get("channel_post") or {}).get("channel", ""))
-        if k == "post_at":
-            return str((self.cfg.get("channel_post") or {}).get("at", ""))
         if k == "param":
             return self.param
         if k == "visits":
             return str(self.visits)
         if k == "refs":
             return str(self.refs)
+        if k == "ticket_no":
+            return self.ticket_no
         if k == "ref_link":
             return f"https://t.me/{self.bot['username']}?start=ref_{self.uid}" if self.bot.get("username") else ""
         n = self._now
@@ -2709,38 +2662,89 @@ class Env:
             return _WEEK[n.weekday()]
         return ""
 
+    # ── متغیرهای مشترک بین همه‌ی کاربرها ──
+    def is_global(self, k):
+        return k in (self.cfg.get("globals") or {})
+
+    def _gdoc(self):
+        if self._g is None:
+            self._g = (db.gvars.find_one({"_id": self.bot_id}) or {}).get("v") or {}
+        return self._g
+
+    def gget(self, k):
+        v = self._gdoc().get(k)
+        if v is None:
+            return str((self.cfg.get("globals") or {}).get(k, ""))
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return fmt_num(v)
+        return str(v)
+
+    def gset(self, k, v):
+        x = to_num(v)
+        val = x if x is not None else str(v)[:200]
+        db.gvars.update_one({"_id": self.bot_id}, {"$set": {f"v.{k}": val}}, upsert=True)
+        self._g = None
+
+    def gadd(self, k, n):
+        base = to_num((self.cfg.get("globals") or {}).get(k, "")) or 0
+        if base:                            # مقدار پیش‌فرضِ غیرصفر فقط یک بار جا می‌افته
+            try:
+                db.gvars.update_one({"_id": self.bot_id}, {"$setOnInsert": {"v": {}}}, upsert=True)
+            except DuplicateKeyError:
+                pass
+            db.gvars.update_one({"_id": self.bot_id, f"v.{k}": {"$exists": False}}, {"$set": {f"v.{k}": base}})
+        try:
+            d = db.gvars.find_one_and_update({"_id": self.bot_id}, {"$inc": {f"v.{k}": n}}, upsert=True,
+                                             return_document=ReturnDocument.AFTER)
+            self._g = (d or {}).get("v") or {}
+        except Exception:                   # مقدار قبلی عدد نبوده
+            self.gset(k, fmt_num((to_num(self.gget(k)) or 0) + n))
+
     def get(self, k):
         if k in BUILTINS:
             return self.builtin(k)
+        if self.is_global(k):
+            return self.gget(k)
         if k in self.vars:
             return self.vars[k]
         return str((self.cfg.get("vars") or {}).get(k, ""))
 
     def set(self, k, v):
-        if k in BUILTINS or not VAR_RE.match(k or "") or k not in (self.cfg.get("vars") or {}):
+        if k in BUILTINS or not VAR_RE.match(k or ""):
+            return
+        if self.is_global(k):
+            self.gset(k, v)
+            return
+        if k not in (self.cfg.get("vars") or {}):
             return
         self.vars[k] = str(v)[:200]
         self.dirty = True
 
     def reset(self, k):
+        if self.is_global(k):
+            db.gvars.update_one({"_id": self.bot_id}, {"$unset": {f"v.{k}": ""}})
+            self._g = None
+            return
         if self.vars.pop(k, None) is not None:
             self.dirty = True
 
     def save(self):
         if self.dirty:
             db.uvars.update_one({"_id": self._key},
-                                {"$set": {"v": self.vars, "visits": self.visits,
-                                          "lm": self.last_msg, "t": now()}}, upsert=True)
+                                {"$set": {"v": self.vars, "visits": self.visits, "t": now(), "bot": self.bot_id,
+                                          "n": (self.user.get("first_name") or "")[:30], "tk": self.ticket_no}},
+                                upsert=True)
             self.dirty = False
 
 
 def fill(t, env):
     """{name} / {coins} / {city|پیش‌فرض} رو با مقدار جایگزین می‌کنه (اسم ناشناس دست‌نخورده می‌مونه)"""
     declared = env.cfg.get("vars") or {}
+    shared = env.cfg.get("globals") or {}
 
     def rep(m):
         k = m.group(1)
-        if k in BUILTINS or k in declared:
+        if k in BUILTINS or k in declared or k in shared:
             v = env.get(k)
             return v if (v != "" or m.group(2) is None) else m.group(2)
         return m.group(0)
@@ -2786,7 +2790,10 @@ def run_actions(acts, env):
         if op == "set":
             env.set(name, val)
         elif op == "add":
-            env.set(name, fmt_num((to_num(env.get(name)) or 0) + (to_num(val) or 0)))
+            if env.is_global(name):
+                env.gadd(name, to_num(val) or 0)
+            else:
+                env.set(name, fmt_num((to_num(env.get(name)) or 0) + (to_num(val) or 0)))
         elif op == "clear":
             env.reset(name)
         elif op == "random":
@@ -2795,233 +2802,8 @@ def run_actions(acts, env):
                 env.set(name, str(random.randint(int(m.group(1)), int(m.group(2)))))
         elif op == "notify" and val.strip():
             to_owner(env, text=f"{env.cfg.get('name', '')}\n{val}\n\n{who(env)}")
-        elif op == "send_channel":
-            body = fill(a.get("text", ""), env)[:3500]
-            # اول پیام تأیید می‌فرستیم تا شناسه‌اش رو داشته باشیم، بعد صف می‌کنیم
-            probe = tg(env.token, "sendMessage", chat_id=env.chat_id, text="⏳ در حال ثبت در صف…")
-            pmid = (probe.get("result") or {}).get("message_id")
-            ok, when, err = queue_channel(env, a, body, owner_msg=pmid)
-            if ok:
-                sched_keyboard(env, pmid, a, when, body)
-            else:
-                if pmid:
-                    tg(env.token, "editMessageText", chat_id=env.chat_id, message_id=pmid,
-                       text=f"⚠️ ثبت در صف ناموفق بود\n{err}")
-                else:
-                    tg(env.token, "sendMessage", chat_id=env.chat_id, text=f"⚠️ {err}")
-
-
-# ───────────────────────── زمان‌بندی ارسال به کانال ─────────────────────────
-def _gregorian_from_jalali(jy, jm, jd):
-    """تبدیل شمسی → میلادی با جست‌وجوی معکوس روی to_jalali (که تست‌شده و درست است).
-    دقت: حداکثر یک روز خطا، که برای زمان‌بندی پست کاملاً کافی است."""
-    jy, jm, jd = int(jy), int(jm), int(jd)
-    if not (1 <= jm <= 12 and 1 <= jd <= 31):
-        return None
-    base = _dt.date(2010, 1, 1)          # پایه: تقریبی ۱۳۸۸/۱۰/۱۱
-    best = None
-    for delta in range(-8, 9):
-        d = base + _dt.timedelta(days=int((jy - 1388) * 365.2422 + (jm - 10) * 30.44 + (jd - 11)) + delta)
-        if d < _dt.date(1970, 1, 1) or d > _dt.date(2100, 1, 1):
-            continue
-        if to_jalali(d.year, d.month, d.day) == (jy, jm, jd):
-            return d
-        best = best or d
-    return best                          # بهترین تخمین در صورت نداشتن تطابق دقیق
-
-
-import datetime as _dt
-from datetime import datetime, timezone, timedelta
-
-_sched_lock = threading.Lock()
-_sched_idx = {"done": False}
-
-
-def _index_sched():
-    """ایندکس صف زمان‌بندی (یک‌بار)"""
-    if _sched_idx["done"]:
-        return
-    _sched_idx["done"] = True
-    _index(db.sched, "run_at")
-    _index(db.sched, "t", expireAfterSeconds=90 * 86400)
-
-
-def sched_keyboard(env, mid, a, when, body=""):
-    """پیام تأیید زمان‌بندی + دکمه حذف، زیر همان پیامی که شناسه‌اش در صف ثبت شد"""
-    loc = when + timedelta(hours=3, minutes=30)
-    jy, jm, jd = to_jalali(loc.year, loc.month, loc.day)
-    lbl = f"{jy}/{jm:02d}/{jd:02d} ساعت {loc.strftime('%H:%M')}"
-    kb = {"inline_keyboard": [[{"text": "🗑 حذف از صف", "callback_data": f"pd:{env.bot_id}:{mid}"[:64]}]]}
-    text = f"✅ پستت زمان‌بندی شد\n\n🕐 {lbl}\n📢 کانال: {a.get('channel', '')}\n\n"
-    if body and body != "—":
-        text += f"📝 متن پست:\n{body[:500]}"
-    if mid:
-        r = tg(env.token, "editMessageText", chat_id=env.chat_id, message_id=mid, text=text, reply_markup=kb)
-        if not r.get("ok"):
-            tg(env.token, "sendMessage", chat_id=env.chat_id, text=text, reply_markup=kb)
-    else:
-        tg(env.token, "sendMessage", chat_id=env.chat_id, text=text, reply_markup=kb)
-
-
-def cancel_scheduled(bot_id, token, chat_id, owner_msg):
-    r = db.sched.update_one({"bot": bot_id, "owner_msg": owner_msg, "status": "queued"},
-                            {"$set": {"status": "canceled"}})
-    if r.modified_count:
-        tg(token, "sendMessage", chat_id=chat_id, text="🗑 از صف زمان‌بندی حذف شد.")
-    else:
-        tg(token, "sendMessage", chat_id=chat_id, text="این پست قبلاً ارسال یا حذف شده بود.")
-
-
-def run_sched_tick():
-    """هر ۲۰ ثانیه یک‌بار: پست‌های سررسیده رو به کانال می‌فرسته"""
-    if not _sched_lock.acquire(False):
-        return
-    try:
-        _index_sched()
-        due = list(db.sched.find({"status": "queued", "run_at": {"$lte": naive()}}).limit(20))
-        for j in due:
-            if not db.sched.find_one_and_update({"_id": j["_id"], "status": "queued"},
-                                                {"$set": {"status": "sending"}}):
-                continue
-            try:
-                bot = db.bots.find_one({"_id": ObjectId(j["bot"])})
-            except (InvalidId, TypeError):
-                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "شناسه ربات نامعتبر"}})
-                continue
-            if not bot or not bot.get("active") or not bot.get("token_enc"):
-                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "ربات غیرفعال یا بدون توکن است"}})
-                continue
-            try:
-                token = dec(bot["token_enc"])
-            except Exception:
-                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "توکن ربات قابل خواندن نبود"}})
-                continue
-            chat = norm_channel(j.get("channel", "")) or j.get("channel", "")
-            if not chat:
-                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "آدرس کانال نامعتبر"}})
-                continue
-            txt = j.get("text", "") or "—"
-            sent, err = False, ""
-            try:
-                if j.get("media"):
-                    sent = tg_media(token, j["bot"], chat, j["media"], txt if len(txt) <= 1000 else "")
-                if not sent:
-                    r = tg(token, "sendMessage", chat_id=chat, text=txt[:4096],
-                           link_preview_options={"is_disabled": True})
-                    sent = bool(r.get("ok"))
-                    if not sent:
-                        err = str((r or {}).get("description", ""))[:200]
-            except Exception as e:
-                err = str(e)[:200]
-            db.sched.update_one({"_id": j["_id"]},
-                                {"$set": {"status": "done" if sent else "error", "err": err, "sent_at": now()}})
-            if sent:
-                tg(token, "sendMessage", chat_id=j["owner"],
-                   text=f"✅ پست زمان‌بندی‌شده ارسال شد.\nکانال: {chat}")
-            else:
-                tg(token, "sendMessage", chat_id=j["owner"],
-                   text=f"⚠️ ارسال پست زمان‌بندی‌شده ناموفق بود.\nکانال: {chat}\nخطا: {err or 'نامشخص'}")
-            log.info("sched %s -> %s (%s)", j["_id"], "sent" if sent else "failed", err)
-    except Exception:
-        log.exception("run_sched_tick failed")
-    finally:
-        _sched_lock.release()
-
-
-def sched_loop():
-    while True:
-        try:
-            run_sched_tick()
-        except Exception:
-            pass
-        time.sleep(20)
-
-
-def start_scheduler():
-    _index_sched()
-    threading.Thread(target=sched_loop, daemon=True).start()
-    log.info("channel post scheduler started")
-
-
-def parse_when(s, env):
-    """رشته‌ی زمان → datetime. قالب‌ها: 'YYYY/MM/DD HH:MM' یا 'HH:MM' یا 'MM/DD HH:MM'
-    همه به وقت تهران (+۳:۳۰)"""
-    s = str(s or "").strip().translate(_DIG)
-    n = now() + timedelta(hours=3, minutes=30)
-    m = re.match(r"^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$", s)
-    if m:
-        try:
-            d = _gregorian_from_jalali(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            if not d:
-                return None
-            hh, mm = int(m.group(4) or 0), int(m.group(5) or 0)
-            if not (0 <= hh < 24 and 0 <= mm < 60):
-                return None
-            return _dt.datetime(d.year, d.month, d.day, hh, mm) - timedelta(hours=3, minutes=30)
-        except Exception:
-            return None
-    m = re.match(r"^(\d{1,2}):(\d{2})$", s)
-    if m:
-        hh, mm = int(m.group(1)), int(m.group(2))
-        if not (0 <= hh < 24 and 0 <= mm < 60):
-            return None
-        t = n.replace(hour=hh, minute=mm, second=0, microsecond=0)
-        if t <= n:
-            t += timedelta(days=1)             # امروز گذشته → فردا
-        return t - timedelta(hours=3, minutes=30)
-    m = re.match(r"^(\d{1,2})[/\-.](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$", s)
-    if m:
-        try:
-            mm_, dd_ = int(m.group(1)), int(m.group(2))
-            t = n.replace(month=mm_, day=dd_, hour=int(m.group(3) or 0), minute=int(m.group(4) or 0),
-                          second=0, microsecond=0)
-            if t <= n:
-                t = t.replace(year=t.year + 1) if mm_ == 2 and dd_ == 29 else t + timedelta(days=1)
-            return t - timedelta(hours=3, minutes=30)
-        except Exception:
-            return None
-    return None
-
-
-def queue_channel(env, a, body, owner_msg=None):
-    """اکشن send_channel: پیام رو در صف می‌ذاره. (موفق؟، زمان، خطا)
-    اگه متن خالی باشه از آخرین پیام کاربر ({last_msg}) استفاده می‌شه."""
-    # ── ۱) کانال: اول از اکشن، بعد از تنظیمات ربات ({channel}) ──
-    raw_ch = str(a.get("channel", "") or "").strip()
-    ch = norm_channel(fill(raw_ch, env)) if not PH_RE.search(raw_ch) else None
-    if not ch and not PH_RE.search(raw_ch):
-        ch = norm_channel(raw_ch)
-    if not ch:
-        ch = norm_channel(env.get("channel") or "")          # از تنظیمات ربات
-    if not ch:
-        return False, None, ("کانال تعیین نشده. برو به «تنظیمات ربات ← پست زمان‌بندی‌شده به کانال» "
-                             "و کانالت را وارد کن.")
-    # ── ۲) زمان ──
-    at = fill(str(a.get("at", "") or ""), env).strip()      # متغیرها پر می‌شن
-    if not at or PH_RE.search(at):
-        at = (env.get("post_at") or "").strip() or at        # از تنظیمات ربات
-    when = parse_when(at, env)
-    if when is None:
-        return False, None, (f"زمان «{at or '—'}» نامعتبره. در تنظیمات ربات ساعت را بنویس "
-                             f"(مثل 21:30 یا 1405/07/15 18:00).")
-    if when < now() - timedelta(minutes=2):
-        return False, None, "زمان گذشته است"
-    if when > now() + timedelta(days=366):
-        return False, None, "بیشتر از یک سال جلوتر نمی‌تونی زمان‌بندی کنی"
-    body = (body or "").strip() or (env.get("last_msg") or "").strip() or "—"
-    cid = secrets.token_hex(6)
-    doc = {"_id": cid, "bot": env.bot_id, "channel": ch, "text": body[:3500],
-           "run_at": when.replace(tzinfo=None), "status": "queued",
-           "owner": env.owner, "media": a.get("media", ""), "t": now()}
-    if owner_msg:
-        doc["owner_msg"] = owner_msg
-    try:
-        db.sched.insert_one(doc)
-    except Exception:
-        log.exception("queue_channel failed")
-        return False, None, "ثبت در صف ناموفق بود"
-    _index_sched()
-    return True, when, ""
+        elif op == "remind":
+            schedule_remind(env, a)
 
 
 def share_url(text, env):
@@ -3053,6 +2835,8 @@ def keyboard(node, node_id, env):
                 r.append({"text": label, "copy_text": {"text": fill(b["copy"], env)[:256]}})
             elif "share" in b:
                 r.append({"text": label, "url": share_url(b["share"], env)})
+            elif "pay" in b and PAYMENTS:
+                r.append({"text": label, "callback_data": f"y:{node_id}:{ri}:{ci}"})
         if r:
             kb.append(r)
     return kb
@@ -3120,6 +2904,8 @@ def send_node(env, node_id, edit=None, depth=0):
             text = alt["text"]
             break
     text = fill(text, env)[:4000]
+    if node.get("board"):
+        text = (text[:3000] + "\n\n" + board_text(env, node["board"]))[:4000]
     kb = keyboard(node, node_id, env)
     use_reply = node.get("kb") == "reply" and bool(kb)
     if not use_reply:
@@ -3149,7 +2935,8 @@ def reply_press(env, rk, text):
         for b in row:
             if not visible(b, env) or text not in (fill(b["text"], env), b["text"]):
                 continue
-            run_actions(b.get("do"), env)
+            if "pay" not in b:                      # دکمه‌ی پرداخت: اکشن‌ها بعد از پرداختِ موفق اجرا می‌شن
+                run_actions(b.get("do"), env)
             if "goto" in b:
                 send_node(env, b["goto"])
             elif "alert" in b:
@@ -3158,6 +2945,8 @@ def reply_press(env, rk, text):
                 c = fill(b["copy"], env)[:256]
                 tg(env.token, "sendMessage", chat_id=env.chat_id, text=c,
                    reply_markup={"inline_keyboard": [[{"text": "کپی", "copy_text": {"text": c}}]]})
+            elif "pay" in b:
+                send_invoice(env, rk.get("node"), b)
             elif "url" in b or "share" in b:
                 url = b["url"] if "url" in b else share_url(b["share"], env)
                 tg(env.token, "sendMessage", chat_id=env.chat_id, text="لینک:",
@@ -3166,69 +2955,22 @@ def reply_press(env, rk, text):
     return False
 
 
-def owner_reply_markup(env, node=None):
-    """دکمه «پاسخ به کاربر» — فقط اگه خودِ بخش در کانفیگ reply_btn=true داشته باشه"""
-    if not (node or {}).get("reply_btn"):
-        return None
-    return {"inline_keyboard": [[{"text": "پاسخ به کاربر", "callback_data": f"r:{env.bot_id}:{env.chat_id}"[:64]}]]}
-
-
-def to_owner(env, text=None, copy_msg=None, node=None):
-    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته.
-    اگه بخش (node) در کانفیگ reply_btn=true داشته باشه، یک دکمه «پاسخ به کاربر» هم زیر پیام می‌آد
-    و ادمین با زدنش می‌تونه مستقیم به همون کاربر جواب بده."""
+def to_owner(env, text=None, copy_msg=None):
+    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته و ذخیره می‌کنه تا با reply جواب بده"""
     ids = []
     if copy_msg:
         r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=copy_msg)
-        if r.get("ok"):
-            ids.append(r["result"]["message_id"])
-    last = None
+        if not r.get("ok"):
+            return False
+        ids.append(r["result"]["message_id"])
     if text:
         r = tg(env.token, "sendMessage", chat_id=env.owner, text=text[:4000])
         if r.get("ok"):
             ids.append(r["result"]["message_id"])
-            last = ids[-1]
-    markup = owner_reply_markup(env, node)
-    if markup:
-        target = last or (ids[-1] if ids else None)
-        if target is None:
-            r = tg(env.token, "sendMessage", chat_id=env.owner, text="پیام جدید از کاربر", reply_markup=markup)
-            if r.get("ok"):
-                ids.append(r["result"]["message_id"])
-        else:
-            tg(env.token, "editMessageReplyMarkup", chat_id=env.owner, message_id=target, reply_markup=markup)
     for mid in ids:
-        db.relay.replace_one({"_id": f"{env.bot_id}:{mid}"}, {"_id": f"{env.bot_id}:{mid}", "chat": env.chat_id, "t": now()}, upsert=True)
+        key = f"{env.bot_id}:{mid}"
+        db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "t": now()}, upsert=True)
     return bool(ids)
-
-
-REPLY_MODE_TTL = 7200          # حالت پاسخ بعد از ۲ ساعت خودکار باطل می‌شه
-
-
-def open_reply_mode(env, target_chat_id):
-    """دکمه «پاسخ به کاربر» زده شد → حالت پاسخ برای ادمین باز می‌شه (فقط یک پیام بعدش ارسال می‌شه)"""
-    db.replymode.replace_one({"_id": f"{env.bot_id}:{env.owner}"},
-                             {"_id": f"{env.bot_id}:{env.owner}", "chat": target_chat_id, "t": now()}, upsert=True)
-    tg(env.token, "sendMessage", chat_id=env.chat_id, reply_markup={"inline_keyboard": [[
-        {"text": "انصراف", "callback_data": "rx"}]]},
-        text="حالت پاسخ فعال شد. پیامت رو بفرست تا مستقیم به همون کاربر برسه.")
-
-
-def take_reply_mode(bot_id, owner_uid):
-    """اگه حالت پاسخ فعاله، آیدی چت کاربر رو برمی‌گردونه و حالت رو می‌بنده"""
-    key = f"{bot_id}:{owner_uid}"
-    d = db.replymode.find_one_and_update({"_id": key}, {"$set": {"t": now()}})
-    if not d:
-        return None
-    if age_sec(d["t"]) > REPLY_MODE_TTL:
-        db.replymode.delete_one({"_id": key})
-        return None
-    db.replymode.delete_one({"_id": key})
-    return int(d.get("chat") or 0) or None
-
-
-def close_reply_mode(bot_id, owner_uid):
-    db.replymode.delete_one({"_id": f"{bot_id}:{owner_uid}"})
 
 
 def finish(env, node, default_done):
@@ -3254,7 +2996,6 @@ def valid_answer(kind, t):
     if kind == "email":
         return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", t)), t
     return True, t
-
 
 def gate_ok(token, cfg, uid):
     """عضویت اجباری؛ اگه ربات ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
@@ -3293,6 +3034,410 @@ def save_submission(env, nid, node, qa=None, text=""):
                                    "name": u.get("first_name", ""), "un": u.get("username", ""), "qa": qa or [], "text": text, "t": now()})
     except Exception:
         log.exception("save_submission failed")
+
+
+# ───────────────────────── جدول برترین‌ها ─────────────────────────
+_board_cache = {}
+
+
+def board_text(env, bd):
+    """جدول برترین کاربرها بر اساس یه متغیر عددی (یا تعداد دعوت‌ها)؛ نتیجه ۴۵ ثانیه کش می‌شه"""
+    env.save()                                          # تغییرهای همین لحظه‌ی خود کاربر هم ثبت بشه
+    var, topn = bd["var"], int(bd.get("top", 10))
+    key = (env.bot_id, var)
+    hit = _board_cache.get(key)
+    if hit and time.time() - hit[0] < 45:
+        rows = hit[1]
+    else:
+        rows = []
+        try:
+            for d in db.uvars.find({"bot": env.bot_id}, {"v": 1, "n": 1, "refs": 1}).limit(BOARD_SCAN):
+                x = to_num(d.get("refs", 0) if var == "refs" else (d.get("v") or {}).get(var))
+                if x is not None and x > 0:
+                    rows.append((x, str(d.get("n") or "")[:20], str(d["_id"])))
+        except Exception:
+            log.exception("board failed")
+        rows.sort(key=lambda r: -r[0])
+        if len(_board_cache) > 200:
+            _board_cache.clear()
+        _board_cache[key] = (time.time(), rows)
+    lines = [f"{i}. {r[1] or 'کاربر'} — {fmt_num(r[0])}" for i, r in enumerate(rows[:topn], 1)]
+    out = (bd.get("label") or "جدول برترین‌ها") + ":\n" + ("\n".join(lines) if lines else "هنوز کسی توی جدول نیست.")
+    mine = next((i for i, r in enumerate(rows, 1) if r[2] == env._key), 0)
+    if mine:
+        out += f"\n\nرتبه‌ی تو: {mine} از {len(rows)}"
+    return out
+
+
+# ───────────────────────── یادآور و پیام‌های زمان‌بندی‌شده ─────────────────────────
+def schedule_remind(env, a):
+    """اکشن remind: بعد از چند دقیقه یه پیام (و/یا یه بخش) برای همین کاربر فرستاده می‌شه"""
+    q = {"bot": env.bot_id, "uid": env.uid}
+    key = a.get("key", "")
+    try:
+        if key and db.sched.find_one({**q, "key": key}):
+            return                                      # همین یادآور از قبل منتظره
+        if db.sched.count_documents(q) >= MAX_PENDING_REMIND:
+            return
+        u = env.user
+        db.sched.insert_one({**q, "chat": env.chat_id, "key": key, "goto": a.get("goto", ""),
+                             "text": fill(a.get("value", ""), env)[:2000],
+                             "due": naive(now() + timedelta(minutes=int(a.get("minutes", 60)))),
+                             "user": {k: u[k] for k in ("id", "first_name", "last_name", "username", "language_code", "is_premium")
+                                      if u.get(k) is not None}})
+    except Exception:
+        log.exception("schedule_remind failed")
+
+
+def run_sched_job(job):
+    bot = db.bots.find_one({"_id": ObjectId(job["bot"])})
+    if not bot or not bot.get("active") or not bot.get("token_enc"):
+        return
+    token = dec(bot["token_enc"])
+    if job.get("text"):
+        if not tg(token, "sendMessage", chat_id=job["chat"], text=job["text"]).get("ok"):
+            return
+    g = job.get("goto")
+    if g and g in bot["config"]["nodes"]:
+        env = Env(bot, token, job["chat"], job.get("user") or {"id": job["uid"]})
+        try:
+            send_node(env, g)
+        finally:
+            env.save()
+
+
+def sched_tick():
+    for _ in range(60):
+        job = db.sched.find_one_and_delete({"due": {"$lte": naive()}}, sort=[("due", 1)])   # هر کار فقط یک بار برداشته می‌شه
+        if not job:
+            break
+        try:
+            run_sched_job(job)
+        except Exception:
+            log.exception("sched job failed")
+
+
+def sched_loop():
+    while True:
+        time.sleep(20)
+        try:
+            sched_tick()
+        except Exception:
+            log.exception("sched_tick failed")
+
+
+# ───────────────────────── میزکار پشتیبانی (تیکت) ─────────────────────────
+STATUS_FA = {"open": "باز", "answered": "پاسخ داده‌شده", "closed": "بسته"}
+
+
+def staff_ids(bot):
+    ids = [bot["owner"]]
+    for x in (bot["config"].get("desk") or {}).get("staff", []):
+        if x not in ids:
+            ids.append(x)
+    return ids
+
+
+def is_staff(bot, uid):
+    return uid in staff_ids(bot)
+
+
+def is_blocked(bot_id, uid):
+    return bool(db.blocked.find_one({"_id": f"{bot_id}:{uid}"}))
+
+
+def tk_get(bot_id, n):
+    try:
+        return db.tickets.find_one({"_id": f"{bot_id}:{int(n)}"})
+    except (TypeError, ValueError):
+        return None
+
+
+def tk_snip(s):
+    return re.sub(r"\s+", " ", str(s or "")).strip()[:300]
+
+
+def tk_log(bot_id, n, w, text):
+    db.tickets.update_one({"_id": f"{bot_id}:{n}"}, {
+        "$push": {"log": {"$each": [{"w": w, "t": tk_snip(text) or "(فایل/رسانه)", "at": now()}], "$slice": -30}},
+        "$set": {"last": now()}, "$inc": {"count": 1}})
+
+
+def tk_buttons(n, status="open", blocked=False):
+    return {"inline_keyboard": [
+        [{"text": "پاسخ", "callback_data": f"t:r:{n}"}, {"text": "سابقه", "callback_data": f"t:h:{n}"}],
+        [{"text": "بازکردن دوباره" if status == "closed" else "بستن تیکت", "callback_data": f"t:{'o' if status == 'closed' else 'c'}:{n}"},
+         {"text": "رفع مسدودی" if blocked else "مسدود کردن", "callback_data": f"t:{'u' if blocked else 'b'}:{n}"}]]}
+
+
+def ticket_push(env, n, body="", copy_msg=None, new=False, tag=""):
+    """پیام تیکت رو برای صاحب ربات و همه‌ی پشتیبان‌ها می‌فرسته (زیرش دکمه‌ی پاسخ)؛ True = حداقل برای یکی رسید"""
+    head = ("تیکت جدید" if new else "پیام جدید در تیکت") + f" #{n}" + (f" — {tag}" if tag else "") + f"\n{who(env)}"
+    kb, ok = tk_buttons(n, blocked=is_blocked(env.bot_id, env.uid)), False
+    for staff in staff_ids(env.bot):
+        ids = []
+        if copy_msg:
+            r = tg(env.token, "sendMessage", chat_id=staff, text=head)
+            if r.get("ok"):
+                ids.append(r["result"]["message_id"])
+            r = tg(env.token, "copyMessage", chat_id=staff, from_chat_id=env.chat_id, message_id=copy_msg, reply_markup=kb)
+        else:
+            r = tg(env.token, "sendMessage", chat_id=staff, text=(head + "\n\n" + body)[:4000], reply_markup=kb)
+        if r.get("ok"):
+            ok = True
+            ids.append(r["result"]["message_id"])
+        for mid in ids:                                  # با reply روی همین پیام‌ها هم می‌شه جواب داد
+            key = f"{env.bot_id}:{staff}:{mid}"
+            db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "tk": n, "t": now()}, upsert=True)
+    return ok
+
+
+def ticket_open(env, node_id, node, body="", copy_msg=None):
+    """تیکت تازه می‌سازه و برای پشتیبان‌ها می‌فرسته؛ (شماره، رسید؟) برمی‌گردونه"""
+    n = int(db.counters.find_one_and_update({"_id": f"tk:{env.bot_id}"}, {"$inc": {"n": 1}}, upsert=True,
+                                           return_document=ReturnDocument.AFTER)["n"])
+    u, tag = env.user, (node or {}).get("tag", "")
+    db.tickets.insert_one({"_id": f"{env.bot_id}:{n}", "bot": env.bot_id, "n": n, "uid": env.uid, "chat": env.chat_id,
+                           "name": (u.get("first_name") or "")[:40], "un": u.get("username", ""), "node": node_id, "tag": tag,
+                           "status": "open", "t": now(), "last": now(), "count": 0, "log": []})
+    env.ticket_no, env.dirty = str(n), True
+    tk_log(env.bot_id, n, "u", body)
+    return n, ticket_push(env, n, body, copy_msg, new=True, tag=tag)
+
+
+def ticket_followup(env, tk, body="", copy_msg=None):
+    db.tickets.update_one({"_id": tk["_id"]}, {"$set": {"status": "open"}})
+    tk_log(env.bot_id, tk["n"], "u", body)
+    return ticket_push(env, tk["n"], body, copy_msg, tag=tk.get("tag", ""))
+
+
+def ticket_answer(bot, token, staff_chat, mid, tk, text=""):
+    """پاسخ پشتیبان (هر نوع پیامی) رو برای کاربر کپی می‌کنه، با دکمه‌ی «پاسخ به پشتیبانی» زیرش"""
+    bot_id, n = str(bot["_id"]), tk["n"]
+    label = (bot["config"].get("desk") or {}).get("reply_btn") or "پاسخ به پشتیبانی"
+    r = tg(token, "copyMessage", chat_id=tk["chat"], from_chat_id=staff_chat, message_id=mid,
+           reply_markup={"inline_keyboard": [[{"text": label, "callback_data": f"u:t:{n}"}]]})
+    if not r.get("ok"):
+        tg(token, "sendMessage", chat_id=staff_chat, text="پیام به کاربر نرسید؛ شاید ربات رو بلاک کرده.")
+        return False
+    db.tickets.update_one({"_id": tk["_id"]}, {"$set": {"status": "answered"}})
+    tk_log(bot_id, n, "s", text)
+    tg(token, "sendMessage", chat_id=staff_chat, text=f"پاسخ تیکت #{n} برای {tk.get('name') or 'کاربر'} ارسال شد.",
+       reply_markup=tk_buttons(n, "answered", is_blocked(bot_id, tk["uid"])))
+    return True
+
+
+def tk_history(tk):
+    rows = (tk.get("log") or [])[-10:]
+    lines = [f"{'کاربر' if r.get('w') == 'u' else 'پشتیبان'}: {r.get('t', '')}" for r in rows]
+    head = f"تیکت #{tk['n']} — {tk.get('name') or 'کاربر'}" + (f" ({tk['tag']})" if tk.get("tag") else "")
+    return head + f"\nوضعیت: {STATUS_FA.get(tk.get('status'), '')} — {tk.get('count', 0)} پیام\n\n" + "\n\n".join(lines)
+
+
+def staff_callback(bot, token, cq, data):
+    """دکمه‌های زیر پیام تیکت (فقط صاحب ربات و پشتیبان‌ها): پاسخ، سابقه، بستن، بازکردن، مسدود"""
+    actor, m = cq["from"]["id"], cq.get("message") or {}
+    chat_id = (m.get("chat") or {}).get("id")
+
+    def ans(t="", alert=False):
+        tg(token, "answerCallbackQuery", callback_query_id=cq["id"], **({"text": t, "show_alert": alert} if t else {}))
+
+    if not chat_id or not is_staff(bot, actor):
+        return ans("این دکمه فقط برای پشتیبان‌هاست.", True)
+    parts = data.split(":")
+    if len(parts) != 3:
+        return ans()
+    act, bot_id = parts[1], str(bot["_id"])
+    tk = tk_get(bot_id, parts[2])
+    if not tk:
+        return ans("این تیکت پیدا نشد.", True)
+    n, sid = tk["n"], f"{bot_id}:{chat_id}"
+    blocked = is_blocked(bot_id, tk["uid"])
+
+    def refresh(status, blk):
+        tg(token, "editMessageReplyMarkup", chat_id=chat_id, message_id=m.get("message_id"), reply_markup=tk_buttons(n, status, blk))
+
+    if act == "r":
+        db.states.replace_one({"_id": sid}, {"_id": sid, "treply": n, "t": now()}, upsert=True)
+        ans("پاسخت رو بفرست")
+        tg(token, "sendMessage", chat_id=chat_id, text=f"پاسخ تیکت #{n} ({tk.get('name') or 'کاربر'}) رو بفرست؛ متن، عکس، فایل یا صدا.\nبرای انصراف /cancel",
+           reply_markup={"inline_keyboard": [[{"text": "انصراف", "callback_data": f"t:x:{n}"}]]})
+    elif act == "x":
+        db.states.delete_one({"_id": sid, "treply": n})
+        tg(token, "deleteMessage", chat_id=chat_id, message_id=m.get("message_id"))
+        ans("لغو شد")
+    elif act == "h":
+        ans()
+        tg(token, "sendMessage", chat_id=chat_id, text=tk_history(tk), reply_markup=tk_buttons(n, tk.get("status", "open"), blocked))
+    elif act == "c":
+        db.tickets.update_one({"_id": tk["_id"]}, {"$set": {"status": "closed", "closed": now()}})
+        txt = (bot["config"].get("desk") or {}).get("closed") or "تیکت #{ticket_no} بسته شد. اگه سؤال دیگه‌ای داشتی، دوباره پیام بده."
+        tg(token, "sendMessage", chat_id=tk["chat"], text=txt.replace("{ticket_no}", str(n)))
+        refresh("closed", blocked)
+        ans("تیکت بسته شد")
+    elif act == "o":
+        db.tickets.update_one({"_id": tk["_id"]}, {"$set": {"status": "open"}})
+        refresh("open", blocked)
+        ans("تیکت دوباره باز شد")
+    elif act == "b":
+        k = f"{bot_id}:{tk['uid']}"
+        db.blocked.replace_one({"_id": k}, {"_id": k, "bot": bot_id, "uid": tk["uid"], "t": now()}, upsert=True)
+        refresh(tk.get("status", "open"), True)
+        ans("کاربر مسدود شد")
+    elif act == "u":
+        db.blocked.delete_one({"_id": f"{bot_id}:{tk['uid']}"})
+        refresh(tk.get("status", "open"), False)
+        ans("مسدودی برداشته شد")
+    else:
+        ans()
+
+
+def staff_list(bot, token, chat_id):
+    rows = list(db.tickets.find({"bot": str(bot["_id"]), "status": {"$ne": "closed"}}).sort("last", -1).limit(10))
+    if not rows:
+        tg(token, "sendMessage", chat_id=chat_id, text="تیکت بازی نداری.")
+        return
+    kb = [[{"text": f"#{r['n']} {r.get('name') or 'کاربر'} — {STATUS_FA.get(r.get('status'), '')}"[:60], "callback_data": f"t:h:{r['n']}"}] for r in rows]
+    tg(token, "sendMessage", chat_id=chat_id, text="تیکت‌های باز؛ برای دیدن سابقه و پاسخ روی هرکدوم بزن:", reply_markup={"inline_keyboard": kb})
+
+
+def staff_message(bot, env, msg, text):
+    """پیام‌های صاحب ربات/پشتیبان: پاسخ تیکت، دستورهای مدیریتی. True = پردازش شد"""
+    token, chat_id, bot_id, sid = env.token, env.chat_id, env.bot_id, env.sid
+    uid = (msg.get("from") or {}).get("id")
+    st = db.states.find_one({"_id": sid}) or {}
+    low = text.lower().split("@")[0]
+    if st.get("treply"):
+        if low == "/cancel":
+            db.states.delete_one({"_id": sid})
+            tg(token, "sendMessage", chat_id=chat_id, text="لغو شد.")
+            return True
+        if not text.startswith("/"):
+            db.states.delete_one({"_id": sid})
+            tk = tk_get(bot_id, st["treply"])
+            if tk:
+                ticket_answer(bot, token, chat_id, msg["message_id"], tk, text or msg.get("caption") or "")
+            else:
+                tg(token, "sendMessage", chat_id=chat_id, text="این تیکت پیدا نشد.")
+            return True
+        db.states.delete_one({"_id": sid})              # دستور دیگه‌ای زده؛ از حالت پاسخ خارج می‌شه
+    rt = msg.get("reply_to_message")
+    if rt:                                              # reply روی پیام تیکت
+        rel = db.relay.find_one({"_id": f"{bot_id}:{chat_id}:{rt['message_id']}"})
+        tk = tk_get(bot_id, rel["tk"]) if rel and rel.get("tk") else None
+        if tk:
+            ticket_answer(bot, token, chat_id, msg["message_id"], tk, text or msg.get("caption") or "")
+            return True
+    if text.startswith("/"):
+        parts = text[1:].split(maxsplit=1)
+        cmd, rest = (parts[0].split("@")[0].lower() if parts else ""), (parts[1].strip() if len(parts) > 1 else "")
+        if cmd == "tickets":
+            staff_list(bot, token, chat_id)
+            return True
+        if cmd == "payments" and uid == bot["owner"]:
+            rows = list(db.payments.find({"bot": bot_id}).sort("t", -1).limit(10))
+            body = "\n\n".join(f"{r.get('name') or 'کاربر'} — {r.get('stars')} ستاره — {r.get('title', '')}"
+                               f"{' (برگشت‌خورده)' if r.get('refunded') else ''}\n{r.get('charge')}" for r in rows)
+            tg(token, "sendMessage", chat_id=chat_id,
+               text=("آخرین پرداخت‌ها (برای برگشت: /refund کد):\n\n" + body) if rows else "هنوز پرداختی ثبت نشده.")
+            return True
+        if cmd == "refund" and uid == bot["owner"]:
+            pay = db.payments.find_one({"bot": bot_id, "charge": rest}) if rest else None
+            if not pay or pay.get("refunded"):
+                tg(token, "sendMessage", chat_id=chat_id, text="پرداختی با این کد پیدا نشد یا قبلاً برگشت خورده. کد رو از /payments بردار.")
+            else:
+                r = tg(token, "refundStarPayment", user_id=pay["uid"], telegram_payment_charge_id=rest)
+                if r.get("ok"):
+                    db.payments.update_one({"_id": pay["_id"]}, {"$set": {"refunded": True}})
+                tg(token, "sendMessage", chat_id=chat_id, text="ستاره‌ها به کاربر برگشت داده شد." if r.get("ok")
+                   else "برگشت پرداخت ناموفق بود: " + str(r.get("description", ""))[:150])
+            return True
+    return False
+
+
+def user_ticket_message(env, msg, text, state):
+    """پیام کاربر بعد از زدنِ «پاسخ به پشتیبانی» (ادامه‌ی تیکت) یا /paysupport (تیکت پرداخت)"""
+    sid, body = env.sid, text or msg.get("caption") or ""
+    cm = None if text else msg["message_id"]
+    db.states.delete_one({"_id": sid})
+    if is_blocked(env.bot_id, env.uid):
+        tg(env.token, "sendMessage", chat_id=env.chat_id, text="ارتباط شما با پشتیبانی محدود شده.")
+        return
+    if state.get("psup"):
+        n, ok = ticket_open(env, "", {"tag": "پرداخت"}, body=body, copy_msg=cm)
+        tg(env.token, "sendMessage", chat_id=env.chat_id,
+           text=f"پیامت ثبت شد (تیکت #{n}). به‌زودی جواب می‌دیم." if ok else "ارسال ناموفق بود، دوباره امتحان کن.")
+        return
+    tk = tk_get(env.bot_id, state.get("tuser"))
+    if not tk or tk["uid"] != env.uid:
+        tg(env.token, "sendMessage", chat_id=env.chat_id, text="این تیکت پیدا نشد.")
+        return
+    ok = ticket_followup(env, tk, body, cm)
+    tg(env.token, "sendMessage", chat_id=env.chat_id,
+       text="پیامت برای پشتیبانی ارسال شد." if ok else "ارسال ناموفق بود، دوباره امتحان کن.")
+
+
+# ───────────────────────── پرداخت با ستاره‌ی تلگرام ─────────────────────────
+def has_pay(cfg):
+    return any("pay" in b for n in cfg["nodes"].values() for row in n["buttons"] for b in row)
+
+
+def pay_button(bot, payload):
+    """دکمه‌ی پرداختی که این فاکتور از روش ساخته شده (برای اعتبارسنجی)"""
+    try:
+        bid, nid, ri, ci = str(payload).split("|")
+        b = bot["config"]["nodes"][nid]["buttons"][int(ri)][int(ci)]
+    except Exception:
+        return None
+    return b if bid == str(bot["_id"]) and "pay" in b else None
+
+
+def send_invoice(env, nid, b):
+    ri = ci = -1
+    for i, row in enumerate(env.cfg["nodes"].get(nid, {}).get("buttons", [])):
+        for j, x in enumerate(row):
+            if x is b or x == b:
+                ri, ci = i, j
+    if ri < 0 or not PAYMENTS:
+        return
+    p = b["pay"]
+    title = (fill(p["title"], env).strip() or fill(b["text"], env))[:32]
+    r = tg(env.token, "sendInvoice", chat_id=env.chat_id, title=title, description=(fill(p["desc"], env).strip() or title)[:255],
+           payload=f"{env.bot_id}|{nid}|{ri}|{ci}", provider_token="", currency="XTR",
+           prices=[{"label": title, "amount": int(p["stars"])}])
+    if not r.get("ok"):
+        log.warning("invoice failed: %s", r)
+        tg(env.token, "sendMessage", chat_id=env.chat_id, text="ساخت فاکتور ناموفق بود. کمی بعد دوباره امتحان کن.")
+
+
+def bot_paid(env, msg):
+    """پرداخت موفقِ داخل ربات: ثبت (فقط یک بار)، اکشن‌ها، پیام تشکر، خبر به صاحب ربات و رفتن به بخش بعد"""
+    sp = msg["successful_payment"]
+    b = pay_button(env.bot, sp.get("invoice_payload"))
+    if not b or sp.get("currency") != "XTR" or int(sp.get("total_amount", 0)) != int(b["pay"]["stars"]):
+        log.warning("bot payment mismatch: %s", sp)
+        return
+    charge, p = sp["telegram_payment_charge_id"], b["pay"]
+    try:
+        db.payments.insert_one({"bot": env.bot_id, "uid": env.uid, "name": (env.user.get("first_name") or "")[:40], "stars": int(p["stars"]),
+                                "title": p["title"], "charge": charge, "t": now()})
+    except DuplicateKeyError:
+        return
+    run_actions(b.get("do"), env)
+    tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(p.get("text") or "پرداختت انجام شد. ممنون!", env)[:4000])
+    to_owner(env, text=f"پرداخت جدید — {p['title']}\n{p['stars']} ستاره\n{who(env)}\nکد پیگیری: {charge}")
+    if p.get("goto") in env.cfg["nodes"]:
+        send_node(env, p["goto"])
+
+
+def ensure_webhook(bot, cfg):
+    """رباتی که دکمه‌ی پرداخت داره باید pre_checkout_query هم بگیره (یک بار وبهوک رو به‌روز می‌کنیم)"""
+    if not PAYMENTS or not bot.get("active") or not bot.get("token_enc") or bot.get("wh_pay") or not has_pay(cfg):
+        return
+    r = tg(dec(bot["token_enc"]), "setWebhook", url=f"{BASE_URL}/hook/{bot['_id']}", secret_token=bot["secret"],
+           allowed_updates=["message", "callback_query", "pre_checkout_query"])
+    if r.get("ok"):
+        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"wh_pay": True}})
 
 
 # ───── گفتگوی هوشمند داخل ربات‌ها ─────
@@ -3396,6 +3541,13 @@ def sub_hook(bot_id):
     token, cfg = dec(bot["token_enc"]), bot["config"]
     env = None
     try:
+        pcq = upd.get("pre_checkout_query")                         # تأیید فاکتور ستاره قبل از کم شدن پول (۱۰ ثانیه وقت داریم)
+        if pcq:
+            b = pay_button(bot, pcq.get("invoice_payload"))
+            ok = bool(b) and PAYMENTS and pcq.get("currency") == "XTR" and int(pcq.get("total_amount", 0)) == int(b["pay"]["stars"])
+            tg(token, "answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok=bool(ok),
+               **({} if ok else {"error_message": "این پرداخت دیگه معتبر نیست."}))
+            return "ok"
         cq, msg = upd.get("callback_query"), upd.get("message")
         actor = (cq or msg or {}).get("from") or {}
         chat0 = (msg or {}).get("chat") or ((cq or {}).get("message") or {}).get("chat") or {}
@@ -3413,6 +3565,9 @@ def sub_hook(bot_id):
             if not chat_id:
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                 return "ok"
+            if data.startswith("t:"):                                   # دکمه‌های تیکت (فقط پشتیبان‌ها)؛ عضویت اجباری شاملشون نمی‌شه
+                staff_callback(bot, token, cq, data)
+                return "ok"
             env = Env(bot, token, chat_id, user)
             if not gate_ok(token, cfg, user["id"]):
                 if data == "chk":
@@ -3420,6 +3575,31 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_gate(token, chat_id, cfg)
+                return "ok"
+            if data.startswith("u:t:"):                                  # کاربر زیر پاسخ پشتیبان «پاسخ به پشتیبانی» رو زد
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                tk = tk_get(bot_id, data[4:])
+                if tk and tk["uid"] == user["id"]:
+                    db.states.replace_one({"_id": env.sid}, {"_id": env.sid, "tuser": tk["n"], "t": now()}, upsert=True)
+                    tg(token, "sendMessage", chat_id=chat_id, text=f"پیامت رو برای تیکت #{tk['n']} بفرست؛ متن، عکس، فایل یا صدا.",
+                       reply_markup={"inline_keyboard": [[{"text": "انصراف", "callback_data": "u:x"}]]})
+                return "ok"
+            if data == "u:x":
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                db.states.delete_one({"_id": env.sid, "tuser": {"$exists": True}})
+                tg(token, "deleteMessage", chat_id=chat_id, message_id=m.get("message_id"))
+                return "ok"
+            if data.startswith("y:"):                                    # دکمه‌ی پرداخت → فاکتور ستاره
+                try:
+                    _, nid, ri, ci = data.split(":")
+                    b = cfg["nodes"][nid]["buttons"][int(ri)][int(ci)]
+                except Exception:
+                    b = None
+                if not b or "pay" not in b or not PAYMENTS or not visible(b, env):
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="این گزینه الان در دسترس نیست", show_alert=True)
+                    return "ok"
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                send_invoice(env, nid, b)
                 return "ok"
             if data.startswith(("a:", "g:")):
                 try:
@@ -3440,29 +3620,9 @@ def sub_hook(bot_id):
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_node(env, b["goto"], edit=m)
                 return "ok"
-            if data.startswith("r:") and user["id"] != bot["owner"]:
-                # دکمه «پاسخ» فقط برای صاحب رباته
-                tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
-                   text="این دکمه فقط برای صاحب رباته.", show_alert=True)
-                return "ok"
             tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
-            if data.startswith("pd:") and user["id"] == bot["owner"]:
-                parts = data.split(":")
-                try:
-                    cancel_scheduled(bot_id, token, chat_id, int(parts[2]))
-                except (ValueError, IndexError):
-                    pass
-                return "ok"
-            if data == "rx":
-                close_reply_mode(bot_id, user["id"])
-            elif data == "chk":
+            if data == "chk":
                 send_node(env, cfg["start"], edit=m)
-            elif data.startswith("r:"):
-                parts = data.split(":")
-                try:
-                    open_reply_mode(env, int(parts[2]))
-                except (ValueError, IndexError):
-                    pass
             elif data.startswith("n:") and data[2:] in cfg["nodes"]:
                 send_node(env, data[2:], edit=m)
             return "ok"
@@ -3472,19 +3632,11 @@ def sub_hook(bot_id):
         text = (msg.get("text") or "").strip()
         env = Env(bot, token, chat_id, user, text=text)
         env.is_new = is_new
-        if text:                       # نگه‌داری آخرین پیام برای زمان‌بندی پست و {last_msg}
-            env.last_msg = text[:3500]
-            env.dirty = True
-        # صاحب ربات در حالت پاسخ (بعد از زدن دکمه «پاسخ به کاربر») — هر نوع پیامی می‌فرسته
-        if user.get("id") == bot["owner"]:
-            target = take_reply_mode(bot_id, user["id"])
-            if target:
-                r = tg(token, "copyMessage", chat_id=target, from_chat_id=chat_id, message_id=msg["message_id"])
-                if r.get("ok"):
-                    tg(token, "sendMessage", chat_id=chat_id, text="پیامت به کاربر رسید.", reply_markup={"remove_keyboard": True})
-                else:
-                    tg(token, "sendMessage", chat_id=chat_id, text="پیام به کاربر نرسید؛ شاید ربات رو بلاک کرده.")
-                return "ok"
+        if msg.get("successful_payment"):                           # پرداخت موفق همیشه پردازش می‌شه (حتی بدون عضویت اجباری)
+            bot_paid(env, msg)
+            return "ok"
+        if is_staff(bot, user.get("id")) and staff_message(bot, env, msg, text):
+            return "ok"
         # صاحب ربات با reply روی پیام کاربر جواب می‌ده
         if user.get("id") == bot["owner"] and msg.get("reply_to_message"):
             rel = db.relay.find_one({"_id": f"{bot_id}:{msg['reply_to_message']['message_id']}"})
@@ -3514,13 +3666,18 @@ def sub_hook(bot_id):
                 env.visits += 1
                 env.dirty = True
                 send_node(env, cfg["start"])
+            elif cmd == "paysupport" and PAYMENTS:                   # الزام تلگرام برای رباتای پولی
+                db.states.replace_one({"_id": sid}, {"_id": sid, "psup": 1, "t": now()}, upsert=True)
+                tg(token, "sendMessage", chat_id=chat_id, text="مشکل یا سؤالت درباره‌ی پرداخت رو بنویس تا برای پشتیبان بفرستم.")
             elif cmd in cfg["commands"]:
                 send_node(env, cfg["commands"][cmd])
             else:
                 send_node(env, cfg["fallback"])
             return "ok"
         state = db.states.find_one({"_id": sid})
-        if state and state.get("form") in cfg["nodes"] and cfg["nodes"][state["form"]].get("fields"):
+        if state and (state.get("tuser") or state.get("psup")):
+            user_ticket_message(env, msg, text, state)
+        elif state and state.get("form") in cfg["nodes"] and cfg["nodes"][state["form"]].get("fields"):
             node = cfg["nodes"][state["form"]]
             fields = node["fields"]
             if not text:
@@ -3541,18 +3698,38 @@ def sub_hook(bot_id):
                 tg(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], env))
             else:
                 db.states.delete_one({"_id": sid})
-                if not node.get("silent"):
-                    save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
-                    body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
-                    to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}", node=node)
-                finish(env, node, "اطلاعاتت ثبت شد، ممنون!")
+                body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
+                if node.get("ticket"):                              # فرم تیکتی: شماره‌دار + دکمه‌ی پاسخ برای پشتیبان‌ها
+                    if is_blocked(bot_id, env.uid):
+                        tg(token, "sendMessage", chat_id=chat_id, text="ارتباط شما با پشتیبانی محدود شده.")
+                        return "ok"
+                    if not node.get("silent"):
+                        save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
+                    ticket_open(env, state["form"], node, body=f"{node.get('title') or 'فرم'}\n\n{body}")
+                    finish(env, node, "اطلاعاتت ثبت شد (تیکت #{ticket_no}). به‌زودی جواب می‌دیم.")
+                else:
+                    if not node.get("silent"):
+                        save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
+                        to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}")
+                    finish(env, node, "اطلاعاتت ثبت شد، ممنون!")
+        elif state and state.get("ask") and isinstance(state["ask"], str) and (cfg["nodes"].get(state["ask"]) or {}).get("ticket"):
+            node = cfg["nodes"][state["ask"]]                       # پیام تیکتی: شماره‌دار + دکمه‌ی پاسخ برای پشتیبان‌ها
+            db.states.delete_one({"_id": sid})
+            if is_blocked(bot_id, env.uid):
+                tg(token, "sendMessage", chat_id=chat_id, text="ارتباط شما با پشتیبانی محدود شده.")
+                return "ok"
+            body = text or msg.get("caption") or ""
+            _n, sent = ticket_open(env, state["ask"], node, body=body, copy_msg=None if text else msg["message_id"])
+            save_submission(env, state["ask"], node, text=body or "(فایل/رسانه)")
+            finish(env, node, "پیامت ثبت شد (تیکت #{ticket_no}). به‌محض پاسخ، همین‌جا برات می‌فرستیم." if sent
+                   else "ارسال پیام ناموفق بود، دوباره امتحان کن.")
         elif state and state.get("ask"):
-            anode = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
-            sent = to_owner(env, text=who(env), copy_msg=msg["message_id"], node=anode)
-            save_submission(env, state["ask"], anode,
+            sent = to_owner(env, text=who(env), copy_msg=msg["message_id"])
+            save_submission(env, state["ask"], cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None,
                             text=text or msg.get("caption") or "(فایل/رسانه)")
             db.states.delete_one({"_id": sid})
-            finish(env, anode or {}, "پیامت ارسال شد." if sent else "ارسال پیام ناموفق بود، دوباره امتحان کن.")
+            node = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
+            finish(env, node or {}, "پیامت ارسال شد." if sent else "ارسال پیام ناموفق بود، دوباره امتحان کن.")
         elif state and state.get("aichat") in cfg["nodes"]:
             if text:
                 threading.Thread(target=ai_chat, args=(bot_id, token, chat_id, user, state["aichat"], text), daemon=True).start()
@@ -3669,15 +3846,6 @@ def mother_hook():
             tg(MOTHER_TOKEN, "answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok=ok,
                **({} if ok else {"error_message": "این بسته معتبر نیست"}))
             return "ok"
-        cq = upd.get("callback_query")
-        if cq:
-            data = cq.get("data", "")
-            if data.startswith("gk:") and cq.get("from", {}).get("id") in ADMIN_IDS:
-                gap_ack(data[3:])
-                tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text="ثبت شد ✓")
-            else:
-                tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"])
-            return "ok"
         msg = upd.get("message")
         if not msg or msg.get("chat", {}).get("type") != "private":
             return "ok"
@@ -3695,7 +3863,7 @@ def setup_mother():
     if not MOTHER_USERNAME:
         MOTHER_USERNAME = ((tg(MOTHER_TOKEN, "getMe").get("result") or {}).get("username") or "")
     r = tg(MOTHER_TOKEN, "setWebhook", url=f"{BASE_URL}/mother", secret_token=MOTHER_SECRET,
-           allowed_updates=["message", "pre_checkout_query", "callback_query"])
+           allowed_updates=["message", "pre_checkout_query"])
     tg(MOTHER_TOKEN, "setChatMenuButton",
        menu_button={"type": "web_app", "text": "ساخت ربات", "web_app": {"url": BASE_URL}})
     tg(MOTHER_TOKEN, "setMyCommands", commands=[
@@ -3707,7 +3875,8 @@ def setup_mother():
 
 recover_jobs()
 setup_mother()
-start_scheduler()
+if SCHED_ON:
+    threading.Thread(target=sched_loop, daemon=True, name="sched").start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
