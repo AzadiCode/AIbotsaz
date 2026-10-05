@@ -1208,11 +1208,10 @@ const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button 
 
 /* ── منطق: متغیر، شرط و اکشن ── */
 const OPS = [["==","مساوی باشد با"],["!=","مساوی نباشد با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشد"],["empty","خالی باشد"],["filled","پر باشد"]];
-const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"]];
-const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود"};
-const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
+const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"],["send_channel","پست به کانال"]];
+const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود"};const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
-  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],["last_msg","پیام قبلی ادمین (برای پست کانال)"],["channel","کانال پست (از تنظیمات)"],["post_at","ساعت پست (از تنظیمات)"],
   ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
 const BUILTIN = BUILTIN_HELP.map(x => x[0]);
 const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
@@ -1234,7 +1233,11 @@ function ruleHTML(list, o, i, cfg){
   if(list === "do"){
     inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v, l]) => `<option value="${v}"${v === o.op ? " selected" : ""}>${l}</option>`).join("")}</select>
       ${o.op === "notify" ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
-      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op])}" maxlength="${o.op === "notify" ? 500 : 100}">`}`;
+      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op] || "")}" maxlength="${o.op === "notify" ? 500 : 100}">`}
+      ${o.op === "send_channel" ? `<input class="a-ch" list="vdl" value="${esc(o.channel || "")}" placeholder="@کانال یا https://t.me/کانال (می‌توانی {متغیر} بگذاری)" maxlength="200" autocomplete="off" style="margin-top:6px">
+        <input class="a-at" value="${esc(o.at || "")}" placeholder="زمان ارسال: 21:30 یا 1405/07/15 18:00" maxlength="40" style="margin-top:6px" dir="ltr">
+        <input class="fa a-tx" value="${esc(o.text || "")}" placeholder="متن پست — خالی بگذاری، آخرین پیام خودت استفاده می‌شود" maxlength="3500" style="margin-top:6px">
+        <p class="muted" style="margin-top:4px">ربات باید در آن کانال ادمین باشد. بعد از زمان‌بندی، دکمهٔ حذف هم می‌آید.</p>` : ""}`;
   } else {
     inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگر…"}</span>${del}</div>${condHTML(o.c)}`;
     if(list === "route") inner += `<span class="lbl">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
@@ -1259,6 +1262,7 @@ function readRl(list){
       o.op = q(".a-op").value;
       o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
       o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
+      if(q(".a-ch")){ o.channel = q(".a-ch").value; o.at = q(".a-at").value; o.text = q(".a-tx").value; }
     }
     return o;
   });
@@ -1267,6 +1271,13 @@ function ruleErr(){
   const empty = c => c && simpleCond(c) && !c.var;
   for(const a of D.do || []){
     if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلانِ اکشن «به من خبر بده» را بنویس"; }
+    if(a.op === "send_channel"){
+      const ch = (r.querySelector(".a-ch")?.value || "").trim();
+      const at = (r.querySelector(".a-at")?.value || "").trim();
+      if(!ch) return "کانالِ اکشن «پست به کانال» را بنویس (مثل @mychannel)";
+      if(!at) return "زمان ارسال را بنویس (مثل 21:30 یا 1405/07/15 18:00)";
+      if(!/^(\{[^}]+\}|@?[\w]{4,32}|https?:\/\/[^\s]+)$/.test(ch)) return "کانال معتبر نیست. @نام یا لینک https://t.me/نام بنویس";
+    }
     else if(!a.var) return "اسم متغیرِ اکشن را بنویس";
   }
   for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، اسم متغیرِ شرط را بنویس";
@@ -1277,7 +1288,9 @@ function ruleErr(){
   for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط را بنویس";
   return null;
 }
-const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
+const outActs = l => l.map(a => a.op === "notify" ? {op:"notify", value:a.value || ""}
+  : a.op === "send_channel" ? {op:"send_channel", channel:a.channel || "", at:a.at || "", text:a.text || ""}
+  : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
 
 /* ── ویرایش بخش ── */
 function openNode(id){
@@ -1500,7 +1513,8 @@ function openBot(){
   S.sheet = {kind: "bot"};
   D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
         cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}),
-        refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "" };
+        refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "",
+        cpChannel: cfg.channel_post?.channel || "", cpAt: cfg.channel_post?.at || "" };
   renderSheet();
 }
 function botSheet(){
@@ -1510,6 +1524,12 @@ function botSheet(){
     <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
     <p class="muted mt">تا ${N(3)} کانال، با فاصله جدا کن. ربات باید در آن کانال‌ها ادمین باشد. خالی یعنی غیرفعال.</p>
+    <details class="adv"><summary>پست زمان‌بندی‌شده به کانال</summary><div class="box">
+      <p class="muted" style="margin-top:8px">اگر ربات بخشی برای زمان‌بندی پست دارد، کانال و ساعت پیش‌فرض را اینجا بگذار تا همه‌ی دکمه‌ها از همین استفاده کنند.</p>
+      <span class="lbl">کانال مقصد</span><input id="s-cpch" value="${esc(d.cpChannel)}" placeholder="@mychannel یا https://t.me/mychannel یا -1001234567890" autocomplete="off">
+      <span class="lbl">ساعت پیش‌فرض ارسال</span><input id="s-cpat" value="${esc(d.cpAt)}" placeholder="21:30 یا 1405/07/15 18:00" maxlength="40">
+      <p class="muted mt">ربات باید در آن کانال ادمین با دسترسی «ارسال پیام» باشد. خالی یعنی کاربر داخل ربات باید کانال را در هر دکمه وارد کند.</p>
+    </div></details>
     <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال شوی.">${esc(d.jtext)}</textarea>
     <div class="rowh"><span class="lbl">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="b o sm" data-sh="addcmd">${IC.plus}دستور</button>` : ""}</div>
     <div class="fgap"></div>
@@ -1546,6 +1566,10 @@ function saveBot(){
   busy($('[data-sh="save"]'), () => commit(cfg => {
     cfg.name = d.name.trim() || "ربات من";
     if(chs.length) cfg.join = {channels: chs, text: d.jtext.trim()}; else delete cfg.join;
+    const cpCh = (g("#s-cpch") || "").trim(), cpAt = (g("#s-cpat") || "").trim();
+    if(cpCh || cpAt){
+      cfg.channel_post = {}; if(cpCh) cfg.channel_post.channel = cpCh; if(cpAt) cfg.channel_post.at = cpAt;
+    } else delete cfg.channel_post;
     cfg.commands = {};
     d.cmds.forEach(([k, v]) => { k = k.trim().replace(/^\//, "").toLowerCase(); if(k) cfg.commands[k] = v; });
     const vars = {};

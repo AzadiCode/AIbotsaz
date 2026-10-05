@@ -695,16 +695,16 @@ Use this when the user wants the bot to post content to a Telegram channel at a 
 How it works: the action runs when the OWNER (is_owner == "1") reaches that node inside the bot, taps the button that carries the action, and the engine queues the text for the requested time. The bot must be an ADMIN of the channel with "post messages" rights.
 
 - {"op": "send_channel", "channel": "@mychannel", "text": "the post text (may use {placeholders})", "at": "21:30", "media": "<media_id>"}
-  - "channel": @username or a t.me link. If the user gave none, use @your_channel and say in "thinking" that the real channel id must be set via manual edit, and that the bot must be made an admin there.
-  - "at": the schedule. Accept "HH:MM" (today if still ahead, otherwise tomorrow) or "YYYY/MM/DD HH:MM" (Jalali, OUTPUT-LANGUAGE users write 1405/07/15 18:00) or "MM/DD HH:MM". Always in Tehran time.
+- "channel": @username, a t.me link, a numeric -100… id, or a joinchat link. BEST PRACTICE: put "{channel}" (not a literal id) so the owner can change the channel later in the bot settings without touching any button. If the user gave a real channel, also set the bot-level "channel_post": {"channel": "...", "at": "..."} so it appears in the settings screen. If they gave none, set it to "@your_channel" and say in "thinking" that the real channel must be set via manual edit, and that the bot must be an admin there.
+  - "at": the schedule. Accept "HH:MM" (today if still ahead, otherwise tomorrow) or "YYYY/MM/DD HH:MM" (Jalali, OUTPUT-LANGUAGE users write 1405/07/15 18:00) or "MM/DD HH:MM". Prefer "{post_at}" so the owner can change it in settings. Always in Tehran time.
   - "text": the post. Keep it under 1000 characters if you attach "media" so it fits as the caption.
   - "media": optional, from the MEDIA LIBRARY.
 - Put it on a "goto" button inside an owner-only section, because only the owner should schedule posts. Pattern:
   {"title": "پنل مدیر", "text": "مدیریت پست‌ها", "buttons": [[{"text": "پنل مدیر", "goto": "admin", "when": {"var": "is_owner", "op": "==", "value": "1"}}]]}
-  {"title": "ارسال پست", "text": "متن پست رو بنویس", "ask": true, "reply_btn": true, "next": "admin"}
-  ...then a node whose button carries the action:
-  {"text": "پست زمان‌بندی شد", "buttons": [[{"text": "زمان‌بندی", "goto": "done", "do": [{"op": "send_channel", "channel": "@mychannel", "text": "{text}", "at": "21:30"}]}]]}
+  {"title": "ارسال پست", "text": "متن پست رو اینجا بنویس و بفرست.", "ask": true, "reply_btn": true, "next": "admin"}
+  {"text": "پست زمان‌بندی شد", "buttons": [[{"text": "ارسال فردا ساعت ۹", "goto": "admin", "do": [{"op": "send_channel", "channel": "@mychannel", "text": "{last_msg}", "at": "09:00"}]}]]}
 - Keep it simple: one "ask" node to collect the text, one button that schedules it, and a confirmation node. The engine already shows the owner a "حذف از صف" button.
+- IMPORTANT: "text" MUST be "{last_msg}" — it is the owner's last message, still available when they tap the button. "{text}" is EMPTY on a button tap, so never use it here.
 - After queuing, the owner is told when it will be posted and gets a delete button. Mention this in "thinking" so they know they can cancel.
 - Do NOT use this for posting to a group, for user-to-user messages, or for anything the engine cannot schedule (recurring/daily cron rules are NOT supported — each post is scheduled once at one specific time).
 
@@ -733,7 +733,8 @@ MAX_VARS = 40
 MAX_HOPS = 5
 # متغیرهای آماده‌ی تلگرام (فقط‌خواندنی)
 BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner",
-            "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday")
+            "bot_name", "bot_username", "text", "last_msg", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday",
+            "channel", "post_at")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 ACT_OPS = ("set", "add", "clear", "random", "notify", "send_channel")
@@ -750,6 +751,29 @@ def norm_url(v):
         v = "https://" + v
     if v.startswith("https://") and len(v) > 12 and not re.search(r"\s", v):
         return v[:500]
+    return None
+
+
+def norm_channel(v):
+    """شناسه/لینک کانال → چیزی که sendMessage قبول می‌کند (@name / -100123 / joinchat)"""
+    v = str(v or "").strip()
+    if not v:
+        return None
+    # لینک دعوت خصوصی: t.me/joinchat/XXX یا t.me/+XXXX یا t.me/XXXXXXXXXXXX
+    m = re.search(r"(?:t\.me|telegram\.me|\+)\s*/?\s*(joinchat/[A-Za-z0-9_-]{5,}|[A-Za-z0-9_-]{16,})", v, re.I)
+    if m:
+        return "https://t.me/" + m.group(1)
+    # آیدی عددی کانال (-1001234567890)
+    digits = re.sub(r"[^\d-]", "", v)
+    if re.fullmatch(r"-100\d{6,}", digits):
+        return digits
+    # @name یا t.me/name یا https://t.me/name
+    s = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", v, flags=re.I).lstrip("@").strip().rstrip("/")
+    s = s.split("?")[0].split("#")[0].strip()
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{3,31}", s):
+        return "@" + s
+    if re.fullmatch(r"-?\d{6,}", s):
+        return s
     return None
 
 
@@ -815,18 +839,26 @@ def clean_actions(lst, used, nums, bad):
                 bad("متن اعلان (notify) خالیه")
             continue
         if op == "send_channel":
-            ch = norm_url(a.get("channel") or a.get("value"))
+            raw_ch = str(a.get("channel") or a.get("value") or "").strip()
             body = str(a.get("text") or "").strip()[:3500]
-            at = str(a.get("at") or a.get("when") or "").strip()[:32]
-            if not (ch and body and at):
-                bad("اکشن send_channel به سه چیز نیاز دارد: channel (لینک یا @آیدی)، text و at (زمان ارسال)")
+            at = str(a.get("at") or a.get("when") or "").strip()[:40]
+            if PH_RE.search(raw_ch):                  # کانال می‌تونه متغیر باشه (مثلاً @{mychan})
+                ch = raw_ch[:200]
+                for m in PH_RE.finditer(raw_ch):
+                    if m.group(1) not in BUILTINS:
+                        used.add(m.group(1))
+            else:
+                ch = norm_channel(raw_ch)
+            if not (ch and at):
+                bad("اکشن send_channel به «کانال» و «زمان ارسال» نیاز دارد")
                 continue
+            if not body:
+                body = "{last_msg}"          # آخرین پیام ادمین
             item = {"op": "send_channel", "channel": ch, "text": body, "at": at}
             mi = str(a.get("media") or "").strip()
             if mi:
                 item["media"] = mi
             out.append(item)
-            used.add("_chan")
             continue
         name = str(a.get("var") or "").strip().lower()
         if not VAR_RE.match(name) or name in BUILTINS:
@@ -1057,6 +1089,19 @@ def sanitize(cfg, strict=False, media=None):
         cmds[k] = str(v)
     out = {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
            "fallback": fallback, "commands": cmds, "nodes": nodes}
+
+    # تنظیمات پیش‌فرض پست کانال: هر ربات این دو را دارد و کاربر می‌تواند از تنظیمات عوضشان کند
+    ch_cfg = cfg.get("channel_post")
+    if isinstance(ch_cfg, dict):
+        cp = {}
+        cval = str(ch_cfg.get("channel") or "").strip()[:200]
+        if cval:
+            cp["channel"] = cval
+        atval = str(ch_cfg.get("at") or "").strip()[:40]
+        if atval:
+            cp["at"] = atval
+        if cp:
+            out["channel_post"] = cp
 
     # پاداش دعوت: اکشن‌هایی که برای دعوت‌کننده اجرا می‌شن
     on_ref = clean_actions(cfg.get("on_ref"), used, nums, bad)
@@ -2607,6 +2652,7 @@ class Env:
         self.vars = {k: str(v) for k, v in (doc.get("v") or {}).items()}
         self.visits = int(doc.get("visits", 0))
         self.refs = int(doc.get("refs", 0))
+        self.last_msg = str(doc.get("lm", ""))[:3500]      # آخرین پیام متنی کاربر (برای زمان‌بندی پست)
         self.is_new = False
         self.dirty = False
         self._now = now() + timedelta(hours=3, minutes=30)      # ساعت تهران
@@ -2637,6 +2683,12 @@ class Env:
             return ("@" + self.bot["username"]) if self.bot.get("username") else ""
         if k == "text":
             return self.text
+        if k == "last_msg":
+            return self.last_msg or self.text
+        if k == "channel":
+            return str((self.cfg.get("channel_post") or {}).get("channel", ""))
+        if k == "post_at":
+            return str((self.cfg.get("channel_post") or {}).get("at", ""))
         if k == "param":
             return self.param
         if k == "visits":
@@ -2677,7 +2729,8 @@ class Env:
     def save(self):
         if self.dirty:
             db.uvars.update_one({"_id": self._key},
-                                {"$set": {"v": self.vars, "visits": self.visits, "t": now()}}, upsert=True)
+                                {"$set": {"v": self.vars, "visits": self.visits,
+                                          "lm": self.last_msg, "t": now()}}, upsert=True)
             self.dirty = False
 
 
@@ -2744,12 +2797,18 @@ def run_actions(acts, env):
             to_owner(env, text=f"{env.cfg.get('name', '')}\n{val}\n\n{who(env)}")
         elif op == "send_channel":
             body = fill(a.get("text", ""), env)[:3500]
-            ok, when, err = queue_channel(env, a, body)
-            note = "📌 زمان‌بندی شد" if ok else f"⚠️ {err}"
-            t2 = tg(env.token, "sendMessage", chat_id=env.chat_id, text=f"{note}\n\n{body[:300]}")
-            mid = (t2.get("result") or {}).get("message_id")
-            if ok and mid:
-                sched_keyboard(env, mid, a, when)
+            # اول پیام تأیید می‌فرستیم تا شناسه‌اش رو داشته باشیم، بعد صف می‌کنیم
+            probe = tg(env.token, "sendMessage", chat_id=env.chat_id, text="⏳ در حال ثبت در صف…")
+            pmid = (probe.get("result") or {}).get("message_id")
+            ok, when, err = queue_channel(env, a, body, owner_msg=pmid)
+            if ok:
+                sched_keyboard(env, pmid, a, when, body)
+            else:
+                if pmid:
+                    tg(env.token, "editMessageText", chat_id=env.chat_id, message_id=pmid,
+                       text=f"⚠️ ثبت در صف ناموفق بود\n{err}")
+                else:
+                    tg(env.token, "sendMessage", chat_id=env.chat_id, text=f"⚠️ {err}")
 
 
 # ───────────────────────── زمان‌بندی ارسال به کانال ─────────────────────────
@@ -2787,15 +2846,21 @@ def _index_sched():
     _index(db.sched, "t", expireAfterSeconds=90 * 86400)
 
 
-def sched_keyboard(env, mid, a, when):
-    """دکمه‌های مدیریت یک پست زمان‌بندی‌شده زیر پیامی که ادمین فرستاده"""
-    jy, jm, jd = to_jalali((when + timedelta(hours=3, minutes=30)).year, (when + timedelta(hours=3, minutes=30)).month, (when + timedelta(hours=3, minutes=30)).day)
-    lbl = (f"ارسال {jy}/{jm:02d}/{jd:02d} ساعت {(when + timedelta(hours=3, minutes=30)).strftime('%H:%M')}")
-    db.sched.update_one({"bot": env.bot_id, "owner_msg": mid}, {"$set": {"owner_msg": mid}})
-    tg(env.token, "sendMessage", chat_id=env.chat_id,
-       text=f"✅ پستت برای «{lbl}» صف شد.\nکانال: {a['channel']}\n\n"
-            f"اگه پشیمون شدی /postdel را بفرست یا روی دکمه بزن.",
-       reply_markup={"inline_keyboard": [[{"text": "🗑 حذف از صف", "callback_data": f"pd:{env.bot_id}:{mid}"}]]})
+def sched_keyboard(env, mid, a, when, body=""):
+    """پیام تأیید زمان‌بندی + دکمه حذف، زیر همان پیامی که شناسه‌اش در صف ثبت شد"""
+    loc = when + timedelta(hours=3, minutes=30)
+    jy, jm, jd = to_jalali(loc.year, loc.month, loc.day)
+    lbl = f"{jy}/{jm:02d}/{jd:02d} ساعت {loc.strftime('%H:%M')}"
+    kb = {"inline_keyboard": [[{"text": "🗑 حذف از صف", "callback_data": f"pd:{env.bot_id}:{mid}"[:64]}]]}
+    text = f"✅ پستت زمان‌بندی شد\n\n🕐 {lbl}\n📢 کانال: {a.get('channel', '')}\n\n"
+    if body and body != "—":
+        text += f"📝 متن پست:\n{body[:500]}"
+    if mid:
+        r = tg(env.token, "editMessageText", chat_id=env.chat_id, message_id=mid, text=text, reply_markup=kb)
+        if not r.get("ok"):
+            tg(env.token, "sendMessage", chat_id=env.chat_id, text=text, reply_markup=kb)
+    else:
+        tg(env.token, "sendMessage", chat_id=env.chat_id, text=text, reply_markup=kb)
 
 
 def cancel_scheduled(bot_id, token, chat_id, owner_msg):
@@ -2831,7 +2896,10 @@ def run_sched_tick():
             except Exception:
                 db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "توکن ربات قابل خواندن نبود"}})
                 continue
-            chat = "@" + str(j.get("channel", "")).split("/")[-1].lstrip("@")
+            chat = norm_channel(j.get("channel", "")) or j.get("channel", "")
+            if not chat:
+                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "آدرس کانال نامعتبر"}})
+                continue
             txt = j.get("text", "") or "—"
             sent, err = False, ""
             try:
@@ -2915,22 +2983,41 @@ def parse_when(s, env):
     return None
 
 
-def queue_channel(env, a, body):
-    """اکشن send_channel: پیام رو در صف می‌ذاره. (موفق؟، زمان، خطا)"""
-    when = parse_when(a.get("at", ""), env)
+def queue_channel(env, a, body, owner_msg=None):
+    """اکشن send_channel: پیام رو در صف می‌ذاره. (موفق؟، زمان، خطا)
+    اگه متن خالی باشه از آخرین پیام کاربر ({last_msg}) استفاده می‌شه."""
+    # ── ۱) کانال: اول از اکشن، بعد از تنظیمات ربات ({channel}) ──
+    raw_ch = str(a.get("channel", "") or "").strip()
+    ch = norm_channel(fill(raw_ch, env)) if not PH_RE.search(raw_ch) else None
+    if not ch and not PH_RE.search(raw_ch):
+        ch = norm_channel(raw_ch)
+    if not ch:
+        ch = norm_channel(env.get("channel") or "")          # از تنظیمات ربات
+    if not ch:
+        return False, None, ("کانال تعیین نشده. برو به «تنظیمات ربات ← پست زمان‌بندی‌شده به کانال» "
+                             "و کانالت را وارد کن.")
+    # ── ۲) زمان ──
+    at = fill(str(a.get("at", "") or ""), env).strip()      # متغیرها پر می‌شن
+    if not at or PH_RE.search(at):
+        at = (env.get("post_at") or "").strip() or at        # از تنظیمات ربات
+    when = parse_when(at, env)
     if when is None:
-        return False, None, "زمان «{}» نامعتبره".format(a.get("at", ""))
-    if when < now() - timedelta(minutes=5):
+        return False, None, (f"زمان «{at or '—'}» نامعتبره. در تنظیمات ربات ساعت را بنویس "
+                             f"(مثل 21:30 یا 1405/07/15 18:00).")
+    if when < now() - timedelta(minutes=2):
         return False, None, "زمان گذشته است"
     if when > now() + timedelta(days=366):
         return False, None, "بیشتر از یک سال جلوتر نمی‌تونی زمان‌بندی کنی"
+    body = (body or "").strip() or (env.get("last_msg") or "").strip() or "—"
     cid = secrets.token_hex(6)
-    doc = {"_id": cid, "bot": env.bot_id, "channel": a["channel"], "text": body,
+    doc = {"_id": cid, "bot": env.bot_id, "channel": ch, "text": body[:3500],
            "run_at": when.replace(tzinfo=None), "status": "queued",
            "owner": env.owner, "media": a.get("media", ""), "t": now()}
+    if owner_msg:
+        doc["owner_msg"] = owner_msg
     try:
         db.sched.insert_one(doc)
-    except Exception as e:
+    except Exception:
         log.exception("queue_channel failed")
         return False, None, "ثبت در صف ناموفق بود"
     _index_sched()
@@ -3385,6 +3472,9 @@ def sub_hook(bot_id):
         text = (msg.get("text") or "").strip()
         env = Env(bot, token, chat_id, user, text=text)
         env.is_new = is_new
+        if text:                       # نگه‌داری آخرین پیام برای زمان‌بندی پست و {last_msg}
+            env.last_msg = text[:3500]
+            env.dirty = True
         # صاحب ربات در حالت پاسخ (بعد از زدن دکمه «پاسخ به کاربر») — هر نوع پیامی می‌فرسته
         if user.get("id") == bot["owner"]:
             target = take_reply_mode(bot_id, user["id"])
