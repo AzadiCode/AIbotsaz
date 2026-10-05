@@ -493,8 +493,8 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .ucnt{font-size:12px;min-width:24px;text-align:center;border-radius:7px;padding:1px 0;margin-top:2px;box-shadow:inset 0 0 0 1px var(--line)}
 
 /* ── کشوی ناوبری (لبه‌ی چپ) ── */
-.dock{--rw:48px;--shift:23px;--out:18px;position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
-  transform:translate(calc(-1 * var(--shift)),-50%);transition:transform .34s cubic-bezier(.2,.8,.2,1)}
+.dock{--rw:48px;--out:18px;--pad:5px;--keep:calc(var(--rw) - var(--pad) - var(--out));position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
+  transform:translate(calc(-1 * var(--rw)),-50%);transition:transform .34s cubic-bezier(.2,.8,.2,1)}
 .dock[hidden]{display:none}
 .dock.open{transform:translate(0,-50%)}
 .dock.hide{opacity:0;pointer-events:none;transition:opacity .2s,transform .34s cubic-bezier(.2,.8,.2,1)}
@@ -509,11 +509,14 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
   transition:transform .34s cubic-bezier(.2,.8,.2,1),background .2s,color .2s,box-shadow .2s}
 .dn svg{width:20px;height:20px}
 .dn:active{transform:scale(.92);background:color-mix(in srgb,var(--sf2) 70%,transparent)}
-/* آیکون بخش فعال: آبی، از نوار بیرون می‌زند (هم باز و هم بسته) */
+/* آیکون بخش فعال: آبی، از نوار بیرون می‌زند (هم باز و هم بسته).
+   وقتی نوار بسته است کل نوار کامل بیرون می‌رود و فقط همین آیکون با --keep برمی‌گردد و کامل دیده می‌شود */
 .dn.on{transform:translateX(var(--out));color:var(--acx);border-radius:13px 15px 15px 13px;
   background:linear-gradient(145deg,var(--ac),color-mix(in srgb,var(--ac) 74%,#000));
   box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 6px 16px color-mix(in srgb,var(--ac) 34%,transparent),0 10px 22px rgba(0,0,0,.22)}
 .dn.on:active{transform:translateX(var(--out)) scale(.92)}
+.dock:not(.open) .dn.on,.dock:not(.open) .dn.on:active{transform:translateX(calc(var(--out) + var(--keep)))}
+.dock:not(.open) .dn.on{border-radius:0 15px 15px 0}
 .dscrim{position:fixed;inset:0;z-index:39;display:none}
 .dscrim.on{display:block;background:transparent}
 
