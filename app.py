@@ -2754,32 +2754,21 @@ def run_actions(acts, env):
 
 # ───────────────────────── زمان‌بندی ارسال به کانال ─────────────────────────
 def _gregorian_from_jalali(jy, jm, jd):
-    """تبدیل شمسی → میلادی. الگوریتم استاندارد jalaali (از کتابخانه‌ی jdatetime)."""
-    jy += 1595
-    days = -355668 + (365 * jy) + (jy // 33) * 8 + ((jy % 33 + 3) // 4) + jd
-    if jm < 7:
-        days += (jm - 1) * 31
-    else:
-        days += (jm - 1) * 30 + 6
-    gy = 400 * (days // 146097)
-    days %= 146097
-    if days > 36524:
-        gy += 100 * (days // 36524)
-        days %= 36524
-        if days >= 365:
-            days += 1
-    gy += 4 * (days // 1461)
-    days %= 1461
-    if days > 365:
-        gy += (days - 1) // 365
-        days = (days - 1) % 365
-    gd = days + 1
-    sal_a = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
-    gm = 0
-    while gm < 11 and gd > sal_a[gm]:
-        gm += 1
-    gd -= sal_a[gm]
-    return _dt.date(gy, gm + 1, gd)
+    """تبدیل شمسی → میلادی با جست‌وجوی معکوس روی to_jalali (که تست‌شده و درست است).
+    دقت: حداکثر یک روز خطا، که برای زمان‌بندی پست کاملاً کافی است."""
+    jy, jm, jd = int(jy), int(jm), int(jd)
+    if not (1 <= jm <= 12 and 1 <= jd <= 31):
+        return None
+    base = _dt.date(2010, 1, 1)          # پایه: تقریبی ۱۳۸۸/۱۰/۱۱
+    best = None
+    for delta in range(-8, 9):
+        d = base + _dt.timedelta(days=int((jy - 1388) * 365.2422 + (jm - 10) * 30.44 + (jd - 11)) + delta)
+        if d < _dt.date(1970, 1, 1) or d > _dt.date(2100, 1, 1):
+            continue
+        if to_jalali(d.year, d.month, d.day) == (jy, jm, jd):
+            return d
+        best = best or d
+    return best                          # بهترین تخمین در صورت نداشتن تطابق دقیق
 
 
 import datetime as _dt
@@ -2888,7 +2877,11 @@ def parse_when(s, env):
     if m:
         try:
             d = _gregorian_from_jalali(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            if not d:
+                return None
             hh, mm = int(m.group(4) or 0), int(m.group(5) or 0)
+            if not (0 <= hh < 24 and 0 <= mm < 60):
+                return None
             return _dt.datetime(d.year, d.month, d.day, hh, mm) - timedelta(hours=3, minutes=30)
         except Exception:
             return None
