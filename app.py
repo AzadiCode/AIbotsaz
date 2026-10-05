@@ -2754,20 +2754,16 @@ def run_actions(acts, env):
 
 # ───────────────────────── زمان‌بندی ارسال به کانال ─────────────────────────
 def _gregorian_from_jalali(jy, jm, jd):
-    """تبدیل شمسی به میلادی (الگوریتم استاندارد)"""
+    """تبدیل شمسی → میلادی. الگوریتم استاندارد jalaali (از کتابخانه‌ی jdatetime)."""
     jy += 1595
     days = -355668 + (365 * jy) + (jy // 33) * 8 + ((jy % 33 + 3) // 4) + jd
-    for i in range(jm):
-        if i < 6:
-            days += 31
-        elif i < 11:
-            days += 30
-        else:
-            days += 29
+    if jm < 7:
+        days += (jm - 1) * 31
+    else:
+        days += (jm - 1) * 30 + 6
     gy = 400 * (days // 146097)
     days %= 146097
     if days > 36524:
-        days -= 1
         gy += 100 * (days // 36524)
         days %= 36524
         if days >= 365:
@@ -2780,14 +2776,14 @@ def _gregorian_from_jalali(jy, jm, jd):
     gd = days + 1
     sal_a = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
     gm = 0
-    while gm < 11 and gd > sal_a[gm] + 1:
+    while gm < 11 and gd > sal_a[gm]:
         gm += 1
     gd -= sal_a[gm]
-    import datetime as _dt
     return _dt.date(gy, gm + 1, gd)
 
 
-import datetime as _dtmod   # noqa: E402
+import datetime as _dt
+from datetime import datetime, timezone, timedelta
 
 _sched_lock = threading.Lock()
 _sched_idx = {"done": False}
@@ -2886,7 +2882,6 @@ def start_scheduler():
 def parse_when(s, env):
     """رشته‌ی زمان → datetime. قالب‌ها: 'YYYY/MM/DD HH:MM' یا 'HH:MM' یا 'MM/DD HH:MM'
     همه به وقت تهران (+۳:۳۰)"""
-    import datetime as _dt
     s = str(s or "").strip().translate(_DIG)
     n = now() + timedelta(hours=3, minutes=30)
     m = re.match(r"^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$", s)
