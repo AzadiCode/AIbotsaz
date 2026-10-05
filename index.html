@@ -48,11 +48,11 @@ svg{display:block}
 
 /* ── چیدمان ── */
 #app{max-width:560px;margin:0 auto;padding:4px 16px 0}
-.top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
-.top-in{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px}
+.top{position:sticky;top:0;z-index:30;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent);background:color-mix(in srgb,var(--bg) 84%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.top-in{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:5px 14px;min-height:46px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px}
 .brand{gap:8px;font-size:17px}
-.brand svg{width:40px;height:40px;color:var(--ac);overflow:visible}
+.brand svg{width:30px;height:30px;color:var(--ac);overflow:visible}
 
 
 /* ── Splash: لوگوی بزرگ وسط پس‌زمینه‌ی سیاه ── */
@@ -71,7 +71,7 @@ svg{display:block}
 @keyframes spBar{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
 
 /* ── Azadi wordmark: جمع‌شدن از دو طرف تا «Ai» و بازشدن ── */
-.wm{direction:ltr;unicode-bidi:isolate;display:inline-flex;align-items:center;font-family:"Oxanium",monospace;font-weight:800;font-size:21px;line-height:1;letter-spacing:.07em;user-select:none;white-space:nowrap;position:relative;padding:2px 0}
+.wm{direction:ltr;unicode-bidi:isolate;display:inline-flex;align-items:center;font-family:"Oxanium",monospace;font-weight:800;font-size:18px;line-height:1;letter-spacing:.07em;user-select:none;white-space:nowrap;position:relative;padding:2px 0}
 .wm .wl{display:inline-flex;justify-content:center;white-space:nowrap;color:var(--ink)}
 .wm .wl.k{color:var(--ac)}
 .wm::after{content:"";position:absolute;left:0;right:0;bottom:-3px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);opacity:.0;transform:scaleX(.2)}
@@ -106,10 +106,10 @@ svg{display:block}
 @keyframes look{0%,10%{transform:translate(0,0)}15%,27%{transform:translate(-1.5px,0)}33%,45%{transform:translate(1.5px,0)}51%,63%{transform:translate(0,1px)}70%,100%{transform:translate(0,0)}}
 @keyframes blink{0%,38%,42%,86%,90%,100%{transform:scaleY(1)}40%,88%{transform:scaleY(.08)}}
 @keyframes ant{0%,60%,100%{transform:rotate(0)}66%{transform:rotate(14deg)}72%{transform:rotate(-10deg)}78%{transform:rotate(0)}}
-.tokpill{position:relative;display:flex;align-items:center;gap:6px;padding:6px 4px;color:var(--tok);transition:transform .15s}
+.tokpill{position:relative;display:flex;align-items:center;gap:6px;padding:3px 4px;color:var(--tok);transition:transform .15s}
 .tokpill svg{width:17px;height:17px}
 .tokpill.gift::after{content:"";position:absolute;top:3px;left:-3px;width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px var(--bg)}
-.tokpill .n{font-size:17px}
+.tokpill .n{font-size:16px;line-height:1}
 .tokpill:active{transform:scale(.96)}
 .tokpill.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
 @keyframes bump{40%{transform:scale(1.15)}}
@@ -179,21 +179,33 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .cfoot .b{width:auto;min-width:112px;min-height:40px;font-size:14px;border-radius:12px;padding:0 16px}
 .cfoot .b svg{width:16px;height:16px}
 
+
+/* ── هشدار فعال‌سازی ── */
+.note{display:flex;align-items:center;gap:12px;margin-top:14px;padding:10px 12px 10px 14px;border-radius:14px;background:color-mix(in srgb,var(--tok) 8%,var(--sf));border:1px solid color-mix(in srgb,var(--tok) 26%,var(--line))}
+.note::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--tok);box-shadow:0 0 0 4px var(--toks);animation:noteDot 2.4s ease-in-out infinite}
+.note .dt{flex:1;min-width:0;font-size:12.5px;line-height:1.7;color:var(--mut)}
+.note .dt b{display:block;font-size:13.5px;line-height:1.6;color:var(--ink);font-weight:700}
+.note .b.sm{flex:none;min-height:32px;padding:0 14px;font-size:12.5px}
+@keyframes noteDot{0%,100%{box-shadow:0 0 0 3px var(--toks)}50%{box-shadow:0 0 0 6px transparent}}
+
 /* ── انیمیشن ساخت ── */
-.build{background:var(--sf);border:1px solid var(--ac);border-radius:18px;padding:14px 16px;margin-top:12px}
-.bh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.bh b{font-size:14px}
-.clk{font-size:13px;color:var(--mut)}
-.bl{display:flex;flex-direction:column;gap:8px}
-.bl div{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mut);transition:color .3s}
-.bl i{width:16px;height:10px;border-radius:3px;background:var(--cell);flex:none;transition:background .3s}
-.bl .cur{color:var(--ink)}
-.bl .cur i{background:var(--ac);animation:blink 1s steps(2) infinite}
-.bl .done i{background:var(--ok)}
-@keyframes blink{50%{opacity:.25}}
-.meter{height:3px;border-radius:2px;background:var(--cell);margin-top:14px;overflow:hidden;position:relative}
-.meter::after{content:"";position:absolute;inset:0 auto 0 0;width:34%;background:var(--ac);border-radius:2px;animation:slide 1.6s ease-in-out infinite}
-@keyframes slide{from{transform:translateX(320%)}to{transform:translateX(-120%)}}
+.build{display:flex;align-items:center;gap:12px;margin-top:12px;padding:9px 14px;min-height:46px;border-radius:14px;background:var(--sf);border:1px solid color-mix(in srgb,var(--ac) 38%,var(--line))}
+.bthink{flex:1;min-width:0;height:24px;position:relative;overflow:hidden;font-size:13px}
+.bthink span{position:absolute;inset:0;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:transparent;
+  background:linear-gradient(100deg,var(--mut) 38%,var(--ink) 50%,var(--mut) 62%) 100% 0/260% 100% no-repeat;-webkit-background-clip:text;background-clip:text;
+  animation:bWave 2.3s linear infinite,bIn .45s cubic-bezier(.2,.8,.2,1) both}
+.bthink span.out{animation:bWave 2.3s linear infinite,bOut .35s ease-in forwards}
+@keyframes bWave{from{background-position:100% 0}to{background-position:0 0}}
+@keyframes bIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+@keyframes bOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-9px)}}
+.rb{width:26px;height:26px;flex:none;color:var(--ac);overflow:visible}
+.rb *{transform-box:fill-box;transform-origin:center}
+.rb .r1{animation:rbSpin 2.6s linear infinite}
+.rb .r2{animation:rbSpin 1.5s linear infinite reverse}
+.rb .c{animation:rbPulse 1.6s ease-in-out infinite}
+@keyframes rbSpin{to{transform:rotate(360deg)}}
+@keyframes rbPulse{0%,100%{transform:scale(.6);opacity:.6}50%{transform:scale(1.15);opacity:1}}
+@media (prefers-reduced-motion:reduce){.bthink span,.bthink span.out,.rb .r1,.rb .r2,.rb .c{animation:none!important}.bthink span{color:var(--ink);background:none}}
 
 /* ── جایزه‌ی روزانه ── */
 .daily{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--toks)}
@@ -741,23 +753,26 @@ function goTo(where){
 const tabsHTML = (list, cur, act) => `<div class="tabs" role="tablist">${list.map(([k, t]) => `<button class="tab${k === cur ? " on" : ""}" role="tab" aria-selected="${k === cur}" data-a="${act}" data-k="${k}">${t}</button>`).join("")}</div>`;
 
 /* ═════════ انیمیشن ساخت ═════════ */
-const STEPS = ["درک درخواست", "طراحی مسیرها", "ساخت بخش‌ها", "اتصال رسانه و منطق", "بازبینی نهایی"];
+const THINK = ["در حال تحلیل درخواست…", "طراحی ساختار مسیرها…", "چیدمان صفحه‌ها و دکمه‌ها…", "نوشتن متن پیام‌ها…", "اتصال منطق و متغیرها…", "بررسی سازگاری با تلگرام…", "بهینه‌سازی تجربه‌ی کاربر…", "تنظیم جزئیات نهایی…", "بازبینی و رفع ایرادها…", "کمی دیگر، تقریباً آماده‌ست…"];
+const RB = `<svg class="rb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle class="r1" cx="12" cy="12" r="10" stroke-dasharray="9 5"/><path class="r2" d="M12 6a6 6 0 0 1 6 6" /><path class="r2" d="M12 18a6 6 0 0 1-6-6" /><circle class="c" cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`;
 function startLive(title){
   const box = $("#live"); if(!box) return;
   $("#think")?.classList.remove("show");
-  box.innerHTML = `<div class="build" role="status" aria-live="polite"><div class="bh"><b>${title}</b><span class="n clk" id="clk">00:00</span></div>
-    <div class="bl" id="bl">${STEPS.map(t => `<div><i></i>${t}</div>`).join("")}</div><div class="meter"></div></div>`;
+  box.innerHTML = `<div class="build" role="status" aria-busy="true" aria-label="${title}"><div class="bthink" aria-hidden="true"></div>${RB}</div>`;
   box.scrollIntoView({behavior: "smooth", block: "center"});
-  const t0 = Date.now(); let k = 0;
-  const mark = () => document.querySelectorAll("#bl div").forEach((el, j) => { el.className = j < k ? "done" : j === k ? "cur" : ""; });
-  mark();
+  const bt = box.querySelector(".bthink");
+  let pool = [], last = title;
+  const next = () => {
+    if(!pool.length){ pool = THINK.slice().sort(() => Math.random() - .5); if(pool[pool.length - 1] === last) pool.reverse(); }
+    return pool.pop();
+  };
+  const show = txt => {
+    bt.querySelectorAll("span").forEach(o => { o.classList.add("out"); setTimeout(() => o.remove(), 380); });
+    const sp = document.createElement("span"); sp.textContent = txt; bt.appendChild(sp); last = txt;
+  };
+  show(title + "…");
   clearInterval(startLive.t); clearInterval(startLive.c);
-  startLive.t = setInterval(() => { k = Math.min(k + 1, STEPS.length - 1); mark(); }, 3600);
-  startLive.c = setInterval(() => {
-    const c = $("#clk"); if(!c) return clearInterval(startLive.c);
-    const s = Math.floor((Date.now() - t0) / 1000);
-    c.textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
-  }, 1000);
+  startLive.t = setInterval(() => { if(!bt.isConnected) return clearInterval(startLive.t); show(next()); }, 2800);
 }
 function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); const b = $("#live"); if(b) b.innerHTML = ""; }
 
