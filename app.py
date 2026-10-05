@@ -113,6 +113,9 @@ ONLINE_SECS  = 70           # کاربری که توی این بازه پینگ 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("aibot")
 
+if not ADMIN_IDS:
+    log.warning("ADMIN_IDS تنظیم نشده؛ گزارش قابلیت‌های شدنی‌نبود و پنل مدیریت کار نمی‌کند")
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = (MEDIA_MAX_MB + 1) * 1024 * 1024
 if MONGO_URI:
@@ -1166,15 +1169,25 @@ def clean_limits(raw):
     return out
 
 
+class BadOutput(ValueError):
+    """خروجی مدل معتبر نبود؛ متن خام برای گزارش به ادمین نگه داشته می‌شود"""
+    def __init__(self, msg, raw=""):
+        super().__init__(msg)
+        self.raw = str(raw)[:600]
+
+
 def _call_llm(user, lang, final, media_ids, acc):
     txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
-        raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
-    raw = json.loads(m.group(0))
+        raise BadOutput("پاسخ AI شامل JSON نبود", txt)
+    try:
+        raw = json.loads(m.group(0))
+    except ValueError:
+        raise BadOutput("JSON مدل ناقص/نامعتبر بود", txt)
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
-        raise ValueError("پاسخ AI فاقد بخش config بود")
+        raise BadOutput("پاسخ AI فاقد بخش config بود", txt)
     cfg = sanitize(raw["config"], media=media_ids)
     thinking = str(raw.get("thinking") or "").strip()[:900]
     ideas = [str(x).strip()[:80] for x in (raw.get("ideas") if isinstance(raw.get("ideas"), list) else []) if str(x).strip()][:3]
@@ -1228,7 +1241,14 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
             continue
         except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
             last = e
-            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.)"
+            raw = getattr(e, "raw", "")
+            hint = ""
+            if isinstance(e, BadOutput) and raw:
+                # مدل ظاهراً توضیح داده چرا نمی‌تواند → به صریح‌ترین شکل تکرار کن
+                hint = (f" (Your previous reply was NOT json. Your own words were: {raw[:300]!r}. "
+                        f"You MUST still return one valid JSON object. If you believe the request is "
+                        f"impossible, build the closest approximation and describe the gap in \"limits\".)")
+            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.{hint})"
             log.warning("bad AI output, retrying once", exc_info=True)
             continue
         problems = lint(cfg)
@@ -1713,6 +1733,7 @@ def new_bot_doc(uid, cfg, thinking):
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: رزرو توکن از قبل کم شده؛ در پایان هزینه‌ی واقعی ثبت و باقی‌مونده برمی‌گرده"""
     acc = []
+    user, bot = {}, None
     try:
         user = db.users.find_one({"_id": uid}) or {}
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
@@ -1745,6 +1766,22 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         if db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}}):
             release(uid, reserve)
+        # ── گزارش شکست به ادمین: مدل نتونست جواب بده، پس بگو دقیقاً چه گفت ──
+        try:
+            raw = getattr(e, "raw", "")
+            reason = f"{type(e).__name__}: {str(e)[:200]}"
+            why = f"مدل نتونست کانفیگ معتبر برگردونه.\nخطا: {reason}"
+            if raw:
+                why += f"\n\nمتن خام مدل:\n{raw}"
+            report_gaps(uid, user, bot, prompt, [{
+                "feature": "ai_refused_or_bad_json",
+                "want": prompt[:300],
+                "why": why[:900],
+                "upgrade": ("پرامپت/مدل رو بررسی کن؛ شاید مدل درخواست رو رد کرده. "
+                            "راه‌حل: فعال کردن JSON Schema خروجی (response_format) تا مدل نتونه فرار نکنه.")
+                }])
+        except Exception:
+            log.exception("report_gaps on error failed")
 
 
 def recover_jobs():
