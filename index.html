@@ -493,7 +493,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .ucnt{font-size:12px;min-width:24px;text-align:center;border-radius:7px;padding:1px 0;margin-top:2px;box-shadow:inset 0 0 0 1px var(--line)}
 
 /* ── کشوی ناوبری (لبه‌ی چپ) ── */
-.dock{--rw:48px;--out:18px;--pad:5px;--keep:calc(var(--rw) - var(--pad) - var(--out));position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
+.dock{--rw:48px;--out:18px;--pad:5px;--keep:6px;position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
   transform:translate(calc(-1 * var(--rw)),-50%);transition:transform .34s cubic-bezier(.2,.8,.2,1)}
 .dock[hidden]{display:none}
 .dock.open{transform:translate(0,-50%)}
@@ -516,7 +516,6 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
   box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 6px 16px color-mix(in srgb,var(--ac) 34%,transparent),0 10px 22px rgba(0,0,0,.22)}
 .dn.on:active{transform:translateX(var(--out)) scale(.92)}
 .dock:not(.open) .dn.on,.dock:not(.open) .dn.on:active{transform:translateX(calc(var(--out) + var(--keep)))}
-.dock:not(.open) .dn.on{border-radius:0 15px 15px 0}
 .dscrim{position:fixed;inset:0;z-index:39;display:none}
 .dscrim.on{display:block;background:transparent}
 
