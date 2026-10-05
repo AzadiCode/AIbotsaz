@@ -499,31 +499,30 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .dock.open{transform:translate(0,-50%)}
 .dock.hide{transform:translate(calc(-1 * var(--shift) - 40px),-50%)}
 .dpanel{position:relative;display:flex;flex-direction:column;gap:6px;width:var(--rw);padding:10px 6px;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--sf) 52%,transparent),color-mix(in srgb,var(--sf) 38%,transparent));
-  -webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5);
-  border:1px solid color-mix(in srgb,var(--ac) 22%,var(--line));border-left:0;border-radius:0 22px 22px 0;
-  box-shadow:0 12px 36px rgba(0,0,0,.30),inset 0 1px 0 color-mix(in srgb,#fff 10%,transparent)}
-.dn{position:relative;display:grid;place-items:center;width:42px;height:42px;border-radius:14px;color:var(--mut);transition:background .2s,color .2s,transform .2s,box-shadow .2s}
-.dn svg{width:22px;height:22px;transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .25s}
+  background:linear-gradient(180deg,color-mix(in srgb,var(--sf) 46%,transparent),color-mix(in srgb,var(--sf) 32%,transparent));
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
+  border:1px solid color-mix(in srgb,var(--ac) 18%,var(--line));border-left:0;border-radius:0 20px 20px 0;
+  box-shadow:0 10px 30px rgba(0,0,0,.24),inset 0 1px 0 color-mix(in srgb,#fff 8%,transparent)}
+.dn{position:relative;display:grid;place-items:center;width:42px;height:42px;border-radius:13px;color:var(--mut);transition:background .2s,color .2s,transform .2s,box-shadow .2s}
+.dn svg{width:21px;height:21px;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
 .dn:active{transform:scale(.92);background:color-mix(in srgb,var(--sf2) 70%,transparent)}
-.dn.on{color:var(--acx);background:linear-gradient(145deg,var(--ac),color-mix(in srgb,var(--ac) 62%,#fff));
-  box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 70%,transparent),0 6px 18px color-mix(in srgb,var(--ac) 46%,transparent),0 0 22px color-mix(in srgb,var(--ac) 38%,transparent)}
-.dn.on svg{transform:scale(1.14);filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
-.dn.on::before{content:"";position:absolute;left:-7px;top:11px;bottom:11px;width:3px;border-radius:0 3px 3px 0;background:var(--ac);box-shadow:0 0 10px var(--ac)}
-.dhandle{position:relative;display:grid;place-items:center;width:24px;height:64px;margin-left:6px;color:var(--acx);
-  background:linear-gradient(160deg,var(--ac),color-mix(in srgb,var(--ac) 60%,#fff));border:0;border-radius:0 16px 16px 0;
-  box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 65%,transparent),0 0 20px color-mix(in srgb,var(--ac) 55%,transparent),0 8px 22px rgba(0,0,0,.28);
-  animation:glow 2.4s ease-in-out infinite;transition:border-radius .3s,width .3s}
-.dock.open .dhandle{border-radius:14px;width:22px;animation:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 6px 18px rgba(0,0,0,.25)}
-.dh-i{display:block;animation:nudge 1.4s ease-in-out 1.2s infinite}
+.dn.on{color:var(--ac);background:color-mix(in srgb,var(--ac) 11%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 34%,transparent)}
+.dn.on svg{transform:scale(1.04)}
+.dn.on::before{content:"";position:absolute;left:-6px;top:13px;bottom:13px;width:2px;border-radius:0 2px 2px 0;background:var(--ac)}
+.dhandle{position:relative;display:grid;place-items:center;width:16px;height:46px;margin-left:6px;color:var(--acx);
+  background:linear-gradient(160deg,var(--ac),color-mix(in srgb,var(--ac) 72%,#000));border:0;border-radius:0 13px 13px 0;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 50%,transparent),0 6px 18px rgba(0,0,0,.26);
+  animation:glow 2.8s ease-in-out infinite;transition:border-radius .3s,width .3s}
+.dock.open .dhandle{border-radius:12px;width:16px;animation:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 45%,transparent),0 6px 16px rgba(0,0,0,.24)}
+.dh-i{display:block;animation:nudge 1.6s ease-in-out 1.2s infinite}
 .dock.open .dh-i{animation:none}
-.dhandle svg{width:15px;height:15px;transition:transform .34s cubic-bezier(.2,.8,.2,1)}
+.dhandle svg{width:11px;height:11px;transition:transform .34s cubic-bezier(.2,.8,.2,1)}
 .dock.open .dhandle svg{transform:rotate(180deg)}
-@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
-@keyframes glow{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 65%,transparent),0 0 12px color-mix(in srgb,var(--ac) 40%,transparent),0 8px 22px rgba(0,0,0,.28)}
-  50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 80%,transparent),0 0 26px color-mix(in srgb,var(--ac) 75%,transparent),0 8px 22px rgba(0,0,0,.28)}}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 50%,transparent),0 0 8px color-mix(in srgb,var(--ac) 26%,transparent),0 6px 18px rgba(0,0,0,.26)}
+  50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 62%,transparent),0 0 16px color-mix(in srgb,var(--ac) 45%,transparent),0 6px 18px rgba(0,0,0,.26)}}
 .dscrim{position:fixed;inset:0;z-index:39;display:none}
-.dscrim.on{display:block;background:rgba(0,0,0,.18);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.dscrim.on{display:block;background:transparent}
 
 /* ── اعلان و جشن ── */
 #toast{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);
