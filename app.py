@@ -2818,12 +2818,20 @@ def run_sched_tick():
             if not db.sched.find_one_and_update({"_id": j["_id"], "status": "queued"},
                                                 {"$set": {"status": "sending"}}):
                 continue
-            bot = db.bots.find_one({"_id": ObjectId(j["bot"])})
-            if not bot or not bot.get("active") or not bot.get("token_enc"):
-                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "ربات غیرفعال است"}})
+            try:
+                bot = db.bots.find_one({"_id": ObjectId(j["bot"])})
+            except (InvalidId, TypeError):
+                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "شناسه ربات نامعتبر"}})
                 continue
-            token = dec(bot["token_enc"])
-            chat = "@" + str(j["channel"]).split("/")[-1].lstrip("@")
+            if not bot or not bot.get("active") or not bot.get("token_enc"):
+                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "ربات غیرفعال یا بدون توکن است"}})
+                continue
+            try:
+                token = dec(bot["token_enc"])
+            except Exception:
+                db.sched.update_one({"_id": j["_id"]}, {"$set": {"status": "error", "err": "توکن ربات قابل خواندن نبود"}})
+                continue
+            chat = "@" + str(j.get("channel", "")).split("/")[-1].lstrip("@")
             txt = j.get("text", "") or "—"
             sent, err = False, ""
             try:
@@ -2831,8 +2839,7 @@ def run_sched_tick():
                     sent = tg_media(token, j["bot"], chat, j["media"], txt if len(txt) <= 1000 else "")
                 if not sent:
                     r = tg(token, "sendMessage", chat_id=chat, text=txt[:4096],
-                           parse_mode="HTML",
-                           **({"link_preview_options": {"is_disabled": True}} if True else {}))
+                           link_preview_options={"is_disabled": True})
                     sent = bool(r.get("ok"))
                     if not sent:
                         err = str((r or {}).get("description", ""))[:200]
