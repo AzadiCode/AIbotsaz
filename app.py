@@ -571,7 +571,7 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 
 BASIC ENGINE FEATURES
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (promo code, card number), share (opens Telegram's share dialog with the user's personal invite link of this bot plus your message).
-- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner. The owner can answer by replying to it inside the bot chat and the answer reaches the user. Good for support, feedback, orders with receipts.
+- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner WITH a «پاسخ» (Reply) button underneath. The owner taps that button and their next message goes directly to that user. Good for support, feedback, orders with receipts.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary (the owner can reply to it too). Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
 - "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of buttons under the message. Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on nodes with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
@@ -634,7 +634,7 @@ WHEN TO USE LOGIC
 
 PATTERNS (pick what fits, combine freely)
 - Shop/catalog: home, categories, product pages with media, order form, contact. Store/service business: services, prices (placeholders if unknown), booking form, location, support.
-- Support/helpdesk: FAQ sections, "ask" for contacting the owner (owner replies inside the bot), optional AI assistant for free questions.
+- Support/helpdesk: FAQ sections, "ask" for contacting the owner (owner gets a Reply button under each message), optional AI assistant for free questions.
 - Content/channel promoter: welcome with media, forced join, latest content links, share button.
 - Quiz/game/loyalty: variables + route + alt, scores, levels, daily-style rewards via {date}.
 - Community/viral: invites with {refs}, {ref_link}, on_ref rewards, leaderboard-like messages per user.
@@ -2667,22 +2667,51 @@ def reply_press(env, rk, text):
     return False
 
 
-def to_owner(env, text=None, copy_msg=None):
-    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته و ذخیره می‌کنه تا با reply جواب بده"""
+def to_owner(env, text=None, copy_msg=None, with_reply_btn=False):
+    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته و ذخیره می‌کنه تا با reply جواب بده.
+    اگه with_reply_btn=True باشه، دکمه «پاسخ» هم زیر پیام اضافه می‌شه."""
     ids = []
+    markup = None
+    if with_reply_btn:
+        markup = {"inline_keyboard": [[{"text": "پاسخ به کاربر", "callback_data": f"r:{env.bot_id}:{env.chat_id}"}]]}
     if copy_msg:
-        r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=copy_msg)
+        r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=copy_msg,
+               **({"reply_markup": markup} if markup else {}))
         if not r.get("ok"):
             return False
         ids.append(r["result"]["message_id"])
     if text:
-        r = tg(env.token, "sendMessage", chat_id=env.owner, text=text[:4000])
+        r = tg(env.token, "sendMessage", chat_id=env.owner, text=text[:4000],
+               **({"reply_markup": markup} if markup else {}))
         if r.get("ok"):
             ids.append(r["result"]["message_id"])
     for mid in ids:
         key = f"{env.bot_id}:{mid}"
         db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "t": now()}, upsert=True)
     return bool(ids)
+
+
+def handle_reply_callback(env, bot_id, target_chat_id):
+    """وقتی صاحب ربات روی دکمه «پاسخ به کاربر» می‌زنه، حالت پاسخ رو فعال می‌کنه"""
+    # ذخیره حالت پاسخ برای صاحب ربات
+    db.states.replace_one(
+        {"_id": f"{bot_id}:{env.uid}"},
+        {"_id": f"{bot_id}:{env.uid}", "reply_to": target_chat_id, "t": now()},
+        upsert=True
+    )
+    tg(env.token, "sendMessage", chat_id=env.chat_id,
+        text="حالت پاسخ فعال شد. پیامت رو بنویس تا به کاربر ارسال بشه.")
+
+
+def forward_owner_reply(bot_id, token, owner_chat_id, target_chat_id, text):
+    """پیام صاحب ربات رو به کاربر هدف فوروارد می‌کنه"""
+    r = tg(token, "sendMessage", chat_id=target_chat_id, text=text[:4000])
+    if r.get("ok"):
+        # پیام تأیید به صاحب ربات
+        tg(token, "sendMessage", chat_id=owner_chat_id,
+            text="پیامت به کاربر ارسال شد.")
+        return True
+    return False
 
 
 def finish(env, node, default_done):
@@ -2694,6 +2723,25 @@ def finish(env, node, default_done):
     if not sent:
         tg(env.token, "sendMessage", chat_id=env.chat_id, text=t)
     send_node(env, node.get("next") or env.cfg["start"])
+
+
+def send_ticket_to_owner(env, node, user_text, msg_id):
+    """پیام کاربر رو به عنوان تیکت به صاحب ربات می‌فرسته + دکمه «پاسخ»"""
+    # اول پیام کاربر رو کپی می‌کنیم
+    r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=msg_id)
+    if not r.get("ok"):
+        return False
+    copied_mid = r["result"]["message_id"]
+    # اطلاعات تیکت
+    u = env.user
+    ticket_info = f"تیکت جدید از: {u.get('first_name', '')} (@{u.get('username', '-')}) — {env.uid}"
+    # ارسال با دکمه پاسخ
+    markup = {"inline_keyboard": [[{"text": "پاسخ به کاربر", "callback_data": f"r:{env.bot_id}:{env.chat_id}"}]]}
+    tg(env.token, "sendMessage", chat_id=env.owner, text=ticket_info, reply_markup=markup)
+    # ذخیره برای ردیابی
+    key = f"{env.bot_id}:{copied_mid}"
+    db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "t": now()}, upsert=True)
+    return True
 
 
 def valid_answer(kind, t):
@@ -2896,6 +2944,13 @@ def sub_hook(bot_id):
             tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
             if data == "chk":
                 send_node(env, cfg["start"], edit=m)
+            elif data.startswith("r:"):
+                # دکمه «پاسخ به کاربر» — صاحب ربات می‌خواد به یه کاربر خاص جواب بده
+                try:
+                    _, r_bot_id, r_chat_id = data.split(":")
+                    handle_reply_callback(env, r_bot_id, int(r_chat_id))
+                except (ValueError, IndexError):
+                    pass
             elif data.startswith("n:") and data[2:] in cfg["nodes"]:
                 send_node(env, data[2:], edit=m)
             return "ok"
@@ -2916,6 +2971,14 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "sendMessage", chat_id=chat_id, text="پیام به کاربر نرسید؛ شاید ربات رو بلاک کرده.")
                 return "ok"
+        # صاحب ربات در حالت پاسخ به کاربر خاص (از طریق دکمه «پاسخ»)
+        if user.get("id") == bot["owner"] and text:
+            owner_state = db.states.find_one({"_id": f"{bot_id}:{user['id']}"})
+            if owner_state and owner_state.get("reply_to"):
+                target_chat = owner_state["reply_to"]
+                db.states.delete_one({"_id": f"{bot_id}:{user['id']}"})
+                if forward_owner_reply(bot_id, token, chat_id, target_chat, text):
+                    return "ok"
         cmd = ""
         if text.startswith("/"):
             parts = text[1:].split(maxsplit=1)
@@ -2964,10 +3027,12 @@ def sub_hook(bot_id):
                 if not node.get("silent"):
                     save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
                     body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
-                    to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}")
+                    to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}", with_reply_btn=True)
                 finish(env, node, "اطلاعاتت ثبت شد، ممنون!")
         elif state and state.get("ask"):
-            sent = to_owner(env, text=who(env), copy_msg=msg["message_id"])
+            # ارسال تیکت با دکمه پاسخ
+            sent = send_ticket_to_owner(env, cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None,
+                                         text or msg.get("caption") or "(فایل/رسانه)", msg["message_id"])
             save_submission(env, state["ask"], cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None,
                             text=text or msg.get("caption") or "(فایل/رسانه)")
             db.states.delete_one({"_id": sid})
