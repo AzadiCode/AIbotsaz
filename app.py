@@ -553,7 +553,8 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
                    {"text": "label", "copy": "text copied to clipboard when tapped"},
                    {"text": "label", "share": "message sent along with the user's invite link"} ]],
      "ask": false,
-     "kb": "reply",                                                                 (optional)
+     "reply_btn": false,                                                           (optional, only on "ask"/"fields" nodes, see REPLY BUTTON)
+      "kb": "reply",                                                                 (optional)
      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
      "save": ["city", ""],                                                           (optional, see FORMS)
      "types": ["text", "number"],                                                    (optional, see FORMS)
@@ -571,11 +572,29 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 
 BASIC ENGINE FEATURES
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (promo code, card number), share (opens Telegram's share dialog with the user's personal invite link of this bot plus your message).
-- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner WITH a «پاسخ» (Reply) button underneath. The owner taps that button and their next message goes directly to that user. Good for support, feedback, orders with receipts.
+- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner, who can reply to that exact user (by using Telegram's reply, and by tapping the "پاسخ به کاربر" button if you also set "reply_btn": true on the node). Good for support, feedback, orders with receipts. Do NOT use "ask" for simple data collection that a fixed set of questions can cover — use "fields" for that.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary (the owner can reply to it too). Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
 - "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of buttons under the message. Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on nodes with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
+
+REPLY BUTTON ("reply_btn": true on an "ask" or "fields" node) — READ CAREFULLY
+What it does: when the user sends their message/form there, the owner receives it in his own chat with a «پاسخ به کاربر» button attached. Tapping it puts the owner in reply mode; the owner's next message (text, photo, anything) is delivered straight to that one user. It is OFF by default.
+
+Set "reply_btn": true ONLY when the user explicitly wants to answer users one-by-one in Telegram, e.g.:
+- "when a user sends a support message it must have a reply button so I can answer it"
+- "تیکت‌ها با دکمه پاسخ برام بیاد", "روی هر پیام کاربر دکمه پاسخ باشه", "پشتیبانی آنلاین می‌خوام"
+- order requests / complaints must come with a reply button
+- a human support, consultation or helpdesk bot where the owner personally replies
+- the user says "I want to reply to users", "let me answer them", "so I can respond to each person"
+
+Leave it OFF (do not write the key, or write false) when:
+- the user says "no reply button", "don't add a reply button", "فقط دریافت کنه", "بدون دکمه پاسخ", "جواب نده", "فقط ثبت کنه"
+- the section only collects data (a form, registration, order) and nobody answers individually
+- the user never mentions answering people; it is a plain menu, shop, quiz, channel promoter or AI assistant
+- the owner answers rarely, outside Telegram, or in bulk
+
+Do not invent the button for bots that don't need per-user conversation, and do not add it to nodes without "ask" or "fields" (the engine ignores it there). When you set it, mention in "thinking" that each ticket arrives with a reply button. When you leave it off while the user asked for something similar, say in "thinking" that tickets still arrive but without the button.
 
 MEDIA
 - The request may contain a MEDIA LIBRARY: files the user uploaded, each with id, kind (photo, video, animation, audio, voice, document) and name. Attach them with "media": "<id>" on a node (shown above/with the node text; node text becomes the caption) or "done_media" (sent with the thank-you message).
@@ -634,7 +653,7 @@ WHEN TO USE LOGIC
 
 PATTERNS (pick what fits, combine freely)
 - Shop/catalog: home, categories, product pages with media, order form, contact. Store/service business: services, prices (placeholders if unknown), booking form, location, support.
-- Support/helpdesk: FAQ sections, "ask" for contacting the owner (owner gets a Reply button under each message), optional AI assistant for free questions.
+- Support/helpdesk: FAQ sections, "ask" for contacting the owner, optional AI assistant for free questions. Add "reply_btn": true ONLY if the user wants to personally answer each person as tickets arrive; otherwise the owner just reads them.
 - Content/channel promoter: welcome with media, forced join, latest content links, share button.
 - Quiz/game/loyalty: variables + route + alt, scores, levels, daily-style rewards via {date}.
 - Community/viral: invites with {refs}, {ref_link}, on_ref rewards, leaderboard-like messages per user.
@@ -925,6 +944,14 @@ def sanitize(cfg, strict=False, media=None):
                 node["next"] = nxt
             else:
                 bad(f"بخش بعدیِ «{nid}» وجود نداره")
+
+        # دکمه «پاسخ به کاربر» روی پیام‌های این بخش: فقط وقتی خود کاربر خواسته باشه
+        if node.get("ask") or node.get("fields"):
+            rb = n.get("reply_btn", None)
+            if isinstance(rb, bool):
+                node["reply_btn"] = rb
+            elif rb is not None:
+                bad(f"مقدار reply_btn در بخش «{nid}» باید true (دکمه پاسخ بساز) یا false (نساز) باشه")
 
         # منطق: اکشن‌ها، هدایت شرطی، متن جایگزین
         acts = clean_actions(n.get("do"), used, nums, bad)
@@ -1318,7 +1345,7 @@ TEMPLATES = {
                              "buttons": [[_b("ثبت سفارش", "order")], HOME]},
                 "order": {"title": "ثبت سفارش", "text": "برای ثبت سفارش چند تا سؤال کوتاه ازت می‌پرسم ",
                           "fields": ["اسم و فامیلت؟", "شماره تماست؟", "چه محصولی می‌خوای؟ (تعداد و توضیحات)", "آدرس یا شهرت؟"],
-                          "types": ["text", "phone", "text", "text"], "done": "سفارشت ثبت شد. به‌زودی باهات تماس می‌گیریم.", "next": "home", "buttons": []},
+                          "types": ["text", "phone", "text", "text"], "done": "سفارشت ثبت شد. به‌زودی باهات تماس می‌گیریم.", "next": "home", "buttons": [], "reply_btn": True},
                 "contact": {"title": "تماس با ما", "text": "[شماره تماس]\n[آدرس]\n[ساعت کاری]",
                             "buttons": [[_b("کپی شماره", copy="[شماره تماس]")], HOME]}}}},
     "support": {"icon": "headset", "title": "پشتیبانی مشتری", "desc": "سؤال‌های پرتکرار + ارسال پیام به پشتیبان",
@@ -1331,7 +1358,7 @@ TEMPLATES = {
                         "buttons": [[_b("زمان پاسخگویی", alert="معمولاً ظرف چند ساعت کاری پاسخ می‌دیم.")],
                                     [_b("روش‌های پرداخت", alert="[روش‌های پرداخت رو اینجا بنویس]")], HOME]},
                 "ticket": {"title": "پیام به پشتیبان", "text": "مشکلت یا سؤالت رو بنویس؛ پیامت مستقیم برای پشتیبان ارسال می‌شه ",
-                           "ask": True, "done": "پیامت رسید. به‌زودی جواب می‌دیم.", "next": "home",
+                           "ask": True, "reply_btn": True, "done": "پیامت رسید. به‌زودی جواب می‌دیم.", "next": "home",
                            "buttons": [[_b("انصراف", "home")]]}}}},
     "form": {"icon": "form", "title": "فرم ثبت‌نام", "desc": "جمع‌آوری اطلاعات با فرم چندمرحله‌ای و اعتبارسنجی",
         "note": "فرم ثبت‌نام با اعتبارسنجی شماره ساختم و شهر هر کاربر رو یادش می‌مونه. جواب‌ها توی «پاسخ فرم‌ها» جمع می‌شن.",
@@ -1400,7 +1427,7 @@ TEMPLATES.update({
                 "book": {"title": "رزرو نوبت", "text": "چند تا سؤال کوتاه ازت می‌پرسم تا نوبتت ثبت بشه.",
                          "fields": ["اسم و فامیلت؟", "شماره تماست؟", "کدوم خدمت رو می‌خوای؟", "چه روز و ساعتی برات مناسبه؟"],
                          "types": ["text", "phone", "text", "text"], "done": "درخواست نوبتت ثبت شد. برای تأیید باهات تماس می‌گیریم.",
-                         "next": "home", "buttons": []},
+                         "next": "home", "buttons": [], "reply_btn": True},
                 "location": {"title": "آدرس و ساعت کاری", "text": "[آدرس]\n[ساعت کاری]\n[شماره تماس]",
                              "buttons": [[_b("کپی شماره", copy="[شماره تماس]")], HOME]}}}},
     "referral": {"icon": "users", "title": "دعوت و جایزه", "desc": "کاربرها دوستاشون رو دعوت می‌کنن و سکه می‌گیرن",
@@ -1851,7 +1878,7 @@ def api_delete(uid, bot_id):
     db.subs.delete_many({"bot": bot_id})
     db.submissions.delete_many({"bot_id": bot_id})
     db.nvis.delete_many({"bot": bot_id})
-    for col in (db.states, db.rk, db.uvars, db.relay, db.mfid, db.aiuse, db.xp_views):
+    for col in (db.states, db.rk, db.uvars, db.relay, db.mfid, db.aiuse, db.xp_views, db.replymode):
         col.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
     db.xp_ev.delete_many({"_id": {"$regex": f"^[lsr]:{bot_id}:"}})
     return jsonify(ok=True)
@@ -2667,51 +2694,69 @@ def reply_press(env, rk, text):
     return False
 
 
-def to_owner(env, text=None, copy_msg=None, with_reply_btn=False):
-    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته و ذخیره می‌کنه تا با reply جواب بده.
-    اگه with_reply_btn=True باشه، دکمه «پاسخ» هم زیر پیام اضافه می‌شه."""
+def owner_reply_markup(env, node=None):
+    """دکمه «پاسخ به کاربر» — فقط اگه خودِ بخش در کانفیگ reply_btn=true داشته باشه"""
+    if not (node or {}).get("reply_btn"):
+        return None
+    return {"inline_keyboard": [[{"text": "پاسخ به کاربر", "callback_data": f"r:{env.bot_id}:{env.chat_id}"[:64]}]]}
+
+
+def to_owner(env, text=None, copy_msg=None, node=None):
+    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته.
+    اگه بخش (node) در کانفیگ reply_btn=true داشته باشه، یک دکمه «پاسخ به کاربر» هم زیر پیام می‌آد
+    و ادمین با زدنش می‌تونه مستقیم به همون کاربر جواب بده."""
     ids = []
-    markup = None
-    if with_reply_btn:
-        markup = {"inline_keyboard": [[{"text": "پاسخ به کاربر", "callback_data": f"r:{env.bot_id}:{env.chat_id}"}]]}
     if copy_msg:
-        r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=copy_msg,
-               **({"reply_markup": markup} if markup else {}))
-        if not r.get("ok"):
-            return False
-        ids.append(r["result"]["message_id"])
-    if text:
-        r = tg(env.token, "sendMessage", chat_id=env.owner, text=text[:4000],
-               **({"reply_markup": markup} if markup else {}))
+        r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=copy_msg)
         if r.get("ok"):
             ids.append(r["result"]["message_id"])
+    last = None
+    if text:
+        r = tg(env.token, "sendMessage", chat_id=env.owner, text=text[:4000])
+        if r.get("ok"):
+            ids.append(r["result"]["message_id"])
+            last = ids[-1]
+    markup = owner_reply_markup(env, node)
+    if markup:
+        target = last or (ids[-1] if ids else None)
+        if target is None:
+            r = tg(env.token, "sendMessage", chat_id=env.owner, text="پیام جدید از کاربر", reply_markup=markup)
+            if r.get("ok"):
+                ids.append(r["result"]["message_id"])
+        else:
+            tg(env.token, "editMessageReplyMarkup", chat_id=env.owner, message_id=target, reply_markup=markup)
     for mid in ids:
-        key = f"{env.bot_id}:{mid}"
-        db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "t": now()}, upsert=True)
+        db.relay.replace_one({"_id": f"{env.bot_id}:{mid}"}, {"_id": f"{env.bot_id}:{mid}", "chat": env.chat_id, "t": now()}, upsert=True)
     return bool(ids)
 
 
-def handle_reply_callback(env, bot_id, target_chat_id):
-    """وقتی صاحب ربات روی دکمه «پاسخ به کاربر» می‌زنه، حالت پاسخ رو فعال می‌کنه"""
-    # ذخیره حالت پاسخ برای صاحب ربات
-    db.states.replace_one(
-        {"_id": f"{bot_id}:{env.uid}"},
-        {"_id": f"{bot_id}:{env.uid}", "reply_to": target_chat_id, "t": now()},
-        upsert=True
-    )
-    tg(env.token, "sendMessage", chat_id=env.chat_id,
-        text="حالت پاسخ فعال شد. پیامت رو بنویس تا به کاربر ارسال بشه.")
+REPLY_MODE_TTL = 7200          # حالت پاسخ بعد از ۲ ساعت خودکار باطل می‌شه
 
 
-def forward_owner_reply(bot_id, token, owner_chat_id, target_chat_id, text):
-    """پیام صاحب ربات رو به کاربر هدف فوروارد می‌کنه"""
-    r = tg(token, "sendMessage", chat_id=target_chat_id, text=text[:4000])
-    if r.get("ok"):
-        # پیام تأیید به صاحب ربات
-        tg(token, "sendMessage", chat_id=owner_chat_id,
-            text="پیامت به کاربر ارسال شد.")
-        return True
-    return False
+def open_reply_mode(env, target_chat_id):
+    """دکمه «پاسخ به کاربر» زده شد → حالت پاسخ برای ادمین باز می‌شه (فقط یک پیام بعدش ارسال می‌شه)"""
+    db.replymode.replace_one({"_id": f"{env.bot_id}:{env.owner}"},
+                             {"_id": f"{env.bot_id}:{env.owner}", "chat": target_chat_id, "t": now()}, upsert=True)
+    tg(env.token, "sendMessage", chat_id=env.chat_id, reply_markup={"inline_keyboard": [[
+        {"text": "انصراف", "callback_data": "rx"}]]},
+        text="حالت پاسخ فعال شد. پیامت رو بفرست تا مستقیم به همون کاربر برسه.")
+
+
+def take_reply_mode(bot_id, owner_uid):
+    """اگه حالت پاسخ فعاله، آیدی چت کاربر رو برمی‌گردونه و حالت رو می‌بنده"""
+    key = f"{bot_id}:{owner_uid}"
+    d = db.replymode.find_one_and_update({"_id": key}, {"$set": {"t": now()}})
+    if not d:
+        return None
+    if age_sec(d["t"]) > REPLY_MODE_TTL:
+        db.replymode.delete_one({"_id": key})
+        return None
+    db.replymode.delete_one({"_id": key})
+    return int(d.get("chat") or 0) or None
+
+
+def close_reply_mode(bot_id, owner_uid):
+    db.replymode.delete_one({"_id": f"{bot_id}:{owner_uid}"})
 
 
 def finish(env, node, default_done):
@@ -2723,25 +2768,6 @@ def finish(env, node, default_done):
     if not sent:
         tg(env.token, "sendMessage", chat_id=env.chat_id, text=t)
     send_node(env, node.get("next") or env.cfg["start"])
-
-
-def send_ticket_to_owner(env, node, user_text, msg_id):
-    """پیام کاربر رو به عنوان تیکت به صاحب ربات می‌فرسته + دکمه «پاسخ»"""
-    # اول پیام کاربر رو کپی می‌کنیم
-    r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=msg_id)
-    if not r.get("ok"):
-        return False
-    copied_mid = r["result"]["message_id"]
-    # اطلاعات تیکت
-    u = env.user
-    ticket_info = f"تیکت جدید از: {u.get('first_name', '')} (@{u.get('username', '-')}) — {env.uid}"
-    # ارسال با دکمه پاسخ
-    markup = {"inline_keyboard": [[{"text": "پاسخ به کاربر", "callback_data": f"r:{env.bot_id}:{env.chat_id}"}]]}
-    tg(env.token, "sendMessage", chat_id=env.owner, text=ticket_info, reply_markup=markup)
-    # ذخیره برای ردیابی
-    key = f"{env.bot_id}:{copied_mid}"
-    db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "t": now()}, upsert=True)
-    return True
 
 
 def valid_answer(kind, t):
@@ -2756,6 +2782,7 @@ def valid_answer(kind, t):
     if kind == "email":
         return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", t)), t
     return True, t
+
 
 def gate_ok(token, cfg, uid):
     """عضویت اجباری؛ اگه ربات ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
@@ -2941,14 +2968,20 @@ def sub_hook(bot_id):
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_node(env, b["goto"], edit=m)
                 return "ok"
+            if data.startswith("r:") and user["id"] != bot["owner"]:
+                # دکمه «پاسخ» فقط برای صاحب رباته
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
+                   text="این دکمه فقط برای صاحب رباته.", show_alert=True)
+                return "ok"
             tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
-            if data == "chk":
+            if data == "rx":
+                close_reply_mode(bot_id, user["id"])
+            elif data == "chk":
                 send_node(env, cfg["start"], edit=m)
             elif data.startswith("r:"):
-                # دکمه «پاسخ به کاربر» — صاحب ربات می‌خواد به یه کاربر خاص جواب بده
+                parts = data.split(":")
                 try:
-                    _, r_bot_id, r_chat_id = data.split(":")
-                    handle_reply_callback(env, r_bot_id, int(r_chat_id))
+                    open_reply_mode(env, int(parts[2]))
                 except (ValueError, IndexError):
                     pass
             elif data.startswith("n:") and data[2:] in cfg["nodes"]:
@@ -2960,6 +2993,16 @@ def sub_hook(bot_id):
         text = (msg.get("text") or "").strip()
         env = Env(bot, token, chat_id, user, text=text)
         env.is_new = is_new
+        # صاحب ربات در حالت پاسخ (بعد از زدن دکمه «پاسخ به کاربر») — هر نوع پیامی می‌فرسته
+        if user.get("id") == bot["owner"]:
+            target = take_reply_mode(bot_id, user["id"])
+            if target:
+                r = tg(token, "copyMessage", chat_id=target, from_chat_id=chat_id, message_id=msg["message_id"])
+                if r.get("ok"):
+                    tg(token, "sendMessage", chat_id=chat_id, text="پیامت به کاربر رسید.", reply_markup={"remove_keyboard": True})
+                else:
+                    tg(token, "sendMessage", chat_id=chat_id, text="پیام به کاربر نرسید؛ شاید ربات رو بلاک کرده.")
+                return "ok"
         # صاحب ربات با reply روی پیام کاربر جواب می‌ده
         if user.get("id") == bot["owner"] and msg.get("reply_to_message"):
             rel = db.relay.find_one({"_id": f"{bot_id}:{msg['reply_to_message']['message_id']}"})
@@ -2971,14 +3014,6 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "sendMessage", chat_id=chat_id, text="پیام به کاربر نرسید؛ شاید ربات رو بلاک کرده.")
                 return "ok"
-        # صاحب ربات در حالت پاسخ به کاربر خاص (از طریق دکمه «پاسخ»)
-        if user.get("id") == bot["owner"] and text:
-            owner_state = db.states.find_one({"_id": f"{bot_id}:{user['id']}"})
-            if owner_state and owner_state.get("reply_to"):
-                target_chat = owner_state["reply_to"]
-                db.states.delete_one({"_id": f"{bot_id}:{user['id']}"})
-                if forward_owner_reply(bot_id, token, chat_id, target_chat, text):
-                    return "ok"
         cmd = ""
         if text.startswith("/"):
             parts = text[1:].split(maxsplit=1)
@@ -3027,17 +3062,15 @@ def sub_hook(bot_id):
                 if not node.get("silent"):
                     save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
                     body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
-                    to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}", with_reply_btn=True)
+                    to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}", node=node)
                 finish(env, node, "اطلاعاتت ثبت شد، ممنون!")
         elif state and state.get("ask"):
-            # ارسال تیکت با دکمه پاسخ
-            sent = send_ticket_to_owner(env, cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None,
-                                         text or msg.get("caption") or "(فایل/رسانه)", msg["message_id"])
-            save_submission(env, state["ask"], cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None,
+            anode = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
+            sent = to_owner(env, text=who(env), copy_msg=msg["message_id"], node=anode)
+            save_submission(env, state["ask"], anode,
                             text=text or msg.get("caption") or "(فایل/رسانه)")
             db.states.delete_one({"_id": sid})
-            node = cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None
-            finish(env, node or {}, "پیامت ارسال شد." if sent else "ارسال پیام ناموفق بود، دوباره امتحان کن.")
+            finish(env, anode or {}, "پیامت ارسال شد." if sent else "ارسال پیام ناموفق بود، دوباره امتحان کن.")
         elif state and state.get("aichat") in cfg["nodes"]:
             if text:
                 threading.Thread(target=ai_chat, args=(bot_id, token, chat_id, user, state["aichat"], text), daemon=True).start()

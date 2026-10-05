@@ -906,6 +906,7 @@ function nodeCard(cfg, id){
   if(id === cfg.start) tags.push('<span class="tag st">شروع</span>');
   if(id === cfg.fallback) tags.push('<span class="tag">پیام ناشناس</span>');
   if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">دریافت پیام</span>');
+  if(n.reply_btn) tags.push('<span class="tag st">دکمه پاسخ</span>');
   if(n.ai) tags.push('<span class="tag ai">هوش مصنوعی</span>');
   if(isRk) tags.push('<span class="tag">کیبورد چت</span>');
   if(n.media) tags.push('<span class="tag">رسانه</span>'); else if(n.photo) tags.push('<span class="tag">عکس</span>');
@@ -1284,7 +1285,7 @@ function openNode(id){
   S.sheet = {kind: "node", id};
   D = { title: n.title || "", text: n.text, photo: n.photo || "", media: n.media || "", doneMedia: n.done_media || "", done: n.done || "", next: n.next || "",
         fields: n.fields ? n.fields.map((q, i) => ({q, v: (n.save || [])[i] || "", t: (n.types || [])[i] || "text"})) : [{q: "", v: "", t: "text"}],
-        silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
+        silent: !!n.silent, reply_btn: !!n.reply_btn, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
         aip: n.ai?.prompt || "", aid: n.ai?.daily || 15, aim: n.ai?.memory ?? 3,
         start: id === cfg.start, fb: id === cfg.fallback,
         do: cp(n.do || []), route: (n.route || []).map(r => ({c: cp(r.when), goto: r.goto})), alt: (n.alt || []).map(r => ({c: cp(r.when), text: r.text})), adv: false };
@@ -1328,6 +1329,7 @@ function nodeSheet(){
         <select class="ft">${TYPES.map(([v, l]) => `<option value="${v}"${v === f.t ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>`).join("")}
       ${d.fields.length < 6 ? `<button class="b o sm" data-sh="addfld">${IC.plus}سؤال</button>` : ""}
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent ? " checked" : ""}> نتیجه‌ی فرم برای من فرستاده نشود</label>` : ""}
+    ${d.mode === "ask" || d.mode === "form" ? `<label class="chk"><input type="checkbox" id="f-replybtn"${d.reply_btn ? " checked" : ""}> زیر هر پیام/فرم دکمه «پاسخ به کاربر» بیاید تا بتوانم مستقیم جواب بدهم</label>` : ""}
     ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
       <span class="lbl">رسانه‌ی پیام تشکر (اختیاری)</span>${mediaPicker("doneMedia", d.doneMedia)}
       <span class="lbl">بعد از ثبت، کدام بخش نشان داده شود؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
@@ -1349,6 +1351,7 @@ function readNode(){
   const fq = [...document.querySelectorAll(".fq")];
   if(fq.length) D.fields = fq.map(r => ({q: r.querySelector(".fld").value, v: cleanVar(r.querySelector(".fv").value), t: r.querySelector(".ft").value}));
   if($("#f-silent")) D.silent = $("#f-silent").checked;
+  if($("#f-replybtn")) D.reply_btn = $("#f-replybtn").checked;
   if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
   if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
   if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
@@ -1367,7 +1370,7 @@ function saveNode(){
   const err = ruleErr(); if(err) return toast(err);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id];
-    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "done", "next", "kb", "do", "route", "alt"]) delete n[k];
+    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "reply_btn", "done", "next", "kb", "do", "route", "alt"]) delete n[k];
     if(D.mode === "show" && D.kb === "reply") n.kb = "reply";
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
@@ -1383,6 +1386,7 @@ function saveNode(){
       if(D.silent) n.silent = true;
     }
     if(D.mode === "ask" || D.mode === "form"){
+      if(D.reply_btn) n.reply_btn = true;
       if(D.done.trim()) n.done = D.done.trim();
       if(D.doneMedia && mediaById(D.doneMedia)) n.done_media = D.doneMedia;
       if(D.next) n.next = D.next;
