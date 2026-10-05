@@ -8,7 +8,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
   ادمین: /give /stats /announce
 مینی‌اپ
   ساخت و ارتقای ربات با هوش مصنوعی (کانفیگ JSON)، قالب‌های آماده، ویرایش دستی کامل، تست زنده،
-  بررسی مسیرها، خروجی/ورودی JSON، کپی ربات، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
+  بررسی مسیرها، خروجی JSON، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
   پاسخ فرم‌ها، اکسپلور (ویترین عمومی + لایک + گزارش)، کیف توکن (روزانه، دعوت، کوپن، خرید با ستاره)،
   پنل ادمین (کاربران آنلاین، شارژ، کوپن، اعلان همگانی، آمار سیستم)
 موتور ثابت و امن (send_node / run_actions)
@@ -83,8 +83,10 @@ GEN_COST          = _int("GEN_COST", 12)            # ساخت ربات جدید
 EDIT_COST         = _int("EDIT_COST", 6)            # ارتقای ربات (حالت fixed)
 AI_MSGS_PER_TOKEN = max(1, _int("AI_MSGS_PER_TOKEN", 3))        # حالت fixed: هر چند پیام هوشمند = ۱ توکن
 ENHANCE_COST      = _int("ENHANCE_COST", 1)         # بهینه‌سازی توضیحِ ربات با هوش مصنوعی
-TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.5)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق = ۱، گفتگوی هوشمند = ۲)
-TEMPLATE_MIN_COST = _int("TEMPLATE_MIN_COST", 1)         # حداقل هزینه‌ی قالب آماده (۰ = رایگان)
+TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.8)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق/تیکت = ۱، گفتگوی هوشمند = ۲)
+TEMPLATE_FACTOR   = _float("TEMPLATE_FACTOR", 1.0)       # ضریب کلی قیمت قالب‌ها (۱ = پیش‌فرض؛ ۱.۵ = ۵۰٪ گرون‌تر)
+TEMPLATE_MIN_COST = _int("TEMPLATE_MIN_COST", 3)         # حداقل هزینه‌ی قالب آماده (۰ = رایگان)
+TEMPLATE_MAX_COST = _int("TEMPLATE_MAX_COST", 0)         # سقف هزینه‌ی قالب (۰ = خودکار: کمی کمتر از ساخت با هوش مصنوعی)
 BROADCAST_PER_TOKEN = max(1, _int("BROADCAST_PER_TOKEN", 50))   # پخش همگانی: هر چند گیرنده = ۱ توکن
 BROADCAST_MAX     = _int("BROADCAST_MAX", 5000)
 START_TOKENS      = _int("START_TOKENS", _int("WELCOME_TOKENS", 100))   # هدیه‌ی ثبت‌نام
@@ -1250,6 +1252,53 @@ def detect_lang(s):
     return "fa" if fa >= la else "other"
 
 
+# اسکریپت‌های ناخواسته: چینی/ژاپنی/کره‌ای، سیریلیک، تایی، دواناگری، عبری، یونانی و ...
+FOREIGN_RE = re.compile(
+    "[\u0370-\u03FF\u0400-\u052F\u0590-\u05FF\u0900-\u0DFF\u0E00-\u0EFF\u1100-\u11FF\u1780-\u17FF"
+    "\u2E80-\u2FDF\u3000-\u303F\u3040-\u30FF\u3100-\u312F\u3130-\u318F\u31A0-\u31FF\u3200-\u33FF\u3400-\u4DBF"
+    "\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7FF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF"
+    "\U00020000-\U0002FA1F]+")
+
+LANG_GUARD = ("\n\nSTRICT LANGUAGE RULE: write every user-facing text only in Persian (Farsi, Arabic script), "
+              "using Latin letters only for brand names, URLs, commands and ids. NEVER output Chinese, Japanese, Korean, "
+              "Russian, Thai, Hindi or any other script, not even a single character or word.")
+
+
+def has_foreign(s):
+    return bool(FOREIGN_RE.search(s if isinstance(s, str) else ""))
+
+
+def scrub_foreign(s):
+    """حذف نویسه‌های غیرفارسیِ ناخواسته و مرتب‌کردن فاصله‌ها"""
+    if not isinstance(s, str) or not FOREIGN_RE.search(s):
+        return s
+    out = FOREIGN_RE.sub(" ", s)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r" +([،.؟!:؛)])", r"\1", out)
+    return out.strip()
+
+
+def scrub_deep(o):
+    """همین کار برای همه‌ی رشته‌های داخل کانفیگ (متن بخش‌ها، دکمه‌ها، پرامپت‌ها، ...)"""
+    if isinstance(o, str):
+        return scrub_foreign(o)
+    if isinstance(o, list):
+        return [scrub_deep(x) for x in o]
+    if isinstance(o, dict):
+        return {k: scrub_deep(v) for k, v in o.items()}
+    return o
+
+
+def foreign_in(o):
+    if isinstance(o, str):
+        return has_foreign(o)
+    if isinstance(o, list):
+        return any(foreign_in(x) for x in o)
+    if isinstance(o, dict):
+        return any(foreign_in(v) for v in o.values())
+    return False
+
+
 FALLBACK_THINKING = "ربات رو طبق توضیحت طراحی کردم. اگه متن، دکمه یا آیدی کانال چیزی نیاز به تغییر داشت، از «ویرایش دستی» درستش کن."
 
 
@@ -1353,8 +1402,8 @@ def _take_gaps(raw):
     return out
 
 
-def _call_llm(user, lang, final, media_ids, acc):
-    txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}], AI_MAX_TOKENS)
+def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False):
+    txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
@@ -1362,17 +1411,28 @@ def _call_llm(user, lang, final, media_ids, acc):
     raw = json.loads(m.group(0))
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
         raise ValueError("پاسخ AI فاقد بخش config بود")
-    _gap.items = _take_gaps(raw.get("unsupported"))
+    gaps = _take_gaps(raw.get("unsupported"))
     warns = []
+    cfg_foreign = guard and check_cfg and foreign_in(raw["config"])
+    if guard:                                   # قبل از اعتبارسنجی پاک می‌کنیم تا دکمه/متن نیمه‌کاره نمونه
+        raw["config"] = scrub_deep(raw["config"])
     cfg = sanitize(raw["config"], media=media_ids, warns=warns)
     thinking = str(raw.get("thinking") or "").strip()[:900]
     ideas = [str(x).strip()[:80] for x in (raw.get("ideas") if isinstance(raw.get("ideas"), list) else []) if str(x).strip()][:3]
     if lang == "fa":
         fa, la = _count(thinking)
-        if not thinking or la > fa:            # توضیح انگلیسی/خالی شده
+        bad_lang = not thinking or la > fa or has_foreign(thinking)          # توضیح انگلیسی/خالی/چینی و ...
+        if guard:
+            bad_lang = bad_lang or foreign_in([ideas, gaps]) or cfg_foreign
+        if bad_lang:
             if not final:
                 raise ThinkLang(cfg, ideas)
-            thinking = FALLBACK_THINKING
+            thinking = scrub_foreign(thinking) if (thinking and la <= fa) else ""
+            if _count(thinking)[0] < 12:
+                thinking = FALLBACK_THINKING
+        if guard:                               # آخرین خط دفاعی: هر نویسه‌ی غیرفارسی باقی‌مونده حذف می‌شه
+            ideas, gaps = [x for x in scrub_deep(ideas) if x], [g for g in scrub_deep(gaps) if g.get("want")]
+    _gap.items = gaps
     return thinking, cfg, ideas, warns
 
 
@@ -1404,14 +1464,16 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
     acc = فهرست مصرف (توکن ورودی/خروجی) هر فراخوانی؛ برای محاسبه‌ی هزینه‌ی واقعی"""
     acc = [] if acc is None else acc
     lang = detect_lang(prompt)
+    guard = lang == "fa" and not has_foreign(prompt)          # کاربر خودش متن غیرفارسی ننوشته → خروجی فقط فارسی
+    check_cfg = guard and not foreign_in(current)             # اگه ربات فعلی از قبل نویسه‌ی بیگانه داره، فقط پاکش می‌کنیم
     media_ids = {m["id"] for m in media_items}
     best, last, feedback = None, None, ""
     for attempt in (0, 1):
         try:
-            thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc)
+            thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc, guard, check_cfg)
         except ThinkLang as e:
             best, last = best or ("", e.cfg, e.ideas), e
-            feedback = "(Your previous answer used the wrong language for \"thinking\". Fix that now.)"
+            feedback = "(Your previous answer used the wrong language or contained foreign-script characters (Chinese/Japanese/Korean/Russian...) in \"thinking\", \"ideas\", \"unsupported\" or node texts. Rewrite EVERYTHING in Persian only, with no foreign characters.)"
             log.warning("thinking in wrong language, retrying")
             continue
         except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
@@ -1440,9 +1502,10 @@ ENHANCE_PROMPT = ("You are a product designer who briefs a Telegram-bot builder.
 
 
 def enhance_prompt(prompt):
-    txt, _ = llm_post([{"role": "system", "content": ENHANCE_PROMPT}, {"role": "user", "content": prompt[:MAX_PROMPT]}],
+    guard = detect_lang(prompt) == "fa" and not has_foreign(prompt)
+    txt, _ = llm_post([{"role": "system", "content": ENHANCE_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": prompt[:MAX_PROMPT]}],
                       700, temperature=0.6, timeout=60, model=AI_CHAT_MODEL)
-    txt = txt.strip().strip('"').strip()
+    txt = (scrub_foreign(txt) if guard else txt).strip().strip('"').strip()
     if len(txt) < 10:
         raise ValueError("empty enhance")
     return txt[:MAX_PROMPT]
@@ -1694,7 +1757,9 @@ def media_used(uid):
 
 
 def template_cost(t):
-    """هزینه‌ی قالب آماده: بر اساس اندازه‌ی کار (تعداد بخش‌ها + فرم، منطق و هوش مصنوعی)"""
+    """هزینه‌ی قالب آماده، هم‌جهت با ساخت و ارتقا: ضریبی از «مقدار کار» و «حجم پرامپت/کانفیگ».
+    کار = تعداد بخش‌ها + فرم، تیکت، منطق/شرط و گفتگوی هوشمند؛ حجم = توکنِ خروجیِ همین کانفیگ با نرخ خروجی مدل.
+    هزینه همیشه کمی بیشتر از قبل و کمتر از ساخت با هوش مصنوعی می‌مونه."""
     nodes = t["config"]["nodes"]
     work = len(nodes)
     for n in nodes.values():
@@ -1702,11 +1767,16 @@ def template_cost(t):
             work += 2
         if n.get("fields"):
             work += 1
+        if n.get("ticket"):
+            work += 1
         if n.get("do") or n.get("route") or n.get("alt"):
             work += 1
     if TEMPLATE_UNIT_COST <= 0 and TEMPLATE_MIN_COST <= 0:
         return 0
-    return max(TEMPLATE_MIN_COST, math.ceil(work * TEMPLATE_UNIT_COST))
+    size = est_tokens(json.dumps(t["config"], ensure_ascii=False)) * TOKEN_OUT_RATE / 1000
+    cost = max(TEMPLATE_MIN_COST, math.ceil((work * TEMPLATE_UNIT_COST + size) * TEMPLATE_FACTOR))
+    cap = TEMPLATE_MAX_COST or max(TEMPLATE_MIN_COST, math.floor(typical_cost() * 0.8))
+    return min(cost, cap)
 
 
 def client_cfg():
@@ -1982,22 +2052,6 @@ def api_template_create(uid, tid):
     return jsonify(bot=public(bot), wallet=wallet_info(uid), cost=cost)
 
 
-@app.post("/api/bots/import")
-@authed
-def api_import(uid):
-    ensure_user(uid)
-    if db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
-        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
-    if not rate_ok(f"imp:{uid}", 6, 60):
-        return jsonify(error="کمی بعد دوباره امتحان کن"), 429
-    raw = (request.get_json(silent=True) or {}).get("config")
-    try:
-        cfg = sanitize(raw, strict=True, media=own_media_ids(uid))
-    except Exception as e:
-        return jsonify(error="فایل معتبر نیست: " + str(e)[:120]), 400
-    return jsonify(bot=public(new_bot_doc(uid, cfg, "")))
-
-
 @app.post("/api/bots/<bot_id>/undo")
 @authed
 def api_undo(uid, bot_id):
@@ -2034,19 +2088,6 @@ def api_save_config(uid, bot_id):
         bot = db.bots.find_one({"_id": bot["_id"]})
         sync_commands(bot, cfg)
     return jsonify(bot=public(bot))
-
-
-@app.post("/api/bots/<bot_id>/duplicate")
-@authed
-def api_duplicate(uid, bot_id):
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="ربات پیدا نشد"), 404
-    if db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
-        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
-    cfg = json.loads(json.dumps(bot["config"]))
-    cfg["name"] = (cfg.get("name", "bot") + " (کپی)")[:50]
-    return jsonify(bot=public(new_bot_doc(uid, cfg, "")))
 
 
 @app.get("/api/bots/<bot_id>/export")
@@ -3572,8 +3613,18 @@ def ai_chat(bot_id, token, chat_id, user, node_id, text):
         mem = max(0, min(6, int(ai.get("memory", 3))))
         hist = (st.get("h") or [])[-mem * 2:] if (mem and st.get("aichat") == node_id) else []
         system = AI_CHILD_PROMPT.replace("{bot}", cfg.get("name", "")) + fill(ai["prompt"], env)
+        guard = not (has_foreign(ai["prompt"]) or has_foreign(text))      # صاحب ربات و کاربر فارسی/لاتین نوشتن
+        if guard:
+            system += LANG_GUARD.replace("only in Persian (Farsi, Arabic script)", "in the user's language (default Persian)")
         reply, (pt, ct) = llm_post([{"role": "system", "content": system}, *hist, {"role": "user", "content": text[:1500]}],
                                    AI_NODE_MAX_TOKENS, temperature=0.6, timeout=60, model=AI_CHAT_MODEL)
+        if guard and has_foreign(reply):                                   # یک بار دوباره با تأکید؛ اگه باز نشد حذف می‌کنیم
+            r2, (pt2, ct2) = llm_post([{"role": "system", "content": system}, *hist, {"role": "user", "content": text[:1500]},
+                                       {"role": "assistant", "content": reply[:900]},
+                                       {"role": "user", "content": "Rewrite your last answer fully in Persian. Remove every Chinese/Japanese/Korean/Russian character."}],
+                                      AI_NODE_MAX_TOKENS, temperature=0.3, timeout=60, model=AI_CHAT_MODEL)
+            reply, pt, ct = r2, pt + pt2, ct + ct2
+            reply = scrub_foreign(reply)
         reply = reply[:3800] or "نتونستم جوابی پیدا کنم، یه جور دیگه بپرس."
         ai_postcharge(owner, bot_id, pt, ct)
         hist = (hist + [{"role": "user", "content": text[:800]}, {"role": "assistant", "content": reply[:800]}])[-12:]

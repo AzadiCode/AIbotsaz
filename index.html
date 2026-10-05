@@ -498,21 +498,32 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .dock[hidden]{display:none}
 .dock.open{transform:translate(0,-50%)}
 .dock.hide{transform:translate(calc(-1 * var(--shift) - 40px),-50%)}
-.dpanel{display:flex;flex-direction:column;gap:4px;width:var(--rw);padding:8px 6px;background:color-mix(in srgb,var(--sf) 94%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
-  border:1px solid var(--line);border-left:0;border-radius:0 20px 20px 0;box-shadow:0 10px 32px rgba(0,0,0,.28)}
-.dn{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;color:var(--mut);transition:background .15s,color .15s}
-.dn svg{width:22px;height:22px}
-.dn:active{background:var(--sf2)}
-.dn.on{color:var(--ac);background:var(--acs)}
-.dhandle{display:grid;place-items:center;width:17px;height:56px;margin-left:6px;color:var(--ac);background:var(--sf);border:1px solid var(--line);border-left:0;border-radius:0 14px 14px 0;
-  box-shadow:0 6px 20px rgba(0,0,0,.2);transition:border-radius .3s,border-left-width .3s}
-.dock.open .dhandle{border-radius:12px;border-left-width:1px}
-.dh-i{display:block;animation:nudge 1.4s ease-in-out 1.2s 2}
-.dhandle svg{width:13px;height:13px;transition:transform .34s cubic-bezier(.2,.8,.2,1)}
+.dpanel{position:relative;display:flex;flex-direction:column;gap:6px;width:var(--rw);padding:10px 6px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--sf) 52%,transparent),color-mix(in srgb,var(--sf) 38%,transparent));
+  -webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5);
+  border:1px solid color-mix(in srgb,var(--ac) 22%,var(--line));border-left:0;border-radius:0 22px 22px 0;
+  box-shadow:0 12px 36px rgba(0,0,0,.30),inset 0 1px 0 color-mix(in srgb,#fff 10%,transparent)}
+.dn{position:relative;display:grid;place-items:center;width:42px;height:42px;border-radius:14px;color:var(--mut);transition:background .2s,color .2s,transform .2s,box-shadow .2s}
+.dn svg{width:22px;height:22px;transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .25s}
+.dn:active{transform:scale(.92);background:color-mix(in srgb,var(--sf2) 70%,transparent)}
+.dn.on{color:var(--acx);background:linear-gradient(145deg,var(--ac),color-mix(in srgb,var(--ac) 62%,#fff));
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 70%,transparent),0 6px 18px color-mix(in srgb,var(--ac) 46%,transparent),0 0 22px color-mix(in srgb,var(--ac) 38%,transparent)}
+.dn.on svg{transform:scale(1.14);filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.dn.on::before{content:"";position:absolute;left:-7px;top:11px;bottom:11px;width:3px;border-radius:0 3px 3px 0;background:var(--ac);box-shadow:0 0 10px var(--ac)}
+.dhandle{position:relative;display:grid;place-items:center;width:24px;height:64px;margin-left:6px;color:var(--acx);
+  background:linear-gradient(160deg,var(--ac),color-mix(in srgb,var(--ac) 60%,#fff));border:0;border-radius:0 16px 16px 0;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 65%,transparent),0 0 20px color-mix(in srgb,var(--ac) 55%,transparent),0 8px 22px rgba(0,0,0,.28);
+  animation:glow 2.4s ease-in-out infinite;transition:border-radius .3s,width .3s}
+.dock.open .dhandle{border-radius:14px;width:22px;animation:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 6px 18px rgba(0,0,0,.25)}
+.dh-i{display:block;animation:nudge 1.4s ease-in-out 1.2s infinite}
+.dock.open .dh-i{animation:none}
+.dhandle svg{width:15px;height:15px;transition:transform .34s cubic-bezier(.2,.8,.2,1)}
 .dock.open .dhandle svg{transform:rotate(180deg)}
-@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(3px)}}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 65%,transparent),0 0 12px color-mix(in srgb,var(--ac) 40%,transparent),0 8px 22px rgba(0,0,0,.28)}
+  50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 80%,transparent),0 0 26px color-mix(in srgb,var(--ac) 75%,transparent),0 8px 22px rgba(0,0,0,.28)}}
 .dscrim{position:fixed;inset:0;z-index:39;display:none}
-.dscrim.on{display:block}
+.dscrim.on{display:block;background:rgba(0,0,0,.18);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
 
 /* ── اعلان و جشن ── */
 #toast{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);
@@ -665,7 +676,7 @@ const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="a
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
   referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب های ساده برای یادگیری و روع سریع"};
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -838,9 +849,8 @@ function tplBlock(){
   let h = "";
   if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}Ai میسازه</div><div>${N(3)}فعال و متصلش کن</div></div>`;
   if((S.templates || []).length && !full){
-    h += `<div class="sec"><h2>قالب آماده</h2></div>
-      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${goIc}</button>`).join("")}</div>
-      <button class="b t mt" data-a="import">${IC.upload}ورود از JSON</button>`;
+    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛ مناسب شروع سریع و آشنایی با سیستم</h2></div>
+      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${t.cost ? `<span class="xbd">${N(t.cost)} توکن</span>` : ""}${goIc}</button>`).join("")}</div>`;
   }
   return h;
 }
@@ -1019,7 +1029,6 @@ function tabMore(b){
       ${row('data-sa="bot"', "gear", "تنظیمات ربات", "نام، کانال، دستورها و متغیرها")}
       ${row('data-a="health"', "heal", "بررسی مسیرها", "بخش‌های بدون مسیر و بن‌بست")}
       ${row('data-a="export"', "dl", "خروجی JSON", "نسخه‌ی پشتیبان از ربات")}
-      ${row('data-a="dup"', "layers", "کپی ربات", "ساخت یک نسخه‌ی تازه")}
       ${row('data-a="subs"', "inbox", "پاسخ فرم‌ها", "آخرین پاسخ‌های ثبت‌شده")}
     </div>
     <button class="b r mt2" data-a="del">${IC.trash}حذف ربات</button>`;
@@ -1885,14 +1894,7 @@ Object.assign(A, {
         render(); bumpTokens(); celebrate(); toast("قالب آماده شد" + (d.cost ? `، ${d.cost} توکن` : "")); scrollTo(0, 0);
       }catch(e){ if(e.status === 402){ if(e.data?.wallet){ S.wallet = e.data.wallet; renderTop(); } openBuy(e.message); } else throw e; }
     }); },
-  import: () => { S.sheet = {kind: "info"}; showSheet(head("ورود از JSON") + `<p class="muted" style="margin:6px 0 10px">خروجی JSON یک ربات را اینجا بچسبان تا به‌عنوان ربات جدید ساخته شود.</p><textarea id="im-text" class="code" placeholder='{"name": "...", "nodes": {...}}'></textarea><div class="fgap"></div><button data-a="importgo" class="b">${IC.upload}ساخت ربات</button><div class="fgap"></div><div class="fgap"></div>`); },
-  importgo: el => busy(el, async () => { let c; try{ c = JSON.parse($("#im-text").value); }catch(_){ return toast("JSON معتبر نیست"); }
-    const d = await api("/api/bots/import", "POST", {config: c.config || c}); closeSheet(); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "nodes"; S.open = new Set(); S.ideas = []; S.stats = null; render(); toast("ربات وارد شد"); scrollTo(0, 0); }),
-  health: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/health`); S.sheet = {kind: "info"};
-    const row = i => { const h = HEALTH_FA.find(([k]) => i.startsWith(k)); return `<div class="hl"><b>${h ? h[1] : "هشدار"}</b><br><span class="muted ltr">${esc(i.split(": ").pop())}</span></div>`; };
-    showSheet(head("بررسی مسیرها") + (d.issues.length ? d.issues.map(row).join("") + `<p class="muted mt">برای رفع خودکار، در بخش‌ها به هوش مصنوعی بگو «مشکلات مسیر را درست کن».</p>` : `<div class="hl ok">مشکلی پیدا نشد؛ ${N(d.nodes)} بخش بررسی شد.</div>`) + `<div class="fgap"></div><div class="fgap"></div>`); }),
-  export: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "این متن را نگه دار؛ هر وقت خواستی از «ورود از JSON» برش گردان."); }),
-  dup: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/duplicate`, "POST"); S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.btab = "nodes"; S.open = new Set(); S.stats = null; render(); scrollTo(0, 0); toast("کپی ساخته شد"); }),
+  export: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/export`); textSheet("خروجی JSON", JSON.stringify(d.config, null, 2), "نسخه‌ی پشتیبان از تنظیمات این ربات؛ آن را در جای امن نگه دار."); }),
   subs: () => openSubs(),
   csv: () => textSheet("خروجی CSV", csvOf(S.subs || []), "آخرین 50 پاسخ. در اکسل یا گوگل‌شیت پیست کن."),
   copyout: () => { const t = $("#tx-out"); t.select(); navigator.clipboard?.writeText(t.value).then(() => toast("کپی شد"), () => toast("متن را دستی کپی کن")); },
