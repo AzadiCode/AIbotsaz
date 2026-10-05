@@ -429,10 +429,9 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .sub2 small{display:block;color:var(--mut);font-size:11.5px}
 
 /* ── اکسپلور ── */
-.xhd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 2px 4px}
-.xhd h1{font-size:24px}
-.xhd .muted{display:block}
-.xlist{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.xhd{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 2px 6px}
+.xhd h1{font-size:28px;line-height:1.35;letter-spacing:-.2px}
+.xlist{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
 .xc{position:relative;display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;background:var(--sf);border:1px solid var(--line);border-radius:18px;cursor:pointer;overflow:hidden}
 .xc:active{background:var(--sf2)}
 .xc.feat{border-color:var(--ac);background:linear-gradient(var(--sf),var(--sf)) padding-box}
@@ -516,6 +515,9 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
   box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 6px 16px color-mix(in srgb,var(--ac) 34%,transparent),0 10px 22px rgba(0,0,0,.22)}
 .dn.on:active{transform:translateX(var(--out)) scale(.92)}
 .dock:not(.open) .dn.on,.dock:not(.open) .dn.on:active{transform:translateX(calc(var(--out) + var(--keep)))}
+/* محدوده‌ی لمس نامرئیِ بزرگ‌تر: فقط قد و بالا-پایین بزرگ می‌شود (سمت چپ بیرون از صفحه است)
+   تا هیچ دکمه‌ی صفحه زیر دست نرود و اشتباهی چیزی لمس نشود */
+.dock:not(.open) .dn.on::after{content:"";position:absolute;inset:-14px 0 -14px -40px;z-index:2}
 .dscrim{position:fixed;inset:0;z-index:39;display:none}
 .dscrim.on{display:block;background:transparent}
 
@@ -1751,15 +1753,16 @@ function xCard(it){
   const feat = XP.sort !== "new" && it.rank === 1, hot = XP.sort === "hot" && it.rank > 1 && it.rank <= 5;
   const badge = feat ? `<span class="xbd">${IC.flame}${XP.sort === "hot" ? "داغ‌ترین" : "محبوب‌ترین"}</span>` : hot ? `<span class="xbd">${IC.flame}داغ</span>`
     : it.mine ? `<span class="xbd m">ربات تو</span>` : it.new ? `<span class="xbd n2">جدید</span>` : "";
+  const note = it.mine ? "منتشر شده توسط خودت" : it.username ? `سازنده: @${esc(it.username)}` : "";
   return `<article class="xc${feat ? " feat" : ""}" data-id="${esc(it.id)}">
-    <div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div>${badge}</div>
+    <div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">${note}</span></div>${badge}</div>
     ${it.desc ? `<p class="xd">${esc(it.desc)}</p>` : ""}
     <div class="xf">${xStats(it)}<div class="xa">${likeBtn(it)}<button class="b sm" data-xp="start" data-id="${esc(it.id)}">شروع${IC.play}</button></div></div></article>`;
 }
 const xSkel = () => `<div class="xc sk"><div class="xt"><span class="xav"></span><div class="xn"><i style="width:60%"></i></div></div><i></i><i style="width:55%"></i></div>`;
 function renderExplore(){
   const tabs = [["hot", "flame", "داغ‌ترین"], ["new", "spark", "جدیدترین"], ["top", "heart", "محبوب‌ترین"]];
-  $("#app").innerHTML = `<div class="xhd"><div><h1>اکسپلور</h1><span class="muted">ربات‌های دیگران را امتحان کن و لایک بزن</span></div>
+  $("#app").innerHTML = `<div class="xhd"><h1>اکسپلور</h1>
     <button class="iconb" data-xp="refresh" aria-label="تازه‌سازی">${IC.refresh}</button></div>
     <div class="tabs" role="tablist">${tabs.map(([k, ic, t]) => `<button class="tab${XP.sort === k ? " on" : ""}" role="tab" aria-selected="${XP.sort === k}" data-xp="sort" data-k="${k}">${IC[ic]}${t}</button>`).join("")}</div>
     <div class="xlist" id="xgrid"></div><div id="xmore"></div>`;
