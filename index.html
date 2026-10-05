@@ -899,7 +899,7 @@ const btnInfo0 = (cfg, b) => {
   return k === "pay" ? "پرداخت " + N(b.pay.stars) + " ستاره" : k === "goto" ? "به: " + esc(titleOf(cfg, b.goto)) : k === "channel" ? "کانال @" + esc(CH_RE.exec(b.url)[1])
     : k === "alert" ? "پیام پاپ‌آپ" : k === "copy" ? "کپی متن" : k === "share" ? "اشتراک لینک دعوت" : "لینک " + esc((b.url || "").replace(/^https:\/\//, "").slice(0, 22));
 };
-const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " (شرطی)" : "") + (b.do?.length ? " (اکشن)" : "");
+const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " (شرطی)" : "") + (b.join ? " (عضویت)" : "") + (b.do?.length ? " (اکشن)" : "");
 
 function nodeCard(cfg, id){
   const n = cfg.nodes[id], tags = [], isRk = n.kb === "reply";
@@ -910,6 +910,7 @@ function nodeCard(cfg, id){
   if(n.ticket) tags.push('<span class="tag ai">تیکت' + (n.tag ? " · " + esc(n.tag) : "") + '</span>');
   if(n.board) tags.push('<span class="tag">جدول برترین‌ها</span>');
   if(isRk) tags.push('<span class="tag">کیبورد چت</span>');
+  if(n.join) tags.push('<span class="tag">عضویت اجباری</span>');
   if(n.media) tags.push('<span class="tag">رسانه</span>'); else if(n.photo) tags.push('<span class="tag">عکس</span>');
   if(n.do?.length || n.route?.length || n.alt?.length) tags.push('<span class="tag">منطق</span>');
   const open = S.open.has(id), nb = n.buttons.reduce((a, r) => a + r.length, 0);
@@ -1216,6 +1217,14 @@ const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدو
   ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],
   ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["ticket_no","شماره‌ی آخرین تیکت کاربر"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
 const BUILTIN = BUILTIN_HELP.map(x => x[0]);
+const chList = v => String(v || "").split(/[\s,،]+/).filter(Boolean).map(x => x.replace(/^(https?:\/\/)?(t\.me|telegram\.me)\//i, "").replace(/^@/, ""));
+const chOut = (v, text) => { const l = chList(v); if(l.length > 3) return "حداکثر ۳ کانال"; if(l.some(c => !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(c))) return "آیدی کانال معتبر نیست (مثل @channel_id)"; return l.length ? {channels: l, text: (text || "").trim()} : null; };
+const joinBox = (d, what) => `<details class="adv jn"${d.jch ? " open" : ""}><summary>عضویت اجباری در کانال</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">${what} فقط وقتی کاربر عضو این کانال‌ها باشد کار می‌کند؛ وگرنه پیام عضویت می‌بیند و بعد از عضو شدن مستقیم به همین‌جا می‌رسد. ربات باید در کانال ادمین باشد. خالی یعنی غیرفعال.</p>
+      <span class="lbl">کانال‌ها (تا ${N(3)} تا، با فاصله)</span><input class="ltr" id="j-ch" value="${esc(d.jch)}" placeholder="@channel1 @channel2" autocomplete="off">
+      <span class="lbl">پیام درخواست عضویت</span><input class="fa" id="j-tx" value="${esc(d.jtx)}" maxlength="500" placeholder="برای ادامه اول عضو کانال شو.">
+    </div></details>`;
+const readJoin = () => { if($("#j-ch")){ D.jch = $("#j-ch").value; D.jtx = $("#j-tx").value; } };
 const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
 const simpleCond = c => !!c && typeof c.var === "string" && !c.all && !c.any && !c.not;
 const blankCond = () => ({var:"", op:"==", value:""});
@@ -1297,6 +1306,7 @@ function openNode(id){
         silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
         aip: n.ai?.prompt || "", aid: n.ai?.daily || 15, aim: n.ai?.memory ?? 3,
         start: id === cfg.start, fb: id === cfg.fallback,
+        jch: (n.join?.channels || []).map(c => "@" + c).join(" "), jtx: n.join?.text || "",
         ticket: !!n.ticket, tag: n.tag || "", bvar: n.board?.var || "", btop: n.board?.top || 10,
         do: cp(n.do || []), route: (n.route || []).map(r => ({c: cp(r.when), goto: r.goto})), alt: (n.alt || []).map(r => ({c: cp(r.when), text: r.text})), adv: false };
   renderSheet();
@@ -1351,7 +1361,7 @@ function nodeSheet(){
       ${ruleSection("متن جایگزین شرطی", "اگر شرط درست بود، به‌جای متن اصلی نشان داده می‌شود", "alt", cfg, 4)}
       <div class="sub"><span>جدول برترین‌ها</span></div><p class="muted" style="margin:-3px 0 8px">زیر متن این بخش رتبه‌بندی کاربرها بر اساس یک متغیر عددی (یا refs برای دعوت‌ها) نشان داده می‌شود. خالی یعنی غیرفعال.</p>
       <div class="cmd"><input class="ltr" id="f-bvar" list="vdl" value="${esc(d.bvar)}" placeholder="متغیر عددی، مثلاً coins" maxlength="20" autocomplete="off"><input id="f-btop" type="number" min="3" max="20" value="${esc(d.btop)}" placeholder="چند نفر؟"></div>
-    </div></details>${dlist()}
+    </div></details>${joinBox(d, "این بخش")}${dlist()}
     <label class="chk"><input type="checkbox" id="f-start"${d.start ? " checked disabled" : ""}> صفحه‌ی شروع (/start)</label>
     <label class="chk"><input type="checkbox" id="f-fb"${d.fb ? " checked disabled" : ""}> جواب پیام‌های نامفهوم کاربر</label>
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${d.start || d.fb ? "" : `<button class="b r" data-sh="del">حذف بخش</button>`}</div>`;
@@ -1371,6 +1381,7 @@ function readNode(){
   if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
   if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
   for(const l of ["do", "route", "alt"]) readRl(l);
+  readJoin();
   const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
 }
 function saveNode(){
@@ -1383,9 +1394,11 @@ function saveNode(){
     if(!node.buttons.length) return toast("برای خروج کاربر از گفتگو، اول یک دکمه‌ی بازگشت به این بخش اضافه کن");
   }
   const err = ruleErr(); if(err) return toast(err);
+  const nj = chOut(D.jch, D.jtx); if(typeof nj === "string") return toast(nj);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id], ob = n.board;
-    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "done", "next", "kb", "do", "route", "alt", "ticket", "tag", "board"]) delete n[k];
+    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "done", "next", "kb", "do", "route", "alt", "ticket", "tag", "board", "join"]) delete n[k];
+    if(nj) n.join = nj;
     if(D.bvar) n.board = {var: D.bvar, top: Math.max(3, Math.min(20, parseInt(D.btop) || 10)), ...(ob?.label ? {label: ob.label} : {})};
     if(D.mode === "show" && D.kb === "reply") n.kb = "reply";
     n.text = D.text.trim();
@@ -1443,12 +1456,13 @@ function addNode(){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind: "btn", n: nid, r, c};
-  if(c === null) D = {text: "دکمه‌ی جدید", kind: "goto", goto: cfg.start, val: "", when: [], do: [], adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
+  if(c === null) D = {text: "دکمه‌ی جدید", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
     D = {text: b.text, kind: k, goto: b.goto || cfg.start,
          val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || b.share || "",
          when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
+         jch: (b.join?.channels || []).map(c => "@" + c).join(" "), jtx: b.join?.text || "",
          stars: b.pay?.stars || 50, ptitle: b.pay?.title || "", pdesc: b.pay?.desc || "", ptext: b.pay?.text || "", pgoto: b.pay?.goto || ""};
   }
   renderSheet();
@@ -1480,7 +1494,7 @@ function btnSheet(){
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشان دادن پیام اجرا می‌شوند", "do", cfg, 6)
               : `<p class="muted">اکشن فقط برای دکمه‌های «رفتن به یک بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کند.</p>`}
-    </div></details>${dlist()}
+    </div></details>${canDo ? joinBox(d, "این دکمه") : ""}${dlist()}
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف دکمه</button>`}</div>`;
 }
 function readBtn(){
@@ -1488,7 +1502,7 @@ function readBtn(){
   if($("#b-goto")) D.goto = $("#b-goto").value;
   if($("#b-val")) D.val = $("#b-val").value;
   if($("#b-stars")){ D.stars = $("#b-stars").value; D.ptitle = $("#b-ptitle").value; D.pdesc = $("#b-pdesc").value; D.ptext = $("#b-ptext").value; D.pgoto = $("#b-pgoto").value; }
-  readRl("when"); readRl("do");
+  readRl("when"); readRl("do"); readJoin();
   const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
 }
 function saveBtn(){
@@ -1497,6 +1511,7 @@ function saveBtn(){
   if(d.kind === "pay"){ const st = parseInt(d.stars); if(!(st >= 1 && st <= 10000)) return toast("قیمت باید عددی بین ۱ تا ۱۰٬۰۰۰ ستاره باشد"); }
   else if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه را وارد کن");
   const err = ruleErr(); if(err) return toast(err);
+  const bj = (d.kind === "goto" || d.kind === "alert" || d.kind === "pay") ? chOut(d.jch, d.jtx) : null; if(typeof bj === "string") return toast(bj);
   const btn = {text: d.text.trim()};
   if(d.kind === "goto") btn.goto = d.goto;
   else if(d.kind === "alert") btn.alert = d.val.trim();
@@ -1509,6 +1524,7 @@ function saveBtn(){
     if(d.pgoto) btn.pay.goto = d.pgoto;
   }
   else btn.url = d.val.trim();
+  if(bj) btn.join = bj;
   if(d.when.length) btn.when = d.when[0].c;
   if(d.do.length && (d.kind === "goto" || d.kind === "alert" || d.kind === "pay")) btn.do = outActs(d.do);
   busy($('[data-sh="save"]'), () => commit(cfg => {
@@ -1539,10 +1555,10 @@ function botSheet(){
   const cfg = S.cur.config, d = D;
   return head("تنظیمات ربات") + `
     <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
-    <span class="lbl">عضویت اجباری در کانال (اختیاری)</span>
+    ${d.channels ? `<span class="lbl">عضویت اجباری کل ربات</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
-    <p class="muted mt">تا ${N(3)} کانال، با فاصله جدا کن. ربات باید در آن کانال‌ها ادمین باشد. خالی یعنی غیرفعال.</p>
-    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500" placeholder="برای استفاده از ربات اول باید عضو کانال شوی.">${esc(d.jtext)}</textarea>
+    <p class="muted mt">این قفلِ کل ربات است. برای قفل کردن فقط یک بخش یا دکمه، از ویرایش همان بخش یا دکمه استفاده کن. خالی کردن این فیلد قفل را برمی‌دارد.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500">${esc(d.jtext)}</textarea>` : ""}
     <div class="rowh"><span class="lbl">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="b o sm" data-sh="addcmd">${IC.plus}دستور</button>` : ""}</div>
     <div class="fgap"></div>
     ${d.cmds.map(([k, v], i) => `<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="iconb sm" data-sh="delcmd" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}

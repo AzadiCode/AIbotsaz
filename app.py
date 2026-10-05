@@ -552,8 +552,11 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 {
  "thinking": "...",
  "ideas": ["...", "..."],
+ "unsupported": [],
  "config": { ...bot config as described below... }
 }
+
+"unsupported" (array, normally EMPTY, max 3 items): a private report for the platform admin. Add an item ONLY when the user explicitly asked for something the engine truly cannot do and your design therefore drops it or replaces it with a weaker approximation (see ENGINE LIMITS). Never add items for things you built fully, for vague wishes, or for optional extras you chose yourself. Each item is {"want": "what the user asked, in one short sentence", "why": "the exact reason the engine cannot do it", "upgrade": "a concrete engine/backend feature that would make it possible"}. These three fields are ALWAYS written in Persian (فارسی) whatever the output language is, and are read by the platform developer, not by the user. The user still gets the closest honest approximation and the usual explanation in "thinking".
 
 "thinking" (string, 2-5 short sentences, OUTPUT LANGUAGE, natural first-person tone, like a sharp colleague narrating the plan, not a formal report):
 - Say what you understood the user wants and the key sections/flows you chose and why.
@@ -571,7 +574,7 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "start": "<node_id shown on /start>",
  "fallback": "<node_id shown for unknown messages>",
  "commands": {"help": "<node_id>"},
- "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional)
+ "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional, whole bot; prefer per-section/per-button join below)
  "vars": {"coins": "0", "city": ""},                                                 (optional, declare EVERY custom variable with its default value)
  "globals": {"votes_a": "0"},                                                       (optional, variables SHARED by all users, see GLOBALS)
  "desk": {"staff": [123456789], "closed": "text sent when a ticket is closed", "reply_btn": "label"},   (optional, see SUPPORT DESK)
@@ -600,6 +603,7 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
      "ai": {"prompt": "instructions for the AI assistant", "daily": 15, "memory": 3},             (optional, see AI CHAT)
      "ticket": true,  "tag": "فروش",                                                 (optional, on ask/fields nodes only, see SUPPORT DESK)
      "board": {"var": "coins", "top": 10, "label": "برترین‌ها"},                       (optional, see LEADERBOARD)
+     "join": {"channels": ["channel_username"], "text": "message asking to join"},  (optional, forced membership ONLY for this section)
      "do": [ ...actions... ],                                                        (optional, see LOGIC)
      "route": [ {"when": <cond>, "goto": "<node_id>"} ],                             (optional, see LOGIC)
      "alt": [ {"when": <cond>, "text": "..."} ]                                      (optional, see LOGIC)
@@ -611,7 +615,7 @@ BASIC ENGINE FEATURES
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (promo code, card number), share (opens Telegram's share dialog with the user's personal invite link of this bot plus your message).
 - "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner. The owner can answer by replying to it inside the bot chat and the answer reaches the user. Good for simple one-way notes. For anything where the owner must answer users personally, add "ticket": true (see SUPPORT DESK), which gives numbered tickets and a Reply button.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary (the owner can reply to it too). Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
-- "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. In "thinking" remind that the bot must be admin in that channel.
+- "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. Put it on the specific node (the section the user must unlock) or on a goto/alert/pay button ({"text": "...", "goto": "vip", "join": {"channels": ["x"], "text": "..."}}) so only that part is locked; use the top-level "join" only when the user wants the WHOLE bot locked. In "thinking" remind that the bot must be admin in that channel.
 - "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of buttons under the message. Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on nodes with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
 
@@ -908,6 +912,24 @@ def clean_pay(pay, label, valid, bad):
     return {"text": label, "pay": p}
 
 
+def clean_join(j, bad, where=""):
+    """عضویت اجباری (سراسری، روی یک بخش یا روی یک دکمه): تا ۳ کانال عمومی + پیام درخواست"""
+    if not isinstance(j, dict):
+        return None
+    chans, raw = [], j.get("channels")
+    for c in (raw if isinstance(raw, list) else [])[:3]:
+        c = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", str(c).strip(), flags=re.I).lstrip("@")
+        if re.match(r"^[A-Za-z][A-Za-z0-9_]{4,31}$", c):
+            if c not in chans:
+                chans.append(c)
+        else:
+            bad(f"آیدی کانال «{c}» معتبر نیست{where}")
+    if not chans:
+        return None
+    return {"channels": chans,
+            "text": str(j.get("text") or "برای استفاده از ربات اول باید عضو کانال بشی.").strip()[:500]}
+
+
 def sanitize(cfg, strict=False, media=None, warns=None):
     """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه.
     media = مجموعه‌ی شناسه‌ی رسانه‌هایی که مال خود کاربره؛ بقیه بی‌صدا حذف می‌شن"""
@@ -987,6 +1009,13 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                     w = clean_cond(b["when"], used, nums, bad)
                     if w:
                         it["when"] = w
+                if b.get("join"):
+                    if "goto" in it or "alert" in it or "pay" in it:
+                        bj = clean_join(b["join"], bad, f" (دکمه‌ی «{label}»)")
+                        if bj:
+                            it["join"] = bj
+                    else:
+                        bad(f"عضویت اجباری فقط روی دکمه‌های «رفتن به بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنه (دکمه‌ی «{label}»)")
                 if b.get("do"):
                     if "goto" in it or "alert" in it or "pay" in it:
                         acts = clean_actions(b["do"], used, nums, bad, valid)
@@ -1126,6 +1155,9 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 bad(f"یکی از متن‌های جایگزینِ بخش «{nid}» کامل نیست")
         if alt:
             node["alt"] = alt
+        nj = clean_join(n.get("join"), bad, f" (بخش «{nid}»)")
+        if nj:
+            node["join"] = nj
         nodes[nid] = node
 
     start = str(cfg.get("start") or "")
@@ -1203,18 +1235,9 @@ def sanitize(cfg, strict=False, media=None, warns=None):
         if d:
             out["desk"] = d
 
-    j = cfg.get("join")
-    if isinstance(j, dict):
-        chans, raw = [], j.get("channels")
-        for c in (raw if isinstance(raw, list) else [])[:3]:
-            c = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", str(c).strip(), flags=re.I).lstrip("@")
-            if re.match(r"^[A-Za-z][A-Za-z0-9_]{4,31}$", c):
-                chans.append(c)
-            else:
-                bad(f"آیدی کانال «{c}» معتبر نیست")
-        if chans:
-            out["join"] = {"channels": chans,
-                           "text": str(j.get("text") or "برای استفاده از ربات اول باید عضو کانال بشی.").strip()[:500]}
+    jn = clean_join(cfg.get("join"), bad)
+    if jn:
+        out["join"] = jn
     return out
 
 # ───── تشخیص زبان (برای اینکه «thinking» و متن‌ها هیچ‌وقت انگلیسی نشن) ─────
@@ -1318,6 +1341,18 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
     return txt, (pt, ct)
 
 
+_gap = threading.local()          # گزارش «چیزی که ربات‌ساز نتونست»؛ هر کار پس‌زمینه در ترد خودش می‌خونه
+
+
+def _take_gaps(raw):
+    out = []
+    for x in (raw if isinstance(raw, list) else [])[:3]:
+        if isinstance(x, dict) and str(x.get("want") or "").strip():
+            out.append({"want": str(x["want"]).strip()[:300], "why": str(x.get("why") or "").strip()[:500],
+                        "upgrade": str(x.get("upgrade") or "").strip()[:600]})
+    return out
+
+
 def _call_llm(user, lang, final, media_ids, acc):
     txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
@@ -1327,6 +1362,7 @@ def _call_llm(user, lang, final, media_ids, acc):
     raw = json.loads(m.group(0))
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
         raise ValueError("پاسخ AI فاقد بخش config بود")
+    _gap.items = _take_gaps(raw.get("unsupported"))
     warns = []
     cfg = sanitize(raw["config"], media=media_ids, warns=warns)
     thinking = str(raw.get("thinking") or "").strip()[:900]
@@ -1785,9 +1821,31 @@ def new_bot_doc(uid, cfg, thinking):
     return doc
 
 
+def report_gaps(uid, bot, prompt, items):
+    """وقتی کاربر چیزی خواسته که موتور واقعاً نمی‌تونه: متن گزارشِ نوشته‌شده‌ی خودِ هوش مصنوعی برای ادمین ربات‌ساز فرستاده و ذخیره می‌شه"""
+    if not items:
+        return
+    try:
+        u = db.users.find_one({"_id": uid}) or {}
+        who = f"{u.get('tg_name') or ''} {('@' + u['tg_user']) if u.get('tg_user') else ''}".strip() or "بدون نام"
+        db.gaps.insert_one({"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": prompt[:1500], "items": items, "t": now()})
+        lines = [f"گزارش هوش مصنوعی: درخواستی که ربات‌ساز کامل نتونست انجام بده",
+                 f"کاربر: {who} (آیدی {uid})",
+                 f"ربات: {(bot or {}).get('name') or 'جدید'}" + (f" (@{bot['username']})" if bot and bot.get("username") else ""),
+                 "", "متن درخواست کاربر:", prompt[:700]]
+        for i, x in enumerate(items, 1):
+            lines += ["", f"{i}) خواسته: {x['want']}", f"چرا نشد: {x['why'] or '-'}", f"راه ارتقا: {x['upgrade'] or '-'}"]
+        text = "\n".join(lines)[:3900]
+        for admin in ADMIN_IDS:
+            tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=text)
+    except Exception:
+        log.exception("report_gaps failed")
+
+
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: رزرو توکن از قبل کم شده؛ در پایان هزینه‌ی واقعی ثبت و باقی‌مونده برمی‌گرده"""
     acc = []
+    _gap.items = []
     try:
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
         thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
@@ -1808,6 +1866,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         db.jobs.update_one({"_id": jid}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": cost}})
         if REF_ON == "create":
             settle_referral(uid)
+        report_gaps(uid, bot, prompt, getattr(_gap, "items", []))
     except Exception as e:
         log.exception("generate failed")
         msg = "ساخت ربات ناموفق بود و توکن‌هات برگشت داده شد. دوباره امتحان کن یا توضیح رو ساده‌تر بنویس."
@@ -2827,7 +2886,7 @@ def keyboard(node, node_id, env):
             if "url" in b:
                 r.append({"text": label, "url": b["url"]})
             elif "goto" in b:
-                cd = f"g:{node_id}:{ri}:{ci}" if b.get("do") else f"n:{b['goto']}"
+                cd = f"g:{node_id}:{ri}:{ci}" if (b.get("do") or b.get("join")) else f"n:{b['goto']}"
                 r.append({"text": label, "callback_data": cd})
             elif "alert" in b:
                 r.append({"text": label, "callback_data": f"a:{node_id}:{ri}:{ci}"})
@@ -2892,6 +2951,10 @@ def send_node(env, node_id, edit=None, depth=0):
     if node_id not in cfg["nodes"]:
         node_id = cfg["start"]
     node = cfg["nodes"][node_id]
+    nj = node.get("join")
+    if nj and not member_ok(env.token, nj["channels"], env.uid):       # عضویت اجباریِ این بخش
+        send_gate(env.token, env.chat_id, cfg, nj, f"j:{node_id}")
+        return
     bump_node(env, node_id)
     run_actions(node.get("do"), env)                       # ۱) اکشن‌های ورود
     if depth < MAX_HOPS:                                   # ۲) هدایت شرطی
@@ -2935,6 +2998,8 @@ def reply_press(env, rk, text):
         for b in row:
             if not visible(b, env) or text not in (fill(b["text"], env), b["text"]):
                 continue
+            if button_gate(env, b, f"n:{rk.get('node')}"):
+                return True
             if "pay" not in b:                      # دکمه‌ی پرداخت: اکشن‌ها بعد از پرداختِ موفق اجرا می‌شن
                 run_actions(b.get("do"), env)
             if "goto" in b:
@@ -2997,24 +3062,36 @@ def valid_answer(kind, t):
         return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", t)), t
     return True, t
 
-def gate_ok(token, cfg, uid):
-    """عضویت اجباری؛ اگه ربات ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
-    j = cfg.get("join")
-    if not j:
-        return True
-    for ch in j["channels"]:
+def member_ok(token, channels, uid):
+    """اگه ربات ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
+    for ch in channels:
         r = tg(token, "getChatMember", chat_id="@" + ch, user_id=uid)
         if r.get("ok") and r["result"].get("status") in ("left", "kicked"):
             return False
     return True
 
 
+def gate_ok(token, cfg, uid):
+    """عضویت اجباریِ سراسری (نسخه‌های قبلی)"""
+    j = cfg.get("join")
+    return not j or member_ok(token, j["channels"], uid)
 
-def send_gate(token, chat_id, cfg):
-    j = cfg["join"]
+
+def send_gate(token, chat_id, cfg, j=None, retry="chk"):
+    """پیام درخواست عضویت؛ j = join همین بخش/دکمه، retry = callback دکمه‌ی «عضو شدم»"""
+    j = j or cfg["join"]
     kb = [[{"text": f"@{c}", "url": f"https://t.me/{c}"}] for c in j["channels"]]
-    kb.append([{"text": "عضو شدم", "callback_data": "chk"}])
+    kb.append([{"text": "عضو شدم", "callback_data": retry[:64]}])
     tg(token, "sendMessage", chat_id=chat_id, text=j["text"], reply_markup={"inline_keyboard": kb})
+
+
+def button_gate(env, b, retry):
+    """دکمه‌ای که عضویت اجباری داره: اگه کاربر عضو نیست پیام عضویت می‌فرسته و True برمی‌گردونه"""
+    bj = b.get("join")
+    if bj and not member_ok(env.token, bj["channels"], env.uid):
+        send_gate(env.token, env.chat_id, env.cfg, bj, retry)
+        return True
+    return False
 
 
 # ───────────────────────── ردیابی و پاسخ فرم‌ها ─────────────────────────
@@ -3599,6 +3676,8 @@ def sub_hook(bot_id):
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="این گزینه الان در دسترس نیست", show_alert=True)
                     return "ok"
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                if button_gate(env, b, data):
+                    return "ok"
                 send_invoice(env, nid, b)
                 return "ok"
             if data.startswith(("a:", "g:")):
@@ -3612,6 +3691,11 @@ def sub_hook(bot_id):
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
                        text="این گزینه الان در دسترس نیست", show_alert=True)
                     return "ok"
+                if b.get("join") and not member_ok(token, b["join"]["channels"], env.uid):
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
+                       text="برای استفاده از این گزینه اول باید عضو کانال بشی.", show_alert=True)
+                    send_gate(token, chat_id, cfg, b["join"], data)
+                    return "ok"
                 run_actions(b.get("do"), env)
                 if kind == "a":
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
@@ -3619,6 +3703,14 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_node(env, b["goto"], edit=m)
+                return "ok"
+            if data.startswith("j:") and data[2:] in cfg["nodes"]:                # «عضو شدم» روی عضویت اجباریِ یک بخش
+                nj = cfg["nodes"][data[2:]].get("join")
+                if nj and not member_ok(token, nj["channels"], env.uid):
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="هنوز عضو نشدی.", show_alert=True)
+                    return "ok"
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                send_node(env, data[2:], edit=m)
                 return "ok"
             tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
             if data == "chk":
