@@ -1197,7 +1197,7 @@ async function commit(fn, msg = "ذخیره شد"){
   setBot(d.bot);
   closeSheet(); renderBot(); toast(msg); haptic("ok");
 }
-function closeSheet(){ clearInterval(window.__ut); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function closeSheet(){ clearInterval(window.__ut); clearInterval(window.__gp); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
 function showSheet(html){
   const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
   sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp" role="dialog" aria-modal="true">${html}</div>`;
@@ -1841,6 +1841,7 @@ Object.assign(A, {
   aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان را بنویس");
     confirmQ("این اعلان برای همه‌ی کاربرهای ربات‌ساز فرستاده شود؟", ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
   ausers: () => openUsers(),
+  agaps: el => busy(el, async () => { const d = await api("/api/admin/gaps"); openGaps(d); }),
 });
 document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
 
@@ -1857,6 +1858,7 @@ function adminCard(){
       <textarea class="fa" id="an-text" maxlength="3500" style="min-height:76px" placeholder="متن اعلان برای همه‌ی کاربران" aria-label="متن اعلان"></textarea><div class="fgap"></div>
       <button class="b o" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
     <div class="two"><button class="b o" data-a="ausers">${IC.users}کاربران</button><button class="b o" data-a="astats">${IC.chart}آمار سیستم</button></div>
+    <button class="b o mt" data-a="agaps">${IC.inbox}قابلیت‌های درخواست‌شده</button>
     <div class="stats mt" id="astats" style="border:0"></div>`;
 }
 let UQ = "";
@@ -1886,6 +1888,29 @@ async function openUsers(){
   await tick(); window.__ut = setInterval(tick, 10000);
 }
 document.addEventListener("input", e => { if(e.target.id === "uq" && openUsers.d){ UQ = e.target.value; $("#ulist").innerHTML = uList(openUsers.d); } });
+
+/* ── قابلیت‌های درخواست‌شده که موتور پشتیبانی نمی‌کند ── */
+function gapRow(r){
+  const who = r.un ? `@${esc(r.un)}` : (r.uid || "—");
+  return `<div class="rl"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+      <b style="font-size:13px">${esc(r.feature)}</b><span class="muted">${N(r.n)} بار · ${ago(r.t)}</span></div>
+    <p class="muted" style="margin-top:4px">خواسته: ${esc(r.want)}</p>
+    <p class="muted" style="margin-top:2px">چرا نشد: ${esc(r.why)}</p>
+    <p style="margin-top:4px;font-size:12.5px;line-height:1.75"><b>ارتقا:</b> ${esc(r.upgrade)}</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <span class="muted ltr">${who}</span>
+      <button class="b sm o" data-a="agapdone" data-id="${esc(r.id)}">انجام شد</button></div></div>`;
+}
+function openGaps(d){
+  S.sheet = {kind: "info"};
+  const body = d.items.length ? d.items.map(gapRow).join("")
+    : '<p class="muted">فعلاً هیچ قابلیت پیاده‌نشده‌ای گزارش نشده.</p>';
+  showSheet(head("قابلیت‌های درخواست‌شده") + `<p class="muted">این‌ها را هوش مصنوعی از درخواست کاربرها تشخیص داده و فرستاده.</p><div class="fgap"></div>${body}<div class="fgap"></div>`);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest('[data-a="agapdone"]');
+  if(b) busy(b, async () => { await api("/api/admin/gaps/done", "POST", {id: b.dataset.id}); b.closest(".rl").remove(); toast("ثبت شد"); });
+});
 
 /* حضور آنلاین */
 if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); }; setInterval(ping, 25000); document.addEventListener("visibilitychange", ping); }

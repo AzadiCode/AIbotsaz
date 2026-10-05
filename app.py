@@ -143,6 +143,8 @@ _index(db.jobs, "t", expireAfterSeconds=86400)
 _index(db.relay, "t", expireAfterSeconds=30 * 86400)
 _index(db.xp_views, "t", expireAfterSeconds=3 * 86400)    # رویداد بازدیدِ روزانه بعد از ۳ روز پاک می‌شه
 _index(db.nvis, "bot")
+_index(db.gaps, "t")
+_index(db.gaps, "status")
 
 fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest()))
 MOTHER_SECRET = hashlib.sha256(("mother" + SECRET_KEY).encode()).hexdigest()[:32]
@@ -662,6 +664,24 @@ PATTERNS (pick what fits, combine freely)
 ENGINE LIMITS (be honest about them in "thinking" and build the closest working approximation)
 - CANNOT do: online payments, real inventory/databases, calling external APIs, scheduled messages, data shared BETWEEN users except invite counts (no global counters or real leaderboards; variables are per user), reading the content of files or photos users send.
 - Example approximation: an order form whose answers (and photo of a receipt via an "ask" section) are sent to the owner instead of online payment.
+- When one of these limits blocks a core requirement, you MUST also report it in the "limits" array described in the next section.
+
+IMPOSSIBLE REQUESTS → "limits" (you are helping the platform owner build new engine features)
+Some requests cannot be genuinely done by this engine no matter how you structure the config. For every such requirement, add an item to the top-level "limits" array. This goes ONLY to the platform developer, never to the end user.
+
+"limits": [ {"feature": "english_snake_case_slug", "want": "...", "why": "...", "upgrade": "..."} ]   (omit the key entirely when nothing is impossible)
+
+Rules for "limits":
+- MAX 3 items. Report only the CORE of the request being impossible, not every small wish.
+- "feature": a short english slug naming the missing capability, e.g. payment, database, schedule, external_api, multi_user_data, global_counters, file_understanding, webhook, rich_list_pagination, ban_user, team_roles.
+- "want": what the user asked for, in the user's OWN words (OUTPUT LANGUAGE), quoted or closely paraphrased. Keep it under 300 characters.
+- "why": 1-2 sentences on the concrete technical reason this fixed engine can't do it (per-user variables only, no shared state, no outbound calls, no timers, no money handling...).
+- "upgrade": what infrastructure would have to be built so this becomes possible, phrased as an actionable engineering note (e.g. "add per-bot key-value store with admin API", "add job scheduler with cron-like triggers", "add shared counter collections for leaderboards").
+- WRITE IN THE OUTPUT LANGUAGE for "want", "why" and "upgrade"; only "feature" stays english.
+- Do NOT use "limits" as an excuse: if an approximation exists, BUILD the approximation and stay silent. Report only what you truly cannot deliver at all, even approximately.
+- Do NOT report: missing user information (ask for it in "thinking" instead), things outside a Telegram bot's nature, content policies, or anything the engine actually supports.
+- NEVER put this report in "thinking", "ideas", node texts or anywhere the end user can see. "thinking" may mention the limitation to the user in one short honest sentence, but the "limits" array is for the developer only.
+- If the whole request is impossible, still build the most useful nearby bot AND report it.
 
 Design rules:
 - Think before you structure: identify the bot's real purpose, the natural user journeys, and the minimum set of nodes that cover them well. Don't pad with filler, but don't skip an obviously needed part (a shop bot needs a way to order, a business bot needs contact/support).
@@ -1104,9 +1124,9 @@ def lint(cfg):
 
 
 class ThinkLang(ValueError):
-    def __init__(self, cfg, ideas):
+    def __init__(self, cfg, ideas, limits=None):
         super().__init__("thinking language mismatch")
-        self.cfg, self.ideas = cfg, ideas
+        self.cfg, self.ideas, self.limits = cfg, ideas, limits or []
 
 
 def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
@@ -1130,6 +1150,22 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
     return txt, (pt, ct)
 
 
+def clean_limits(raw):
+    """گزارش «این قابلیت واقعاً شدنی نیست» که به ادمین رباتساز می‌ره؛ فقط ۳ مورد معتبر و کوتاه"""
+    out = []
+    for x in (raw if isinstance(raw, list) else [])[:3]:
+        if not isinstance(x, dict):
+            continue
+        feat = re.sub(r"[^a-z0-9_]", "", str(x.get("feature") or "").lower())[:30]
+        want = str(x.get("want") or "").strip()[:400]
+        why = str(x.get("why") or "").strip()[:500]
+        up = str(x.get("upgrade") or "").strip()[:600]
+        if not (feat and want and why and up):
+            continue
+        out.append({"feature": feat, "want": want, "why": why, "upgrade": up})
+    return out
+
+
 def _call_llm(user, lang, final, media_ids, acc):
     txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
@@ -1142,13 +1178,14 @@ def _call_llm(user, lang, final, media_ids, acc):
     cfg = sanitize(raw["config"], media=media_ids)
     thinking = str(raw.get("thinking") or "").strip()[:900]
     ideas = [str(x).strip()[:80] for x in (raw.get("ideas") if isinstance(raw.get("ideas"), list) else []) if str(x).strip()][:3]
+    limits = clean_limits(raw.get("limits"))
     if lang == "fa":
         fa, la = _count(thinking)
         if not thinking or la > fa:            # توضیح انگلیسی/خالی شده
             if not final:
-                raise ThinkLang(cfg, ideas)
+                raise ThinkLang(cfg, ideas, limits)
             thinking = FALLBACK_THINKING
-    return thinking, cfg, ideas
+    return thinking, cfg, ideas, limits
 
 
 def media_brief(items):
@@ -1183,9 +1220,9 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
     best, last, feedback = None, None, ""
     for attempt in (0, 1):
         try:
-            thinking, cfg, ideas = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc)
+            thinking, cfg, ideas, limits = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc)
         except ThinkLang as e:
-            best, last = best or ("", e.cfg, e.ideas), e
+            best, last = best or ("", e.cfg, e.ideas, e.limits), e
             feedback = "(Your previous answer used the wrong language for \"thinking\". Fix that now.)"
             log.warning("thinking in wrong language, retrying")
             continue
@@ -1196,15 +1233,92 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
             continue
         problems = lint(cfg)
         if problems and attempt == 0:
-            best = (thinking, cfg, ideas)
+            best = (thinking, cfg, ideas, limits)
             feedback = "(Your previous config had logic problems, fix them and return the FULL config again: " + "; ".join(problems[:6]) + ")"
             log.info("lint problems, retrying: %s", problems)
             continue
-        return thinking, cfg, ideas
+        return thinking, cfg, ideas, limits
     if best:                        # کانفیگ سالمِ تلاش اول رو نگه می‌داریم
-        th, cfg, ideas = best
-        return (th or FALLBACK_THINKING), cfg, ideas
+        th, cfg, ideas, lim = best
+        return (th or FALLBACK_THINKING), cfg, ideas, (lim or [])
     raise last
+
+
+GAP_RESEND_DAYS = 14           # بعد از این مدت، گزارش تکراری دوباره فرستاده می‌شه
+
+
+def gap_key(feature, want):
+    """کلید ضدتکرار: همون قابلیت + خواسته‌ی مشابه"""
+    norm = re.sub(r"[^\w؀-ۿ]+", " ", str(want or "").lower()).strip()
+    return f"{feature}:{hashlib.sha1(norm.encode()).hexdigest()[:10]}"
+
+
+def gap_text(feature, want, why, upgrade, user_line, prompt, bot_line):
+    """متن گزارش برای ادمین رباتساز"""
+    p = str(prompt or "").strip()
+    p = (p[:900] + "…") if len(p) > 900 else p
+    return ("قابلیت درخواستی که موتور فعلی پشتیبانی نمی‌کند\n\n"
+            f"ویژگی: {feature}\n\n"
+            f"کاربر چی خواست:\n{want}\n\n"
+            f"متن درخواست (کامل):\n{p}\n\n"
+            f"چرا شدنی نیست:\n{why}\n\n"
+            f"برای ارتقا چه لازم است:\n{upgrade}\n\n"
+            f"{user_line}\n{bot_line}")
+
+
+def report_gaps(uid, user, bot, prompt, limits):
+    """گزارش «شدنی نبود» رو برای ادمین‌های رباتساز می‌فرسته (با ضدتکرار)"""
+    if not limits or not ADMIN_IDS:
+        return
+    uname = user.get("username") or "-"
+    user_line = f"سازنده: {user.get('first_name', '')} (@{uname}) — {uid}"
+    for lim in limits[:3]:
+        key = gap_key(lim["feature"], lim["want"])
+        today = tehran_day()
+        prev = db.gaps.find_one({"_id": key})
+        fresh = not prev
+        if not fresh and prev.get("status") == "done":
+            continue                                  # قبلاً بررسی و پیاده شده
+        if not fresh and prev.get("day") == today:
+            db.gaps.update_one({"_id": key}, {"$inc": {"n": 1}, "$set": {"seen": now()}})
+            continue                                  # امروز همین گزارش دیده شده
+        db.gaps.replace_one({"_id": key}, {
+            "_id": key, "feature": lim["feature"], "want": lim["want"], "why": lim["why"],
+            "upgrade": lim["upgrade"], "uid": uid, "un": uname, "day": today,
+            "n": int((prev or {}).get("n", 0)) + 1, "status": (prev or {}).get("status", "new"),
+            "t": now(), "seen": now()}, upsert=True)
+        if fresh or age_sec(prev.get("t", now())) > GAP_RESEND_DAYS * 86400:
+            bot_line = f"ربات: {bot.get('name', '')}" if bot else "ربات جدید"
+            txt = gap_text(lim["feature"], lim["want"], lim["why"], lim["upgrade"], user_line, prompt, bot_line)
+            markup = {"inline_keyboard": [[{"text": "دیدم ✓", "callback_data": f"gk:{key}"[:64]}]]}
+            for admin in ADMIN_IDS:
+                tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=txt, reply_markup=markup)
+            log.info("gap reported: %s (%s)", lim["feature"], key)
+
+
+def gap_ack(key):
+    """ادمین روی «دیدم» زده"""
+    db.gaps.update_one({"_id": key}, {"$set": {"status": "seen", "seen": now()}})
+
+
+@app.get("/api/admin/gaps")
+@admin_only
+def api_admin_gaps(uid):
+    st = request.args.get("status", "open")
+    q = {} if st == "all" else {"status": {"$ne": "done"}}
+    rows = list(db.gaps.find(q).sort("t", -1).limit(200))
+    return jsonify(items=[{"id": r["_id"], "feature": r.get("feature", ""), "want": r.get("want", ""),
+                           "why": r.get("why", ""), "upgrade": r.get("upgrade", ""), "un": r.get("un", ""),
+                           "uid": r.get("uid"), "n": int(r.get("n", 1)), "status": r.get("status", "new"),
+                           "t": aware(r["t"]).isoformat()} for r in rows])
+
+
+@app.post("/api/admin/gaps/done")
+@admin_only
+def api_admin_gap_done(uid):
+    gid = str((request.get_json(silent=True) or {}).get("id", ""))
+    db.gaps.update_one({"_id": gid}, {"$set": {"status": "done", "seen": now()}})
+    return jsonify(ok=True)
 
 
 ENHANCE_PROMPT = ("You are a product designer who briefs a Telegram-bot builder. Rewrite the user's rough bot idea into a clear, concrete brief "
@@ -1600,8 +1714,9 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: رزرو توکن از قبل کم شده؛ در پایان هزینه‌ی واقعی ثبت و باقی‌مونده برمی‌گرده"""
     acc = []
     try:
+        user = db.users.find_one({"_id": uid}) or {}
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
-        thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
+        thinking, cfg, ideas, limits = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
         cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc)))
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return                                  # کار منقضی شده و توکن‌ها برگشته؛ نتیجه رو دور می‌ریزیم
@@ -1617,6 +1732,10 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         release(uid, reserve - cost)
         settle(uid, cost, "edit" if bot_id else "gen")
         db.jobs.update_one({"_id": jid}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": cost}})
+        try:
+            report_gaps(uid, user, bot, prompt, limits)     # گزارش قابلیت‌های شدنی‌نبود به ادمین
+        except Exception:
+            log.exception("report_gaps failed")
         if REF_ON == "create":
             settle_referral(uid)
     except Exception as e:
@@ -3187,6 +3306,15 @@ def mother_hook():
             tg(MOTHER_TOKEN, "answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok=ok,
                **({} if ok else {"error_message": "این بسته معتبر نیست"}))
             return "ok"
+        cq = upd.get("callback_query")
+        if cq:
+            data = cq.get("data", "")
+            if data.startswith("gk:") and cq.get("from", {}).get("id") in ADMIN_IDS:
+                gap_ack(data[3:])
+                tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text="ثبت شد ✓")
+            else:
+                tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"])
+            return "ok"
         msg = upd.get("message")
         if not msg or msg.get("chat", {}).get("type") != "private":
             return "ok"
@@ -3204,7 +3332,7 @@ def setup_mother():
     if not MOTHER_USERNAME:
         MOTHER_USERNAME = ((tg(MOTHER_TOKEN, "getMe").get("result") or {}).get("username") or "")
     r = tg(MOTHER_TOKEN, "setWebhook", url=f"{BASE_URL}/mother", secret_token=MOTHER_SECRET,
-           allowed_updates=["message", "pre_checkout_query"])
+           allowed_updates=["message", "pre_checkout_query", "callback_query"])
     tg(MOTHER_TOKEN, "setChatMenuButton",
        menu_button={"type": "web_app", "text": "ساخت ربات", "web_app": {"url": BASE_URL}})
     tg(MOTHER_TOKEN, "setMyCommands", commands=[
