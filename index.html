@@ -495,6 +495,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .hn i{font-style:normal;font-size:11px;padding:4px 10px;border-radius:99px;background:var(--acs);color:var(--ac)}
 .hn i.t{background:var(--toks);color:var(--tok)}
 .inv-end{margin-top:22px}
+.pf .lvp{margin:0;display:inline-block;vertical-align:middle}
 .mp{padding:13px;border-radius:14px;gap:11px}
 .mph .ib{width:30px;height:30px;border-radius:9px}
 .mph .ib svg{width:16px;height:16px}
@@ -1196,7 +1197,7 @@ function renderAccount(){
   const body = ({wallet: tabWallet, invite: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
     <div class="pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
-      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span></div>${S.lv ? `<div><span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span></div>` : ""}</div></div>
+      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span>${S.lv ? ` · <span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span>` : ""}</div></div></div>
     ${tabsHTML(tabs, S.atab, "atab")}
     ${body}`;
   if(S.atab === "history") loadLedger();
@@ -1828,18 +1829,27 @@ IC.check = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 2.6);
 S._bw = {};
 /* نوارها و حلقه‌ی پیشرفت: از مقدار قبلی تا مقدار تازه با انیمیشن پر می‌شن (مرحله یا سطح عوض شد، از صفر) */
 function animBars(){
+  const rm = reduced(), D = 900;
   document.querySelectorAll("[data-p]").forEach(el => {
     const k = el.dataset.k, p = +el.dataset.p, st = el.dataset.s || "", prev = S._bw[k];
-    const from = prev && prev.s === st ? prev.p : 0;
-    const set = v => { if(el.tagName === "circle") el.style.strokeDashoffset = 138.2 * (1 - v / 100); else el.style.width = v + "%"; };
-    el.style.transition = "none"; set(from); void el.getBoundingClientRect(); el.style.transition = "";
-    requestAnimationFrame(() => requestAnimationFrame(() => set(p)));
-    S._bw[k] = {p, s: st};
+    const cv = document.querySelector(`[data-cv][data-k="${k}"]`), v = cv ? +cv.dataset.cv : 0;
+    const same = prev && prev.s === st, p0 = same ? prev.p : 0, v0 = same ? prev.v : 0;
+    S._bw[k] = {p, v, s: st};
+    const set = q => { if(el.tagName === "circle") el.style.strokeDashoffset = 138.2 * (1 - q / 100); else el.style.width = q + "%"; };
+    const put = (q, c) => { set(q); if(cv) cv.textContent = fa(Math.round(c)); };
+    el.style.transition = "none";
+    if(rm || (p0 === p && v0 === v)){ put(p, v); return; }
+    put(p0, v0);
+    const t0 = performance.now();
+    const step = t => { const x = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - x, 3); put(p0 + (p - p0) * e, v0 + (v - v0) * e); if(x < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
   });
 }
+const ADV = "قابلیت‌های پیشرفته +";
+const perksFor = (n, arr) => n >= 4 ? [ADV] : arr;
 function lvCard(){
   const l = S.lv; if(!l) return "";
-  const chips = l.to ? [...l.next_perks, ...(l.next_tokens ? [`+${l.next_tokens} توکن هدیه`] : [])] : [];
+  const chips = l.to ? [...perksFor(l.level + 1, l.next_perks), ...(l.next_tokens ? [`+${l.next_tokens} توکن هدیه`] : [])] : [];
   return `<div class="hero"><div class="rg"><svg viewBox="0 0 52 52"><circle class="tr" cx="26" cy="26" r="22"/><circle class="pg" cx="26" cy="26" r="22" data-k="lv" data-s="${l.level}" data-p="${lvPct(l)}"/></svg><b>${N(l.level)}</b></div>
     <div class="hi"><small>سطح شما</small><h2>${esc(l.title)}</h2><span class="muted">${N(fa(l.xp))} XP${l.to ? ` · ${N(fa(l.to - l.xp))} XP تا «${esc(l.next_title)}»` : " · بالاترین سطح"}</span></div>
     <button class="b o sm" data-a="lvinfo">مزایا</button>
@@ -1851,7 +1861,7 @@ function richCard(t){
   const pct = s ? Math.round(Math.min(s.value, s.goal) / s.goal * 100) : 100;
   const body = !s ? "" : `<div class="mc"><div class="mn"><b>مرحله‌ی ${N(cur + 1)}: ${esc(s.label)}</b><span>${digitsHTML(s.hint)}</span></div>
     <div class="bar"><i data-k="${t.id}" data-s="${cur}" data-p="${pct}"></i></div>
-    <div class="qr"><span class="qg">${N(fa(s.value))} از ${N(fa(s.goal))}</span><span class="qrw"><span class="xbd t">${N("+" + s.tokens)} توکن</span><span class="xbd">${N("+" + s.xp)} XP</span></span>
+    <div class="qr"><span class="qg"><span class="n" data-cv="${s.value}" data-k="${t.id}">${fa(s.value)}</span> از ${N(fa(s.goal))}</span><span class="qrw"><span class="xbd t">${N("+" + s.tokens)} توکن</span><span class="xbd">${N("+" + s.xp)} XP</span></span>
     ${s.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div></div>`;
   return `<div class="mp"><div class="mph"><span class="ib">${IC[t.icon] || IC.spark}</span><div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها را گرفتی" : esc(t.desc)}</span></div>
     <span class="mpc">${N(t.stage)}/${N(t.total)}</span></div><ol class="rail">${rail}</ol>${body}</div>`;
@@ -1861,7 +1871,7 @@ function taskCard(t){
   const v = Math.min(t.value, t.goal), pct = Math.round(v / t.goal * 100);
   const dots = Array.from({length: t.total}, (_, i) => `<i class="${i < t.stage ? "on" : ""}"></i>`).join("");
   const body = t.done ? "" : `<div class="bar"><i data-k="${t.id}" data-s="${t.stage}" data-p="${pct}"></i></div>
-    <div class="qr"><span class="qg">${N(fa(v))} از ${N(fa(t.goal))}</span>
+    <div class="qr"><span class="qg"><span class="n" data-cv="${v}" data-k="${t.id}">${fa(v)}</span> از ${N(fa(t.goal))}</span>
       <span class="qrw">${t.tokens ? `<span class="xbd t">${N("+" + t.tokens)} توکن</span>` : ""}<span class="xbd">${N("+" + t.xp)} XP</span></span>
       ${t.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div>`;
   return `<div class="q${t.ready ? " ready" : ""}${t.done ? " fin" : ""}"><div class="qt"><span class="ib">${IC[t.icon] || IC.spark}</span>
@@ -1876,7 +1886,7 @@ function lvSheet(){
   const l = S.lv; if(!l) return;
   const rows = (S.cfg.levels || []).map(x => {
     const cls = x.n < l.level ? "d" : x.n === l.level ? "c" : "k";
-    const chips = [...(x.tokens ? [`<i class="t">${N("+" + x.tokens)} توکن هدیه</i>`] : []), ...x.perks.map(p => `<i>${digitsHTML(p)}</i>`)].join("");
+    const chips = [...(x.tokens ? [`<i class="t">${N("+" + x.tokens)} توکن هدیه</i>`] : []), ...perksFor(x.n, x.perks).map(p => `<i>${digitsHTML(p)}</i>`)].join("");
     return `<li class="${cls}"><span class="nd">${x.n < l.level ? IC.check : N(x.n)}</span><div class="bd"><b>${esc(x.title)}</b><small>${N(fa(x.xp))} XP${x.n === l.level ? " · سطح فعلی" : ""}</small>
       ${chips ? `<div class="chs">${chips}</div>` : ""}</div></li>`;
   }).join("");
@@ -1888,7 +1898,7 @@ function levelUp(up){
   celebrate(); haptic("ok"); S.sheet = {kind: "info"};
   showSheet(head("ارتقای سطح") + `<div class="lvup"><div class="lvb big">${N(up.to)}</div><h2>${esc(up.title)}</h2>
     ${up.tokens ? `<p class="muted">${N("+" + up.tokens)} توکن هدیه به حسابت اضافه شد</p>` : ""}
-    ${up.perks.length ? `<ul>${up.perks.map(p => `<li>${digitsHTML(p)}</li>`).join("")}</ul>` : ""}
+    ${perksFor(up.to, up.perks).length ? `<ul>${perksFor(up.to, up.perks).map(p => `<li>${digitsHTML(p)}</li>`).join("")}</ul>` : ""}
     <button class="b" data-x="close">عالیه</button></div>`);
 }
 
