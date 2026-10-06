@@ -533,7 +533,8 @@ def task_steps(t):
             metric, key, label, hint = st[3], st[4], st[5], st[6]
         else:
             metric, key = t["metric"], f"{t['id']}:{g}"
-            label, hint = t["names"][len(out)], t["text"].format(n=f"{g:,}")
+            hint = t["text"].format(n=f"{g:,}")
+            label = t["names"][len(out)] if t.get("names") else hint
         out.append({"goal": g, "tokens": tk, "xp": x, "metric": metric, "key": key, "label": label, "hint": hint})
     return out
 
