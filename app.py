@@ -9,7 +9,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
 مینی‌اپ
   ساخت و ارتقای ربات با هوش مصنوعی (کانفیگ JSON)، قالب‌های آماده، ویرایش دستی کامل، تست زنده،
   بررسی مسیرها، خروجی JSON، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
-  پاسخ فرم‌ها، اکسپلور (ویترین عمومی + لایک + گزارش)، کیف توکن (روزانه، دعوت، کوپن، خرید با ستاره)،
+  پاسخ فرم‌ها، ماموریت‌ها و سطح (XP، پاداش و مزایا)، کیف توکن (روزانه، دعوت، کوپن، خرید با ستاره)،
   پنل ادمین (کاربران آنلاین، شارژ، کوپن، اعلان همگانی، آمار سیستم)
 موتور ثابت و امن (send_node / run_actions)
   متغیر، شرط، اکشن، فرم‌های اعتبارسنجی‌شده، گفتگوی هوشمند با حافظه، دعوت و پاداش، عضویت اجباری،
@@ -111,10 +111,9 @@ MEDIA_MAX_MB   = _int("MEDIA_MAX_MB", 15)       # سقف حجم هر فایل
 MEDIA_QUOTA_MB = _int("MEDIA_QUOTA_MB", 60)     # سقف کل فایل‌های هر کاربر
 MAX_MEDIA      = _int("MAX_MEDIA", 60)          # سقف تعداد فایل هر کاربر
 
-# اکسپلور
-XP_DESC_MAX    = 90         # حداکثر طول توضیح روی کارت
-XP_REPORT_HIDE = 6          # با این تعداد گزارش (کاربر متفاوت) ربات خودکار پنهان می‌شه تا ادمین بررسی کنه
-XP_PAGE        = 20
+# سطح و ماموریت‌ها (جدول سطح‌ها و ماموریت‌ها پایین‌تر، بخش «سطح و ماموریت‌ها»)
+DAILY_XP     = 2            # XP هر بار دریافت جایزه‌ی روزانه
+MAX_DISCOUNT = 30           # سقف کاهش نرخ مصرف توکن از راه سطح (درصد)
 
 MAX_PROMPT   = 4000
 MAX_VERSIONS = 6
@@ -160,7 +159,6 @@ _index(db.ledger, "uid")
 _index(db.jobs, "uid")
 _index(db.jobs, "t", expireAfterSeconds=86400)
 _index(db.relay, "t", expireAfterSeconds=30 * 86400)
-_index(db.xp_views, "t", expireAfterSeconds=3 * 86400)    # رویداد بازدیدِ روزانه بعد از ۳ روز پاک می‌شه
 _index(db.nvis, "bot")
 _index(db.tickets, "bot")
 _index(db.tickets, [("bot", 1), ("uid", 1)])
@@ -169,6 +167,13 @@ _index(db.uvars, "bot")
 _index(db.payments, "charge", unique=True, sparse=True)
 _index(db.payments, "bot")
 _index(db.blocked, "bot")
+try:
+    db.bots.update_many({"xp_on": {"$exists": True}}, {"$unset": {k: "" for k in (
+        "xp_on", "xp_desc", "xp_v", "xp_l", "xp_s", "xp_since", "xp_hasav", "xp_avts", "xp_av", "xp_avct", "xp_hidden", "xp_rep")}})
+    for _old in ("xp_ev", "xp_views"):
+        db.drop_collection(_old)
+except Exception:
+    log.warning("legacy cleanup skipped")
 
 fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest()))
 MOTHER_SECRET = hashlib.sha256(("mother" + SECRET_KEY).encode()).hexdigest()[:32]
@@ -287,9 +292,6 @@ def public(b):
         "username": b.get("username"), "config": b.get("config"),
         "versions": len(b.get("versions", [])), "updated": aware(b["updated"]).isoformat(),
         "thinking": b.get("thinking", ""),
-        "explore": {"on": bool(b.get("xp_on")) and not b.get("xp_hidden"), "hidden": bool(b.get("xp_hidden")),
-                    "desc": b.get("xp_desc", ""), "v": max(0, b.get("xp_v", 0)), "l": max(0, b.get("xp_l", 0)),
-                    "s": max(0, b.get("xp_s", 0)), "av": b.get("xp_avts", 0) if b.get("xp_hasav") else 0},
     }
 
 
@@ -426,17 +428,17 @@ def est_tokens(s):
     return max(1, len(str(s)) // 3)
 
 
-def calc_cost(p, c, minimum=None):
+def calc_cost(p, c, minimum=None, uid=None):
     m = TOKEN_MIN_COST if minimum is None else minimum
-    return max(m, math.ceil((p * TOKEN_IN_RATE + c * TOKEN_OUT_RATE) / 1000))
+    return cut(uid, max(m, math.ceil((p * TOKEN_IN_RATE + c * TOKEN_OUT_RATE) / 1000)))
 
 
-def reserve_cost(prompt, current):
+def reserve_cost(prompt, current, uid=None):
     """مبلغی که قبل از شروع کار رزرو می‌شه؛ هزینه‌ی نهایی از این بیشتر نمی‌شه"""
     if BILLING == "fixed":
-        return EDIT_COST if current else GEN_COST
+        return cut(uid, EDIT_COST if current else GEN_COST)
     p = est_tokens(SYSTEM_PROMPT) + est_tokens(prompt) + (est_tokens(json.dumps(current, ensure_ascii=False)) if current else 0) + 600
-    return calc_cost(p * 2, min(AI_MAX_TOKENS, 5000))      # ×۲ چون ممکنه یک بار دوباره‌کاری بشه
+    return calc_cost(p * 2, min(AI_MAX_TOKENS, 5000), uid=uid)      # ×۲ چون ممکنه یک بار دوباره‌کاری بشه
 
 
 def typical_cost():
@@ -447,15 +449,15 @@ def claim_daily(uid):
     d, _ = ensure_user(uid)
     today, yest = tehran_day(), tehran_day(1)
     streak = d.get("streak", 0) + 1 if d.get("last_claim") == yest else 1
-    reward = DAILY_BONUS + min(streak - 1, 4)
+    reward = DAILY_BONUS + min(streak - 1, 4) + perks_at(lvl_of(int(d.get("xp", 0))))["daily"]
     r = db.users.find_one_and_update(
         {"_id": uid, "last_claim": {"$ne": today}},
-        {"$set": {"last_claim": today, "streak": streak}, "$inc": {"tokens": reward}},
+        {"$set": {"last_claim": today, "streak": streak}, "$inc": {"tokens": reward}, "$max": {"best_streak": streak}},
         return_document=ReturnDocument.AFTER)
     if not r:
         return None
     log_ledger(uid, reward, "daily")
-    return reward, streak
+    return reward, streak, add_xp(uid, DAILY_XP)
 
 
 def wallet_info(uid):
@@ -463,7 +465,7 @@ def wallet_info(uid):
     last = d.get("last_claim")
     streak = d.get("streak", 0) if last in (tehran_day(), tehran_day(1)) else 0
     return {"tokens": int(d.get("tokens", 0)), "streak": streak, "can_claim": last != tehran_day(),
-            "next_reward": DAILY_BONUS + min(streak, 4), "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
+            "next_reward": DAILY_BONUS + min(streak, 4) + perks_at(lvl_of(int(d.get("xp", 0))))["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
 
 
 def redeem(uid, code):
@@ -480,6 +482,198 @@ def redeem(uid, code):
         return 0, "این کد قبلاً استفاده شده یا ظرفیتش تموم شده"
     credit(uid, c["tokens"], "coupon", key=f"coupon:{code}:{uid}")
     return int(c["tokens"]), ""
+
+
+# ───────────────────────── سطح و ماموریت‌ها ─────────────────────────
+# هر سطح: XP لازم، عنوان، توکنِ هدیه‌ی رسیدن به سطح و مزایای ماندگار (مزایای سطح‌ها روی هم جمع می‌شن)
+#   bots = + سقف ساخت ربات      disc = ٪ کاهش نرخ مصرف توکن   daily = + جایزه‌ی روزانه
+#   mb / files = + فضا و تعداد رسانه   ver = + نسخه‌ی قابل بازگشت   bc = + سقف گیرنده‌ی پیام همگانی
+#   free_enhance = «کامل‌ترش کن» رایگان
+LEVELS = [
+    {"xp": 0,    "title": "تازه‌کار",  "tokens": 0,  "perks": {}},
+    {"xp": 50,   "title": "کاوشگر",    "tokens": 10, "perks": {"bots": 2}},
+    {"xp": 130,  "title": "سازنده",    "tokens": 15, "perks": {"disc": 5}},
+    {"xp": 250,  "title": "حرفه‌ای",    "tokens": 20, "perks": {"mb": 40, "files": 20}},
+    {"xp": 430,  "title": "ماهر",      "tokens": 30, "perks": {"bots": 3, "daily": 2}},
+    {"xp": 680,  "title": "استاد",     "tokens": 40, "perks": {"disc": 5, "ver": 4}},
+    {"xp": 1000, "title": "نخبه",      "tokens": 50, "perks": {"bc": 5000, "free_enhance": True}},
+    {"xp": 1400, "title": "افسانه‌ای",  "tokens": 80, "perks": {"bots": 5, "disc": 10, "daily": 3}},
+]
+
+# ماموریت‌ها به‌صورت زنجیره‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
+TASKS = [
+    {"id": "bots",     "icon": "bot",    "title": "ربات‌ساز",        "metric": "bots",     "text": "ساخت {n} ربات",
+     "steps": [(1, 5, 20), (3, 10, 40), (5, 20, 70)]},
+    {"id": "live",     "icon": "open",   "title": "راه‌اندازی",       "metric": "live",     "text": "فعال کردن {n} ربات",
+     "steps": [(1, 10, 30), (3, 20, 60)]},
+    {"id": "audience", "icon": "users",  "title": "رشد مخاطب",       "metric": "audience", "text": "رسیدن مجموع کاربران ربات‌هات به {n} نفر",
+     "steps": [(10, 10, 30), (50, 20, 60), (100, 40, 100), (500, 80, 200), (1000, 150, 350)]},
+    {"id": "edits",    "icon": "spark",  "title": "ارتقا با هوش مصنوعی", "metric": "edits",  "text": "ارتقای ربات با هوش مصنوعی {n} بار",
+     "steps": [(1, 5, 20), (5, 15, 50), (15, 30, 100)]},
+    {"id": "bc",       "icon": "mega",   "title": "پیام همگانی",      "metric": "bc",       "text": "ارسال {n} پیام همگانی",
+     "steps": [(1, 5, 20), (5, 15, 50)]},
+    {"id": "media",    "icon": "photo",  "title": "کتابخانه‌ی رسانه",  "metric": "media",    "text": "آپلود {n} فایل در کتابخانه",
+     "steps": [(1, 3, 15), (5, 8, 30)]},
+    {"id": "streak",   "icon": "flame",  "title": "پیوستگی",         "metric": "streak",   "text": "{n} روز پشت‌سرهم دریافت جایزه‌ی روزانه",
+     "steps": [(3, 5, 20), (7, 15, 50), (30, 60, 150)]},
+    {"id": "refs",     "icon": "medal",  "title": "ناوگان",          "metric": "refs",     "text": "دعوت موفق {n} دوست",
+     "steps": [(1, 5, 30), (5, 15, 80), (15, 40, 150)]},
+]
+
+
+def lvl_of(xp):
+    n = 1
+    for i, L in enumerate(LEVELS, 1):
+        if xp >= L["xp"]:
+            n = i
+    return n
+
+
+def perks_at(level):
+    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0, "free_enhance": False}
+    for L in LEVELS[:level]:
+        for k, v in L["perks"].items():
+            p[k] = (p[k] or v) if isinstance(v, bool) else p[k] + v
+    p["disc"] = min(p["disc"], MAX_DISCOUNT)
+    return p
+
+
+def perks_of(uid):
+    if uid is None:
+        return perks_at(1)
+    d = db.users.find_one({"_id": uid}, {"xp": 1}) or {}
+    return perks_at(lvl_of(int(d.get("xp", 0))))
+
+
+def perk_texts(p):
+    out = []
+    if p.get("bots"):
+        out.append(f"سقف ساخت ربات +{p['bots']}")
+    if p.get("disc"):
+        out.append(f"{p['disc']}٪ کاهش نرخ مصرف توکن")
+    if p.get("daily"):
+        out.append(f"جایزه‌ی روزانه +{p['daily']} توکن")
+    if p.get("mb"):
+        out.append(f"فضای رسانه +{p['mb']} مگابایت و +{p.get('files', 0)} فایل")
+    if p.get("ver"):
+        out.append(f"+{p['ver']} نسخه‌ی قابل بازگشت برای هر ربات")
+    if p.get("bc"):
+        out.append(f"سقف پیام همگانی +{p['bc']} نفر")
+    if p.get("free_enhance"):
+        out.append("«کامل‌ترش کن» رایگان")
+    return out
+
+
+def max_bots(uid):
+    return MAX_BOTS + perks_of(uid)["bots"]
+
+
+def cut(uid, n):
+    """نرخ مصرف توکن بعد از تخفیف سطح (هزینه‌ی ۱ توکنی دست نمی‌خوره)"""
+    pct = perks_of(uid)["disc"] if uid is not None else 0
+    return n if pct <= 0 or n <= 1 else max(1, int(n * (100 - pct) / 100 + 0.5))
+
+
+def ai_per(uid):
+    """حالت fixed: هر چند پیام هوشمند = ۱ توکن (با تخفیف سطح بیشتر می‌شه)"""
+    return max(1, round(AI_MSGS_PER_TOKEN * 100 / (100 - perks_of(uid)["disc"])))
+
+
+def add_xp(uid, n):
+    """XP اضافه می‌کنه و پاداش توکنِ هر سطحِ تازه رو (فقط یک بار) می‌ده؛ خروجی: (سطح قبلی، سطح جدید)"""
+    n = int(n)
+    if n <= 0:
+        return None
+    d = db.users.find_one_and_update({"_id": uid}, {"$inc": {"xp": n}}, return_document=ReturnDocument.BEFORE)
+    if not d:
+        return None
+    old = lvl_of(int(d.get("xp", 0)))
+    new = lvl_of(int(d.get("xp", 0)) + n)
+    for lv in range(old + 1, new + 1):
+        if LEVELS[lv - 1]["tokens"]:
+            credit(uid, LEVELS[lv - 1]["tokens"], "levelup", key=f"lv:{uid}:{lv}")
+    return old, new
+
+
+def up_dict(up):
+    if not up or up[1] <= up[0]:
+        return None
+    return {"from": up[0], "to": up[1], "title": LEVELS[up[1] - 1]["title"],
+            "tokens": sum(LEVELS[i - 1]["tokens"] for i in range(up[0] + 1, up[1] + 1)),
+            "perks": [t for i in range(up[0] + 1, up[1] + 1) for t in perk_texts(LEVELS[i - 1]["perks"])]}
+
+
+def lv_info(uid):
+    d = db.users.find_one({"_id": uid}, {"xp": 1}) or {}
+    xp = int(d.get("xp", 0))
+    n = lvl_of(xp)
+    nxt = LEVELS[n] if n < len(LEVELS) else None
+    return {"xp": xp, "level": n, "title": LEVELS[n - 1]["title"], "from": LEVELS[n - 1]["xp"],
+            "to": nxt["xp"] if nxt else None, "next_title": nxt["title"] if nxt else None,
+            "next_perks": perk_texts(nxt["perks"]) if nxt else [], "next_tokens": nxt["tokens"] if nxt else 0}
+
+
+def levels_public():
+    return [{"n": i, "xp": L["xp"], "title": L["title"], "tokens": L["tokens"], "perks": perk_texts(L["perks"])}
+            for i, L in enumerate(LEVELS, 1)]
+
+
+def task_metrics(uid, d):
+    bots = list(db.bots.find({"owner": uid}, {"active": 1}))
+    ids = [str(b["_id"]) for b in bots]
+    return {
+        "bots": len(bots),
+        "live": sum(1 for b in bots if b.get("active")),
+        "audience": db.subs.count_documents({"bot": {"$in": ids}, "blocked": {"$ne": True}, "chat": {"$ne": uid}}) if ids else 0,
+        "edits": db.ledger.count_documents({"uid": uid, "why": "edit"}),
+        "bc": db.ledger.count_documents({"uid": uid, "why": "broadcast"}),
+        "media": db.media.count_documents({"owner": uid}),
+        "streak": max(int(d.get("best_streak", 0)), int(d.get("streak", 0))),
+        "refs": int(d.get("refs", 0)),
+    }
+
+
+def tasks_state(uid):
+    d = db.users.find_one({"_id": uid}) or {}
+    done = set(d.get("tasks_done", []))
+    m = task_metrics(uid, d)
+    items = []
+    for t in TASKS:
+        steps = [{"goal": g, "tokens": tk, "xp": x, "done": f"{t['id']}:{g}" in done} for g, tk, x in t["steps"]]
+        nxt = next((s for s in steps if not s["done"]), None)
+        cur = nxt or steps[-1]
+        v = m[t["metric"]]
+        items.append({"id": t["id"], "icon": t["icon"], "title": t["title"], "text": t["text"].format(n=cur["goal"]),
+                      "value": v, "goal": cur["goal"], "tokens": cur["tokens"], "xp": cur["xp"],
+                      "stage": sum(1 for s in steps if s["done"]), "total": len(steps),
+                      "done": nxt is None, "ready": nxt is not None and v >= cur["goal"]})
+    return items
+
+
+@app.post("/api/tasks/<tid>/claim")
+@authed
+def api_task_claim(uid, tid):
+    t = next((x for x in TASKS if x["id"] == tid), None)
+    if not t:
+        return jsonify(error="ماموریت پیدا نشد"), 404
+    if not rate_ok(f"task:{uid}", 20, 60):
+        return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
+    d, _ = ensure_user(uid)
+    done = set(d.get("tasks_done", []))
+    step = next(((g, tk, x) for g, tk, x in t["steps"] if f"{tid}:{g}" not in done), None)
+    if not step:
+        return jsonify(error="همه‌ی مرحله‌های این ماموریت کامل شده"), 400
+    g, tk, x = step
+    if task_metrics(uid, d)[t["metric"]] < g:
+        return jsonify(error="هنوز به هدف این مرحله نرسیدی"), 400
+    sid = f"{tid}:{g}"
+    if db.users.update_one({"_id": uid, "tasks_done": {"$ne": sid}}, {"$push": {"tasks_done": sid}}).modified_count != 1:
+        return jsonify(error="این پاداش قبلاً دریافت شده"), 400
+    if tk:
+        credit(uid, tk, "task", key=f"task:{uid}:{sid}")
+    up = add_xp(uid, x)
+    return jsonify(gain={"tokens": tk, "xp": x}, up=up_dict(up), tasks=tasks_state(uid), lv=lv_info(uid),
+                   wallet=wallet_info(uid), cfg=client_cfg(uid))
 
 
 def mother_link(uid):
@@ -523,7 +717,7 @@ def ai_tick(owner):
     d = db.users.find_one_and_update({"_id": owner}, {"$inc": {"ai_n": 1}}, return_document=ReturnDocument.AFTER)
     if not d:
         return False
-    if (int(d.get("ai_n", 1)) - 1) % AI_MSGS_PER_TOKEN == 0 and not charge_up_to(owner, 1, "ai_chat", daily_key=True):
+    if (int(d.get("ai_n", 1)) - 1) % ai_per(owner) == 0 and not charge_up_to(owner, 1, "ai_chat", daily_key=True):
         db.users.update_one({"_id": owner}, {"$inc": {"ai_n": -1}})
         return False
     return True
@@ -1756,7 +1950,7 @@ def media_used(uid):
     return sum(int(m.get("size", 0)) for m in db.media.find({"owner": uid}, {"size": 1}))
 
 
-def template_cost(t):
+def template_cost(t, uid=None):
     """هزینه‌ی قالب آماده، هم‌جهت با ساخت و ارتقا: ضریبی از «مقدار کار» و «حجم پرامپت/کانفیگ».
     کار = تعداد بخش‌ها + فرم، تیکت، منطق/شرط و گفتگوی هوشمند؛ حجم = توکنِ خروجیِ همین کانفیگ با نرخ خروجی مدل.
     هزینه همیشه کمی بیشتر از قبل و کمتر از ساخت با هوش مصنوعی می‌مونه."""
@@ -1776,16 +1970,18 @@ def template_cost(t):
     size = est_tokens(json.dumps(t["config"], ensure_ascii=False)) * TOKEN_OUT_RATE / 1000
     cost = max(TEMPLATE_MIN_COST, math.ceil((work * TEMPLATE_UNIT_COST + size) * TEMPLATE_FACTOR))
     cap = TEMPLATE_MAX_COST or max(TEMPLATE_MIN_COST, math.floor(typical_cost() * 0.8))
-    return min(cost, cap)
+    return cut(uid, min(cost, cap))
 
 
-def client_cfg():
-    return {"billing": BILLING, "gen": GEN_COST, "edit": EDIT_COST, "typical": typical_cost(), "min": TOKEN_MIN_COST,
-            "ai_per": AI_MSGS_PER_TOKEN, "bc_per": BROADCAST_PER_TOKEN, "enhance": ENHANCE_COST,
-            "max_bots": MAX_BOTS, "max_nodes": MAX_NODES, "max_prompt": MAX_PROMPT, "daily": DAILY_BONUS,
+def client_cfg(uid=None):
+    pk = perks_of(uid)
+    return {"billing": BILLING, "gen": cut(uid, GEN_COST), "edit": cut(uid, EDIT_COST), "typical": cut(uid, typical_cost()), "min": cut(uid, TOKEN_MIN_COST),
+            "ai_per": ai_per(uid) if uid is not None else AI_MSGS_PER_TOKEN, "bc_per": BROADCAST_PER_TOKEN,
+            "enhance": 0 if pk["free_enhance"] else ENHANCE_COST,
+            "max_bots": MAX_BOTS + pk["bots"], "max_nodes": MAX_NODES, "max_prompt": MAX_PROMPT, "daily": DAILY_BONUS + pk["daily"],
             "ref_inviter": REF_INVITER, "ref_invitee": REF_INVITEE, "ref_max": REF_MAX_PER_USER, "ref_on": REF_ON,
-            "milestones": REF_MILESTONES, "media_max_mb": MEDIA_MAX_MB, "media_quota_mb": MEDIA_QUOTA_MB,
-            "max_media": MAX_MEDIA, "xp_desc": XP_DESC_MAX}
+            "milestones": REF_MILESTONES, "media_max_mb": MEDIA_MAX_MB, "media_quota_mb": MEDIA_QUOTA_MB + pk["mb"],
+            "max_media": MAX_MEDIA + pk["files"], "disc": pk["disc"], "levels": levels_public()}
 
 
 @app.errorhandler(413)
@@ -1825,11 +2021,11 @@ def api_me(uid):
     touch_user(u)
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
     items = media_list(uid)
-    return jsonify(bots=bots, wallet=wallet_info(uid), cfg=client_cfg(), packs=PACKS, media=items,
+    return jsonify(bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, media=items, lv=lv_info(uid), tasks=tasks_state(uid),
                    used=sum(i["size"] for i in items), admin=uid in ADMIN_IDS,
                    ref={"link": mother_link(uid), "count": int(d.get("refs", 0)), "earned": int(d.get("ref_earned", 0))},
                    joined=aware(d.get("created") or now()).isoformat(),
-                   templates=[{"id": k, "icon": t["icon"], "title": t["title"], "desc": t["desc"], "cost": template_cost(t)} for k, t in TEMPLATES.items()])
+                   templates=[{"id": k, "icon": t["icon"], "title": t["title"], "desc": t["desc"], "cost": template_cost(t, uid)} for k, t in TEMPLATES.items()])
 
 
 @app.post("/api/ping")
@@ -1845,7 +2041,7 @@ def api_daily(uid):
     r = claim_daily(uid)
     if not r:
         return jsonify(error="جایزه‌ی امروز رو قبلاً گرفتی، فردا برگرد"), 400
-    return jsonify(reward=r[0], streak=r[1], wallet=wallet_info(uid))
+    return jsonify(reward=r[0], streak=r[1], xp=DAILY_XP, up=up_dict(r[2]), wallet=wallet_info(uid), lv=lv_info(uid), cfg=client_cfg(uid), tasks=tasks_state(uid))
 
 
 @app.get("/api/ledger")
@@ -1919,13 +2115,13 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
     try:
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
         thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
-        cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc)))
+        cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc), uid=uid))
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return                                  # کار منقضی شده و توکن‌ها برگشته؛ نتیجه رو دور می‌ریزیم
         if bot:
             db.bots.update_one({"_id": bot["_id"]}, {
                 "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
-                "$push": {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}},
+                "$push": {"versions": {"$each": [bot["config"]], "$slice": -(MAX_VERSIONS + perks_of(uid)["ver"])}},
                 "$unset": {"last_manual": ""}})
             bot = db.bots.find_one({"_id": bot["_id"]})
             sync_commands(bot, cfg)
@@ -1968,15 +2164,15 @@ def api_generate(uid):
         bot = get_bot(body["bot_id"], uid)
         if not bot:
             return jsonify(error="ربات پیدا نشد"), 404
-    elif db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
-        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
+    elif db.bots.count_documents({"owner": uid}) >= max_bots(uid):
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با بالا رفتن سطح، سقفت بیشتر می‌شه."), 400
     if not rate_ok(f"gen:{uid}", 10, 60):
         return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
     for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}}):
         if age_sec(j["t"]) < JOB_TIMEOUT:
             return jsonify(error="یه کار دیگه‌ات هنوز در حال انجامه، چند لحظه صبر کن"), 409
     ensure_user(uid)
-    reserve = reserve_cost(prompt, bot["config"] if bot else None)
+    reserve = reserve_cost(prompt, bot["config"] if bot else None, uid)
     if not hold(uid, reserve):
         msg = (f"توکن کافی نداری. این کار {reserve} توکن می‌خواد." if BILLING == "fixed"
                else f"توکن کافی نداری. برای این درخواست حداقل {reserve} توکن لازمه (هزینه‌ی واقعی معمولاً کمتره و باقی‌مونده برمی‌گرده).")
@@ -2017,13 +2213,15 @@ def api_enhance(uid):
     if not rate_ok(f"enh:{uid}", 6, 60):
         return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
     ensure_user(uid)
-    if not spend(uid, ENHANCE_COST, "enhance"):
-        return jsonify(error=f"توکن کافی نداری. این کار {ENHANCE_COST} توکن می‌خواد.", need=ENHANCE_COST, wallet=wallet_info(uid)), 402
+    ecost = 0 if perks_of(uid)["free_enhance"] else ENHANCE_COST
+    if ecost and not spend(uid, ecost, "enhance"):
+        return jsonify(error=f"توکن کافی نداری. این کار {ecost} توکن می‌خواد.", need=ecost, wallet=wallet_info(uid)), 402
     try:
         text = enhance_prompt(prompt)
     except Exception:
         log.exception("enhance failed")
-        refund(uid, ENHANCE_COST)
+        if ecost:
+            refund(uid, ecost)
         return jsonify(error="بهینه‌سازی ناموفق بود و توکنت برگشت. دوباره امتحان کن."), 502
     return jsonify(prompt=text, wallet=wallet_info(uid))
 
@@ -2035,9 +2233,9 @@ def api_template_create(uid, tid):
     if not t:
         return jsonify(error="قالب پیدا نشد"), 404
     ensure_user(uid)
-    if db.bots.count_documents({"owner": uid}) >= MAX_BOTS:
-        return jsonify(error=f"حداکثر {MAX_BOTS} ربات می‌تونی داشته باشی"), 400
-    cost = template_cost(t)
+    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با بالا رفتن سطح، سقفت بیشتر می‌شه."), 400
+    cost = template_cost(t, uid)
     cfg = sanitize(t["config"])
     if cost and not spend(uid, cost, "template"):
         return jsonify(error=f"توکن کافی نداری. این قالب {cost} توکن می‌خواهد.", need=cost, wallet=wallet_info(uid)), 402
@@ -2083,7 +2281,7 @@ def api_save_config(uid, bot_id):
         recent = lm and age_sec(lm) < 180
         upd = {"$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now(), "last_manual": now()}}
         if not recent:      # ویرایش‌های پشت‌سرهم یک نسخه‌ی برگشت حساب می‌شن
-            upd["$push"] = {"versions": {"$each": [bot["config"]], "$slice": -MAX_VERSIONS}}
+            upd["$push"] = {"versions": {"$each": [bot["config"]], "$slice": -(MAX_VERSIONS + perks_of(uid)["ver"])}}
         db.bots.update_one({"_id": bot["_id"]}, upd)
         bot = db.bots.find_one({"_id": bot["_id"]})
         sync_commands(bot, cfg)
@@ -2155,7 +2353,7 @@ def api_deactivate(uid, bot_id):
     if bot.get("token_enc"):
         tg(dec(bot["token_enc"]), "deleteWebhook")
     db.bots.update_one({"_id": bot["_id"]}, {
-        "$set": {"active": False, "xp_on": False, "updated": now()}, "$unset": {"token_enc": "", "token_hash": ""}})
+        "$set": {"active": False, "updated": now()}, "$unset": {"token_enc": "", "token_hash": ""}})
     return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
 
 
@@ -2171,9 +2369,8 @@ def api_delete(uid, bot_id):
     db.subs.delete_many({"bot": bot_id})
     db.submissions.delete_many({"bot_id": bot_id})
     db.nvis.delete_many({"bot": bot_id})
-    for col in (db.states, db.rk, db.uvars, db.relay, db.mfid, db.aiuse, db.xp_views):
+    for col in (db.states, db.rk, db.uvars, db.relay, db.mfid, db.aiuse):
         col.delete_many({"_id": {"$regex": f"^{bot_id}:"}})
-    db.xp_ev.delete_many({"_id": {"$regex": f"^[lsr]:{bot_id}:"}})
     return jsonify(ok=True)
 
 
@@ -2260,10 +2457,10 @@ def api_broadcast(uid, bot_id):
         return jsonify(error="متن یا رسانه‌ی پیام رو وارد کن"), 400
     if bot.get("bc_at") and age_sec(bot["bc_at"]) < 1800:
         return jsonify(error="یه پیام همگانی دیگه هنوز در حال ارساله"), 409
-    chats = [s["chat"] for s in db.subs.find({"bot": bot_id, "blocked": {"$ne": True}}, {"chat": 1})][:BROADCAST_MAX]
+    chats = [s["chat"] for s in db.subs.find({"bot": bot_id, "blocked": {"$ne": True}}, {"chat": 1})][:BROADCAST_MAX + perks_of(uid)["bc"]]
     if not chats:
         return jsonify(error="هنوز کاربری نداری که بهش پیام بدی"), 400
-    cost = max(1, math.ceil(len(chats) / BROADCAST_PER_TOKEN))
+    cost = cut(uid, max(1, math.ceil(len(chats) / BROADCAST_PER_TOKEN)))
     if not spend(uid, cost, "broadcast"):
         return jsonify(error=f"توکن کافی نداری. این ارسال {cost} توکن می‌خواد.", need=cost, wallet=wallet_info(uid)), 402
     db.bots.update_one({"_id": bot["_id"]}, {"$set": {"bc_at": now()}})
@@ -2289,9 +2486,10 @@ def api_media_up(uid):
         return jsonify(error=f"حجم فایل بیشتر از {MEDIA_MAX_MB} مگابایت نباید باشه"), 413
     name = re.sub(r"[\\/\x00-\x1f]", "_", unquote(request.headers.get("X-Filename", "file")).strip())[:80] or "file"
     existing = list(db.media.find({"owner": uid}, {"size": 1}))
-    if len(existing) >= MAX_MEDIA:
-        return jsonify(error=f"حداکثر {MAX_MEDIA} فایل می‌تونی داشته باشی"), 400
-    if sum(int(x.get("size", 0)) for x in existing) + len(data) > MEDIA_QUOTA_MB * 1024 * 1024:
+    pk = perks_of(uid)
+    if len(existing) >= MAX_MEDIA + pk["files"]:
+        return jsonify(error=f"حداکثر {MAX_MEDIA + pk['files']} فایل می‌تونی داشته باشی"), 400
+    if sum(int(x.get("size", 0)) for x in existing) + len(data) > (MEDIA_QUOTA_MB + pk["mb"]) * 1024 * 1024:
         return jsonify(error="فضای رسانه‌ات پر شده؛ چند فایل قدیمی رو پاک کن"), 400
     mime = (request.headers.get("Content-Type") or "").split(";")[0].strip().lower()
     mid = ObjectId()
@@ -2343,209 +2541,6 @@ def media_get(mid):
     return resp
 
 
-# ───────────────────────── اکسپلور (ویترین عمومی ربات‌ها) ─────────────────────────
-XP_PROJ = {"name": 1, "username": 1, "owner": 1, "xp_desc": 1, "xp_v": 1, "xp_l": 1, "xp_s": 1, "xp_since": 1, "xp_hasav": 1, "xp_avts": 1}
-_XP_LINK = re.compile(r"(https?://|t\.me/|www\.)\S+|@\w{3,}", re.I)
-
-
-def xp_clean_desc(s):
-    s = re.sub(r"\s+", " ", _XP_LINK.sub("", str(s or ""))).strip()   # توی کارت عمومی لینک و منشن نمی‌ذاریم
-    return s[:XP_DESC_MAX]
-
-
-def xp_default_desc(bot):
-    cfg = bot.get("config") or {}
-    n = (cfg.get("nodes") or {}).get(cfg.get("start"), {})
-    return xp_clean_desc(re.sub(r"\{[^{}]*\}", "", n.get("text", "")))
-
-
-def xp_score(b, t):
-    """الگوریتم «داغ»: تعامل (استارت > لایک > بازدید) × کیفیت (چند درصد بیننده‌ها واکنش دادن)
-    × تازگی (آروم کم می‌شه) + امتیاز شروع برای ربات‌های جدید + کمی تغییر روزانه تا ربات‌های هم‌رتبه جابه‌جا بشن"""
-    v, l, s = max(0, b.get("xp_v", 0)), max(0, b.get("xp_l", 0)), max(0, b.get("xp_s", 0))
-    age = max(0.0, (t - (aware(b.get("xp_since")) or t)).total_seconds() / 86400)
-    eng = 4 * s + 3 * l + v
-    rate = min(1.0, (l + s) / (v + 5))
-    fresh = 1 / (1 + age / 10) ** 0.6
-    boost = 1.2 if age < 3 else 0.0
-    jit = int(hashlib.md5(f"{b['_id']}{t:%Y%j}".encode()).hexdigest()[:4], 16) / 65535 * 0.4
-    return math.log1p(eng) * (0.5 + rate) * (0.4 + 0.6 * fresh) + boost + jit
-
-
-def xp_avatar(bot):
-    """عکس پروفایل خودِ ربات (همونی که توی BotFather گذاشته) → (base64, content-type) یا None"""
-    try:
-        token = dec(bot["token_enc"])
-        r = tg(token, "getUserProfilePhotos", user_id=int(token.split(":")[0]), limit=1)
-        photos = (r.get("result") or {}).get("photos") or []
-        if not photos:
-            return None
-        sizes = photos[0]
-        pick = next((x for x in sizes if x.get("width", 0) >= 160), sizes[-1])
-        path = ((tg(token, "getFile", file_id=pick["file_id"])).get("result") or {}).get("file_path")
-        if not path:
-            return None
-        resp = requests.get(f"https://api.telegram.org/file/bot{token}/{path}", timeout=10)
-        if resp.status_code != 200 or len(resp.content) > 250_000:
-            return None
-        return base64.b64encode(resp.content).decode(), ("image/png" if path.endswith(".png") else "image/jpeg")
-    except Exception:
-        log.exception("xp_avatar failed")
-        return None
-
-
-def xp_listed(bot_id):
-    try:
-        return db.bots.find_one({"_id": ObjectId(bot_id), "xp_on": True, "active": True, "xp_hidden": {"$ne": True}}, XP_PROJ)
-    except (InvalidId, TypeError):
-        return None
-
-
-def xp_count_start(bot, uid):
-    """استارتِ واقعی از اکسپلور (لینک t.me/bot?start=ex)؛ هر نفر فقط یک‌بار حساب می‌شه"""
-    if not bot.get("xp_on") or uid == bot.get("owner"):
-        return
-    try:
-        db.xp_ev.insert_one({"_id": f"s:{bot['_id']}:{uid}", "t": now()})
-    except Exception:
-        return
-    db.bots.update_one({"_id": bot["_id"]}, {"$inc": {"xp_s": 1}})
-
-
-@app.get("/api/explore")
-@authed
-def api_explore(uid):
-    sort = request.args.get("sort", "hot")
-    try:
-        offset = max(0, int(request.args.get("offset", 0)))
-    except ValueError:
-        offset = 0
-    t = now()
-    docs = list(db.bots.find({"xp_on": True, "active": True, "xp_hidden": {"$ne": True}}, XP_PROJ).limit(500))
-    if sort == "new":
-        docs.sort(key=lambda b: aware(b.get("xp_since")) or t, reverse=True)
-    elif sort == "top":
-        docs.sort(key=lambda b: (b.get("xp_l", 0), b.get("xp_v", 0)), reverse=True)
-    else:
-        sort = "hot"
-        docs.sort(key=lambda b: xp_score(b, t), reverse=True)
-    page = docs[offset:offset + XP_PAGE]
-    liked = {e["_id"] for e in db.xp_ev.find({"_id": {"$in": [f"l:{b['_id']}:{uid}" for b in page]}})} if page else set()
-    items = []
-    for i, b in enumerate(page, start=offset):
-        since = aware(b.get("xp_since")) or t
-        items.append({"id": str(b["_id"]), "name": b.get("name", ""), "username": b.get("username"), "desc": b.get("xp_desc", ""),
-                      "v": max(0, b.get("xp_v", 0)), "l": max(0, b.get("xp_l", 0)), "s": max(0, b.get("xp_s", 0)),
-                      "liked": f"l:{b['_id']}:{uid}" in liked, "mine": b["owner"] == uid, "rank": i + 1,
-                      "av": b.get("xp_avts", 0) if b.get("xp_hasav") else 0, "new": (t - since).days < 3})
-    return jsonify(items=items, total=len(docs), sort=sort, more=offset + XP_PAGE < len(docs))
-
-
-@app.post("/api/explore/view")
-@authed
-def api_explore_view(uid):
-    if not rate_ok(f"xv:{uid}", 40, 60):
-        return jsonify(ok=True, counted=0)
-    ids = (request.get_json(silent=True) or {}).get("ids")
-    day, n = f"{now():%Y%m%d}", 0
-    for raw in (ids if isinstance(ids, list) else [])[:20]:
-        try:
-            oid = ObjectId(str(raw))
-        except (InvalidId, TypeError):
-            continue
-        b = db.bots.find_one({"_id": oid, "xp_on": True, "active": True}, {"owner": 1})
-        if not b or b["owner"] == uid:          # بازدید صاحب ربات حساب نمی‌شه
-            continue
-        try:
-            db.xp_views.insert_one({"_id": f"{oid}:{uid}:{day}", "t": now()})   # هر نفر روزی یک بازدید
-        except Exception:
-            continue
-        db.bots.update_one({"_id": oid}, {"$inc": {"xp_v": 1}})
-        n += 1
-    return jsonify(ok=True, counted=n)
-
-
-@app.post("/api/explore/<bot_id>/like")
-@authed
-def api_explore_like(uid, bot_id):
-    if not rate_ok(f"xl:{uid}", 20, 60):
-        return jsonify(error="کمی آروم‌تر"), 429
-    b = xp_listed(bot_id)
-    if not b:
-        return jsonify(error="این ربات دیگه توی اکسپلور نیست"), 404
-    if b["owner"] == uid:
-        return jsonify(error="ربات خودت رو نمی‌تونی لایک کنی"), 400
-    key = f"l:{b['_id']}:{uid}"
-    if db.xp_ev.find_one({"_id": key}):
-        db.xp_ev.delete_one({"_id": key})
-        db.bots.update_one({"_id": b["_id"]}, {"$inc": {"xp_l": -1}})
-        liked = False
-    else:
-        try:
-            db.xp_ev.insert_one({"_id": key, "t": now()})
-        except Exception:
-            return jsonify(error="دوباره امتحان کن"), 409
-        db.bots.update_one({"_id": b["_id"]}, {"$inc": {"xp_l": 1}})
-        liked = True
-    return jsonify(liked=liked, likes=max(0, (db.bots.find_one({"_id": b["_id"]}, {"xp_l": 1}) or {}).get("xp_l", 0)))
-
-
-@app.post("/api/explore/<bot_id>/report")
-@authed
-def api_explore_report(uid, bot_id):
-    if not rate_ok(f"xr:{uid}", 5, 3600):
-        return jsonify(error="کمی بعد دوباره امتحان کن"), 429
-    b = xp_listed(bot_id)
-    if not b or b["owner"] == uid:
-        return jsonify(error="ربات پیدا نشد"), 404
-    try:
-        db.xp_ev.insert_one({"_id": f"r:{b['_id']}:{uid}", "t": now()})
-    except Exception:
-        return jsonify(ok=True)                    # قبلاً گزارش داده
-    db.bots.update_one({"_id": b["_id"]}, {"$inc": {"xp_rep": 1}})
-    if (db.bots.find_one({"_id": b["_id"]}, {"xp_rep": 1}) or {}).get("xp_rep", 0) >= XP_REPORT_HIDE:
-        db.bots.update_one({"_id": b["_id"]}, {"$set": {"xp_hidden": True}})
-    return jsonify(ok=True)
-
-
-@app.post("/api/bots/<bot_id>/explore")
-@authed
-def api_bot_explore(uid, bot_id):
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="ربات پیدا نشد"), 404
-    d = request.get_json(silent=True) or {}
-    on = bool(d.get("on"))
-    if on and (not bot.get("active") or not bot.get("username") or not bot.get("token_enc")):
-        return jsonify(error="اول ربات رو فعال کن"), 400
-    if on and bot.get("xp_hidden"):
-        return jsonify(error="این ربات توسط ادمین از اکسپلور برداشته شده"), 403
-    if not rate_ok(f"xp:{uid}", 12, 3600):
-        return jsonify(error="کمی بعد دوباره امتحان کن"), 429
-    upd = {"xp_on": on, "xp_desc": xp_clean_desc(d.get("desc")) or xp_default_desc(bot)}
-    if on:
-        if not bot.get("xp_since"):
-            upd["xp_since"] = now()                # تاریخ اولین انتشار ثابت می‌مونه (با خاموش/روشن کردن «جدید» نمی‌شه)
-        av = xp_avatar(bot)
-        if av:
-            upd.update(xp_av=av[0], xp_avct=av[1], xp_hasav=True, xp_avts=int(time.time()))
-    db.bots.update_one({"_id": bot["_id"]}, {"$set": upd})
-    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
-
-
-@app.get("/xp/avatar/<bot_id>")
-def xp_avatar_img(bot_id):
-    try:
-        b = db.bots.find_one({"_id": ObjectId(bot_id), "xp_on": True}, {"xp_av": 1, "xp_avct": 1})
-    except (InvalidId, TypeError):
-        return "", 404
-    if not b or not b.get("xp_av"):
-        return "", 404
-    r = Response(base64.b64decode(b["xp_av"]), mimetype=b.get("xp_avct") or "image/jpeg")
-    r.headers["Cache-Control"] = "public, max-age=86400"
-    return r
-
-
 # ───────────────────────── پنل ادمین ─────────────────────────
 @app.get("/api/admin/stats")
 @admin_only
@@ -2553,7 +2548,6 @@ def api_admin_stats(uid):
     users = list(db.users.find({}, {"tokens": 1, "refs": 1, "seen": 1, "created": 1}))
     cut, day = naive() - timedelta(seconds=ONLINE_SECS), naive() - timedelta(days=1)
     return jsonify(users=len(users), bots=db.bots.count_documents({}), active=db.bots.count_documents({"active": True}),
-                   explore=db.bots.count_documents({"xp_on": True, "active": True}),
                    circulation=sum(int(u.get("tokens", 0)) for u in users), referrals=sum(int(u.get("refs", 0)) for u in users),
                    bot_users=db.subs.count_documents({}), forms=db.submissions.count_documents({}),
                    online=sum(1 for u in users if u.get("seen") and naive(u["seen"]) >= cut),
@@ -2615,18 +2609,6 @@ def api_admin_coupon(uid):
     except DuplicateKeyError:
         return jsonify(error="این کد قبلاً ساخته شده"), 400
     return jsonify(code=code)
-
-
-@app.post("/api/admin/explore/<bot_id>")
-@admin_only
-def api_admin_explore(uid, bot_id):
-    try:
-        oid = ObjectId(bot_id)
-    except (InvalidId, TypeError):
-        return jsonify(error="ربات پیدا نشد"), 404
-    hide = bool((request.get_json(silent=True) or {}).get("hide", True))
-    db.bots.update_one({"_id": oid}, {"$set": {"xp_hidden": True}} if hide else {"$set": {"xp_hidden": False, "xp_rep": 0}})
-    return jsonify(ok=True)
 
 
 def run_announce(text, admin):
@@ -3576,7 +3558,7 @@ def ai_precheck(owner):
 def ai_postcharge(owner, bot_id, pt, ct):
     cost = 0
     if BILLING == "usage":
-        cost = charge_up_to(owner, calc_cost(pt, ct, minimum=1), "ai_chat", daily_key=True)
+        cost = charge_up_to(owner, calc_cost(pt, ct, minimum=1, uid=owner), "ai_chat", daily_key=True)
     try:
         db.bots.update_one({"_id": ObjectId(bot_id)}, {"$inc": {"ai_tokens": cost, "ai_msgs": 1}})
     except Exception:
@@ -3796,8 +3778,6 @@ def sub_hook(bot_id):
             parts = text[1:].split(maxsplit=1)
             cmd = parts[0].split("@")[0].lower() if parts else ""
             env.param = parts[1].strip()[:64] if len(parts) > 1 else ""
-        if cmd == "start" and env.param == "ex":
-            xp_count_start(bot, user.get("id"))
         if is_new and cmd == "start" and env.param.startswith("ref_"):
             child_referral(env)
         if not gate_ok(token, cfg, user.get("id", chat_id)):

@@ -428,53 +428,53 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .sub2:first-of-type{border-top:0}
 .sub2 small{display:block;color:var(--mut);font-size:11.5px}
 
-/* ── اکسپلور ── */
-.xhd{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 2px 6px}
-.xhd h1{font-size:28px;line-height:1.35;letter-spacing:-.2px}
-.xlist{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
-.xc{position:relative;display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;background:var(--sf);border:1px solid var(--line);border-radius:18px;cursor:pointer;overflow:hidden}
-.xc:active{background:var(--sf2)}
-.xc.feat{border-color:var(--ac);background:linear-gradient(var(--sf),var(--sf)) padding-box}
-.xt{display:flex;align-items:center;gap:12px;min-width:0}
-.xn{min-width:0;flex:1;line-height:1.55}
-.xn b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xn .un{display:block;direction:ltr;text-align:right;font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xav{position:relative;flex:none;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;overflow:hidden;font-weight:800;font-size:19px;color:#fff;
-  background:linear-gradient(135deg,hsl(var(--h,200) 62% 46%),hsl(calc(var(--h,200) + 36) 62% 36%))}
-.xav img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.xd{font-size:13px;line-height:1.75;color:var(--mut);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.xf{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.xs{display:flex;align-items:center;gap:12px;font-size:11.5px;color:var(--mut)}
-.xs span{display:inline-flex;align-items:center;gap:4px}
-.xs svg{width:14px;height:14px}
-.xa{display:flex;gap:6px;align-items:center}
-.xa .b{min-height:34px}
-.xlike{display:inline-flex;align-items:center;gap:5px;padding:0 11px;min-height:34px;font-size:12.5px;color:var(--mut);border-radius:10px;box-shadow:inset 0 0 0 1px var(--line)}
-.xlike svg{width:15px;height:15px}
-.xlike.on{color:var(--bad);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 45%,transparent);background:color-mix(in srgb,var(--bad) 8%,transparent)}
-.xlike.pop svg{animation:beat .45s cubic-bezier(.3,1.6,.5,1)}
-@keyframes beat{40%{transform:scale(1.5)}}
-.xlike:disabled{opacity:.55}
+/* ── نشان کوچک (قالب‌ها و ماموریت‌ها) ── */
 .xbd{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;line-height:1;padding:5px 8px;border-radius:99px;color:var(--ac);background:var(--acs);flex:none}
 .xbd svg{width:11px;height:11px}
-.xbd.n2{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
-.xbd.m{color:var(--mut);background:var(--sf2)}
-.xc.sk{pointer-events:none}
-.xc.sk i{display:block;height:10px;border-radius:5px;background:linear-gradient(100deg,var(--line) 30%,var(--sf2) 50%,var(--line) 70%);background-size:220% 100%;animation:xsh 1.3s linear infinite}
-.xc.sk .xav{background:var(--line)}
-@keyframes xsh{from{background-position:120% 0}to{background-position:-120% 0}}
-.xbig{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:14px 0;background:var(--line2);border-radius:14px;overflow:hidden}
-.xbig div{background:var(--sf2);padding:10px 6px;text-align:center}
-.xbig b{display:block;font-size:17px}
-.xbig small{font-size:11.5px;color:var(--mut)}
-.xsheet-desc{margin-top:14px;font-size:13.5px;line-height:1.9}
-.xsheet-act{display:flex;gap:8px;margin-top:4px}
-.xsheet-act .b{flex:1}
-.xlinks{display:flex;gap:8px;margin-top:10px}
-.xlinks .b{flex:1}
-.xo .xprev .xc{cursor:default;margin:12px 0}
-.xo textarea{min-height:64px;font-size:13.5px}
-.xcnt{display:flex;justify-content:flex-end;font-size:11px;color:var(--mut);margin:2px 2px 10px}
+.xbd.t{color:var(--tok);background:var(--toks)}
+/* ── سطح و ماموریت‌ها ── */
+.lvc{margin-bottom:12px}
+.lvh{display:flex;align-items:center;gap:12px}
+.lvb{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:21px;font-weight:800;color:var(--acx);background:var(--ac)}
+.lvb.sm{width:34px;height:34px;border-radius:10px;font-size:15px}
+.lvb.big{width:64px;height:64px;border-radius:20px;font-size:30px;margin:6px auto 10px}
+.lvt{flex:1;min-width:0;line-height:1.7}
+.lvt b{display:block;font-size:15px}
+.lvt span{font-size:12px;color:var(--mut)}
+.lvh .b{width:auto}
+.bar{height:7px;border-radius:99px;background:var(--line2);overflow:hidden;margin:12px 0 6px}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--ac);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.lvn{font-size:12px;color:var(--mut);line-height:1.9}
+.lvp{display:inline-block;margin-top:5px;font-size:11.5px;line-height:1;padding:5px 10px;border-radius:99px;color:var(--ac);background:var(--acs);cursor:pointer}
+.qs{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
+.q{display:flex;flex-direction:column;gap:8px;padding:13px 14px;background:var(--sf);border:1px solid var(--line);border-radius:16px}
+.q.ready{border-color:var(--ac)}
+.q.fin{opacity:.6}
+.q .bar{margin:2px 0}
+.q .b{width:auto}
+.qt{display:flex;align-items:center;gap:11px}
+.qt .gt{flex:1;min-width:0;line-height:1.65}
+.qt .gt b{display:block;font-size:14px}
+.qt .gt span{display:block;font-size:12px;color:var(--mut)}
+.qdots{display:flex;gap:4px;flex:none}
+.qdots i{width:14px;height:4px;border-radius:3px;background:var(--line)}
+.qdots i.on{background:var(--ok)}
+.qr{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qg{font-size:11.5px;color:var(--mut);margin-inline-end:auto}
+.qrw{display:flex;gap:6px}
+.qdot{display:inline-block;width:7px;height:7px;margin-inline-start:6px;border-radius:50%;background:var(--tok)}
+.lvl{display:flex;flex-direction:column;gap:8px}
+.lvr{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line)}
+.lvr.cur{box-shadow:inset 0 0 0 1.5px var(--ac);background:var(--acs)}
+.lvr.lock{opacity:.6}
+.lvr .gt{flex:1;min-width:0;line-height:1.7}
+.lvr .gt b{display:block;font-size:14px}
+.lvr small{display:block;font-size:11.5px;color:var(--mut)}
+.lvr ul,.lvup ul{margin:4px 0 0;padding:0;list-style:none}
+.lvr li,.lvup li{position:relative;padding-inline-start:14px;font-size:12.5px;line-height:1.9;color:var(--mut)}
+.lvr li::before,.lvup li::before{content:"";position:absolute;inset-inline-start:0;top:.85em;width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.lvup{text-align:center;padding:4px 0 8px}
+.lvup ul{text-align:start;margin:12px 0 16px}
 
 /* ── مدیریت ── */
 .usum{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13.5px}
@@ -564,7 +564,7 @@ let S = {
   view: "create", btab: "nodes", atab: "wallet",
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, open: new Set(), busy: false, fresh: false,
-  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null
+  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], lv: null
 };
 let D = null;   // پیش‌نویس فرمِ باز
 
@@ -623,7 +623,6 @@ const svg = (p, w = 1.7) => `<svg viewBox="0 0 24 24" fill="none" stroke="curren
 const IC = {
   bot: svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V4.5"/><circle cx="12" cy="3.6" r="1"/><circle cx="9" cy="13.5" r="1.1" fill="currentColor"/><circle cx="15" cy="13.5" r="1.1" fill="currentColor"/><path d="M2.5 12.5v2M21.5 12.5v2"/>'),
   spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" stroke-width="1.3"/>'),
-  compass: svg('<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>'),
   photo: svg('<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.7"/><path d="M4 17l4.5-4.5 3.5 3.5 3-3 5 5"/>'),
   wallet: svg('<rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17"/><circle cx="16.5" cy="14.5" r="1" fill="currentColor"/>'),
   coin: svg('<circle cx="12" cy="12" r="8.5"/><path d="M13 7.5l-3.5 5H14l-3 4.5"/>'),
@@ -640,13 +639,8 @@ const IC = {
   voice: svg('<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>'),
   document: svg('<path d="M7 3.5h7l4 4v13a.5.5 0 0 1-.5.5h-10.5a.5.5 0 0 1-.5-.5v-16.5a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5v4h4M9.5 12.5h5M9.5 16h5"/>'),
   copy: svg('<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/>', 2),
-  heart: svg('<path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>'),
-  heartf: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.6 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/></svg>`,
   play: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>`,
   flame: svg('<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .3 1.2 1 1.8 1.7 2C10.5 8.5 11 5.5 12 3z"/>'),
-  flag: svg('<path d="M6 21V4M6 5h11l-2 4 2 4H6"/>'),
-  refresh: svg('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>'),
-  eye: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/>'),
   trash: svg('<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>'),
   heal: svg('<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>'),
   dl: svg('<path d="M12 4v11M8 11l4 4 4-4M5 19h14"/>'),
@@ -671,7 +665,7 @@ const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="a
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
   referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده"};
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", levelup:"پاداش ارتقای سطح"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -697,7 +691,7 @@ function mediaPicker(key, cur){
 
 /* ═════════ بارگذاری و رندر ═════════ */
 function takeMe(d){
-  Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin });
+  Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null });
 }
 async function load(){
   try{ takeMe(await api("/api/me")); }
@@ -710,7 +704,7 @@ async function load(){
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
 
-const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["explore", "compass", "اکسپلور"], ["media", "photo", "رسانه"], ["account", "wallet", "حساب"]];
+const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["media", "photo", "رسانه"], ["account", "wallet", "حساب"]];
 $("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}" aria-label="${t}" title="${t}">${IC[ic]}</button>`).join("");
 function setDock(on){ $("#dock").classList.toggle("open", on); $("#dscrim").classList.toggle("on", on); }
 document.addEventListener("click", e => {
@@ -971,7 +965,6 @@ function renderBot(){
     if(S.fresh && b.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior: "smooth", block: "nearest"}); }
     S.fresh = false;
   }
-  if(S.btab === "publish" && b.active) bindXo();
   if(S.btab === "stats" && b.active){ if(S.stats?._id === b.id) paintStats(S.stats); loadStats(); }
 }
 function tabNodes(b){
@@ -1019,7 +1012,6 @@ function tabPublish(b){
   return `<div class="panel"><div class="pstat"><span class="dot on"></span><div><b class="ltr">@${esc(b.username)}</b><div class="muted">فعال است و تغییرات فوری اعمال می‌شوند.</div></div></div>
       <div class="two"><button class="b" data-a="openbot">${IC.open}باز کردن</button><button class="b o" data-a="sharebot">${IC.users}اشتراک</button></div>
       <p class="muted mt">برای دریافت پیام کاربرها، یک بار ربات خودت را استارت کن و با Reply جواب بده.</p></div>
-    ${xoHTML(b)}
     <button class="b r mt2" id="off" data-a="off">غیرفعال کردن</button>`;
 }
 function tabMore(b){
@@ -1124,18 +1116,18 @@ function loadLedger(){
 function renderAccount(){
   const u = tg?.initDataUnsafe?.user || {};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const tabs = [["wallet", "توکن"], ["invite", "پاداش +"], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
+  const tabs = [["wallet", "توکن"], ["invite", "پاداش +" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
-  const body = ({wallet: tabWallet, invite: inviteCard, history: tabHistory, admin: adminCard})[S.atab]();
+  const body = ({wallet: tabWallet, invite: () => inviteCard() + questsHTML(), history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
     <div class="pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
-      <div><h1>${esc(name)}</h1>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}</div></div>
+      <div><h1>${esc(name)}</h1>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}${S.lv ? `<div><span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span></div>` : ""}</div></div>
     ${tabsHTML(tabs, S.atab, "atab")}
     ${body}`;
   if(S.atab === "history") loadLedger();
 }
 
-const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount, explore: renderExplore };
+const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount };
 
 /* ═════════════════ اکشن‌های صفحه ═════════════════ */
 const setBot = bot => { S.cur = bot; S.bots = S.bots.map(b => b.id === bot.id ? bot : b); };
@@ -1147,7 +1139,19 @@ const A = {
   back: () => { S.view = "bots"; S.cur = null; S.ideas = []; closeSheet(); render(); scrollTo(0, 0); sync().then(ok => { if(ok && S.view === "bots") render(); }); },
   btab: el => { if(S.busy) return toast("صبر کن کار فعلی تموم شه"); S.btab = el.dataset.k; renderBot(); },
   atab: el => { S.atab = el.dataset.k; renderAccount(); },
-  daily: el => busy(el, async () => { const d = await api("/api/daily", "POST"); S.wallet = d.wallet; if(S.sheet?.kind === "buy") closeSheet(); render(); bumpTokens(); toast(`${d.reward} توکن جایزه گرفتی`); haptic("ok"); }),
+  daily: el => busy(el, async () => {
+    const d = await api("/api/daily", "POST");
+    Object.assign(S, {wallet: d.wallet, lv: d.lv, cfg: d.cfg, tasks: d.tasks});
+    if(S.sheet?.kind === "buy") closeSheet();
+    render(); bumpTokens(); toast(`${d.reward} توکن و ${d.xp} XP جایزه گرفتی`); haptic("ok"); if(d.up) levelUp(d.up);
+  }),
+  claim: el => busy(el, async () => {
+    const d = await api(`/api/tasks/${el.dataset.id}/claim`, "POST");
+    Object.assign(S, {tasks: d.tasks, lv: d.lv, wallet: d.wallet, cfg: d.cfg});
+    render(); bumpTokens(); haptic("ok");
+    if(d.up) levelUp(d.up); else toast(`${d.gain.tokens ? `${d.gain.tokens} توکن و ` : ""}${d.gain.xp} XP دریافت شد`);
+  }),
+  lvinfo: () => lvSheet(),
   undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); S.ideas = []; render(); toast("برگشت داده شد"); }),
   act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن را وارد کن");
     busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/activate`, "POST", {token: t}); setBot(d.bot); render(); toast("ربات فعال شد"); haptic("ok"); }); },
@@ -1742,123 +1746,47 @@ function shAction(a, ds){
   renderSheet();
 }
 
-/* ═════════════════ اکسپلور ═════════════════ */
-const XP = { sort: "hot", items: [], more: false, tok: 0, seen: new Set(), q: [], io: null };
-const hueOf = id => [...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-const kfmt = n => n >= 1e6 ? N((n / 1e6).toFixed(1).replace(/\.0$/, "")) + " م" : n >= 1000 ? N((n / 1000).toFixed(1).replace(/\.0$/, "")) + " هزار" : N(n);
-const xAv = (name, id, av) => `<span class="xav" style="--h:${hueOf(id)}">${esc((name || "?").trim().charAt(0))}${av ? `<img src="${API_BASE}/xp/avatar/${esc(id)}?v=${esc(av)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>`;
-const xStats = it => `<div class="xs"><span title="بازدید">${IC.eye}${kfmt(it.v)}</span><span title="استارت">${IC.play}${kfmt(it.s)}</span></div>`;
-const likeBtn = it => `<button class="xlike${it.liked ? " on" : ""}" data-xp="like" data-id="${esc(it.id)}" aria-pressed="${!!it.liked}" aria-label="لایک"${it.mine ? " disabled" : ""}>${it.liked ? IC.heartf : IC.heart}<span>${kfmt(it.l)}</span></button>`;
-function xCard(it){
-  const feat = XP.sort !== "new" && it.rank === 1, hot = XP.sort === "hot" && it.rank > 1 && it.rank <= 5;
-  const badge = feat ? `<span class="xbd">${IC.flame}${XP.sort === "hot" ? "داغ‌ترین" : "محبوب‌ترین"}</span>` : hot ? `<span class="xbd">${IC.flame}داغ</span>`
-    : it.mine ? `<span class="xbd m">ربات تو</span>` : it.new ? `<span class="xbd n2">جدید</span>` : "";
-  const note = it.mine ? "منتشر شده توسط خودت" : it.username ? `سازنده: @${esc(it.username)}` : "";
-  return `<article class="xc${feat ? " feat" : ""}" data-id="${esc(it.id)}">
-    <div class="xt">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">${note}</span></div>${badge}</div>
-    ${it.desc ? `<p class="xd">${esc(it.desc)}</p>` : ""}
-    <div class="xf">${xStats(it)}<div class="xa">${likeBtn(it)}<button class="b sm" data-xp="start" data-id="${esc(it.id)}">شروع${IC.play}</button></div></div></article>`;
+/* ═════════════════ سطح و ماموریت‌ها ═════════════════ */
+const lvPct = l => l && l.to ? Math.max(0, Math.min(100, Math.round((l.xp - l.from) / (l.to - l.from) * 100))) : 100;
+function lvCard(){
+  const l = S.lv; if(!l) return "";
+  const nx = l.to ? `${N(fa(l.to - l.xp))} XP تا سطح ${N(l.level + 1)} (${esc(l.next_title)}): ${digitsHTML(l.next_perks.join("، "))}${l.next_tokens ? `${l.next_perks.length ? "، " : ""}${N(l.next_tokens)} توکن هدیه` : ""}` : "همه‌ی مزایای سطح‌ها برای تو باز شده است.";
+  return `<div class="panel lvc"><div class="lvh"><div class="lvb">${N(l.level)}</div>
+    <div class="lvt"><b>${esc(l.title)}</b><span>${N(fa(l.xp))} XP${l.to ? ` از ${N(fa(l.to))}` : ""}</span></div>
+    <button class="b o sm" data-a="lvinfo">مزایا</button></div>
+    <div class="bar"><i style="width:${lvPct(l)}%"></i></div><p class="lvn">${nx}</p></div>`;
 }
-const xSkel = () => `<div class="xc sk"><div class="xt"><span class="xav"></span><div class="xn"><i style="width:60%"></i></div></div><i></i><i style="width:55%"></i></div>`;
-function renderExplore(){
-  const tabs = [["hot", "flame", "داغ‌ترین"], ["new", "spark", "جدیدترین"], ["top", "heart", "محبوب‌ترین"]];
-  $("#app").innerHTML = `<div class="xhd"><h1>اکسپلور</h1>
-    <button class="iconb" data-xp="refresh" aria-label="تازه‌سازی">${IC.refresh}</button></div>
-    <div class="tabs" role="tablist">${tabs.map(([k, ic, t]) => `<button class="tab${XP.sort === k ? " on" : ""}" role="tab" aria-selected="${XP.sort === k}" data-xp="sort" data-k="${k}">${IC[ic]}${t}</button>`).join("")}</div>
-    <div class="xlist" id="xgrid"></div><div id="xmore"></div>`;
-  loadExplore(true);
+function taskCard(t){
+  const v = Math.min(t.value, t.goal), pct = Math.round(v / t.goal * 100);
+  const dots = Array.from({length: t.total}, (_, i) => `<i class="${i < t.stage ? "on" : ""}"></i>`).join("");
+  const body = t.done ? "" : `<div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="qr"><span class="qg">${N(fa(v))} از ${N(fa(t.goal))}</span>
+      <span class="qrw">${t.tokens ? `<span class="xbd t">${N("+" + t.tokens)} توکن</span>` : ""}<span class="xbd">${N("+" + t.xp)} XP</span></span>
+      ${t.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div>`;
+  return `<div class="q${t.ready ? " ready" : ""}${t.done ? " fin" : ""}"><div class="qt"><span class="ib">${IC[t.icon] || IC.spark}</span>
+    <div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها کامل شد" : digitsHTML(t.text)}</span></div>${t.total > 1 ? `<div class="qdots">${dots}</div>` : ""}</div>${body}</div>`;
 }
-async function loadExplore(reset){
-  const tok = ++XP.tok, grid = $("#xgrid"); if(!grid) return;
-  if(reset){ XP.items = []; grid.innerHTML = xSkel() + xSkel() + xSkel(); $("#xmore").innerHTML = ""; }
-  try{
-    const d = await api(`/api/explore?sort=${XP.sort}&offset=${XP.items.length}`);
-    if(tok !== XP.tok || S.view !== "explore") return;
-    XP.items = XP.items.concat(d.items); XP.more = d.more;
-    if(reset) grid.innerHTML = "";
-    if(!XP.items.length){ grid.innerHTML = `<div class="empty">${`<div class="ib big">${IC.compass}</div>`}<h2>اکسپلور هنوز خالی است</h2><p class="muted">ربات خودت را فعال کن و از بخش «انتشار» اولین کارت را بساز.</p></div>`; return; }
-    grid.insertAdjacentHTML("beforeend", d.items.map(xCard).join(""));
-    $("#xmore").innerHTML = XP.more ? `<button class="b o" data-xp="more">نمایش بیشتر</button>` : "";
-    xObserve();
-  }catch(e){
-    if(tok !== XP.tok) return;
-    grid.innerHTML = `<div class="empty"><p class="muted">${esc(e.message)}</p><button class="b o sm" data-xp="refresh">دوباره امتحان کن</button></div>`;
-  }
+const readyTasks = () => (S.tasks || []).filter(t => t.ready).length;
+function questsHTML(){
+  const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
+  return `<div class="sec"><h2>ماموریت‌ها و سطح</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div>
+    ${lvCard()}<div class="qs">${list.map(taskCard).join("")}</div>`;
 }
-function xObserve(){
-  XP.io?.disconnect();
-  XP.io = new IntersectionObserver(es => es.forEach(e => {
-    if(!e.isIntersecting) return;
-    XP.io.unobserve(e.target);
-    const id = e.target.dataset.id, it = XP.items.find(x => x.id === id);
-    if(it && !it.mine && !XP.seen.has(id)){ XP.seen.add(id); XP.q.push(id); clearTimeout(XP.t); XP.t = setTimeout(xFlush, 1200); }
-  }), {threshold: .6});
-  document.querySelectorAll("#xgrid .xc[data-id]").forEach(el => XP.io.observe(el));
-}
-function xFlush(){ const ids = XP.q.splice(0, 20); if(ids.length) api("/api/explore/view", "POST", {ids}).catch(() => {}); }
-async function xLike(id){
-  const it = XP.items.find(x => x.id === id); if(!it || it.mine) return;
-  const was = it.liked; it.liked = !was; it.l += was ? -1 : 1; xSyncLike(it, true); haptic();
-  try{ const d = await api(`/api/explore/${id}/like`, "POST"); it.liked = d.liked; it.l = d.likes; }
-  catch(e){ it.liked = was; it.l += was ? 1 : -1; toast(e.message); }
-  xSyncLike(it, false);
-}
-function xSyncLike(it, pop){
-  document.querySelectorAll(`.xlike[data-id="${it.id}"]`).forEach(b => { b.outerHTML = likeBtn(it); });
-  if(pop && it.liked) document.querySelectorAll(`.xlike[data-id="${it.id}"]`).forEach(b => { b.classList.add("pop"); setTimeout(() => b.classList.remove("pop"), 500); });
-}
-function xOpen(id){
-  const it = XP.items.find(x => x.id === id); if(!it) return;
+function lvSheet(){
+  const l = S.lv; if(!l) return;
+  const rows = (S.cfg.levels || []).map(x => `<div class="lvr${x.n === l.level ? " cur" : ""}${x.n > l.level ? " lock" : ""}"><span class="lvb sm">${N(x.n)}</span>
+    <div class="gt"><b>${esc(x.title)}</b><small>${N(fa(x.xp))} XP${x.tokens ? ` · ${N("+" + x.tokens)} توکن هدیه` : ""}</small>
+    ${x.perks.length ? `<ul>${x.perks.map(p => `<li>${digitsHTML(p)}</li>`).join("")}</ul>` : `<small>شروع مسیر</small>`}</div></div>`).join("");
   S.sheet = {kind: "info"};
-  showSheet(head("اکسپلور") + `<div class="xt" style="margin-top:6px">${xAv(it.name, it.id, it.av)}<div class="xn"><b>${esc(it.name)}</b><span class="un">@${esc(it.username)}</span></div></div>
-    ${it.desc ? `<p class="xsheet-desc">${esc(it.desc)}</p>` : ""}
-    <div class="xbig"><div><b>${kfmt(it.v)}</b><small>بازدید</small></div><div><b>${kfmt(it.l)}</b><small>لایک</small></div><div><b>${kfmt(it.s)}</b><small>استارت</small></div></div>
-    <div class="xsheet-act"><button class="b" data-xp="start" data-id="${esc(it.id)}">شروع و امتحان ربات${IC.play}</button>${likeBtn(it)}</div>
-    <div class="xlinks">${it.mine ? "" : `<button class="b o sm" data-xp="report" data-id="${esc(it.id)}">${IC.flag}گزارش</button>`}${S.admin ? `<button class="b r sm" data-xp="adm" data-id="${esc(it.id)}">${IC.trash}حذف از اکسپلور</button>` : ""}</div>
-    <div class="fgap"></div><div class="fgap"></div>`);
+  showSheet(head("سطح‌ها و مزایا") + `<p class="muted" style="margin:6px 0 12px">با انجام ماموریت‌ها و گرفتن جایزه‌ی روزانه XP می‌گیری. هر سطح مزایای قبلی را نگه می‌دارد و مزیت تازه اضافه می‌کند.</p><div class="lvl">${rows}</div><div class="fgap"></div><div class="fgap"></div>`);
 }
-document.addEventListener("click", async e => {
-  const b = e.target.closest("[data-xp]");
-  if(!b){ const c = e.target.closest("#xgrid .xc[data-id]"); if(c) xOpen(c.dataset.id); return; }
-  const a = b.dataset.xp, id = b.dataset.id;
-  if(a === "sort"){ XP.sort = b.dataset.k; renderExplore(); }
-  else if(a === "refresh"){ b.classList.add("spinning"); XP.seen.clear(); await loadExplore(true); b.classList.remove("spinning"); }
-  else if(a === "more"){ b.disabled = true; await loadExplore(false); }
-  else if(a === "start"){ const it = XP.items.find(x => x.id === id); if(it) openLink(`https://t.me/${it.username}?start=ex`); }
-  else if(a === "like") xLike(id);
-  else if(a === "report") confirmQ("این ربات را گزارش می‌کنی؟", async ok => { if(!ok) return; try{ await api(`/api/explore/${id}/report`, "POST"); toast("گزارشت ثبت شد، ممنون"); closeSheet(); }catch(err){ toast(err.message); } });
-  else if(a === "adm"){ try{ await api(`/api/admin/explore/${id}`, "POST", {hide: true}); XP.items = XP.items.filter(x => x.id !== id); document.querySelector(`#xgrid .xc[data-id="${id}"]`)?.remove(); closeSheet(); toast("از اکسپلور برداشته شد"); }catch(err){ toast(err.message); } }
-});
-
-/* کارت اکسپلورِ ربات (برای صاحب ربات، در بخش انتشار) */
-const xDefault = b => ((b.config.nodes[b.config.start]?.text) || "").replace(/\{[^{}]*\}/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
-function xPrev(b, desc){
-  const x = b.explore || {};
-  return `<article class="xc"><div class="xt">${xAv(b.name, b.id, x.av)}<div class="xn"><b>${esc(b.name)}</b><span class="un">@${esc(b.username)}</span></div></div>
-    <p class="xd" id="xpd">${esc(desc)}</p>
-    <div class="xf">${xStats({v: x.v || 0, s: x.s || 0})}<div class="xa"><span class="xlike">${IC.heart}<span>${kfmt(x.l || 0)}</span></span><span class="b sm">شروع${IC.play}</span></div></div></article>`;
-}
-function xoHTML(b){
-  const x = b.explore || {}, mx = S.cfg.xp_desc || 90;
-  return `<div class="panel xo" id="xo"><h2>اکسپلور${x.on ? ` <span class="tag st">فعال</span>` : ""}</h2>
-    <p class="muted">${x.hidden ? "این ربات توسط ادمین از اکسپلور برداشته شده." : "کارت ربات را در ویترین عمومی بگذار تا دیگران ببینند، لایک کنند و امتحانش کنند."}</p>
-    ${x.hidden ? "" : `<div class="xprev">${xPrev(b, x.desc || xDefault(b) || "—")}</div>
-      <textarea class="fa" id="xdesc" maxlength="${mx}" aria-label="توضیح کارت" placeholder="توضیح کوتاه برای کارت (لینک و آیدی حذف می‌شوند)">${esc(x.desc || "")}</textarea>
-      <div class="xcnt"><span id="xcn">${fa((x.desc || "").length)}/${fa(mx)}</span></div>
-      <button class="b" id="xsave">${x.on ? "ذخیره و به‌روزرسانی عکس" : "اضافه به اکسپلور"}</button>
-      ${x.on ? `<button class="b o mt" id="xoff">برداشتن از اکسپلور</button>` : ""}`}</div>`;
-}
-function bindXo(){
-  const t = $("#xdesc"); if(!t || !S.cur) return;
-  const b = S.cur, mx = S.cfg.xp_desc || 90;
-  t.addEventListener("input", () => { $("#xcn").textContent = `${fa(t.value.length)}/${fa(mx)}`; const d = $("#xpd"); if(d) d.textContent = t.value.trim() || xDefault(b) || "—"; });
-  const save = (on, btn) => busy(btn, async () => {
-    const d = await api(`/api/bots/${b.id}/explore`, "POST", {on, desc: t.value});
-    setBot(d.bot);
-    $("#xo").outerHTML = xoHTML(S.cur); bindXo(); toast(on ? "در اکسپلور قرار گرفت" : "از اکسپلور برداشته شد"); haptic("ok");
-  });
-  $("#xsave").onclick = () => save(true, $("#xsave"));
-  $("#xoff")?.addEventListener("click", () => save(false, $("#xoff")));
+function levelUp(up){
+  if(!up) return;
+  celebrate(); haptic("ok"); S.sheet = {kind: "info"};
+  showSheet(head("ارتقای سطح") + `<div class="lvup"><div class="lvb big">${N(up.to)}</div><h2>${esc(up.title)}</h2>
+    ${up.tokens ? `<p class="muted">${N("+" + up.tokens)} توکن هدیه به حسابت اضافه شد</p>` : ""}
+    ${up.perks.length ? `<ul>${up.perks.map(p => `<li>${digitsHTML(p)}</li>`).join("")}</ul>` : ""}
+    <button class="b" data-x="close">عالیه</button></div>`);
 }
 
 /* ═════════════════ ابزارهای ربات ═════════════════ */
@@ -1907,7 +1835,7 @@ Object.assign(A, {
   acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
     toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
   astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
-    $("#astats").innerHTML = statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید امروز", d.new24], ["ربات‌ها", d.bots], ["ربات فعال", d.active], ["در اکسپلور", d.explore],
+    $("#astats").innerHTML = statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید امروز", d.new24], ["ربات‌ها", d.bots], ["ربات فعال", d.active],
       ["مخاطب ربات‌ها", d.bot_users], ["پاسخ فرم‌ها", d.forms], ["توکن در گردش", d.circulation], ["دعوت موفق", d.referrals]]); }),
   aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان را بنویس");
     confirmQ("این اعلان برای همه‌ی کاربرهای ربات‌ساز فرستاده شود؟", ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
