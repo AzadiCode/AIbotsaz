@@ -500,43 +500,42 @@ LEVELS = [
     {"xp": 1400, "title": "افسانه‌ای",  "tokens": 80, "perks": {"bots": 5, "disc": 10, "daily": 3}},
 ]
 
-# ماموریت‌ها در «مسیر»های موضوعی‌ان و زنجیره‌ای پیش می‌رن؛ هر مرحله (هدف، توکن، XP) اسم مخصوص خودش رو داره
-# و با دریافت مرحله‌ی آخر، «هدیه‌ی تکمیل» (توکن، XP) هم داده می‌شه
+# ماموریت‌ها به‌صورت زنجیره‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
 TASKS = [
-    {"id": "bots", "track": "build", "icon": "bot", "title": "کارگاه ربات‌سازی", "metric": "bots", "text": "ساخت {n} ربات",
-     "story": "هر ربات یه ایده‌ست که زنده می‌شه", "names": ["اولین جرقه", "خط تولید", "کارخانه"], "bonus": (30, 100),
-     "steps": [(1, 5, 20), (3, 10, 40), (5, 20, 70)]},
-    {"id": "tpl", "track": "build", "icon": "layers", "title": "قالب‌باز", "metric": "tpl", "text": "ساخت {n} ربات از قالب آماده",
-     "story": "با قالب آماده، تو چند ثانیه شروع کن", "names": ["شروع سریع", "قالب‌شناس"], "bonus": (10, 40),
-     "steps": [(1, 5, 15), (3, 12, 40)]},
-    {"id": "live", "track": "build", "icon": "open", "title": "پرواز اول", "metric": "live", "text": "فعال کردن {n} ربات",
-     "story": "ربات تا فعال نشه، مشتری نداره", "names": ["پرتاب", "ناوگان آنلاین"], "bonus": (15, 50),
-     "steps": [(1, 10, 30), (3, 20, 60)]},
-    {"id": "audience", "track": "grow", "icon": "users", "title": "رشد مخاطب", "metric": "audience", "text": "رسیدن مجموع کاربران ربات‌هات به {n} نفر",
-     "story": "ربات‌ت رو به محله‌ی شلوغ تبدیل کن", "names": ["اولین مشتری‌ها", "محله‌ی پرجمعیت", "شهرت محلی", "کانون توجه", "ستاره‌ی تلگرام"], "bonus": (100, 400),
+    # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن، XP, معیار, کلید, عنوان)
+    {"id": "bots",     "icon": "bot",    "title": "ساخت ربات",        "metric": "bots",     "text": "ساخت {n} ربات", "rich": True,
+     "desc": "از ایده تا ربات حرفه‌ای در سه قدم",
+     "steps": [(1, 5, 20, "bots", "bots:1", "ساخت اولین ربات"),
+               (1, 10, 40, "live", "bots:live", "فعال‌سازی ربات با توکن"),
+               (1, 15, 60, "edits", "bots:edit", "توسعه و ارتقا با هوش مصنوعی")]},
+    {"id": "audience", "icon": "users",  "title": "رشد مخاطب",       "metric": "audience", "text": "رسیدن مجموع کاربران ربات‌هات به {n} نفر", "rich": True,
+     "desc": "مجموع کاربران همه‌ی ربات‌هات", "short": "{n} کاربر",
      "steps": [(10, 10, 30), (50, 20, 60), (100, 40, 100), (500, 80, 200), (1000, 150, 350)]},
-    {"id": "refs", "track": "grow", "icon": "medal", "title": "ناوگان", "metric": "refs", "text": "دعوت موفق {n} دوست",
-     "story": "دوستانت رو بیار و با هم رشد کنید", "names": ["همراه اول", "تیم کوچک", "ناخدا"], "bonus": (40, 150),
+    {"id": "refs",     "icon": "medal",  "title": "ناوگان",          "metric": "refs",     "text": "دعوت موفق {n} دوست", "rich": True,
+     "desc": "دوستات رو دعوت کن و با هم رشد کنید", "short": "{n} دعوت موفق",
      "steps": [(1, 5, 30), (5, 15, 80), (15, 40, 150)]},
-    {"id": "edits", "track": "ai", "icon": "spark", "title": "آزمایشگاه هوش", "metric": "edits", "text": "ارتقای ربات با هوش مصنوعی {n} بار",
-     "story": "به هوش مصنوعی بگو چی می‌خوای", "names": ["اولین ارتقا", "مهندس دستور", "هم‌فکر هوشمند"], "bonus": (25, 100),
-     "steps": [(1, 5, 20), (5, 15, 50), (15, 30, 100)]},
-    {"id": "forms", "track": "ai", "icon": "inbox", "title": "گوش شنوا", "metric": "forms", "text": "جمع شدن {n} پاسخ فرم از کاربران",
-     "story": "ربات خوب، حرف مشتری‌ها رو جمع می‌کنه", "names": ["اولین پاسخ", "صندوق پر", "مرکز داده"], "bonus": (30, 120),
-     "steps": [(1, 5, 20), (10, 15, 50), (50, 40, 100)]},
-    {"id": "bc", "track": "pro", "icon": "mega", "title": "بلندگو", "metric": "bc", "text": "ارسال {n} پیام همگانی",
-     "story": "خبر مهم رو به همه برسون", "names": ["اولین اعلان", "صدای ناوگان"], "bonus": (10, 40),
+    {"id": "edits",    "icon": "spark",  "title": "ارتقا با هوش مصنوعی", "metric": "edits",  "text": "ارتقای ربات با هوش مصنوعی {n} بار",
+     "steps": [(5, 15, 50), (15, 30, 100)]},
+    {"id": "bc",       "icon": "mega",   "title": "پیام همگانی",      "metric": "bc",       "text": "ارسال {n} پیام همگانی",
      "steps": [(1, 5, 20), (5, 15, 50)]},
-    {"id": "media", "track": "pro", "icon": "photo", "title": "استودیو رسانه", "metric": "media", "text": "آپلود {n} فایل در کتابخانه",
-     "story": "عکس و ویدیو ربات رو زنده می‌کنه", "names": ["گالری", "استودیو"], "bonus": (10, 40),
+    {"id": "media",    "icon": "photo",  "title": "کتابخانه‌ی رسانه",  "metric": "media",    "text": "آپلود {n} فایل در کتابخانه",
      "steps": [(1, 3, 15), (5, 8, 30)]},
-    {"id": "spent", "track": "pro", "icon": "coin", "title": "سرمایه‌گذار", "metric": "spent", "text": "مصرف {n} توکن برای ساخت و ارتقا",
-     "story": "هر توکن یه قدم به ربات بهتره", "names": ["سرمایه‌ی اولیه", "شریک جدی", "سرمایه‌دار"], "bonus": (30, 120),
-     "steps": [(20, 5, 20), (100, 15, 50), (300, 40, 100)]},
-    {"id": "streak", "track": "club", "icon": "flame", "title": "پیوستگی", "metric": "streak", "text": "{n} روز پشت‌سرهم دریافت جایزه‌ی روزانه",
-     "story": "هر روز سر بزن، شعله رو زنده نگه دار", "names": ["عادت", "هفته‌ی طلایی", "باشگاه سی‌روزه"], "bonus": (50, 200),
+    {"id": "streak",   "icon": "flame",  "title": "پیوستگی",         "metric": "streak",   "text": "{n} روز پشت‌سرهم دریافت جایزه‌ی روزانه",
      "steps": [(3, 5, 20), (7, 15, 50), (30, 60, 150)]},
 ]
+
+
+def task_steps(t):
+    out = []
+    for st in t["steps"]:
+        g, tk, x = st[:3]
+        if len(st) > 3:
+            metric, key, label = st[3], st[4], st[5]
+        else:
+            metric, key = t["metric"], f"{t['id']}:{g}"
+            label = (t.get("short") or t["text"]).format(n=f"{g:,}")
+        out.append({"goal": g, "tokens": tk, "xp": x, "metric": metric, "key": key, "label": label})
+    return out
 
 
 def lvl_of(xp):
@@ -648,9 +647,6 @@ def task_metrics(uid, d):
         "media": db.media.count_documents({"owner": uid}),
         "streak": max(int(d.get("best_streak", 0)), int(d.get("streak", 0))),
         "refs": int(d.get("refs", 0)),
-        "tpl": db.ledger.count_documents({"uid": uid, "why": "template"}),
-        "forms": db.submissions.count_documents({"bot_id": {"$in": ids}}) if ids else 0,
-        "spent": int(d.get("spent", 0)),
     }
 
 
@@ -660,17 +656,18 @@ def tasks_state(uid):
     m = task_metrics(uid, d)
     items = []
     for t in TASKS:
-        steps = [{"goal": g, "tokens": tk, "xp": x, "done": f"{t['id']}:{g}" in done, "name": t["names"][i]}
-                 for i, (g, tk, x) in enumerate(t["steps"])]
+        steps = [dict(s, done=s["key"] in done, value=min(m[s["metric"]], s["goal"])) for s in task_steps(t)]
         nxt = next((s for s in steps if not s["done"]), None)
         cur = nxt or steps[-1]
-        v = m[t["metric"]]
-        stage = sum(1 for s in steps if s["done"])
-        items.append({"id": t["id"], "track": t["track"], "icon": t["icon"], "title": t["title"], "story": t["story"],
-                      "text": t["text"].format(n=f"{cur['goal']:,}"), "sname": cur["name"], "steps": steps,
+        for s in steps:
+            s["ready"] = s is nxt and m[s["metric"]] >= s["goal"]
+        v = m[cur["metric"]]
+        items.append({"id": t["id"], "icon": t["icon"], "title": t["title"], "text": t["text"].format(n=cur["goal"]),
+                      "rich": bool(t.get("rich")), "desc": t.get("desc", ""),
+                      "steps": [{"label": s["label"], "goal": s["goal"], "value": s["value"], "tokens": s["tokens"], "xp": s["xp"],
+                                 "done": s["done"], "ready": s["ready"]} for s in steps],
                       "value": v, "goal": cur["goal"], "tokens": cur["tokens"], "xp": cur["xp"],
-                      "stage": stage, "total": len(steps), "last": stage == len(steps) - 1,
-                      "bonus": {"tokens": t["bonus"][0], "xp": t["bonus"][1]},
+                      "stage": sum(1 for s in steps if s["done"]), "total": len(steps),
                       "done": nxt is None, "ready": nxt is not None and v >= cur["goal"]})
     return items
 
@@ -685,23 +682,18 @@ def api_task_claim(uid, tid):
         return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
     d, _ = ensure_user(uid)
     done = set(d.get("tasks_done", []))
-    step = next(((g, tk, x) for g, tk, x in t["steps"] if f"{tid}:{g}" not in done), None)
-    if not step:
+    st = next((x for x in task_steps(t) if x["key"] not in done), None)
+    if not st:
         return jsonify(error="همه‌ی مرحله‌های این ماموریت کامل شده"), 400
-    g, tk, x = step
-    if task_metrics(uid, d)[t["metric"]] < g:
+    tk, x, sid = st["tokens"], st["xp"], st["key"]
+    if task_metrics(uid, d)[st["metric"]] < st["goal"]:
         return jsonify(error="هنوز به هدف این مرحله نرسیدی"), 400
-    sid = f"{tid}:{g}"
     if db.users.update_one({"_id": uid, "tasks_done": {"$ne": sid}}, {"$push": {"tasks_done": sid}}).modified_count != 1:
         return jsonify(error="این پاداش قبلاً دریافت شده"), 400
-    fin = all(f"{tid}:{gg}" in done or gg == g for gg, _, _ in t["steps"])
-    if fin:   # هدیه‌ی تکمیل کل ماموریت (فقط یک بار، چون فقط با مرحله‌ی آخر داده می‌شه)
-        tk += t["bonus"][0]
-        x += t["bonus"][1]
     if tk:
         credit(uid, tk, "task", key=f"task:{uid}:{sid}")
     up = add_xp(uid, x)
-    return jsonify(gain={"tokens": tk, "xp": x}, fin=fin, title=t["title"], up=up_dict(up), tasks=tasks_state(uid), lv=lv_info(uid),
+    return jsonify(gain={"tokens": tk, "xp": x}, up=up_dict(up), tasks=tasks_state(uid), lv=lv_info(uid),
                    wallet=wallet_info(uid), cfg=client_cfg(uid))
 
 
