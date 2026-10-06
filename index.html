@@ -116,7 +116,8 @@ svg{display:block}
 .ph{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:10px 2px 14px}
 .cnt{font-size:13px;color:var(--mut);display:flex;align-items:baseline;gap:3px}
 .sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:28px 2px 10px}
-.sec h2{font-size:14px}
+.sec h2{font-size:14px;line-height:1.8}
+.sec h2 small{font-size:11.5px;font-weight:400;color:var(--mut)}
 .sec .muted{font-size:12px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .stack>*+*{margin-top:12px}
@@ -142,6 +143,9 @@ svg{display:block}
 
 /* ── فرم‌ها ── */
 textarea,input,select{font:inherit;width:100%;color:var(--ink);background:var(--sf2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;outline:none;resize:none;transition:border-color .15s,box-shadow .15s}
+.cpn{position:relative}
+.cpn input{padding-right:72px}
+.cpn .b{position:absolute;top:5px;bottom:5px;right:5px;width:auto;min-height:0;padding:0 14px;font-size:12.5px;border-radius:9px}
 textarea:focus,input:focus,select:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
 textarea{min-height:100px}
 input{direction:ltr;text-align:left}
@@ -156,9 +160,9 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .fgap{height:10px}
 
 /* ── کنسول ساخت (نقطه‌ی اصلی صفحه) ── */
-.hero-t{margin:6px 2px 14px}
+.hero-t{margin:6px 2px 14px;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px}
 .hero-t h1{font-size:18px;font-weight:700;line-height:1.5}
-.hero-t p{color:var(--mut);font-size:12.5px;line-height:1.7;margin-top:1px}
+.hero-t p{color:var(--mut);font-size:12.5px;line-height:1.7}
 .console{background:var(--sf);border:1px solid var(--line);border-radius:18px;overflow:hidden;transition:border-color .15s,box-shadow .2s}
 .console:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px var(--acs)}
 .console textarea{display:block;border:0;border-radius:0;background:transparent;box-shadow:none;min-height:96px;padding:14px 16px 4px;font-size:15px;line-height:1.85}
@@ -220,6 +224,10 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .group{background:var(--sf);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .gi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid var(--line2);cursor:pointer;transition:background .15s}
 .gi:first-child{border-top:0}
+.group.sep{background:none;border:0;border-radius:0;overflow:visible;display:flex;flex-direction:column;gap:6px}
+.group.sep .gi{background:var(--sf);border:1px solid var(--line);border-radius:14px}
+.group.sep .gi:active{background:var(--sf2)}
+.sep-btn{margin-top:6px}
 .gi:active{background:var(--sf2)}
 .gi.static{cursor:default}.gi.static:active{background:none}
 .gi .gt{flex:1;min-width:0;line-height:1.6}
@@ -252,7 +260,9 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .bh2{display:flex;align-items:center;gap:12px;margin:8px 0 6px}
 .bh2 .bt{flex:1;min-width:0}
 .bh2 h1{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bh2 .muted{display:block;line-height:1.5}
+.bh2 .bt{display:flex;align-items:baseline;gap:8px}
+.bh2 h1{min-width:0;flex:0 1 auto}
+.bh2 .bt .muted{display:block;line-height:1.5;flex:none;font-size:12px}
 .think{background:var(--acs);border-radius:14px;padding:10px 14px;margin:14px 0 0;font-size:13px;line-height:1.85;display:none}
 .think.show{display:block}
 .ideas{display:flex;flex-direction:column;gap:6px;margin:10px 0 0}
@@ -916,7 +926,7 @@ function tplBlock(){
   let h = "";
   if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}Ai میسازه</div><div>${N(3)}فعال و متصلش کن</div></div>`;
   if((S.templates || []).length && !full){
-    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛ مناسب شروع سریع و آشنایی با سیستم</h2></div>
+    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛ مناسب <small>شروع سریع و آشنایی با سیستم</small></h2></div>
       <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${t.cost ? `<span class="xbd">${N(t.cost)} توکن</span>` : ""}${goIc}</button>`).join("")}</div>`;
   }
   return h;
@@ -962,7 +972,7 @@ function renderBots(){
       <span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"}</span></span>${goIc}</div>`).join("");
   $("#app").innerHTML = `
     <div class="ph"><h1>ربات‌های من</h1><span class="cnt">${N(S.bots.length)}<span>از</span>${N(max)}</span></div>
-    ${S.bots.length ? `<div class="group">${list}</div>${full ? "" : `<button class="b o mt" data-go="create">${IC.plus}ربات جدید</button>`}`
+    ${S.bots.length ? `<div class="group sep">${list}</div>${full ? "" : `<button class="b o sep-btn" data-go="create">${IC.plus}ربات جدید</button>`}`
       : `<div class="empty"><div class="ib big">${IC.bot}</div><h2>هنوز رباتی نداری</h2><p class="muted">اولین ربات را در چند دقیقه بساز.</p><button class="b sm" data-go="create">ساخت ربات</button></div>`}`;
 }
 
@@ -1159,7 +1169,7 @@ function inviteCard(){
     <p class="muted mt">تا الان ${N(n)} نفر به ناوگان شما پیوسته اند${S.ref.earned ? `؛ ${N(S.ref.earned)} توکن درآمد ` : ""}.</p></div>`;
 }
 function couponCard(){
-  return `<div class="sec"><h2>کد هدیه</h2></div><div class="cpn"><input id="cpn" placeholder="CODE" autocomplete="off" aria-label="کد هدیه"><button class="b" data-a="coupon">ثبت</button></div>`;
+  return `<div class="sec"><h2>کد هدیه</h2></div><div class="cpn"><input id="cpn" placeholder="CODE" autocomplete="off" aria-label="کد هدیه"><button class="b sm" data-a="coupon">ثبت</button></div>`;
 }
 function tabWallet(){
   const w = S.wallet, c = S.cfg, per = costOf(false) || 6;
@@ -1845,7 +1855,7 @@ function animBars(){
   });
 }
 const ADV = "قابلیت‌های پیشرفته +";
-const perksFor = (n, arr) => n >= 4 ? [ADV] : arr;
+const perksFor = (n, arr) => n >= 4 ? [ADV, ...arr] : arr;
 function lvCard(){
   const l = S.lv; if(!l) return "";
   const chips = l.to ? [...perksFor(l.level + 1, l.next_perks), ...(l.next_tokens ? [`+${l.next_tokens} توکن هدیه`] : [])] : [];
