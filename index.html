@@ -479,20 +479,31 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 
 
 /* ── سطح و ماموریت‌ها: ظریف ── */
-.lvx{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:14px 16px;margin-bottom:12px;border:1px solid var(--line);border-radius:16px;background:var(--sf)}
-.rg{position:relative;width:56px;height:56px}
-.rg svg{width:56px;height:56px;transform:rotate(-90deg)}
-.rg circle{fill:none;stroke-width:3}
+.hero{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:16px;margin-bottom:6px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(160deg,var(--acs),transparent 65%),var(--sf)}
+.rg{position:relative;width:66px;height:66px}
+.rg svg{width:66px;height:66px;transform:rotate(-90deg)}
+.rg circle{fill:none;stroke-width:2.6}
 .rg .tr{stroke:var(--line2)}
 .rg .pg{stroke:var(--ac);stroke-linecap:round;stroke-dasharray:138.2;stroke-dashoffset:138.2;transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)}
-.rg b{position:absolute;inset:0;display:grid;place-items:center;font-size:17px}
-.lvx .hi{line-height:1.6}
-.lvx .hi small{display:block;font-size:11.5px;color:var(--mut)}
-.lvx .hi b{font-size:16px}
-.lvx .hi span{display:block;font-size:12px;color:var(--mut)}
-.lvx .nx{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:11px;border-top:1px solid var(--line2);font-size:11.5px;color:var(--mut)}
-.lvx .nx i{font-style:normal;padding:4px 9px;border-radius:99px;background:var(--line2);color:var(--ink)}
-.lvx .nx i.t{background:var(--toks);color:var(--tok)}
+.rg b{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;color:var(--ac)}
+.hero .hi{line-height:1.6;min-width:0}
+.hero .hi small{display:block;font-size:11.5px;color:var(--mut)}
+.hero .hi h2{font-size:18px;font-weight:800;line-height:1.4}
+.hero .hi span{font-size:12px}
+.hn{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px;border-top:1px dashed var(--line)}
+.hn span{font-size:11.5px;color:var(--mut);margin-inline-end:4px}
+.hn i{font-style:normal;font-size:11px;padding:4px 10px;border-radius:99px;background:var(--acs);color:var(--ac)}
+.hn i.t{background:var(--toks);color:var(--tok)}
+.inv-end{margin-top:22px}
+.mp{padding:13px;border-radius:14px;gap:11px}
+.mph .ib{width:30px;height:30px;border-radius:9px}
+.mph .ib svg{width:16px;height:16px}
+.mph .gt b{font-size:13.5px;font-weight:600}
+.rail li i{width:21px;height:21px;font-size:10px}
+.rail li::before{top:10px}
+.mc{background:transparent;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px}
+.mc .xbd{font-size:10px;padding:4px 7px}
+.b.amber.sm{min-height:30px;padding:0 12px;font-size:12px;border-radius:9px}
 .lt{list-style:none;padding:0;margin:4px 0 0}
 .lt li{position:relative;display:flex;gap:12px;padding-bottom:16px}
 .lt li::before{content:"";position:absolute;inset-block:28px 2px;inset-inline-start:13px;width:1px;background:var(--line)}
@@ -1172,9 +1183,9 @@ function loadLedger(){
 function renderAccount(){
   const u = tg?.initDataUnsafe?.user || {};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const tabs = [["wallet", "توکن"], ["invite", "پاداش +" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
+  const tabs = [["wallet", "توکن"], ["invite", "لول آپ" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
-  const body = ({wallet: tabWallet, invite: () => inviteCard() + questsHTML(), history: tabHistory, admin: adminCard})[S.atab]();
+  const body = ({wallet: tabWallet, invite: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
     <div class="pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
       <div><h1>${esc(name)}</h1>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}${S.lv ? `<div><span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span></div>` : ""}</div></div>
@@ -1821,10 +1832,10 @@ function animBars(){
 function lvCard(){
   const l = S.lv; if(!l) return "";
   const chips = l.to ? [...l.next_perks, ...(l.next_tokens ? [`+${l.next_tokens} توکن هدیه`] : [])] : [];
-  return `<div class="lvx"><div class="rg"><svg viewBox="0 0 52 52"><circle class="tr" cx="26" cy="26" r="22"/><circle class="pg" cx="26" cy="26" r="22" data-k="lv" data-s="${l.level}" data-p="${lvPct(l)}"/></svg><b>${N(l.level)}</b></div>
-    <div class="hi"><small>سطح شما</small><b>${esc(l.title)}</b><span>${N(fa(l.xp))}${l.to ? ` از ${N(fa(l.to))}` : ""} XP</span></div>
+  return `<div class="hero"><div class="rg"><svg viewBox="0 0 52 52"><circle class="tr" cx="26" cy="26" r="22"/><circle class="pg" cx="26" cy="26" r="22" data-k="lv" data-s="${l.level}" data-p="${lvPct(l)}"/></svg><b>${N(l.level)}</b></div>
+    <div class="hi"><small>سطح شما</small><h2>${esc(l.title)}</h2><span class="muted">${N(fa(l.xp))} XP${l.to ? ` · ${N(fa(l.to - l.xp))} XP تا «${esc(l.next_title)}»` : " · بالاترین سطح"}</span></div>
     <button class="b o sm" data-a="lvinfo">مزایا</button>
-    <div class="nx">${l.to ? `${N(fa(l.to - l.xp))} XP تا «${esc(l.next_title)}»${chips.length ? " · " : ""}${chips.map((p, i) => `<i class="${i === chips.length - 1 && l.next_tokens ? "t" : ""}">${digitsHTML(p)}</i>`).join("")}` : "همه‌ی مزایای سطح‌ها برای تو باز شده است."}</div></div>`;
+    ${chips.length ? `<div class="hn"><span>جایزه‌ی سطح بعد</span>${chips.map((p, i) => `<i class="${i === chips.length - 1 && l.next_tokens ? "t" : ""}">${digitsHTML(p)}</i>`).join("")}</div>` : ""}</div>`;
 }
 function richCard(t){
   const cur = t.steps.findIndex(s => !s.done), s = t.steps[cur];
@@ -1850,9 +1861,8 @@ function taskCard(t){
 }
 const readyTasks = () => (S.tasks || []).filter(t => t.ready).length;
 function questsHTML(){
-  const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.rich - a.rich) || (b.ready - a.ready) || (a.done - b.done));
-  return `<div class="sec"><h2>ماموریت‌ها و سطح</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div>
-    ${lvCard()}<div class="qs">${list.map(taskCard).join("")}</div>`;
+  const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
+  return `${lvCard()}<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div>`;
 }
 function lvSheet(){
   const l = S.lv; if(!l) return;
