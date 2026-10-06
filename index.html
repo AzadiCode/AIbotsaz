@@ -476,6 +476,50 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .lvup{text-align:center;padding:4px 0 8px}
 .lvup ul{text-align:start;margin:12px 0 16px}
 
+
+/* ── ماموریت‌ها: طراحی تازه ── */
+.hero{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:16px;margin-bottom:14px;border-radius:20px;border:1px solid var(--line);
+  background:linear-gradient(160deg,var(--acs),transparent 70%),var(--sf)}
+.ring{--p:0;position:relative;width:74px;height:74px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ac) calc(var(--p)*1%),var(--line2) 0)}
+.ring::before{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--sf)}
+.ring b{position:relative;font-size:26px;font-family:"Oxanium",sans-serif;color:var(--ac)}
+.hi small{display:block;font-size:11.5px;color:var(--mut)}
+.hi h2{font-size:19px;font-weight:800;line-height:1.4}
+.hn{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px;border-top:1px dashed var(--line)}
+.hn span{font-size:11.5px;color:var(--mut);margin-inline-end:4px}
+.hn i{font-style:normal;font-size:11.5px;padding:5px 10px;border-radius:99px;background:var(--acs);color:var(--ac)}
+.qsum{display:flex;align-items:center;gap:10px;margin:0 2px 6px}
+.qsum .bar{flex:1;margin:0}
+.qsum .muted{white-space:nowrap}
+.tk{display:flex;align-items:center;justify-content:space-between;margin:22px 2px 10px}
+.tk h2{display:flex;align-items:center;gap:8px;font-size:14px}
+.tk h2 svg{width:16px;height:16px;color:var(--ac)}
+.mq{display:flex;flex-direction:column;gap:12px;padding:14px;margin-bottom:10px;background:var(--sf);border:1px solid var(--line);border-radius:18px;transition:border-color .2s,box-shadow .2s}
+.mq.rd{border-color:var(--tok);box-shadow:0 0 0 3px var(--toks)}
+.mq.fin{background:transparent;padding:11px 14px}
+.mh{display:flex;align-items:center;gap:12px}
+.mh .gt{flex:1;min-width:0;line-height:1.6}
+.mh .gt b{display:block;font-size:14.5px}
+.mh .gt span{display:block;font-size:12px;color:var(--mut)}
+.mst{display:inline-flex;align-items:center;gap:4px;flex:none;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:99px;background:var(--line2);color:var(--mut)}
+.mst svg{width:12px;height:12px}
+.rd .mst{background:var(--tok);color:#fff}
+.fin .mst{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.rail{display:flex;list-style:none;padding:0}
+.rail li{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--mut)}
+.rail li::before{content:"";position:absolute;top:11px;inset-inline:-50% 50%;height:2px;background:var(--line)}
+.rail li:first-child::before{display:none}
+.rail li.d::before,.rail li.c::before{background:var(--ok)}
+.rail li i{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11px;background:var(--sf);box-shadow:inset 0 0 0 2px var(--line)}
+.rail li.d i{background:var(--ok);box-shadow:none;color:#fff}
+.rail li.c i{box-shadow:inset 0 0 0 2px var(--ac);color:var(--ac)}
+.rail li svg{width:12px;height:12px}
+.rail li.d span{color:var(--ok)}
+.mc{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:14px;background:var(--sf2)}
+.mn b{display:block;font-size:13px;color:var(--ac)}
+.mn span{font-size:12.5px;line-height:1.7}
+.mc .bar{margin:2px 0}
+
 /* ── مدیریت ── */
 .usum{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13.5px}
 .urow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--line2)}
@@ -1149,7 +1193,8 @@ const A = {
     const d = await api(`/api/tasks/${el.dataset.id}/claim`, "POST");
     Object.assign(S, {tasks: d.tasks, lv: d.lv, wallet: d.wallet, cfg: d.cfg});
     render(); bumpTokens(); haptic("ok");
-    if(d.up) levelUp(d.up); else toast(`${d.gain.tokens ? `${d.gain.tokens} توکن و ` : ""}${d.gain.xp} XP دریافت شد`);
+    if(d.fin) celebrate();
+    if(d.up) levelUp(d.up); else toast(d.fin ? `ماموریت «${d.title}» کامل شد! ${d.gain.tokens} توکن و ${d.gain.xp} XP گرفتی` : `${d.gain.tokens ? `${d.gain.tokens} توکن و ` : ""}${d.gain.xp} XP دریافت شد`);
   }),
   lvinfo: () => lvSheet(),
   undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); S.ideas = []; render(); toast("برگشت داده شد"); }),
@@ -1748,29 +1793,39 @@ function shAction(a, ds){
 
 /* ═════════════════ سطح و ماموریت‌ها ═════════════════ */
 const lvPct = l => l && l.to ? Math.max(0, Math.min(100, Math.round((l.xp - l.from) / (l.to - l.from) * 100))) : 100;
+IC.check = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 2.6);
+const TRACKS = {build: ["کارگاه ساخت", "bot"], grow: ["رشد و مخاطب", "users"], ai: ["آزمایشگاه هوش", "spark"], pro: ["ابزار حرفه‌ای", "mega"], club: ["باشگاه", "medal"]};
 function lvCard(){
   const l = S.lv; if(!l) return "";
-  const nx = l.to ? `${N(fa(l.to - l.xp))} XP تا سطح ${N(l.level + 1)} (${esc(l.next_title)}): ${digitsHTML(l.next_perks.join("، "))}${l.next_tokens ? `${l.next_perks.length ? "، " : ""}${N(l.next_tokens)} توکن هدیه` : ""}` : "همه‌ی مزایای سطح‌ها برای تو باز شده است.";
-  return `<div class="panel lvc"><div class="lvh"><div class="lvb">${N(l.level)}</div>
-    <div class="lvt"><b>${esc(l.title)}</b><span>${N(fa(l.xp))} XP${l.to ? ` از ${N(fa(l.to))}` : ""}</span></div>
-    <button class="b o sm" data-a="lvinfo">مزایا</button></div>
-    <div class="bar"><i style="width:${lvPct(l)}%"></i></div><p class="lvn">${nx}</p></div>`;
+  const nx = l.to ? `${N(fa(l.to - l.xp))} XP تا «${esc(l.next_title)}»` : "به بالاترین سطح رسیدی";
+  const pk = l.to ? [...l.next_perks, ...(l.next_tokens ? [`+${l.next_tokens} توکن هدیه`] : [])].slice(0, 3) : [];
+  return `<div class="hero"><div class="ring" style="--p:${lvPct(l)}"><b>${N(l.level)}</b></div>
+    <div class="hi"><small>سطح شما</small><h2>${esc(l.title)}</h2><span class="muted">${N(fa(l.xp))} XP · ${nx}</span></div>
+    <button class="b o sm" data-a="lvinfo">مزایا</button>
+    ${pk.length ? `<div class="hn"><span>جایزه‌ی سطح بعد</span>${pk.map(p => `<i>${digitsHTML(p)}</i>`).join("")}</div>` : ""}</div>`;
 }
 function taskCard(t){
-  const v = Math.min(t.value, t.goal), pct = Math.round(v / t.goal * 100);
-  const dots = Array.from({length: t.total}, (_, i) => `<i class="${i < t.stage ? "on" : ""}"></i>`).join("");
-  const body = t.done ? "" : `<div class="bar"><i style="width:${pct}%"></i></div>
+  const v = Math.min(t.value, t.goal), pct = Math.round(v / t.goal * 100), ic = IC[t.icon] || IC.spark;
+  const rail = t.steps.map((s, i) => `<li class="${s.done ? "d" : i === t.stage ? "c" : ""}"><i>${s.done ? IC.check : N(i + 1)}</i><span>${N("+" + s.tokens)}</span></li>`).join("");
+  const st = t.done ? `${IC.check}کامل` : t.ready ? "آماده‌ی دریافت" : `${N(t.stage)}/${N(t.total)}`;
+  const body = t.done ? "" : `<div class="mc"><div class="mn"><b>مرحله‌ی ${N(t.stage + 1)}: ${esc(t.sname)}</b><span>${digitsHTML(t.text)}</span></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="qr"><span class="qg">${N(fa(v))} از ${N(fa(t.goal))}</span>
-      <span class="qrw">${t.tokens ? `<span class="xbd t">${N("+" + t.tokens)} توکن</span>` : ""}<span class="xbd">${N("+" + t.xp)} XP</span></span>
-      ${t.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div>`;
-  return `<div class="q${t.ready ? " ready" : ""}${t.done ? " fin" : ""}"><div class="qt"><span class="ib">${IC[t.icon] || IC.spark}</span>
-    <div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها کامل شد" : digitsHTML(t.text)}</span></div>${t.total > 1 ? `<div class="qdots">${dots}</div>` : ""}</div>${body}</div>`;
+      <span class="qrw">${t.tokens ? `<span class="xbd t">${N("+" + t.tokens)} توکن</span>` : ""}<span class="xbd">${N("+" + t.xp)} XP</span>${t.last ? `<span class="xbd t">هدیه‌ی تکمیل ${N("+" + t.bonus.tokens)}</span>` : ""}</span>
+      ${t.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div></div>`;
+  return `<div class="mq${t.ready ? " rd" : ""}${t.done ? " fin" : ""}"><div class="mh"><span class="ib">${ic}</span>
+    <div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها را گرفتی" : esc(t.story)}</span></div><span class="mst">${st}</span></div>
+    ${t.done ? "" : `<ol class="rail">${rail}</ol>`}${body}</div>`;
 }
 const readyTasks = () => (S.tasks || []).filter(t => t.ready).length;
 function questsHTML(){
-  const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
-  return `<div class="sec"><h2>ماموریت‌ها و سطح</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div>
-    ${lvCard()}<div class="qs">${list.map(taskCard).join("")}</div>`;
+  const all = S.tasks || [], r = readyTasks(), fin = all.filter(t => t.done).length;
+  const groups = Object.entries(TRACKS).map(([k, [name, ic]]) => {
+    const list = all.filter(t => t.track === k).sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
+    return list.length ? `<div class="tk"><h2>${IC[ic]}${name}</h2><span class="muted">${N(list.filter(t => t.done).length)} از ${N(list.length)}</span></div>${list.map(taskCard).join("")}` : "";
+  }).join("");
+  return `<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} جایزه آماده‌ی دریافت</span>` : ""}</div>
+    ${lvCard()}<div class="qsum"><div class="bar"><i style="width:${all.length ? Math.round(fin / all.length * 100) : 0}%"></i></div><span class="muted">${N(fin)} از ${N(all.length)} کامل</span></div>${groups}`;
 }
 function lvSheet(){
   const l = S.lv; if(!l) return;
