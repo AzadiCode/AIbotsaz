@@ -50,7 +50,7 @@ AI_MODEL     = os.environ["AI_MODEL"]
 AI_CHAT_MODEL = os.environ.get("AI_CHAT_MODEL", "").strip() or AI_MODEL   # مدل گفتگوی داخل رباتا (می‌تونه سبک‌تر باشه)
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)
 ADMIN_IDS    = {int(x) for x in re.findall(r"\d+", os.environ.get("ADMIN_IDS", ""))}
-ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "123456").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
+ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
 MOTHER_USERNAME = os.environ.get("MOTHER_USERNAME", "").strip().lstrip("@")   # اگه خالی باشه از getMe گرفته می‌شه
 
 
@@ -263,7 +263,7 @@ def request_user():
         return u
     k = request.headers.get("X-Admin-Key", "")
     if ADMIN_WEB_KEY and ADMIN_IDS and k and hmac.compare_digest(k.encode(), ADMIN_WEB_KEY.encode()):
-        return {"id": min(ADMIN_IDS), "first_name": "Admin", "username": "admin", "_sp": ""}
+        return {"id": min(ADMIN_IDS), "first_name": "Admin", "username": "admin", "_sp": "", "_web": True}
     return None
 
 
@@ -326,6 +326,8 @@ def sync_commands(bot, cfg):
 
 def touch_user(u):
     """آخرین حضور و مشخصات تلگرامی کاربر (برای وضعیت آنلاین و فهرست ادمین)"""
+    if u.get("_web"):      # ورود ادمین از مرورگر: اطلاعات واقعی تلگرام ادمین رو بازنویسی نکن
+        return
     try:
         name = " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x)[:80]
         db.users.update_one({"_id": u["id"]}, {"$set": {"seen": naive(), "tg_user": (u.get("username") or "")[:40], "tg_name": name}})
@@ -2054,9 +2056,12 @@ def api_me(uid):
     m = re.fullmatch(r"ref_(\d{1,15})", u.get("_sp") or "")
     d, _ = ensure_user(uid, u.get("first_name", ""), int(m.group(1)) if m else None)
     touch_user(u)
+    web = bool(u.get("_web"))
+    me = {"id": uid, "name": (d.get("tg_name") or d.get("name") or "") if web else " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x),
+          "username": (d.get("tg_user") or "") if web else (u.get("username") or ""), "web": web}
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
     items = media_list(uid)
-    return jsonify(bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, media=items, lv=lv_info(uid), tasks=tasks_state(uid),
+    return jsonify(me=me, bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, media=items, lv=lv_info(uid), tasks=tasks_state(uid),
                    used=sum(i["size"] for i in items), admin=uid in ADMIN_IDS,
                    ref={"link": mother_link(uid), "count": int(d.get("refs", 0)), "earned": int(d.get("ref_earned", 0))},
                    joined=aware(d.get("created") or now()).isoformat(),

@@ -657,7 +657,7 @@ const confirmQ = (q, go) => tg?.showConfirm ? tg.showConfirm(q, go) : go(confirm
 
 /* ═════════ تم ═════════ */
 function applyTheme(){
-  const dark = (tg?.colorScheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+  const dark = (tg?.initData ? (tg.colorScheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) : "dark") === "dark";   // بیرون از تلگرام: همیشه تیره
   document.documentElement.dataset.theme = dark ? "dark" : "light";
   try{ tg?.setHeaderColor?.(dark ? "#081116" : "#E8ECEE"); tg?.setBackgroundColor?.(dark ? "#081116" : "#E8ECEE"); }catch(_){}
 }
@@ -765,7 +765,7 @@ function mediaPicker(key, cur){
 
 /* ═════════ بارگذاری و رندر ═════════ */
 function takeMe(d){
-  Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null });
+  Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null, me: d.me || null });
 }
 async function load(){
   try{ takeMe(await api("/api/me")); }
@@ -1188,14 +1188,15 @@ function loadLedger(){
   }).catch(() => {});
 }
 function renderAccount(){
-  const u = tg?.initDataUnsafe?.user || {};
+  const tu = tg?.initDataUnsafe?.user || {}, me = S.me || {};
+  const u = {first_name: tu.first_name || me.name || "", last_name: tu.first_name ? tu.last_name : "", username: tu.username || me.username || "", photo_url: tu.photo_url};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
   const tabs = [["wallet", "توکن"], ["invite", "لول آپ" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
   const body = ({wallet: tabWallet, invite: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
     <div class="pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
-      <div><h1>${esc(name)}</h1>${u.username ? `<span class="muted ltr">@${esc(u.username)}</span>` : ""}${S.lv ? `<div><span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span></div>` : ""}</div></div>
+      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span></div>${S.lv ? `<div><span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span></div>` : ""}</div></div>
     ${tabsHTML(tabs, S.atab, "atab")}
     ${body}`;
   if(S.atab === "history") loadLedger();
