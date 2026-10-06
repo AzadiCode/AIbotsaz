@@ -505,14 +505,14 @@ TASKS = [
     # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن، XP, معیار, کلید, عنوان)
     {"id": "bots",     "icon": "bot",    "title": "ساخت ربات",        "metric": "bots",     "text": "ساخت {n} ربات", "rich": True,
      "desc": "از ایده تا ربات حرفه‌ای در سه قدم",
-     "steps": [(1, 5, 20, "bots", "bots:1", "ساخت اولین ربات"),
-               (1, 10, 40, "live", "bots:live", "فعال‌سازی ربات با توکن"),
-               (1, 15, 60, "edits", "bots:edit", "توسعه و ارتقا با هوش مصنوعی")]},
+     "steps": [(1, 5, 20, "bots", "bots:1", "ساخت ربات", "اولین ربات خودت رو بساز"),
+               (1, 10, 40, "live", "bots:live", "فعال‌سازی", "ربات رو با توکن BotFather فعال کن"),
+               (1, 15, 60, "edits", "bots:edit", "توسعه و ارتقا", "ربات رو یک بار با هوش مصنوعی ارتقا بده")]},
     {"id": "audience", "icon": "users",  "title": "رشد مخاطب",       "metric": "audience", "text": "رسیدن مجموع کاربران ربات‌هات به {n} نفر", "rich": True,
-     "desc": "مجموع کاربران همه‌ی ربات‌هات", "short": "{n} کاربر",
+     "desc": "مجموع کاربران همه‌ی ربات‌هات", "names": ["اولین مشتری‌ها", "محله‌ی پرجمعیت", "شهرت محلی", "کانون توجه", "ستاره‌ی تلگرام"],
      "steps": [(10, 10, 30), (50, 20, 60), (100, 40, 100), (500, 80, 200), (1000, 150, 350)]},
     {"id": "refs",     "icon": "medal",  "title": "ناوگان",          "metric": "refs",     "text": "دعوت موفق {n} دوست", "rich": True,
-     "desc": "دوستات رو دعوت کن و با هم رشد کنید", "short": "{n} دعوت موفق",
+     "desc": "دوستات رو دعوت کن و با هم رشد کنید", "names": ["همراه اول", "تیم کوچک", "ناخدا"],
      "steps": [(1, 5, 30), (5, 15, 80), (15, 40, 150)]},
     {"id": "edits",    "icon": "spark",  "title": "ارتقا با هوش مصنوعی", "metric": "edits",  "text": "ارتقای ربات با هوش مصنوعی {n} بار",
      "steps": [(5, 15, 50), (15, 30, 100)]},
@@ -530,11 +530,11 @@ def task_steps(t):
     for st in t["steps"]:
         g, tk, x = st[:3]
         if len(st) > 3:
-            metric, key, label = st[3], st[4], st[5]
+            metric, key, label, hint = st[3], st[4], st[5], st[6]
         else:
             metric, key = t["metric"], f"{t['id']}:{g}"
-            label = (t.get("short") or t["text"]).format(n=f"{g:,}")
-        out.append({"goal": g, "tokens": tk, "xp": x, "metric": metric, "key": key, "label": label})
+            label, hint = t["names"][len(out)], t["text"].format(n=f"{g:,}")
+        out.append({"goal": g, "tokens": tk, "xp": x, "metric": metric, "key": key, "label": label, "hint": hint})
     return out
 
 
@@ -664,7 +664,7 @@ def tasks_state(uid):
         v = m[cur["metric"]]
         items.append({"id": t["id"], "icon": t["icon"], "title": t["title"], "text": t["text"].format(n=cur["goal"]),
                       "rich": bool(t.get("rich")), "desc": t.get("desc", ""),
-                      "steps": [{"label": s["label"], "goal": s["goal"], "value": s["value"], "tokens": s["tokens"], "xp": s["xp"],
+                      "steps": [{"label": s["label"], "hint": s["hint"], "goal": s["goal"], "value": s["value"], "tokens": s["tokens"], "xp": s["xp"],
                                  "done": s["done"], "ready": s["ready"]} for s in steps],
                       "value": v, "goal": cur["goal"], "tokens": cur["tokens"], "xp": cur["xp"],
                       "stage": sum(1 for s in steps if s["done"]), "total": len(steps),

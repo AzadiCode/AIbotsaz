@@ -507,26 +507,28 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .lt .chs{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .lt .chs i{font-style:normal;font-size:11px;padding:4px 9px;border-radius:99px;background:var(--line2);color:var(--mut)}
 .lt .chs i.t{background:var(--toks);color:var(--tok)}
-.mp{padding:14px 15px 6px;margin-bottom:10px;background:var(--sf);border:1px solid var(--line);border-radius:16px}
+.mp{display:flex;flex-direction:column;gap:12px;padding:14px;margin-bottom:10px;background:var(--sf);border:1px solid var(--line);border-radius:16px}
 .mph{display:flex;align-items:center;gap:11px}
 .mph .ib{width:34px;height:34px;border-radius:10px}
 .mph .gt{flex:1;min-width:0;line-height:1.55}
 .mph .gt b{display:block;font-size:14px}
 .mph .gt span{font-size:11.5px;color:var(--mut)}
 .mpc{font-size:11.5px;color:var(--mut)}
-.ms2{list-style:none;padding:0;margin:10px 0 0}
-.ms2 li{display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line2)}
-.ms2 .dt{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;color:var(--mut);box-shadow:inset 0 0 0 1.5px var(--line)}
-.ms2 .dt svg{width:11px;height:11px}
-.ms2 li.d .dt{background:var(--ok);color:#fff;box-shadow:none}
-.ms2 li.c .dt,.ms2 li.r .dt{color:var(--ac);box-shadow:inset 0 0 0 1.5px var(--ac)}
-.ms2 li.k{opacity:.5}
-.ms2 b{display:block;font-size:13px;font-weight:500;line-height:1.6}
-.ms2 li.d b{color:var(--mut)}
-.ms2 .pr2{display:flex;align-items:center;gap:8px;margin-top:4px}
-.ms2 .pr2 .bar{flex:1;height:3px;margin:0}
-.ms2 .pr2 small{font-size:11px;color:var(--mut)}
-.ms2 .rw{font-size:11.5px;color:var(--tok);white-space:nowrap}
+.rail{display:flex;list-style:none;padding:0;margin:0}
+.rail li{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--mut)}
+.rail li::before{content:"";position:absolute;top:11px;inset-inline:-50% 50%;height:1.5px;background:var(--line)}
+.rail li:first-child::before{display:none}
+.rail li.d::before,.rail li.c::before,.rail li.r::before{background:var(--ok)}
+.rail li i{position:relative;z-index:1;width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11px;background:var(--sf);box-shadow:inset 0 0 0 1.5px var(--line)}
+.rail li.d i{background:var(--ok);box-shadow:none;color:#fff}
+.rail li.c i,.rail li.r i{box-shadow:inset 0 0 0 1.5px var(--ac);color:var(--ac)}
+.rail li svg{width:12px;height:12px}
+.rail li.d span{color:var(--ok)}
+.mc{display:flex;flex-direction:column;gap:6px;padding:11px 12px;border-radius:12px;background:var(--sf2)}
+.mc .mn b{display:block;font-size:12.5px;color:var(--ac)}
+.mc .mn span{font-size:12px;line-height:1.7;color:var(--mut)}
+.mc .bar{height:3px;margin:2px 0}
+.mc .qr{display:flex;align-items:center;gap:8px}
 .bar i{transition:width .9s cubic-bezier(.2,.8,.2,1)}
 
 /* ── مدیریت ── */
@@ -1824,16 +1826,15 @@ function lvCard(){
     <div class="nx">${l.to ? `${N(fa(l.to - l.xp))} XP تا «${esc(l.next_title)}»${chips.length ? " · " : ""}${chips.map((p, i) => `<i class="${i === chips.length - 1 && l.next_tokens ? "t" : ""}">${digitsHTML(p)}</i>`).join("")}` : "همه‌ی مزایای سطح‌ها برای تو باز شده است."}</div></div>`;
 }
 function richCard(t){
-  const cur = t.steps.findIndex(s => !s.done);
-  const rows = t.steps.map((s, i) => {
-    const cls = s.done ? "d" : s.ready ? "r" : i === cur ? "c" : "k";
-    const pct = Math.round(Math.min(s.value, s.goal) / s.goal * 100);
-    const prog = i === cur && !s.ready ? `<div class="pr2"><div class="bar"><i data-k="${t.id}" data-s="${i}" data-p="${pct}"></i></div><small>${N(fa(s.value))} از ${N(fa(s.goal))}</small></div>` : "";
-    const end = s.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : `<span class="rw">${N("+" + s.tokens)} توکن</span>`;
-    return `<li class="${cls}"><span class="dt">${s.done ? IC.check : N(i + 1)}</span><div><b>${digitsHTML(s.label)}</b>${prog}</div>${end}</li>`;
-  }).join("");
-  return `<div class="mp"><div class="mph"><span class="ib">${IC[t.icon] || IC.spark}</span><div class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></div>
-    <span class="mpc">${N(t.stage)}/${N(t.total)}</span></div><ul class="ms2">${rows}</ul></div>`;
+  const cur = t.steps.findIndex(s => !s.done), s = t.steps[cur];
+  const rail = t.steps.map((x, i) => `<li class="${x.done ? "d" : x.ready ? "r" : i === cur ? "c" : ""}"><i>${x.done ? IC.check : N(i + 1)}</i><span>${N("+" + x.tokens)}</span></li>`).join("");
+  const pct = s ? Math.round(Math.min(s.value, s.goal) / s.goal * 100) : 100;
+  const body = !s ? "" : `<div class="mc"><div class="mn"><b>مرحله‌ی ${N(cur + 1)}: ${esc(s.label)}</b><span>${digitsHTML(s.hint)}</span></div>
+    <div class="bar"><i data-k="${t.id}" data-s="${cur}" data-p="${pct}"></i></div>
+    <div class="qr"><span class="qg">${N(fa(s.value))} از ${N(fa(s.goal))}</span><span class="qrw"><span class="xbd t">${N("+" + s.tokens)} توکن</span><span class="xbd">${N("+" + s.xp)} XP</span></span>
+    ${s.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div></div>`;
+  return `<div class="mp"><div class="mph"><span class="ib">${IC[t.icon] || IC.spark}</span><div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها را گرفتی" : esc(t.desc)}</span></div>
+    <span class="mpc">${N(t.stage)}/${N(t.total)}</span></div><ol class="rail">${rail}</ol>${body}</div>`;
 }
 function taskCard(t){
   if(t.rich) return richCard(t);
