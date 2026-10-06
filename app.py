@@ -500,7 +500,7 @@ LEVELS = [
     {"xp": 1400, "title": "افسانه‌ای",  "tokens": 80, "perks": {"bots": 5, "disc": 10, "daily": 3}},
 ]
 
-# ماموریت‌ها به‌صورت زنجیره‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
+# ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
 TASKS = [
     # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن، XP, معیار, کلید, عنوان)
     {"id": "bots",     "icon": "bot",    "title": "ساخت ربات",        "metric": "bots",     "text": "ساخت {n} ربات", "rich": True,
@@ -647,6 +647,9 @@ def task_metrics(uid, d):
         "media": db.media.count_documents({"owner": uid}),
         "streak": max(int(d.get("best_streak", 0)), int(d.get("streak", 0))),
         "refs": int(d.get("refs", 0)),
+        "tpl": db.ledger.count_documents({"uid": uid, "why": "template"}),
+        "forms": db.submissions.count_documents({"bot_id": {"$in": ids}}) if ids else 0,
+        "spent": int(d.get("spent", 0)),
     }
 
 
