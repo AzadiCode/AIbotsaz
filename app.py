@@ -25,7 +25,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
   • هوش ساخت: پرامپت چندمرحله‌ای (تحلیل نقش‌ها ← نگاشت به قابلیت‌ها ← بازبینی) + بازخورد خودکار چیزهایی که اعتبارسنج حذف کرده
 Environment اختیاری تازه: PAYMENTS (۰ = خاموش کردن دکمه‌ی پرداخت) SCHED (۰ = خاموش کردن یادآورها)
 
-Environment: MOTHER_TOKEN BASE_URL AI_BASE_URL AI_API_KEY AI_MODEL (الزامی) | MONGO_URI SECRET_KEY ADMIN_IDS
+Environment: MOTHER_TOKEN BASE_URL AI_BASE_URL AI_API_KEY AI_MODEL (الزامی) | MONGO_URI SECRET_KEY ADMIN_IDS ADMIN_WEB_KEY
 MOTHER_USERNAME AI_CHAT_MODEL BILLING(usage|fixed) START_TOKENS DAILY_BONUS REF_* PACKS MAX_BOTS ... (پایین‌تر)
 """
 import os, re, json, time, hmac, hashlib, base64, secrets, logging, math, random, threading, functools
@@ -50,6 +50,7 @@ AI_MODEL     = os.environ["AI_MODEL"]
 AI_CHAT_MODEL = os.environ.get("AI_CHAT_MODEL", "").strip() or AI_MODEL   # مدل گفتگوی داخل رباتا (می‌تونه سبک‌تر باشه)
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)
 ADMIN_IDS    = {int(x) for x in re.findall(r"\d+", os.environ.get("ADMIN_IDS", ""))}
+ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
 MOTHER_USERNAME = os.environ.get("MOTHER_USERNAME", "").strip().lstrip("@")   # اگه خالی باشه از getMe گرفته می‌شه
 
 
@@ -255,10 +256,21 @@ def verify_init_data(init_data):
         return None
 
 
+def request_user():
+    """کاربر درخواست: initData تلگرام؛ یا (فقط برای ادمین) کلید ADMIN_WEB_KEY از مرورگر"""
+    u = verify_init_data(request.headers.get("X-Init-Data", ""))
+    if u:
+        return u
+    k = request.headers.get("X-Admin-Key", "")
+    if ADMIN_WEB_KEY and ADMIN_IDS and k and hmac.compare_digest(k.encode(), ADMIN_WEB_KEY.encode()):
+        return {"id": min(ADMIN_IDS), "first_name": "Admin", "username": "admin", "_sp": ""}
+    return None
+
+
 def authed(fn):
     @functools.wraps(fn)
     def wrapper(*a, **k):
-        u = verify_init_data(request.headers.get("X-Init-Data", ""))
+        u = request_user()
         if not u:
             return jsonify(error="unauthorized"), 401
         g.user = u
@@ -269,7 +281,7 @@ def authed(fn):
 def admin_only(fn):
     @functools.wraps(fn)
     def wrapper(*a, **k):
-        u = verify_init_data(request.headers.get("X-Init-Data", ""))
+        u = request_user()
         if not u:
             return jsonify(error="unauthorized"), 401
         if u["id"] not in ADMIN_IDS:

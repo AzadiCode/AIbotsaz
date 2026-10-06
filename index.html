@@ -624,6 +624,13 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
 const INIT = tg?.initData || "";
+/* ورود ادمین از مرورگر برای تست: یک بار با  ‎/?key=ADMIN_WEB_KEY  باز کن؛ کلید توی مرورگر می‌مونه */
+const WK = (() => { try{
+  if(tg?.initData) return "";
+  const q = new URLSearchParams(location.search).get("key");
+  if(q){ localStorage.setItem("wk", q); history.replaceState(null, "", location.pathname); }
+  return localStorage.getItem("wk") || "";
+}catch(_){ return ""; } })();
 // خالی = همون دامنه‌ای که این صفحه ازش لود شده. فقط اگه index.html رو جدا هاست کردی آدرس بک‌اند رو بذار:
 const API_BASE = "";
 
@@ -660,7 +667,7 @@ function toast(m){ const t = $("#toast"); t.innerHTML = digitsHTML(m); t.classLi
 
 /* ═════════ ارتباط با سرور ═════════ */
 async function api(path, method = "GET", body){
-  const r = await fetch(API_BASE + path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT}, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(API_BASE + path, { method, headers: {"Content-Type":"application/json","X-Init-Data":INIT, ...(WK ? {"X-Admin-Key": WK} : {})}, body: body ? JSON.stringify(body) : undefined });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ const e = new Error(d.error || "خطا در ارتباط با سرور"); e.status = r.status; e.data = d; throw e; }
   return d;
@@ -669,7 +676,7 @@ function uploadFile(file, onp){
   return new Promise((res, rej) => {
     const x = new XMLHttpRequest();
     x.open("POST", API_BASE + "/api/media");
-    x.setRequestHeader("X-Init-Data", INIT);
+    x.setRequestHeader("X-Init-Data", INIT); if(WK) x.setRequestHeader("X-Admin-Key", WK);
     x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
     x.setRequestHeader("X-Filename", encodeURIComponent(file.name));
     x.upload.onprogress = e => e.lengthComputable && onp(e.loaded / e.total);
