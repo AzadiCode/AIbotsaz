@@ -1891,11 +1891,20 @@ function readSheet(){ SHEETS[S.sheet?.kind]?.read?.(); }
 function shAction(a, ds){
   if(!S.sheet) return;
   const prev = D?.kind;
+  // pickmedia رو قبل از readSheet هندل کن تا برای شیت‌هایی که reader ندارن هم کار کنه
+  if(a === "pickmedia"){
+    if(!D) D = {};
+    D[ds.k] = ds.v;
+    // فقط دکمه‌های mediaPicker رو آپدیت کن (کل شیت رو ریرندر نکن)
+    document.querySelectorAll(`[data-sh="pickmedia"][data-k="${ds.k}"]`).forEach(b => {
+      b.classList.toggle("on", b.dataset.v === ds.v);
+    });
+    return;
+  }
   readSheet();
-  if(a === "save") return SHEETS[S.sheet.kind].save();
-  if(a === "del") return SHEETS[S.sheet.kind].del();
+  if(a === "save") return SHEETS[S.sheet.kind]?.save?.();
+  if(a === "del") return SHEETS[S.sheet.kind]?.del?.();
   if(a === "upmedia"){ S.pickKey = ds.k; return $("#fileIn").click(); }
-  if(a === "pickmedia") D[ds.k] = ds.v;
   else if(a === "bkind"){
     const k = D.kind, wasText = prev === "channel" || prev === "url";
     if(k === "channel"){ const m = CH_RE.exec(D.val) || NAME_RE.exec(D.val); D.val = m ? "@" + m[1] : ""; }
@@ -2064,7 +2073,7 @@ function adminCard(){
     <div class="panel"><h2>اعلان همگانی</h2><div class="fgap"></div>
       <span class="lbl">متن اعلان</span><textarea class="fa" id="an-text" maxlength="3500" style="min-height:76px" placeholder="متن اعلان (پشتیبانی از HTML)" aria-label="متن اعلان"></textarea>
       <label class="muted" style="display:flex;align-items:center;gap:8px;margin:6px 0 4px"><input type="checkbox" id="an-html" checked style="width:auto;margin:0">فرمت HTML (بولد، ایتالیک، لینک، کد)</label>
-      <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("an_media", "")}<div class="fgap"></div>
+      <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("an_media", D?.an_media || "")}<div class="fgap"></div>
       <label class="muted" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="an-b" checked style="width:auto;margin:0">سازنده‌ها (از طریق ربات‌ساز)</label>
       <label class="muted" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="an-a" style="width:auto;margin:0">مخاطبان ربات‌های فعال (از طریق خود رباتشان، بدون سازنده)</label><div class="fgap"></div>
       <button class="b o" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
@@ -2086,6 +2095,7 @@ function uList(d){
 }
 async function openUsers(){
   S.sheet = {kind: "info"}; UQ = ""; clearInterval(window.__ut);
+  D = {an_media: ""};  // برای mediaPicker در adminCard
   showSheet(head("کاربران ربات‌ساز", "urefresh") + `<p class="muted">در حال بارگذاری…</p>`);
   const tick = async () => {
     if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return clearInterval(window.__ut);
@@ -2114,6 +2124,7 @@ const auList = d => {
 async function openAudience(botId){
   clearInterval(window.__ut); clearInterval(window.__at);
   S.sheet = {kind: "aud"}; AU.id = botId; AU.target = "ex"; AU.d = null;
+  D = {au_media: ""};  // برای mediaPicker در شیت مخاطبان
   showSheet(head("مخاطبان ربات", "arefresh") + `<p class="muted">در حال بارگذاری…</p>`);
   const tick = async () => {
     if(S.sheet?.kind !== "aud" || !$("#sheet").classList.contains("show")) return clearInterval(window.__at);
@@ -2127,7 +2138,7 @@ async function openAudience(botId){
         <div class="cmd"><button class="b o sm" data-a="autg" data-t="ex">همه به‌جز سازنده</button><button class="b o sm" data-a="autg" data-t="all">همه با سازنده</button></div>
         <span class="lbl">متن اطلاعیه</span><textarea class="fa" id="au-text" maxlength="3500" style="min-height:76px" placeholder="متن اطلاعیه (پشتیبانی از HTML)" aria-label="متن اطلاعیه"></textarea>
         <label class="muted" style="display:flex;align-items:center;gap:8px;margin:6px 0 4px"><input type="checkbox" id="au-html" checked style="width:auto;margin:0">فرمت HTML (بولد، ایتالیک، لینک، کد)</label>
-        <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("au_media", "")}<div class="fgap"></div>
+        <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("au_media", D?.au_media || "")}<div class="fgap"></div>
         <button class="b" data-a="ausend">${IC.mega}ارسال</button>` : '<p class="muted">این ربات فعال نیست و ارسال ممکن نیست.</p>'}
         <div class="fgap"></div><button class="b o" data-a="ausers">بازگشت به کاربران</button>`);
     }catch(e){ clearInterval(window.__at); toast(e.message); }
