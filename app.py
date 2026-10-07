@@ -5,7 +5,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
 
 ربات مادر
   /start /help /invite /balance /daily /coupon — باز کردن مینی‌اپ، پرداخت با Telegram Stars
-  ادمین: /give /stats /announce
+  ادمین: /give /stats /announce /setstartphoto (عکس پیام استارت)
 مینی‌اپ
   ساخت و ارتقای ربات با هوش مصنوعی (کانفیگ JSON)، قالب‌های آماده، ویرایش دستی کامل، تست زنده،
   بررسی مسیرها، خروجی JSON، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
@@ -50,7 +50,7 @@ AI_MODEL     = os.environ["AI_MODEL"]
 AI_CHAT_MODEL = os.environ.get("AI_CHAT_MODEL", "").strip() or AI_MODEL   # مدل گفتگوی داخل رباتا (می‌تونه سبک‌تر باشه)
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)
 ADMIN_IDS    = {int(x) for x in re.findall(r"\d+", os.environ.get("ADMIN_IDS", ""))}
-ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "123456").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
+ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
 MOTHER_USERNAME = os.environ.get("MOTHER_USERNAME", "").strip().lstrip("@")   # اگه خالی باشه از getMe گرفته می‌شه
 
 
@@ -68,7 +68,12 @@ def _float(name, default):
         return default
 
 
-MAX_BOTS      = _int("MAX_BOTS", 10)            # سقف ربات هر کاربر
+# ضریب اقتصاد: همه‌ی توکن‌ها (هدیه‌ها، پاداش‌ها، هزینه‌ها، بسته‌ها) و XP با این ضریب بالا می‌رن.
+# هدیه‌ی ثبت‌نام = ۱۰۰ × TOKEN_SCALE = ۱۰۰۰ توکن؛ بقیه دقیقاً با همین نسبت.
+TOKEN_SCALE = max(1, _int("TOKEN_SCALE", 10))
+XP_SCALE    = max(1, _int("XP_SCALE", 10))
+
+MAX_BOTS      = _int("MAX_BOTS", 1)            # سقف ربات هر کاربر
 AI_MAX_TOKENS = _int("AI_MAX_TOKENS", 9000)     # سقف طول خروجی هوش مصنوعی ساخت ربات
 AI_NODE_MAX_TOKENS = _int("AI_NODE_MAX_TOKENS", 600)   # سقف طول جواب هوش مصنوعیِ داخل رباتا
 DEBUG         = os.environ.get("DEBUG", "") == "1"
@@ -77,35 +82,35 @@ DEBUG         = os.environ.get("DEBUG", "") == "1"
 #  BILLING=usage → هزینه‌ی ساخت/ارتقا و پیام‌های هوشمند از روی مصرف واقعیِ مدل حساب می‌شه (پیش‌فرض)
 #  BILLING=fixed → هزینه‌ی ثابت: GEN_COST / EDIT_COST و هر AI_MSGS_PER_TOKEN پیام = ۱ توکن
 BILLING           = "fixed" if os.environ.get("BILLING", "usage").strip().lower() == "fixed" else "usage"
-TOKEN_IN_RATE     = _float("TOKEN_IN_RATE", 1)      # توکن به‌ازای هر ۱۰۰۰ توکن ورودی مدل
-TOKEN_OUT_RATE    = _float("TOKEN_OUT_RATE", 3)     # توکن به‌ازای هر ۱۰۰۰ توکن خروجی مدل
-TOKEN_MIN_COST    = _int("TOKEN_MIN_COST", 5)       # حداقل هزینه‌ی هر ساخت/ارتقا (حالت usage)
-GEN_COST          = _int("GEN_COST", 12)            # ساخت ربات جدید (حالت fixed)
-EDIT_COST         = _int("EDIT_COST", 6)            # ارتقای ربات (حالت fixed)
+TOKEN_IN_RATE     = _float("TOKEN_IN_RATE", 1 * TOKEN_SCALE)      # توکن به‌ازای هر ۱۰۰۰ توکن ورودی مدل
+TOKEN_OUT_RATE    = _float("TOKEN_OUT_RATE", 3 * TOKEN_SCALE)     # توکن به‌ازای هر ۱۰۰۰ توکن خروجی مدل
+TOKEN_MIN_COST    = _int("TOKEN_MIN_COST", 6 * TOKEN_SCALE)       # حداقل هزینه‌ی هر ساخت/ارتقا (حالت usage)
+GEN_COST          = _int("GEN_COST", 12 * TOKEN_SCALE)            # ساخت ربات جدید (حالت fixed)
+EDIT_COST         = _int("EDIT_COST", 6 * TOKEN_SCALE)            # ارتقای ربات (حالت fixed)
 AI_MSGS_PER_TOKEN = max(1, _int("AI_MSGS_PER_TOKEN", 3))        # حالت fixed: هر چند پیام هوشمند = ۱ توکن
-ENHANCE_COST      = _int("ENHANCE_COST", 1)         # بهینه‌سازی توضیحِ ربات با هوش مصنوعی
-TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.8)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق/تیکت = ۱، گفتگوی هوشمند = ۲)
-TEMPLATE_FACTOR   = _float("TEMPLATE_FACTOR", 1.0)       # ضریب کلی قیمت قالب‌ها (۱ = پیش‌فرض؛ ۱.۵ = ۵۰٪ گرون‌تر)
-TEMPLATE_MIN_COST = _int("TEMPLATE_MIN_COST", 3)         # حداقل هزینه‌ی قالب آماده (۰ = رایگان)
+ENHANCE_COST      = _int("ENHANCE_COST", 1 * TOKEN_SCALE)         # بهینه‌سازی توضیحِ ربات با هوش مصنوعی
+TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.8 * TOKEN_SCALE)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق/تیکت = ۱، گفتگوی هوشمند = ۲)
+TEMPLATE_FACTOR   = _float("TEMPLATE_FACTOR", 1.1)       # ضریب کلی قیمت قالب‌ها (۱ = پیش‌فرض؛ ۱.۵ = ۵۰٪ گرون‌تر)
+TEMPLATE_MIN_COST = _int("TEMPLATE_MIN_COST", 3 * TOKEN_SCALE)         # حداقل هزینه‌ی قالب آماده (۰ = رایگان)
 TEMPLATE_MAX_COST = _int("TEMPLATE_MAX_COST", 0)         # سقف هزینه‌ی قالب (۰ = خودکار: کمی کمتر از ساخت با هوش مصنوعی)
-BROADCAST_PER_TOKEN = max(1, _int("BROADCAST_PER_TOKEN", 50))   # پخش همگانی: هر چند گیرنده = ۱ توکن
+BROADCAST_PER_TOKEN = max(1, _int("BROADCAST_PER_TOKEN", max(1, 50 // TOKEN_SCALE)))   # پخش همگانی: هر چند گیرنده = ۱ توکن
 BROADCAST_MAX     = _int("BROADCAST_MAX", 5000)
-START_TOKENS      = _int("START_TOKENS", _int("WELCOME_TOKENS", 100))   # هدیه‌ی ثبت‌نام
-DAILY_BONUS       = _int("DAILY_BONUS", 5)          # جایزه‌ی روزانه (با استریک تا +۴ بیشتر)
-REF_INVITER       = _int("REF_INVITER", _int("REF_BONUS_INVITER", 60))   # پاداش دعوت‌کننده
-REF_INVITEE       = _int("REF_INVITEE", _int("REF_BONUS_NEW", 40))       # هدیه‌ی دعوت‌شده
+START_TOKENS      = _int("START_TOKENS", _int("WELCOME_TOKENS", 100 * TOKEN_SCALE))   # هدیه‌ی ثبت‌نام
+DAILY_BONUS       = _int("DAILY_BONUS", 5 * TOKEN_SCALE)          # جایزه‌ی روزانه (با استریک تا +۴ بیشتر)
+REF_INVITER       = _int("REF_INVITER", _int("REF_BONUS_INVITER", 60 * TOKEN_SCALE))   # پاداش دعوت‌کننده
+REF_INVITEE       = _int("REF_INVITEE", _int("REF_BONUS_NEW", 40 * TOKEN_SCALE))       # هدیه‌ی دعوت‌شده
 REF_MAX_PER_USER  = _int("REF_MAX_PER_USER", 100)   # سقف دعوت پاداش‌دار هر نفر
 REF_ON            = "create" if os.environ.get("REF_ON", "activate").strip().lower() == "create" else "activate"
-REF_MILESTONES    = [(5, 50), (15, 150), (50, 500)]   # (تعداد دعوت موفق، پاداش اضافه)
-LOW_TOKENS        = _int("LOW_TOKENS", 10)          # زیر این مقدار به صاحب ربات هشدار می‌دیم
+REF_MILESTONES    = [(5, 50 * TOKEN_SCALE), (15, 150 * TOKEN_SCALE), (50, 500 * TOKEN_SCALE)]   # (تعداد دعوت موفق، پاداش اضافه)
+LOW_TOKENS        = _int("LOW_TOKENS", 10 * TOKEN_SCALE)          # زیر این مقدار به صاحب ربات هشدار می‌دیم
 try:
     PACKS = json.loads(os.environ.get("PACKS", "")) or []
 except ValueError:
     PACKS = []
 if not PACKS:   # بسته‌های خرید با Telegram Stars
-    PACKS = [{"id": "p1", "tokens": 200, "stars": 50},
-             {"id": "p2", "tokens": 700, "stars": 150},
-             {"id": "p3", "tokens": 2000, "stars": 380}]
+    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 50},
+             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 150},
+             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 380}]
 
 # رسانه
 MEDIA_MAX_MB   = _int("MEDIA_MAX_MB", 15)       # سقف حجم هر فایل
@@ -113,7 +118,7 @@ MEDIA_QUOTA_MB = _int("MEDIA_QUOTA_MB", 60)     # سقف کل فایل‌های 
 MAX_MEDIA      = _int("MAX_MEDIA", 60)          # سقف تعداد فایل هر کاربر
 
 # سطح و ماموریت‌ها (جدول سطح‌ها و ماموریت‌ها پایین‌تر، بخش «سطح و ماموریت‌ها»)
-DAILY_XP     = 2            # XP هر بار دریافت جایزه‌ی روزانه
+DAILY_XP     = 2 * XP_SCALE   # XP هر بار دریافت جایزه‌ی روزانه
 MAX_DISCOUNT = 30           # سقف کاهش نرخ مصرف توکن از راه سطح (درصد)
 
 MAX_PROMPT   = 4000
@@ -463,7 +468,7 @@ def claim_daily(uid):
     d, _ = ensure_user(uid)
     today, yest = tehran_day(), tehran_day(1)
     streak = d.get("streak", 0) + 1 if d.get("last_claim") == yest else 1
-    reward = DAILY_BONUS + min(streak - 1, 4) + perks_at(lvl_of(int(d.get("xp", 0))))["daily"]
+    reward = DAILY_BONUS + min(streak - 1, 4) * TOKEN_SCALE + perks_at(lvl_of(int(d.get("xp", 0))))["daily"]
     r = db.users.find_one_and_update(
         {"_id": uid, "last_claim": {"$ne": today}},
         {"$set": {"last_claim": today, "streak": streak}, "$inc": {"tokens": reward}, "$max": {"best_streak": streak}},
@@ -479,7 +484,7 @@ def wallet_info(uid):
     last = d.get("last_claim")
     streak = d.get("streak", 0) if last in (tehran_day(), tehran_day(1)) else 0
     return {"tokens": int(d.get("tokens", 0)), "streak": streak, "can_claim": last != tehran_day(),
-            "next_reward": DAILY_BONUS + min(streak, 4) + perks_at(lvl_of(int(d.get("xp", 0))))["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
+            "next_reward": DAILY_BONUS + min(streak, 4) * TOKEN_SCALE + perks_at(lvl_of(int(d.get("xp", 0))))["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
 
 
 def redeem(uid, code):
@@ -503,15 +508,21 @@ def redeem(uid, code):
 #   bots = + سقف ساخت ربات      disc = ٪ کاهش نرخ مصرف توکن   daily = + جایزه‌ی روزانه
 #   mb / files = + فضا و تعداد رسانه   ver = + نسخه‌ی قابل بازگشت   bc = + سقف گیرنده‌ی پیام همگانی
 #   free_enhance = «کامل‌ترش کن» رایگان
+def _lx(base_xp, slow):
+    """آستانه‌ی XP هر سطح: مقدار پایه × XP_SCALE × ضریب کندی (سطح‌های بالاتر کندتر می‌رسن)، رُند به مضرب ۵۰"""
+    return int(round(base_xp * XP_SCALE * slow / 50.0)) * 50 if base_xp else 0
+
+
+T = TOKEN_SCALE
 LEVELS = [
-    {"xp": 0,    "title": "تازه‌کار",  "tokens": 0,  "perks": {}},
-    {"xp": 50,   "title": "کاوشگر",    "tokens": 10, "perks": {"bots": 2}},
-    {"xp": 130,  "title": "سازنده",    "tokens": 15, "perks": {"disc": 5}},
-    {"xp": 250,  "title": "حرفه‌ای",    "tokens": 20, "perks": {"mb": 40, "files": 20}},
-    {"xp": 430,  "title": "ماهر",      "tokens": 30, "perks": {"bots": 3, "daily": 2}},
-    {"xp": 680,  "title": "استاد",     "tokens": 40, "perks": {"disc": 5, "ver": 4}},
-    {"xp": 1000, "title": "نخبه",      "tokens": 50, "perks": {"bc": 5000, "free_enhance": True}},
-    {"xp": 1400, "title": "افسانه‌ای",  "tokens": 80, "perks": {"bots": 5, "disc": 10, "daily": 3}},
+    {"xp": _lx(0, 1),     "title": "تازه‌کار",  "tokens": 0,       "perks": {}},
+    {"xp": _lx(50, 1.2),  "title": "کاوشگر",    "tokens": 10 * T,  "perks": {"bots": 2}},
+    {"xp": _lx(130, 1.25), "title": "سازنده",    "tokens": 15 * T,  "perks": {"disc": 5}},
+    {"xp": _lx(250, 1.3), "title": "حرفه‌ای",    "tokens": 20 * T,  "perks": {"mb": 40, "files": 20}},
+    {"xp": _lx(430, 1.35), "title": "ناظر",      "tokens": 30 * T,  "perks": {"bots": 3, "daily": 2 * T}},
+    {"xp": _lx(680, 1.4), "title": "Ai منیجر",     "tokens": 40 * T,  "perks": {"disc": 5, "ver": 4}},
+    {"xp": _lx(1000, 1.45), "title": "نخبه",      "tokens": 50 * T,  "perks": {"bc": 5000, "free_enhance": True}},
+    {"xp": _lx(1400, 1.5), "title": "لجند",  "tokens": 80 * T,  "perks": {"bots": 5, "disc": 10, "daily": 3 * T}},
 ]
 
 # ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
@@ -523,16 +534,16 @@ TASKS = [
                (1, 10, 40, "live", "bots:live", "فعال‌سازی", "ربات رو با توکن BotFather فعال کن"),
                (1, 15, 60, "edits", "bots:edit", "توسعه و ارتقا", "ربات رو یک بار با هوش مصنوعی ارتقا بده")]},
     {"id": "audience", "icon": "users",  "title": "رشد مخاطب",       "metric": "audience", "text": "رسیدن مجموع کاربران ربات‌هات به {n} نفر", "rich": True,
-     "desc": "مجموع کاربران همه‌ی ربات‌هات", "names": ["اولین مشتری‌ها", "محله‌ی پرجمعیت", "شهرت محلی", "کانون توجه", "ستاره‌ی تلگرام"],
+     "desc": "مجموع کاربران همه‌ی ربات‌هات", "names": ["اولین رشد کاربران", "محله‌ی پرجمعیت", "شهرت محلی", "کانون توجه", "ستاره‌ی تلگرام"],
      "steps": [(10, 10, 30), (50, 20, 60), (100, 40, 100), (500, 80, 200), (1000, 150, 350)]},
-    {"id": "refs",     "icon": "medal",  "title": "ناوگان",          "metric": "refs",     "text": "دعوت موفق {n} دوست", "rich": True,
-     "desc": "دوستات رو دعوت کن و با هم رشد کنید", "names": ["همراه اول", "تیم کوچک", "ناخدا"],
+    {"id": "refs",     "icon": "medal",  "title": "تشکیل ناوگان",          "metric": "refs",     "text": "دعوت موفق {n} دوست", "rich": True,
+     "desc": "دوستات رو دعوت کن و با هم رشد کنید", "names": ["رشد ناوگان", "تیم کوچک", "ناخدا"],
      "steps": [(1, 5, 30), (5, 15, 80), (15, 40, 150)]},
     {"id": "edits",    "icon": "spark",  "title": "ارتقا با هوش مصنوعی", "metric": "edits",  "text": "ارتقای ربات با هوش مصنوعی {n} بار", "rich": True,
-     "desc": "ربات‌هات رو با هوش مصنوعی کامل‌تر کن", "names": ["مهندس دستور", "هم‌فکر هوشمند"],
+     "desc": "ربات‌هات رو با هوش مصنوعی کامل‌تر کن", "names": ["توسعه", "هم‌فکر هوشمند"],
      "steps": [(5, 15, 50), (15, 30, 100)]},
-    {"id": "streak",   "icon": "flame",  "title": "پیوستگی",         "metric": "streak",   "text": "{n} روز پشت‌سرهم دریافت جایزه‌ی روزانه", "rich": True,
-     "desc": "هر روز جایزه‌ی روزانه رو بگیر", "names": ["عادت", "هفته‌ی طلایی", "باشگاه سی‌روزه"],
+    {"id": "streak",   "icon": "flame",  "title": "استمرار",         "metric": "streak",   "text": "{n} روز متوالی دریافت پاداش روزانه ", "rich": True,
+     "desc": "هر روز جایزه‌ی روزانه رو بگیر", "names": ["کسب اولین پاداش روزانه", "هفته‌ی طلایی", "باشگاه سی‌روزه"],
      "steps": [(3, 5, 20), (7, 15, 50), (30, 60, 150)]},
 ]
 
@@ -541,6 +552,7 @@ def task_steps(t):
     out = []
     for st in t["steps"]:
         g, tk, x = st[:3]
+        tk, x = tk * TOKEN_SCALE, x * XP_SCALE
         if len(st) > 3:
             metric, key, label, hint = st[3], st[4], st[5], st[6]
         else:
@@ -604,8 +616,11 @@ def cut(uid, n):
     return n if pct <= 0 or n <= 1 else max(1, int(n * (100 - pct) / 100 + 0.5))
 
 
+AI_MSG_COST = TOKEN_SCALE      # حالت fixed: هزینه‌ی هر «بسته‌ی» پیام هوشمند (هر ai_per پیام = AI_MSG_COST توکن)
+
+
 def ai_per(uid):
-    """حالت fixed: هر چند پیام هوشمند = ۱ توکن (با تخفیف سطح بیشتر می‌شه)"""
+    """حالت fixed: هر چند پیام هوشمند = یک بسته‌ی AI_MSG_COST توکنی (با تخفیف سطح بیشتر می‌شه)"""
     return max(1, round(AI_MSGS_PER_TOKEN * 100 / (100 - perks_of(uid)["disc"])))
 
 
@@ -754,7 +769,7 @@ def ai_tick(owner):
     d = db.users.find_one_and_update({"_id": owner}, {"$inc": {"ai_n": 1}}, return_document=ReturnDocument.AFTER)
     if not d:
         return False
-    if (int(d.get("ai_n", 1)) - 1) % ai_per(owner) == 0 and not charge_up_to(owner, 1, "ai_chat", daily_key=True):
+    if (int(d.get("ai_n", 1)) - 1) % ai_per(owner) == 0 and not charge_up_to(owner, AI_MSG_COST, "ai_chat", daily_key=True):
         db.users.update_one({"_id": owner}, {"$inc": {"ai_n": -1}})
         return False
     return True
@@ -2013,7 +2028,7 @@ def template_cost(t, uid=None):
 def client_cfg(uid=None):
     pk = perks_of(uid)
     return {"billing": BILLING, "gen": cut(uid, GEN_COST), "edit": cut(uid, EDIT_COST), "typical": cut(uid, typical_cost()), "min": cut(uid, TOKEN_MIN_COST),
-            "ai_per": ai_per(uid) if uid is not None else AI_MSGS_PER_TOKEN, "bc_per": BROADCAST_PER_TOKEN,
+            "ai_per": ai_per(uid) if uid is not None else AI_MSGS_PER_TOKEN, "ai_cost": AI_MSG_COST, "bc_per": BROADCAST_PER_TOKEN, "scale": TOKEN_SCALE,
             "enhance": 0 if pk["free_enhance"] else ENHANCE_COST,
             "max_bots": MAX_BOTS + pk["bots"], "max_nodes": MAX_NODES, "max_prompt": MAX_PROMPT, "daily": DAILY_BONUS + pk["daily"],
             "ref_inviter": REF_INVITER, "ref_invitee": REF_INVITEE, "ref_max": REF_MAX_PER_USER, "ref_on": REF_ON,
@@ -2500,7 +2515,7 @@ def api_broadcast(uid, bot_id):
     chats = [s["chat"] for s in db.subs.find({"bot": bot_id, "blocked": {"$ne": True}}, {"chat": 1})][:BROADCAST_MAX + perks_of(uid)["bc"]]
     if not chats:
         return jsonify(error="هنوز کاربری نداری که بهش پیام بدی"), 400
-    cost = cut(uid, max(1, math.ceil(len(chats) / BROADCAST_PER_TOKEN)))
+    cost = cut(uid, max(TOKEN_SCALE, math.ceil(len(chats) / BROADCAST_PER_TOKEN)))
     if not spend(uid, cost, "broadcast"):
         return jsonify(error=f"توکن کافی نداری. این ارسال {cost} توکن می‌خواد.", need=cost, wallet=wallet_info(uid)), 402
     db.bots.update_one({"_id": bot["_id"]}, {"$set": {"bc_at": now()}})
@@ -3592,13 +3607,13 @@ def ai_precheck(owner):
     """قبل از جواب دادن: حالت fixed همون لحظه کم می‌کنه، حالت usage فقط موجودی رو چک می‌کنه"""
     if BILLING == "fixed":
         return ai_tick(owner)
-    return balance(owner) >= 2
+    return balance(owner) >= 2 * TOKEN_SCALE
 
 
 def ai_postcharge(owner, bot_id, pt, ct):
     cost = 0
     if BILLING == "usage":
-        cost = charge_up_to(owner, calc_cost(pt, ct, minimum=1, uid=owner), "ai_chat", daily_key=True)
+        cost = charge_up_to(owner, calc_cost(pt, ct, minimum=TOKEN_SCALE, uid=owner), "ai_chat", daily_key=True)
     try:
         db.bots.update_one({"_id": ObjectId(bot_id)}, {"$inc": {"ai_tokens": cost, "ai_msgs": 1}})
     except Exception:
@@ -3924,6 +3939,57 @@ def pack_from_payload(payload, uid):
     return next((p for p in PACKS if p.get("id") == pid), None)
 
 
+START_TEXT = (
+    "🟢 سیستم آنلاین\n\n"
+    "ابر رباتساز هوشمند\n"
+    "زیرساخت سرور، موتور هوش مصنوعی و داشبورد اختصاصی ساخت ربات شما کاملاً فعال و آماده‌ی اجراست.\n\n"
+    "ورود به داشبورد اختصاصی (برای بار اول حتماً VPN روشن باشد) 👇🏻"
+)
+
+
+def start_keyboard():
+    return {"inline_keyboard": [[{"text": "⚡ ورود به مینی‌اپ هوشمند", "web_app": {"url": BASE_URL}}]]}
+
+
+def send_start(uid):
+    """پیام استارت: اگه ادمین عکس گذاشته باشه با عکس، وگرنه فقط متن؛ همیشه فقط یک دکمه‌ی ورود"""
+    fid = (db.settings.find_one({"_id": "start_photo"}) or {}).get("fid")
+    if fid:
+        r = tg(MOTHER_TOKEN, "sendPhoto", chat_id=uid, photo=fid, caption=START_TEXT, reply_markup=start_keyboard())
+        if r.get("ok"):
+            return r
+        log.warning("start photo failed: %s", r.get("description"))
+    return tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=START_TEXT, reply_markup=start_keyboard())
+
+
+def mother_photo(msg):
+    """ادمین: /setstartphoto — عکس استارت. سه روش: کپشنِ خودِ عکس، ریپلای روی عکس، یا دستور و بعدش ارسال عکس.
+    اگه پیام رو مصرف کرد True برمی‌گردونه"""
+    uid = msg["from"]["id"]
+    if uid not in ADMIN_IDS:
+        return False
+    text = (msg.get("text") or msg.get("caption") or "").strip()
+    cmd = text.split()[0].split("@")[0].lower() if text else ""
+    photo = msg.get("photo") or (msg.get("reply_to_message") or {}).get("photo")
+    waiting = db.settings.find_one_and_delete({"_id": f"await_photo:{uid}"})
+    if waiting and time.time() - waiting.get("t", 0) > 600:
+        waiting = None
+    if cmd == "/setstartphoto" and not photo:
+        db.settings.update_one({"_id": f"await_photo:{uid}"}, {"$set": {"t": time.time()}}, upsert=True)
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text="عکس استارت رو همین‌جا بفرست (به‌صورت عکس، نه فایل). برای انصراف /cancel")
+        return True
+    if waiting and cmd == "/cancel":
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text="لغو شد.")
+        return True
+    if photo and (cmd == "/setstartphoto" or waiting):
+        fid = photo[-1]["file_id"]
+        db.settings.update_one({"_id": "start_photo"}, {"$set": {"fid": fid, "by": uid, "t": time.time()}}, upsert=True)
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text="عکس استارت ذخیره شد. پیش‌نمایش:")
+        send_start(uid)
+        return True
+    return False
+
+
 def mother_keyboard(uid):
     rows = [[{"text": "ساخت و مدیریت ربات", "web_app": {"url": BASE_URL}}]]
     link = mother_link(uid)
@@ -3975,6 +4041,8 @@ def mother_command(msg):
         if cmd == "/announce":
             n, err = start_announce(arg, uid)
             return say(err or f"اعلان برای {n} نفر در حال ارساله.", False)
+    if cmd == "/start":
+        return send_start(uid)
     tokens = wallet_info(uid)["tokens"]
     if cmd == "/balance":
         return say(f"موجودی تو: {tokens} توکن.")
@@ -3993,8 +4061,7 @@ def mother_command(msg):
     if cmd == "/invite":
         return say(f"لینک دعوت تو:\n{mother_link(uid)}\n\nهر دوستی که با این لینک بیاد و اولین رباتش رو بسازه، "
                    f"{REF_INVITER} توکن می‌گیری و اون هم {REF_INVITEE} توکن هدیه می‌گیره.")
-    say((f"سلام {name or ''}. اینجا با هوش مصنوعی هر رباتی که بخوای می‌سازی و ارتقا می‌دی. "
-         f"فقط بگو چی می‌خوای.\n\nموجودی تو: {tokens} توکن.").replace("  ", " "))
+    send_start(uid)
 
 
 @app.post("/mother")
@@ -4014,6 +4081,8 @@ def mother_hook():
             return "ok"
         if msg.get("successful_payment"):
             mother_paid(msg)
+        elif mother_photo(msg):
+            pass
         else:
             mother_command(msg)
     except Exception:
