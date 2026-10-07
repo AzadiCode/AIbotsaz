@@ -349,6 +349,8 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
 .sh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
 .sh h2{font-size:17px;font-weight:800}
+.sh .acts{display:flex;align-items:center;gap:8px}
+.iconb.spin svg{animation:s .7s linear infinite}
 .bar{position:sticky;bottom:0;display:flex;gap:10px;padding:14px 0 calc(16px + env(safe-area-inset-bottom));margin-top:20px;background:linear-gradient(to top,var(--sf) 76%,transparent)}
 .bar .b{flex:1}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -783,6 +785,7 @@ const IC = {
   chart: svg('<path d="M5 19v-8M12 19V5M19 19v-5"/>', 2),
   key: svg('<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H20M17 12v3M14.5 12v2"/>'),
   stats: svg('<path d="M4 19h16M7 16v-5M12 16V6M17 16v-8"/>'),
+  ref: svg('<path d="M20 12a8 8 0 1 1-2.34-5.66M20 3.5V8h-4.5"/>', 2),
 };
 const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g>', 1.7);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
@@ -1384,7 +1387,7 @@ function showSheet(html){
   sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
 }
 const nodeOpts = (cfg, cur, extra = "") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i === cur ? " selected" : ""}>${esc(titleOf(cfg, i))}</option>`).join("");
-const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div>`;
+const head = (t, rf) => `<div class="grab"></div><div class="sh"><h2>${t}</h2><div class="acts">${rf ? `<button class="iconb sm" data-a="${rf}" aria-label="بروزرسانی">${IC.ref}</button>` : ""}<button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div></div>`;
 
 /* ── منطق: متغیر، شرط و اکشن ── */
 const OPS = [["==","مساوی باشد با"],["!=","مساوی نباشد با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشد"],["empty","خالی باشد"],["filled","پر باشد"]];
@@ -2078,15 +2081,16 @@ function uList(d){
 }
 async function openUsers(){
   S.sheet = {kind: "info"}; UQ = ""; clearInterval(window.__ut);
-  showSheet(head("کاربران ربات‌ساز") + `<p class="muted">در حال بارگذاری…</p>`);
+  showSheet(head("کاربران ربات‌ساز", "urefresh") + `<p class="muted">در حال بارگذاری…</p>`);
   const tick = async () => {
     if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return clearInterval(window.__ut);
     try{
       const d = await api("/api/admin/users"); openUsers.d = d;
       if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); return; }
-      showSheet(head("کاربران ربات‌ساز") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px"><div id="ulist">${uList(d)}</div><div class="fgap"></div>`);
+      showSheet(head("کاربران ربات‌ساز", "urefresh") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px"><div id="ulist">${uList(d)}</div><div class="fgap"></div>`);
     }catch(e){ closeSheet(); toast(e.message); }
   };
+  openUsers.tick = tick;
   await tick(); window.__ut = setInterval(tick, 10000);
 }
 /* مخاطبان یک ربات + ارسال اطلاعیه از طریق همان ربات */
@@ -2105,13 +2109,13 @@ const auList = d => {
 async function openAudience(botId){
   clearInterval(window.__ut); clearInterval(window.__at);
   S.sheet = {kind: "aud"}; AU.id = botId; AU.target = "ex"; AU.d = null;
-  showSheet(head("مخاطبان ربات") + `<p class="muted">در حال بارگذاری…</p>`);
+  showSheet(head("مخاطبان ربات", "arefresh") + `<p class="muted">در حال بارگذاری…</p>`);
   const tick = async () => {
     if(S.sheet?.kind !== "aud" || !$("#sheet").classList.contains("show")) return clearInterval(window.__at);
     try{
       const d = await api(`/api/admin/bots/${AU.id}/audience`); AU.d = d;
       if($("#alist")){ $("#asum").innerHTML = auSum(d); $("#alist").innerHTML = auList(d); $("#atg").textContent = auTg(); return; }
-      showSheet(head(d.bot.un ? "@" + esc(d.bot.un) : esc(d.bot.name)) + `<div class="usum" id="asum">${auSum(d)}</div>
+      showSheet(head(d.bot.un ? "@" + esc(d.bot.un) : esc(d.bot.name), "arefresh") + `<div class="usum" id="asum">${auSum(d)}</div>
         <input id="aq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، اسم" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px">
         <div id="alist" style="max-height:38vh;overflow:auto">${auList(d)}</div>
         ${d.bot.on ? `<div class="atg"><span class="muted">گیرنده:</span><b id="atg">${esc(auTg())}</b></div>
@@ -2121,6 +2125,7 @@ async function openAudience(botId){
         <div class="fgap"></div><button class="b o" data-a="ausers">بازگشت به کاربران</button>`);
     }catch(e){ clearInterval(window.__at); toast(e.message); }
   };
+  openAudience.tick = tick;
   await tick(); window.__at = setInterval(tick, 10000);
 }
 document.addEventListener("click", e => {
@@ -2128,6 +2133,8 @@ document.addEventListener("click", e => {
   const r = e.target.closest("[data-au]"); if(r && !e.target.closest("[data-pf]")){ AU.target = r.dataset.au; $("#atg").textContent = auTg(); $("#alist").innerHTML = auList(AU.d); }
 }, true);
 Object.assign(A, {
+  urefresh: el => { el.classList.add("spin"); Promise.resolve(openUsers.tick?.()).catch(() => {}).finally(() => setTimeout(() => el.classList?.remove("spin"), 700)); },
+  arefresh: el => { el.classList.add("spin"); Promise.resolve(openAudience.tick?.()).catch(() => {}).finally(() => setTimeout(() => el.classList?.remove("spin"), 700)); },
   autg: el => { AU.target = el.dataset.t; $("#atg").textContent = auTg(); $("#alist").innerHTML = auList(AU.d); },
   ausend: el => { const t = ($("#au-text")?.value || "").trim(); if(t.length < 2) return toast("متن اطلاعیه را بنویس");
     const one = !["ex", "all"].includes(AU.target), body = one ? {scope: "one", uid: AU.target, text: t} : {scope: AU.target === "all" ? "all" : "except_owner", text: t};
