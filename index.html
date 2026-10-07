@@ -1825,21 +1825,22 @@ function delMedia(){
   const go = ok => ok && busy($('[data-sh="del"]'), async () => { const d = await api(`/api/media/${id}`, "DELETE"); S.media = S.media.filter(m => m.id !== id); S.used = d.used; closeSheet(); render(); toast("فایل پاک شد"); });
   confirmQ(q, go);
 }
-function openBc(){ S.sheet = {kind: "bc"}; D = {text: "", media: ""}; renderSheet(); }
+function openBc(){ S.sheet = {kind: "bc"}; D = {text: "", media: "", html: true}; renderSheet(); }
 function bcSheet(){
   const live = S.stats ? Math.max(0, S.stats.users - S.stats.blocked) : 0, per = S.cfg.bc_per, cost = Math.max(1, Math.ceil(live / per));
   return head("پیام همگانی") + `<p class="muted">این پیام برای همه‌ی کاربرهای ربات فرستاده می‌شود. الان ${N(live)} مخاطب فعال داری.</p>
-    <span class="lbl">متن پیام</span><textarea class="fa" id="bc-t" maxlength="3500" placeholder="متن اطلاعیه">${esc(D.text)}</textarea>
+    <span class="lbl">متن پیام</span><textarea class="fa" id="bc-t" maxlength="3500" placeholder="متن اطلاعیه (پشتیبانی از HTML)">${esc(D.text)}</textarea>
+    <label class="muted" style="display:flex;align-items:center;gap:8px;margin:6px 0 4px"><input type="checkbox" id="bc-html"${D.html ? " checked" : ""} style="width:auto;margin:0">فرمت HTML (بولد، ایتالیک، لینک، کد)</label>
     <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("media", D.media)}
     <p class="muted mt">هزینه: ${N(cost)} توکن (هر ${N(per)} نفر ${N(1)} توکن). موجودی تو ${N(S.wallet.tokens)} توکن است.</p>
     <div class="bar"><button class="b" data-sh="save">${IC.mega}ارسال</button></div>`;
 }
-const readBc = () => { D.text = $("#bc-t")?.value ?? D.text; };
+const readBc = () => { D.text = $("#bc-t")?.value ?? D.text; D.html = !!$("#bc-html")?.checked; };
 function saveBc(){
   if(!D.text.trim() && !D.media) return toast("متن یا رسانه‌ی پیام را وارد کن");
   const go = ok => ok && busy($('[data-sh="save"]'), async () => {
     try{
-      const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text: D.text.trim(), media: D.media});
+      const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text: D.text.trim(), media: D.media, html: D.html});
       S.wallet = d.wallet; renderTop(); closeSheet(); toast(`ارسال برای ${d.queued} نفر شروع شد. وقتی تمام شود خبرت می‌کنم`); haptic("ok");
     }catch(e){ if(e.status === 402){ closeSheet(); openBuy(e.message); } else throw e; }
   });
@@ -2044,7 +2045,9 @@ Object.assign(A, {
       ["مخاطب ربات‌ها", d.bot_users], ["پاسخ فرم‌ها", d.forms], ["توکن در گردش", d.circulation], ["دعوت موفق", d.referrals]]); }),
   aannounce: el => { const t = ($("#an-text")?.value || "").trim(); if(t.length < 3) return toast("متن اعلان را بنویس");
     const b = !!$("#an-b")?.checked, a = !!$("#an-a")?.checked; if(!b && !a) return toast("حداقل یک گیرنده را تیک بزن");
-    confirmQ(`این اعلان برای ${[b && "سازنده‌ها", a && "مخاطبان ربات‌های فعال"].filter(Boolean).join(" و ")} فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t, builders: b, audience: a}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
+    const mid = (window.D || {}).an_media || "";
+    const html = !!$("#an-html")?.checked;
+    confirmQ(`این اعلان برای ${[b && "سازنده‌ها", a && "مخاطبان ربات‌های فعال"].filter(Boolean).join(" و ")} فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text: t, builders: b, audience: a, media: mid, html: html}); toast(`ارسال برای ${d.queued} نفر شروع شد`); $("#an-text").value = ""; })); },
   ausers: () => openUsers(),
 });
 document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
@@ -2059,7 +2062,9 @@ function adminCard(){
       <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
       <button class="b o" data-a="acoupon">ساخت کد</button></div>
     <div class="panel"><h2>اعلان همگانی</h2><div class="fgap"></div>
-      <textarea class="fa" id="an-text" maxlength="3500" style="min-height:76px" placeholder="متن اعلان" aria-label="متن اعلان"></textarea><div class="fgap"></div>
+      <span class="lbl">متن اعلان</span><textarea class="fa" id="an-text" maxlength="3500" style="min-height:76px" placeholder="متن اعلان (پشتیبانی از HTML)" aria-label="متن اعلان"></textarea>
+      <label class="muted" style="display:flex;align-items:center;gap:8px;margin:6px 0 4px"><input type="checkbox" id="an-html" checked style="width:auto;margin:0">فرمت HTML (بولد، ایتالیک، لینک، کد)</label>
+      <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("an_media", "")}<div class="fgap"></div>
       <label class="muted" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="an-b" checked style="width:auto;margin:0">سازنده‌ها (از طریق ربات‌ساز)</label>
       <label class="muted" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="an-a" style="width:auto;margin:0">مخاطبان ربات‌های فعال (از طریق خود رباتشان، بدون سازنده)</label><div class="fgap"></div>
       <button class="b o" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
@@ -2120,7 +2125,9 @@ async function openAudience(botId){
         <div id="alist" style="max-height:38vh;overflow:auto">${auList(d)}</div>
         ${d.bot.on ? `<div class="atg"><span class="muted">گیرنده:</span><b id="atg">${esc(auTg())}</b></div>
         <div class="cmd"><button class="b o sm" data-a="autg" data-t="ex">همه به‌جز سازنده</button><button class="b o sm" data-a="autg" data-t="all">همه با سازنده</button></div>
-        <div class="fgap"></div><textarea class="fa" id="au-text" maxlength="3500" style="min-height:76px" placeholder="متن اطلاعیه از طریق این ربات" aria-label="متن اطلاعیه"></textarea><div class="fgap"></div>
+        <span class="lbl">متن اطلاعیه</span><textarea class="fa" id="au-text" maxlength="3500" style="min-height:76px" placeholder="متن اطلاعیه (پشتیبانی از HTML)" aria-label="متن اطلاعیه"></textarea>
+        <label class="muted" style="display:flex;align-items:center;gap:8px;margin:6px 0 4px"><input type="checkbox" id="au-html" checked style="width:auto;margin:0">فرمت HTML (بولد، ایتالیک، لینک، کد)</label>
+        <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("au_media", "")}<div class="fgap"></div>
         <button class="b" data-a="ausend">${IC.mega}ارسال</button>` : '<p class="muted">این ربات فعال نیست و ارسال ممکن نیست.</p>'}
         <div class="fgap"></div><button class="b o" data-a="ausers">بازگشت به کاربران</button>`);
     }catch(e){ clearInterval(window.__at); toast(e.message); }
@@ -2137,7 +2144,9 @@ Object.assign(A, {
   arefresh: el => { el.classList.add("spin"); Promise.resolve(openAudience.tick?.()).catch(() => {}).finally(() => setTimeout(() => el.classList?.remove("spin"), 700)); },
   autg: el => { AU.target = el.dataset.t; $("#atg").textContent = auTg(); $("#alist").innerHTML = auList(AU.d); },
   ausend: el => { const t = ($("#au-text")?.value || "").trim(); if(t.length < 2) return toast("متن اطلاعیه را بنویس");
-    const one = !["ex", "all"].includes(AU.target), body = one ? {scope: "one", uid: AU.target, text: t} : {scope: AU.target === "all" ? "all" : "except_owner", text: t};
+    const mid = (window.D || {}).au_media || "";
+    const html = !!$("#au-html")?.checked;
+    const one = !["ex", "all"].includes(AU.target), body = one ? {scope: "one", uid: AU.target, text: t, media: mid, html: html} : {scope: AU.target === "all" ? "all" : "except_owner", text: t, media: mid, html: html};
     confirmQ(`این پیام برای «${auTg()}» از طریق همین ربات فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api(`/api/admin/bots/${AU.id}/send`, "POST", body); toast(one ? "ارسال شد" : `ارسال برای ${d.queued} نفر شروع شد`); $("#au-text").value = ""; })); },
 });
 document.addEventListener("input", e => { if(e.target.id === "aq" && AU.d) $("#alist").innerHTML = auList(AU.d); });
