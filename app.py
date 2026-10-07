@@ -150,8 +150,8 @@ else:
 def _index(col, key, **kw):
     try:
         col.create_index(key, **kw)
-    except Exception:
-        log.warning("index %s failed", key)
+    except Exception as e:
+        log.warning("index %s failed: %s", key, str(e)[:300])
 
 
 _index(db.bots, "owner")
@@ -4112,5 +4112,3 @@ if SCHED_ON:
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
-
