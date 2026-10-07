@@ -3941,14 +3941,14 @@ def pack_from_payload(payload, uid):
 
 START_TEXT = (
     "🟢 SYSTEM ONLINE\n\n"
-    "AI BotMaker Terminal\n"
+    "AI Azadi Terminal\n"
     "Server infrastructure, AI engine and your private bot-building dashboard are fully operational.\n\n"
     "ورود به استودیو حرفه‌ای و ساخت ربات (VPN روشن) 👇🏻"
 )
 
 
 def start_keyboard():
-    return {"inline_keyboard": [[{"text": "💎 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
+    return {"inline_keyboard": [[{"text": "🕹 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
 
 
 def start_media():
