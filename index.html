@@ -877,7 +877,7 @@ const tabsHTML = (list, cur, act) => `<div class="tabs" role="tablist">${list.ma
 /* ═════════ انیمیشن ساخت ═════════ */
 const THINK = ["در حال تحلیل درخواست…", "طراحی ساختار مسیرها…", "چیدمان صفحه‌ها و دکمه‌ها…", "نوشتن متن پیام‌ها…", "اتصال منطق و متغیرها…", "بررسی سازگاری با تلگرام…", "بهینه‌سازی تجربه‌ی کاربر…", "تنظیم جزئیات نهایی…", "بازبینی و رفع ایرادها…", "کمی دیگر، تقریباً آماده‌ست…"];
 const RB = `<svg class="rb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle class="r1" cx="12" cy="12" r="10" stroke-dasharray="9 5"/><path class="r2" d="M12 6a6 6 0 0 1 6 6" /><path class="r2" d="M12 18a6 6 0 0 1-6-6" /><circle class="c" cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`;
-const FAD = n => String(n).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+const FAD = n => String(n);          // اعداد لاتین، مثل بقیه‌ی جاهای اپ
 const LQ_STEPS = ["تحلیل", "ساخت", "بررسی", "ذخیره"];
 const LQ_IDX = {analyze: 0, build: 1, review: 1, validate: 2, save: 3};
 const LQ_LBL = {analyze: "تحلیل درخواست", build: "ساخت بخش‌ها و مسیرها", review: "بازبینی و اصلاح نهایی", validate: "بررسی سازگاری با تلگرام", save: "ذخیره‌ی ربات"};
@@ -890,7 +890,7 @@ function startLive(title){
   $("#think")?.classList.remove("show");
   LQ = {t0: Date.now(), target: 0, shown: 0, th: "", ty: 0, real: false, st: ""};
   box.innerHTML = `<div class="lq" role="status" aria-busy="true" aria-label="${title}">
-    <div class="lqh">${RB}<div class="lqt"><b>${title}</b><span class="lqs">${THINK[0]}</span></div><div class="lqp"><b class="lqpc">${FAD(0)}٪</b><small class="lqtm">${FAD("0:00")}</small></div></div>
+    <div class="lqh">${RB}<div class="lqt"><b>${title}</b><span class="lqs">${THINK[0]}</span></div><div class="lqp"><b class="lqpc">${FAD(0)}%</b><small class="lqtm">${FAD("0:00")}</small></div></div>
     <div class="lqbar ind"><i></i></div>
     <ol class="lqst">${LQ_STEPS.map(t => `<li><i></i>${t}</li>`).join("")}</ol>
     <div class="lqn" hidden></div><div class="lqth" hidden></div></div>`;
@@ -913,7 +913,7 @@ function startLive(title){
       const d = LQ.target - LQ.shown;
       LQ.shown = reduced() ? LQ.target : LQ.shown + d * .12 + (Math.abs(d) < .4 && LQ.shown < 96 ? .02 : 0);
       LQ.shown = Math.min(LQ.shown, LQ.done ? 100 : 99);
-      pc.textContent = FAD(Math.round(LQ.shown)) + "٪"; bar.firstElementChild.style.width = LQ.shown + "%";
+      pc.textContent = FAD(Math.round(LQ.shown)) + "%"; bar.firstElementChild.style.width = LQ.shown + "%";
     }
     if(LQ.th){
       if(LQ.ty > LQ.th.length) LQ.ty = LQ.th.length;
@@ -937,7 +937,7 @@ function liveDone(){
   const root = $("#live .lq"); if(!root) return;
   LQ.real = LQ.done = true; LQ.target = LQ.shown = 100;
   root.querySelector(".lqbar").classList.remove("ind"); root.querySelector(".lqbar").firstElementChild.style.width = "100%";
-  root.querySelector(".lqpc").textContent = FAD(100) + "٪"; root.querySelector(".lqs").textContent = "آماده شد"; lqSteps(root, 3, true);
+  root.querySelector(".lqpc").textContent = FAD(100) + "%"; root.querySelector(".lqs").textContent = "آماده شد"; lqSteps(root, 3, true);
 }
 function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); LQ = {}; const b = $("#live"); if(b) b.innerHTML = ""; }
 
