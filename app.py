@@ -84,9 +84,9 @@ DEBUG         = os.environ.get("DEBUG", "") == "1"
 BILLING           = "fixed" if os.environ.get("BILLING", "usage").strip().lower() == "fixed" else "usage"
 TOKEN_IN_RATE     = _float("TOKEN_IN_RATE", 1 * TOKEN_SCALE)      # توکن به‌ازای هر ۱۰۰۰ توکن ورودی مدل
 TOKEN_OUT_RATE    = _float("TOKEN_OUT_RATE", 3 * TOKEN_SCALE)     # توکن به‌ازای هر ۱۰۰۰ توکن خروجی مدل
-TOKEN_MIN_COST    = _int("TOKEN_MIN_COST", 5 * TOKEN_SCALE)       # حداقل هزینه‌ی هر ساخت/ارتقا (حالت usage)
-GEN_COST          = _int("GEN_COST", 5 * TOKEN_SCALE)            # ساخت ربات جدید (حالت fixed)
-EDIT_COST         = _int("EDIT_COST", 2 * TOKEN_SCALE)            # ارتقای ربات (حالت fixed)
+TOKEN_MIN_COST    = _int("TOKEN_MIN_COST", 6 * TOKEN_SCALE)       # حداقل هزینه‌ی هر ساخت/ارتقا (حالت usage)
+GEN_COST          = _int("GEN_COST", 7 * TOKEN_SCALE)            # ساخت ربات جدید (حالت fixed)
+EDIT_COST         = _int("EDIT_COST", 3 * TOKEN_SCALE)            # ارتقای ربات (حالت fixed)
 AI_MSGS_PER_TOKEN = max(1, _int("AI_MSGS_PER_TOKEN", 3))        # حالت fixed: هر چند پیام هوشمند = ۱ توکن
 ENHANCE_COST      = _int("ENHANCE_COST", 1 * TOKEN_SCALE)         # بهینه‌سازی توضیحِ ربات با هوش مصنوعی
 TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.8 * TOKEN_SCALE)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق/تیکت = ۱، گفتگوی هوشمند = ۲)
@@ -119,7 +119,7 @@ MAX_MEDIA      = _int("MAX_MEDIA", 60)          # سقف تعداد فایل ه�
 
 # سطح و ماموریت‌ها (جدول سطح‌ها و ماموریت‌ها پایین‌تر، بخش «سطح و ماموریت‌ها»)
 DAILY_XP     = 2 * XP_SCALE   # XP هر بار دریافت جایزه‌ی روزانه
-MAX_DISCOUNT = 30           # سقف کاهش نرخ مصرف توکن از راه سطح (درصد)
+MAX_DISCOUNT = 20          # سقف کاهش نرخ مصرف توکن از راه سطح (درصد)
 
 MAX_PROMPT   = 4000
 MAX_VERSIONS = 6
