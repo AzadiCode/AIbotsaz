@@ -71,7 +71,7 @@ def _float(name, default):
 # ضریب اقتصاد: همه‌ی توکن‌ها (هدیه‌ها، پاداش‌ها، هزینه‌ها، بسته‌ها) و XP با این ضریب بالا می‌رن.
 # هدیه‌ی ثبت‌نام = ۱۰۰ × TOKEN_SCALE = ۱۰۰۰ توکن؛ بقیه دقیقاً با همین نسبت.
 TOKEN_SCALE = max(1, _int("TOKEN_SCALE", 10))
-XP_SCALE    = max(1, _int("XP_SCALE", 10))
+XP_SCALE    = max(1, _int("XP_SCALE", 13))
 
 MAX_BOTS      = _int("MAX_BOTS", 1)            # سقف ربات هر کاربر
 AI_MAX_TOKENS = _int("AI_MAX_TOKENS", 9000)     # سقف طول خروجی هوش مصنوعی ساخت ربات
@@ -85,8 +85,8 @@ BILLING           = "fixed" if os.environ.get("BILLING", "usage").strip().lower(
 TOKEN_IN_RATE     = _float("TOKEN_IN_RATE", 1 * TOKEN_SCALE)      # توکن به‌ازای هر ۱۰۰۰ توکن ورودی مدل
 TOKEN_OUT_RATE    = _float("TOKEN_OUT_RATE", 3 * TOKEN_SCALE)     # توکن به‌ازای هر ۱۰۰۰ توکن خروجی مدل
 TOKEN_MIN_COST    = _int("TOKEN_MIN_COST", 6 * TOKEN_SCALE)       # حداقل هزینه‌ی هر ساخت/ارتقا (حالت usage)
-GEN_COST          = _int("GEN_COST", 12 * TOKEN_SCALE)            # ساخت ربات جدید (حالت fixed)
-EDIT_COST         = _int("EDIT_COST", 6 * TOKEN_SCALE)            # ارتقای ربات (حالت fixed)
+GEN_COST          = _int("GEN_COST", 7 * TOKEN_SCALE)            # ساخت ربات جدید (حالت fixed)
+EDIT_COST         = _int("EDIT_COST", 3 * TOKEN_SCALE)            # ارتقای ربات (حالت fixed)
 AI_MSGS_PER_TOKEN = max(1, _int("AI_MSGS_PER_TOKEN", 3))        # حالت fixed: هر چند پیام هوشمند = ۱ توکن
 ENHANCE_COST      = _int("ENHANCE_COST", 1 * TOKEN_SCALE)         # بهینه‌سازی توضیحِ ربات با هوش مصنوعی
 TEMPLATE_UNIT_COST = _float("TEMPLATE_UNIT_COST", 0.8 * TOKEN_SCALE)   # قالب آماده: هزینه به‌ازای هر «واحد کار» (هر بخش = ۱، فرم/منطق/تیکت = ۱، گفتگوی هوشمند = ۲)
@@ -407,13 +407,13 @@ def refund(uid, n, why="refund"):
 
 
 def hold(uid, n):
-    """رزرو موقت موجودی (برای کارهایی که هزینه‌ی نهایی‌شون بعداً معلوم می‌شه)"""
-    return db.users.update_one({"_id": uid, "tokens": {"$gte": n}}, {"$inc": {"tokens": -n}}).modified_count == 1
+    """فقط بررسی می‌کنه موجودی برای سقف هزینه کافیه؛ چیزی از موجودی کم نمی‌شه (هزینه‌ی واقعی آخر کار کسر می‌شه)"""
+    return balance(uid) >= int(n)
 
 
 def release(uid, n):
-    if n > 0:
-        db.users.update_one({"_id": uid}, {"$inc": {"tokens": int(n)}})
+    """سازگاری با کد قبلی: دیگه چیزی رزرو نمی‌شه که برگرده"""
+    return None
 
 
 def settle(uid, n, why):
@@ -2331,7 +2331,7 @@ def report_gaps(uid, bot, prompt, items):
 
 
 def gen_job(jid, uid, bot_id, prompt, reserve):
-    """کار پس‌زمینه: رزرو توکن از قبل کم شده؛ در پایان هزینه‌ی واقعی ثبت و باقی‌مونده برمی‌گرده"""
+    """کار پس‌زمینه: تا پایان کار چیزی از موجودی کم نمی‌شه؛ در پایان فقط هزینه‌ی واقعی (حداکثر سقف رزرو) کسر می‌شه"""
     acc = []
     _gap.items = []
     _prog.cb = Progress(jid)
@@ -2351,29 +2351,26 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             sync_commands(bot, cfg)
         else:
             bot = new_bot_doc(uid, cfg, thinking)
-        release(uid, reserve - cost)
-        settle(uid, cost, "edit" if bot_id else "gen")
+        cost = charge_up_to(uid, cost, "edit" if bot_id else "gen")      # فقط هزینه‌ی واقعی، همین الان کسر می‌شه
         db.jobs.update_one({"_id": jid}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": cost}})
         if REF_ON == "create":
             settle_referral(uid)
         report_gaps(uid, bot, prompt, getattr(_gap, "items", []))
     except Exception as e:
         log.exception("generate failed")
-        msg = "ساخت ربات ناموفق بود و توکن‌هات برگشت داده شد. دوباره امتحان کن یا توضیح رو ساده‌تر بنویس."
+        msg = "ساخت ربات ناموفق بود و چیزی از توکن‌هات کم نشد. دوباره امتحان کن یا توضیح رو ساده‌تر بنویس."
         if DEBUG:
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
-        if db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}}):
-            release(uid, reserve)
+        db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}})
     finally:
         _prog.cb = None
 
 
 def recover_jobs():
-    """بعد از ری‌استارت: کارهای نیمه‌کاره‌ی قدیمی رو بسته و توکن رزروشده رو برمی‌گردونه"""
+    """بعد از ری‌استارت: کارهای نیمه‌کاره‌ی قدیمی رو می‌بنده (چیزی کسر نشده بود)"""
     try:
         for j in db.jobs.find({"status": {"$in": ["running", "saving"]}}):
-            if db.jobs.find_one_and_update({"_id": j["_id"], "status": j["status"]}, {"$set": {"status": "error", "error": "سرور ری‌استارت شد و توکن‌هات برگشت داده شد. دوباره امتحان کن."}}):
-                release(j["uid"], int(j.get("hold", 0)))
+            db.jobs.find_one_and_update({"_id": j["_id"], "status": j["status"]}, {"$set": {"status": "error", "error": "سرور ری‌استارت شد و چیزی از توکن‌هات کم نشد. دوباره امتحان کن."}})
     except Exception:
         log.exception("recover_jobs failed")
 
@@ -2401,10 +2398,10 @@ def api_generate(uid):
     reserve = reserve_cost(prompt, bot["config"] if bot else None, uid)
     if not hold(uid, reserve):
         msg = (f"توکن کافی نداری. این کار {reserve} توکن می‌خواد." if BILLING == "fixed"
-               else f"توکن کافی نداری. برای این درخواست حداقل {reserve} توکن لازمه (هزینه‌ی واقعی معمولاً کمتره و باقی‌مونده برمی‌گرده).")
+               else f"توکن کافی نداری. برای این درخواست حداقل {reserve} توکن لازمه (هزینه‌ی واقعی معمولاً کمتره و فقط همون بعد از ساخت کم می‌شه).")
         return jsonify(error=msg, need=reserve, wallet=wallet_info(uid)), 402
     jid = secrets.token_hex(8)
-    db.jobs.insert_one({"_id": jid, "uid": uid, "status": "running", "hold": reserve, "t": now()})
+    db.jobs.insert_one({"_id": jid, "uid": uid, "status": "running", "hold": 0, "t": now()})
     threading.Thread(target=gen_job, args=(jid, uid, str(bot["_id"]) if bot else None, prompt, reserve), daemon=True).start()
     return jsonify(job=jid, hold=reserve, wallet=wallet_info(uid))
 
@@ -2416,9 +2413,8 @@ def api_job(uid, jid):
     if not j:
         return jsonify(error="کار پیدا نشد"), 404
     if j["status"] == "running" and age_sec(j["t"]) > JOB_TIMEOUT:
-        if db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
-                "status": "error", "error": "ساخت بیش از حد طول کشید و توکن‌هات برگشت داده شد. دوباره امتحان کن."}}):
-            release(uid, int(j.get("hold", 0)))
+        db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
+                "status": "error", "error": "ساخت بیش از حد طول کشید و چیزی از توکن‌هات کم نشد. دوباره امتحان کن."}})
         j = db.jobs.find_one({"_id": jid})
     out = {"status": "running" if j["status"] == "saving" else j["status"], "wallet": wallet_info(uid)}
     if j["status"] in ("running", "saving") and j.get("prog"):
@@ -2791,7 +2787,7 @@ def api_admin_users(uid):
     users = list(db.users.find({}, {"seen": 1, "tg_user": 1, "tg_name": 1, "created": 1, "tokens": 1}).sort("seen", -1).limit(300))
     by = {}
     for bt in db.bots.find({"owner": {"$in": [x["_id"] for x in users]}}, {"owner": 1, "username": 1, "name": 1, "active": 1}):
-        by.setdefault(bt["owner"], []).append({"name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active"))})
+        by.setdefault(bt["owner"], []).append({"id": str(bt["_id"]), "name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active"))})
     out = []
     for x in users:
         seen = naive(x["seen"]) if x.get("seen") else None
@@ -2839,26 +2835,54 @@ def api_admin_coupon(uid):
     return jsonify(code=code)
 
 
-def run_announce(text, admin):
-    ok = 0
+def audience_targets():
+    """ربات‌های فعال و مخاطب‌هاشون، بدون خودِ سازنده‌ی هر ربات"""
+    for bt in db.bots.find({"active": True, "token_enc": {"$exists": True}}):
+        bid = str(bt["_id"])
+        chats = [x["chat"] for x in db.subs.find({"bot": bid, "blocked": {"$ne": True}, "chat": {"$ne": bt["owner"]}}, {"chat": 1})]
+        if chats:
+            yield bt, bid, chats
+
+
+def run_announce(text, admin, builders=True, audience=False):
+    ok_b = ok_a = tot_a = 0
     try:
-        for u in db.users.find({}, {"_id": 1}):
-            if tg(MOTHER_TOKEN, "sendMessage", chat_id=u["_id"], text=text,
-                  reply_markup={"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": BASE_URL}}]]}).get("ok"):
-                ok += 1
-            time.sleep(0.05)
+        if builders:
+            for u in db.users.find({}, {"_id": 1}):
+                if tg(MOTHER_TOKEN, "sendMessage", chat_id=u["_id"], text=text,
+                      reply_markup={"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": BASE_URL}}]]}).get("ok"):
+                    ok_b += 1
+                time.sleep(0.05)
+        if audience:
+            for bt, bid, chats in audience_targets():
+                token = dec(bt["token_enc"])
+                tot_a += len(chats)
+                for chat in chats:
+                    r = tg(token, "sendMessage", chat_id=chat, text=text)
+                    if r.get("ok"):
+                        ok_a += 1
+                    elif r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I):
+                        db.subs.update_one({"_id": f"{bid}:{chat}"}, {"$set": {"blocked": True}})
+                    time.sleep(0.04)
     except Exception:
         log.exception("announce crashed")
     finally:
         db.locks.delete_one({"_id": "announce"})
-    tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=f"اعلان همگانی تموم شد. به {ok} نفر رسید.")
+    parts = []
+    if builders:
+        parts.append(f"سازنده‌ها: {ok_b} نفر")
+    if audience:
+        parts.append(f"مخاطب ربات‌های فعال: {ok_a} از {tot_a} نفر")
+    tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text="اعلان همگانی تموم شد.\n" + "\n".join(parts))
 
 
-def start_announce(text, admin):
+def start_announce(text, admin, builders=True, audience=False):
     """(تعداد گیرنده، پیام خطا)"""
     text = str(text or "").strip()[:3500]
     if len(text) < 3:
         return 0, "متن اعلان رو بنویس"
+    if not (builders or audience):
+        return 0, "حداقل یکی از گیرنده‌ها رو انتخاب کن"
     try:
         db.locks.insert_one({"_id": "announce", "t": now()})
     except DuplicateKeyError:
@@ -2866,17 +2890,122 @@ def start_announce(text, admin):
         if lk and age_sec(lk["t"]) < 3600:
             return 0, "یه اعلان دیگه هنوز در حال ارساله"
         db.locks.update_one({"_id": "announce"}, {"$set": {"t": now()}})
-    threading.Thread(target=run_announce, args=(text, admin), daemon=True).start()
-    return db.users.count_documents({}), ""
+    threading.Thread(target=run_announce, args=(text, admin, builders, audience), daemon=True).start()
+    n = db.users.count_documents({}) if builders else 0
+    if audience:
+        n += sum(len(c) for _, _, c in audience_targets())
+    return n, ""
 
 
 @app.post("/api/admin/announce")
 @admin_only
 def api_admin_announce(uid):
-    n, err = start_announce((request.get_json(silent=True) or {}).get("text"), uid)
+    b = request.get_json(silent=True) or {}
+    n, err = start_announce(b.get("text"), uid, builders=bool(b.get("builders", True)), audience=bool(b.get("audience", False)))
     if err:
         return jsonify(error=err), 400
     return jsonify(queued=n)
+
+
+def _admin_bot(bot_id):
+    try:
+        return db.bots.find_one({"_id": ObjectId(bot_id)})
+    except InvalidId:
+        return None
+
+
+@app.get("/api/admin/bots/<bot_id>/audience")
+@admin_only
+def api_admin_bot_audience(uid, bot_id):
+    bot = _admin_bot(bot_id)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    cut_on = naive() - timedelta(seconds=300)
+    rows = list(db.subs.find({"bot": bot_id}).sort("last", -1).limit(500))
+    known = {u["_id"]: u for u in db.users.find({"_id": {"$in": [r.get("uid") for r in rows]}}, {"tg_user": 1, "tg_name": 1})}
+    items = []
+    for r in rows:
+        u = known.get(r.get("uid"), {})
+        last = naive(r["last"]) if r.get("last") else None
+        items.append({"id": r.get("uid"), "un": r.get("un") or u.get("tg_user", ""), "name": r.get("nm") or u.get("tg_name", ""),
+                      "online": bool(last and last >= cut_on and not r.get("blocked")), "seen": last.isoformat() + "Z" if last else "",
+                      "joined": naive(r["t"]).isoformat() + "Z" if r.get("t") else "", "blocked": bool(r.get("blocked")),
+                      "owner": r.get("uid") == bot["owner"]})
+    total = db.subs.count_documents({"bot": bot_id})
+    return jsonify(bot={"id": bot_id, "name": bot.get("name", ""), "un": bot.get("username") or "", "on": bool(bot.get("active") and bot.get("token_enc")),
+                        "owner": bot["owner"]},
+                   items=items, total=total, blocked=db.subs.count_documents({"bot": bot_id, "blocked": True}),
+                   online=sum(1 for x in items if x["online"]))
+
+
+def run_admin_send(bot, chats, text, admin):
+    bot_id, token, ok = str(bot["_id"]), dec(bot["token_enc"]), 0
+    try:
+        for chat in chats:
+            r = tg(token, "sendMessage", chat_id=chat, text=text)
+            if r.get("ok"):
+                ok += 1
+            elif r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I):
+                db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": True}})
+            time.sleep(0.04)
+    except Exception:
+        log.exception("admin send crashed")
+    finally:
+        db.locks.delete_one({"_id": f"abc:{bot_id}"})
+    tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=f"اطلاعیه‌ی ربات @{bot.get('username') or bot.get('name', '')} تموم شد. به {ok} نفر از {len(chats)} نفر رسید.")
+
+
+@app.post("/api/admin/bots/<bot_id>/send")
+@admin_only
+def api_admin_bot_send(uid, bot_id):
+    bot = _admin_bot(bot_id)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    if not (bot.get("active") and bot.get("token_enc")):
+        return jsonify(error="این ربات فعال نیست"), 400
+    b = request.get_json(silent=True) or {}
+    text = str(b.get("text", "")).strip()[:3500]
+    if len(text) < 2:
+        return jsonify(error="متن پیام رو بنویس"), 400
+    scope = b.get("scope")
+    if scope == "one":
+        try:
+            target = int(b.get("uid"))
+        except (TypeError, ValueError):
+            return jsonify(error="کاربر نامعتبره"), 400
+        sub = db.subs.find_one({"_id": f"{bot_id}:{target}"})
+        if not sub:
+            return jsonify(error="این کاربر مخاطب این ربات نیست"), 404
+        r = tg(dec(bot["token_enc"]), "sendMessage", chat_id=sub["chat"], text=text)
+        if not r.get("ok"):
+            if r.get("error_code") == 403:
+                db.subs.update_one({"_id": sub["_id"]}, {"$set": {"blocked": True}})
+            return jsonify(error="ارسال نشد؛ احتمالاً کاربر ربات رو بلاک کرده"), 502
+        return jsonify(queued=1)
+    q = {"bot": bot_id, "blocked": {"$ne": True}}
+    if scope == "except_owner":
+        q["uid"] = {"$ne": bot["owner"]}
+    elif scope != "all":
+        return jsonify(error="نوع گیرنده نامعتبره"), 400
+    chats = [x["chat"] for x in db.subs.find(q, {"chat": 1})]
+    if not chats:
+        return jsonify(error="گیرنده‌ای پیدا نشد"), 400
+    try:
+        db.locks.insert_one({"_id": f"abc:{bot_id}", "t": now()})
+    except DuplicateKeyError:
+        lk = db.locks.find_one({"_id": f"abc:{bot_id}"})
+        if lk and age_sec(lk["t"]) < 1800:
+            return jsonify(error="یه ارسال دیگه برای این ربات هنوز در حاله"), 409
+        db.locks.update_one({"_id": f"abc:{bot_id}"}, {"$set": {"t": now()}})
+    threading.Thread(target=run_admin_send, args=(bot, chats, text, uid), daemon=True).start()
+    return jsonify(queued=len(chats))
+
+
+@app.get("/api/admin/audience")
+@admin_only
+def api_admin_audience(uid):
+    return jsonify(builders=db.users.count_documents({}), bots=db.bots.count_documents({"active": True}),
+                   audience=sum(len(c) for _, _, c in audience_targets()))
 
 
 # ───────────────────────── موتور اجرای کانفیگ ─────────────────────────
@@ -3893,7 +4022,8 @@ def sub_hook(bot_id):
         if actor.get("id") and chat0.get("type") == "private":      # ثبت کاربر برای آمار و پیام همگانی
             prev = db.subs.find_one_and_update(
                 {"_id": f"{bot_id}:{actor['id']}"},
-                {"$set": {"last": now(), "blocked": False},
+                {"$set": {"last": now(), "blocked": False, "un": str(actor.get("username") or "")[:40],
+                          "nm": (str(actor.get("first_name") or "") + " " + str(actor.get("last_name") or "")).strip()[:60]},
                  "$setOnInsert": {"bot": bot_id, "uid": actor["id"], "chat": chat0["id"], "t": now()}},
                 upsert=True, return_document=ReturnDocument.BEFORE)
             is_new = prev is None
