@@ -50,7 +50,7 @@ AI_MODEL     = os.environ["AI_MODEL"]
 AI_CHAT_MODEL = os.environ.get("AI_CHAT_MODEL", "").strip() or AI_MODEL   # مدل گفتگوی داخل رباتا (می‌تونه سبک‌تر باشه)
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)
 ADMIN_IDS    = {int(x) for x in re.findall(r"\d+", os.environ.get("ADMIN_IDS", ""))}
-ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "123456").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
+ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
 MOTHER_USERNAME = os.environ.get("MOTHER_USERNAME", "").strip().lstrip("@")   # اگه خالی باشه از getMe گرفته می‌شه
 
 
@@ -1636,6 +1636,165 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
     return txt, (pt, ct)
 
 
+
+AI_STREAM = _int("AI_STREAM", 1)         # ۱ = ساخت ربات با استریم و پیشرفت زنده؛ ۰ = مثل قبل (یک درخواست بدون استریم)
+_prog = threading.local()                # پیشرفت کار پس‌زمینه‌ی جاری (هر ترد مال خودش)
+
+
+class _NoStream(Exception):
+    """سرویس‌دهنده استریم رو قبول نکرد؛ بدون استریم ادامه می‌دیم"""
+
+
+def live_info(text, fa_only):
+    """از متنِ نیمه‌کاره‌ی JSON، توضیحِ در حال نوشته‌شدن و تعداد/عنوان بخش‌های ساخته‌شده رو درمیاره"""
+    out = {"n": 0, "ti": "", "th": ""}
+    m = re.search(r'"thinking"\s*:\s*"((?:[^"\\]|\\.)*)', text)
+    if m:
+        raw = m.group(1)
+        if raw.endswith("\\"):
+            raw = raw[:-1]
+        try:
+            th = json.loads('"' + raw + '"')
+        except Exception:
+            th = raw.replace("\\n", " ").replace('\\"', '"')
+        th = th.strip()[:700]
+        fa, la = _count(th)
+        if th and not has_foreign(th) and not (fa_only and la > fa):
+            out["th"] = th
+    i = text.find('"nodes"')
+    if i >= 0:
+        titles = re.findall(r'"title"\s*:\s*"((?:[^"\\]|\\.)*)"', text[i:])
+        out["n"] = len(titles)
+        if titles:
+            try:
+                t = json.loads('"' + titles[-1] + '"')
+            except Exception:
+                t = titles[-1]
+            if t and not has_foreign(t):
+                out["ti"] = t[:40]
+    return out
+
+
+class Progress:
+    """پیشرفت زنده‌ی ساخت: متنِ در حال استریم رو تحلیل می‌کنه و (حداکثر هر ۰٫۷ ثانیه) توی job می‌نویسه تا مینی‌اپ نشون بده.
+    درصد تخمینیه (بر پایه‌ی طول خروجی) و هیچ‌وقت قبل از تموم‌شدن واقعی به ۱۰۰ نمی‌رسه"""
+
+    def __init__(self, jid):
+        self.jid, self.fa, self.att, self.last = jid, False, 1, 0.0
+        self.d = {"p": 2.0, "st": "analyze", "n": 0, "ti": "", "th": "", "att": 1}
+
+    def flush(self, force=False):
+        t = time.time()
+        if not force and t - self.last < 0.7:
+            return
+        self.last = t
+        try:
+            db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"prog": dict(self.d)}})
+        except Exception:
+            pass
+
+    def stage(self, st, p=None):
+        self.d["st"] = st
+        if p is not None:
+            self.d["p"] = max(self.d["p"], p)
+        self.flush(True)
+
+    def attempt(self, n):
+        self.att = self.d["att"] = n
+        self.d["st"] = "analyze" if n == 1 else "review"
+        if n > 1:
+            self.d["p"] = max(self.d["p"], 60.0)
+        self.flush(True)
+
+    def feed(self, text, reasoning=0):
+        if time.time() - self.last < 0.7:
+            return
+        vis = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
+        if "<think>" in vis:                       # مدل هنوز داخل بلوک فکر کردنه
+            vis, reasoning = "", reasoning + len(text)
+        info = live_info(vis, self.fa)
+        tok = est_tokens(vis) if vis else 0
+        sat = tok / (tok + 1800.0)
+        if self.att == 1:
+            p = 4 + 84 * sat if tok else 3 + min(8.0, reasoning / 900.0)
+        else:
+            p = 62 + 30 * sat
+        self.d["p"] = round(max(self.d["p"], min(p, 94.0)), 1)
+        self.d["n"] = max(self.d["n"], info["n"])
+        if info["ti"]:
+            self.d["ti"] = info["ti"]
+        if info["th"]:
+            self.d["th"] = info["th"]
+        self.d["st"] = "review" if self.att > 1 else ("build" if self.d["n"] else "analyze")
+        self.flush(True)
+
+
+def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
+    """مثل llm_post ولی با استریم (SSE)؛ هر تکه‌ی رسیده به cb.feed داده می‌شه"""
+    t0 = time.time()
+    r = requests.post(
+        f"{AI_BASE_URL}/chat/completions",
+        headers={"Authorization": f"Bearer {AI_API_KEY}"},
+        json={"model": model or AI_MODEL, "max_tokens": max_tokens, "temperature": temperature, "messages": messages,
+              "stream": True, "stream_options": {"include_usage": True}},
+        timeout=(10, 90), stream=True)
+    try:
+        if r.status_code >= 400:
+            raise _NoStream(f"HTTP {r.status_code}: {r.text[:200]}")
+        if "event-stream" not in (r.headers.get("content-type") or "").lower():     # سرویس‌دهنده استریم نکرد و جواب کامل داد
+            j = r.json()
+            txt = j["choices"][0]["message"]["content"] or ""
+            u = j.get("usage") or {}
+            txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S).strip()
+            return txt, (int(u.get("prompt_tokens") or est_tokens("".join(str(m["content"]) for m in messages))),
+                         int(u.get("completion_tokens") or est_tokens(txt)))
+        parts, reasoning, usage = [], 0, None
+        for raw in r.iter_lines():
+            if time.time() - t0 > timeout:
+                raise RuntimeError("AI timeout")
+            if not raw:
+                continue
+            line = raw.decode("utf-8", "ignore")
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                j = json.loads(data)
+            except Exception:
+                continue
+            if j.get("usage"):
+                usage = j["usage"]
+            d = ((j.get("choices") or [{}])[0].get("delta")) or {}
+            piece = d.get("content")
+            if piece:
+                parts.append(piece)
+            elif d.get("reasoning_content") or d.get("reasoning"):
+                reasoning += len(d.get("reasoning_content") or d.get("reasoning") or "")
+            cb.feed("".join(parts) if parts else "", reasoning)
+    finally:
+        r.close()
+    txt = re.sub(r"<think>.*?</think>", "", "".join(parts), flags=re.S).strip()
+    if not txt:
+        raise RuntimeError("AI پاسخ خالی داد")
+    u = usage or {}
+    return txt, (int(u.get("prompt_tokens") or est_tokens("".join(str(m["content"]) for m in messages))),
+                 int(u.get("completion_tokens") or est_tokens(txt)))
+
+
+def llm_run(messages, max_tokens, temperature=0.4):
+    """فراخوانی ساخت ربات: اگه پیشرفت زنده فعاله استریم می‌کنه، وگرنه (یا اگه استریم پشتیبانی نشه) مثل قبل"""
+    cb = getattr(_prog, "cb", None)
+    if not (cb and AI_STREAM):
+        return llm_post(messages, max_tokens, temperature)
+    try:
+        return llm_stream(messages, max_tokens, temperature, cb)
+    except _NoStream as e:
+        log.warning("استریم پشتیبانی نشد، بدون استریم ادامه می‌دیم: %s", e)
+        return llm_post(messages, max_tokens, temperature)
+
+
 _gap = threading.local()          # گزارش «چیزی که ربات‌ساز نتونست»؛ هر کار پس‌زمینه در ترد خودش می‌خونه
 
 
@@ -1649,8 +1808,11 @@ def _take_gaps(raw):
 
 
 def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False):
-    txt, usage = llm_post([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
+    txt, usage = llm_run([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
+    cb = getattr(_prog, "cb", None)
+    if cb:
+        cb.stage("validate", 95.0)
     m = re.search(r"\{.*\}", txt, re.S)
     if not m:
         raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
@@ -1714,7 +1876,12 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
     check_cfg = guard and not foreign_in(current)             # اگه ربات فعلی از قبل نویسه‌ی بیگانه داره، فقط پاکش می‌کنیم
     media_ids = {m["id"] for m in media_items}
     best, last, feedback = None, None, ""
+    cb = getattr(_prog, "cb", None)
+    if cb:
+        cb.fa = lang == "fa"
     for attempt in (0, 1):
+        if cb:
+            cb.attempt(attempt + 1)
         try:
             thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc, guard, check_cfg)
         except ThinkLang as e:
@@ -2167,12 +2334,14 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: رزرو توکن از قبل کم شده؛ در پایان هزینه‌ی واقعی ثبت و باقی‌مونده برمی‌گرده"""
     acc = []
     _gap.items = []
+    _prog.cb = Progress(jid)
     try:
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
         thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
         cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc), uid=uid))
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return                                  # کار منقضی شده و توکن‌ها برگشته؛ نتیجه رو دور می‌ریزیم
+        _prog.cb.stage("save", 98.0)
         if bot:
             db.bots.update_one({"_id": bot["_id"]}, {
                 "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
@@ -2195,6 +2364,8 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         if db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}}):
             release(uid, reserve)
+    finally:
+        _prog.cb = None
 
 
 def recover_jobs():
@@ -2250,6 +2421,8 @@ def api_job(uid, jid):
             release(uid, int(j.get("hold", 0)))
         j = db.jobs.find_one({"_id": jid})
     out = {"status": "running" if j["status"] == "saving" else j["status"], "wallet": wallet_info(uid)}
+    if j["status"] in ("running", "saving") and j.get("prog"):
+        out["prog"] = {k: j["prog"].get(k) for k in ("p", "st", "n", "ti", "th", "att")}
     if j["status"] == "done":
         b = get_bot(j["bot"], uid)
         out.update(bot=public(b) if b else None, ideas=j.get("ideas", []), cost=j.get("cost", 0))
@@ -3941,14 +4114,14 @@ def pack_from_payload(payload, uid):
 
 START_TEXT = (
     "🟢 SYSTEM ONLINE\n\n"
-    "AI Azadi Terminal\n"
+    "AI BotMaker Terminal\n"
     "Server infrastructure, AI engine and your private bot-building dashboard are fully operational.\n\n"
     "ورود به استودیو حرفه‌ای و ساخت ربات (VPN روشن) 👇🏻"
 )
 
 
 def start_keyboard():
-    return {"inline_keyboard": [[{"text": "🕹 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
+    return {"inline_keyboard": [[{"text": "💎 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
 
 
 def start_media():
