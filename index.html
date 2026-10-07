@@ -602,11 +602,17 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 #toast{position:fixed;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);
   padding:10px 18px;border-radius:14px;font-size:13px;line-height:1.7;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:88%;text-align:center;z-index:99}
 #toast.show{opacity:1;transform:translateX(-50%)}
-.cf{position:fixed;top:-10px;width:8px;height:12px;border-radius:2px;z-index:98;pointer-events:none;animation:cf 1.6s ease-in forwards}
-@keyframes cf{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
+.rbfx{position:fixed;inset:0;z-index:98;pointer-events:none;overflow:hidden}
+.rbfx .scan{position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);box-shadow:0 0 16px 3px var(--ac);animation:fxScan 1.1s cubic-bezier(.55,0,.3,1) forwards}
+.rbfx .scan::before{content:"";position:absolute;left:0;right:0;bottom:2px;height:90px;background:linear-gradient(to top,var(--acs),transparent)}
+.rbfx .ring{position:absolute;left:50%;top:50%;width:24px;height:24px;margin:-12px 0 0 -12px;border:2px solid var(--ac);border-radius:50%;opacity:0;animation:fxRing 1.2s .3s ease-out forwards}
+.rbfx .ok{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);direction:ltr;font:800 12px/1 "Oxanium",monospace;letter-spacing:.2em;padding:9px 14px 9px calc(14px + .2em);border:1px solid var(--ac);border-radius:10px;color:var(--ac);background:var(--bg);opacity:0;animation:fxChip 1.7s .35s ease forwards}
+@keyframes fxScan{0%{transform:translateY(-10px);opacity:1}100%{transform:translateY(100vh);opacity:.2}}
+@keyframes fxRing{0%{transform:scale(1);opacity:.8}100%{transform:scale(16);opacity:0}}
+@keyframes fxChip{0%{opacity:0;transform:translate(-50%,-40%)}20%,70%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0;transform:translate(-50%,-50%)}}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-  .cf{display:none}
+  .rbfx{display:none}
 }
 </style>
 </head>
@@ -900,12 +906,9 @@ function submitPrompt(){
 }
 function celebrate(){
   if(reduced()) return;
-  const cols = ["#3CCFE3", "#00778A", "#FFC24A", "#47D79B", "#FF7B88"];
-  for(let i = 0; i < 26; i++){
-    const e = document.createElement("i"); e.className = "cf";
-    e.style.cssText = `left:${Math.random() * 100}vw;background:${cols[i % 5]};animation-delay:${Math.random() * .5}s;animation-duration:${1.2 + Math.random()}s`;
-    document.body.appendChild(e); setTimeout(() => e.remove(), 2600);
-  }
+  const w = document.createElement("div"); w.className = "rbfx";
+  w.innerHTML = '<i class="scan"></i><i class="ring"></i><b class="ok">SYSTEM OK</b>';
+  document.body.appendChild(w); setTimeout(() => w.remove(), 2400);
 }
 function bumpTokens(){ const p = $(".tokpill"); if(p){ p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump"); } }
 
