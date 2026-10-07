@@ -5,7 +5,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
 
 ربات مادر
   /start /help /invite /balance /daily /coupon — باز کردن مینی‌اپ، پرداخت با Telegram Stars
-  ادمین: /give /stats /announce /setstartphoto (عکس پیام استارت)
+  ادمین: /give /stats /announce /setstartphoto (عکس، گیف یا ویدیوی پیام استارت)
 مینی‌اپ
   ساخت و ارتقای ربات با هوش مصنوعی (کانفیگ JSON)، قالب‌های آماده، ویرایش دستی کامل، تست زنده،
   بررسی مسیرها، خروجی JSON، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
@@ -3951,41 +3951,113 @@ def start_keyboard():
     return {"inline_keyboard": [[{"text": "💎 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
 
 
+def start_media():
+    d = db.settings.find_one({"_id": "start_media"})
+    if d and d.get("fid"):
+        return d
+    old = db.settings.find_one({"_id": "start_photo"})        # سازگاری با نسخه‌ی قبلی (فقط عکس)
+    return {"kind": "photo", "fid": old["fid"]} if old and old.get("fid") else None
+
+
 def send_start(uid):
-    """پیام استارت: اگه ادمین عکس گذاشته باشه با عکس، وگرنه فقط متن؛ همیشه فقط یک دکمه‌ی ورود"""
-    fid = (db.settings.find_one({"_id": "start_photo"}) or {}).get("fid")
-    if fid:
-        r = tg(MOTHER_TOKEN, "sendPhoto", chat_id=uid, photo=fid, caption=START_TEXT, reply_markup=start_keyboard())
+    """پیام استارت: اگه ادمین عکس، گیف یا ویدیو گذاشته باشه با همون، وگرنه فقط متن؛ همیشه فقط یک دکمه‌ی ورود"""
+    m = start_media()
+    if m:
+        method, field = {"photo": ("sendPhoto", "photo"), "animation": ("sendAnimation", "animation"),
+                         "video": ("sendVideo", "video")}.get(m.get("kind"), ("sendPhoto", "photo"))
+        extra = {"supports_streaming": True} if method == "sendVideo" else {}
+        r = tg(MOTHER_TOKEN, method, chat_id=uid, caption=START_TEXT, reply_markup=start_keyboard(), **{field: m["fid"]}, **extra)
         if r.get("ok"):
             return r
-        log.warning("start photo failed: %s", r.get("description"))
+        log.warning("start media failed: %s", r.get("description"))
     return tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=START_TEXT, reply_markup=start_keyboard())
 
 
-def mother_photo(msg):
-    """ادمین: /setstartphoto — عکس استارت. سه روش: کپشنِ خودِ عکس، ریپلای روی عکس، یا دستور و بعدش ارسال عکس.
-    اگه پیام رو مصرف کرد True برمی‌گردونه"""
+def fit_photo(file_id, uid):
+    """تلگرام عکس‌های خیلی بلند یا خیلی عریض رو توی پیام برش می‌زنه. اینجا نسبت رو بین ۱:۱ و ۲:۱ نگه می‌داریم؛
+    اگه بیرون این بازه بود، با حاشیه‌ی مشکی پد می‌شه تا کامل دیده بشه. بدون Pillow دست نمی‌زنیم. خروجی: file_id جدید یا None"""
+    try:
+        from PIL import Image
+    except ImportError:
+        log.warning("Pillow نصب نیست؛ عکس استارت بدون تغییر ذخیره شد")
+        return None
+    try:
+        import io
+        path = tg(MOTHER_TOKEN, "getFile", file_id=file_id)["result"]["file_path"]
+        raw = requests.get(f"https://api.telegram.org/file/bot{MOTHER_TOKEN}/{path}", timeout=30).content
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+        w, h = im.size
+        ratio = w / h
+        if 1.0 <= ratio <= 2.0:
+            return None
+        nw, nh = (h, h) if ratio < 1.0 else (w, int(w / 2.0))
+        canvas = Image.new("RGB", (nw, nh), (0, 0, 0))
+        canvas.paste(im, ((nw - w) // 2, (nh - h) // 2))
+        canvas.thumbnail((1280, 1280))
+        buf = io.BytesIO()
+        canvas.save(buf, "JPEG", quality=90)
+        r = requests.post(f"https://api.telegram.org/bot{MOTHER_TOKEN}/sendPhoto", data={"chat_id": uid},
+                          files={"photo": ("start.jpg", buf.getvalue(), "image/jpeg")}, timeout=60).json()
+        if r.get("ok"):
+            tg(MOTHER_TOKEN, "deleteMessage", chat_id=uid, message_id=r["result"]["message_id"])
+            return r["result"]["photo"][-1]["file_id"]
+    except Exception:
+        log.exception("fit_photo failed")
+    return None
+
+
+def _media_of(m):
+    if not m:
+        return None
+    if m.get("animation"):          # گیف‌ها هم animation دارن هم document؛ اول animation چک می‌شه
+        return "animation", m["animation"]["file_id"]
+    if m.get("video"):
+        return "video", m["video"]["file_id"]
+    if m.get("photo"):
+        return "photo", m["photo"][-1]["file_id"]
+    return None
+
+
+SET_MEDIA_CMDS = ("/setstartphoto", "/setstartmedia")
+
+
+def mother_media(msg):
+    """ادمین: /setstartphoto — عکس، گیف یا ویدیوی کوتاهِ استارت. سه روش: کپشنِ خودِ فایل، ریپلای روی فایل،
+    یا دستور و بعدش ارسال فایل. اگه پیام رو مصرف کرد True برمی‌گردونه"""
     uid = msg["from"]["id"]
     if uid not in ADMIN_IDS:
         return False
     text = (msg.get("text") or msg.get("caption") or "").strip()
     cmd = text.split()[0].split("@")[0].lower() if text else ""
-    photo = msg.get("photo") or (msg.get("reply_to_message") or {}).get("photo")
-    waiting = db.settings.find_one_and_delete({"_id": f"await_photo:{uid}"})
+    media = _media_of(msg) or _media_of(msg.get("reply_to_message"))
+    key = f"await_media:{uid}"
+    waiting = db.settings.find_one({"_id": key})
     if waiting and time.time() - waiting.get("t", 0) > 600:
+        db.settings.delete_one({"_id": key})
         waiting = None
-    if cmd == "/setstartphoto" and not photo:
-        db.settings.update_one({"_id": f"await_photo:{uid}"}, {"$set": {"t": time.time()}}, upsert=True)
-        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text="عکس استارت رو همین‌جا بفرست (به‌صورت عکس، نه فایل). برای انصراف /cancel")
+    say = lambda t: tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=t)
+    if cmd in SET_MEDIA_CMDS and not media:
+        db.settings.update_one({"_id": key}, {"$set": {"t": time.time()}}, upsert=True)
+        say("عکس، گیف یا ویدیوی کوتاه استارت رو همین‌جا بفرست (به‌صورت عکس/ویدیو/گیف، نه فایل). برای انصراف /cancel")
         return True
     if waiting and cmd == "/cancel":
-        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text="لغو شد.")
+        db.settings.delete_one({"_id": key})
+        say("لغو شد.")
         return True
-    if photo and (cmd == "/setstartphoto" or waiting):
-        fid = photo[-1]["file_id"]
-        db.settings.update_one({"_id": "start_photo"}, {"$set": {"fid": fid, "by": uid, "t": time.time()}}, upsert=True)
-        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text="عکس استارت ذخیره شد. پیش‌نمایش:")
+    if media and (cmd in SET_MEDIA_CMDS or waiting):
+        db.settings.delete_one({"_id": key})
+        kind, fid = media
+        note = ""
+        if kind == "photo":
+            nf = fit_photo(fid, uid)
+            if nf:
+                fid, note = nf, " (برای دیده‌شدن کامل، با حاشیه‌ی مشکی به نسبت مناسب تنظیم شد)"
+        db.settings.update_one({"_id": "start_media"}, {"$set": {"kind": kind, "fid": fid, "by": uid, "t": time.time()}}, upsert=True)
+        say("استارت ذخیره شد" + note + ". پیش‌نمایش:")
         send_start(uid)
+        return True
+    if waiting and not cmd:
+        say("فقط عکس، گیف یا ویدیو قبول می‌کنم. بفرست یا /cancel بزن.")
         return True
     return False
 
@@ -4081,7 +4153,7 @@ def mother_hook():
             return "ok"
         if msg.get("successful_payment"):
             mother_paid(msg)
-        elif mother_photo(msg):
+        elif mother_media(msg):
             pass
         else:
             mother_command(msg)
@@ -4098,10 +4170,7 @@ def setup_mother():
            allowed_updates=["message", "pre_checkout_query"])
     tg(MOTHER_TOKEN, "setChatMenuButton",
        menu_button={"type": "web_app", "text": "ساخت ربات", "web_app": {"url": BASE_URL}})
-    tg(MOTHER_TOKEN, "setMyCommands", commands=[
-        {"command": "start", "description": "شروع"}, {"command": "daily", "description": "جایزه‌ی روزانه"},
-        {"command": "balance", "description": "موجودی توکن"}, {"command": "invite", "description": "لینک دعوت من"},
-        {"command": "coupon", "description": "ثبت کد هدیه"}, {"command": "help", "description": "راهنما"}])
+    tg(MOTHER_TOKEN, "setMyCommands", commands=[{"command": "start", "description": "شروع"}])
     log.info("mother webhook: %s (@%s)", r, MOTHER_USERNAME)
 
 
@@ -4112,3 +4181,5 @@ if SCHED_ON:
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+
