@@ -516,13 +516,13 @@ def _lx(base_xp, slow):
 T = TOKEN_SCALE
 LEVELS = [
     {"xp": _lx(0, 1),     "title": "تازه‌کار",  "tokens": 0,       "perks": {}},
-    {"xp": _lx(50, 1.2),  "title": "کاوشگر",    "tokens": 10 * T,  "perks": {"bots": 2}},
-    {"xp": _lx(130, 1.25), "title": "سازنده",    "tokens": 15 * T,  "perks": {"disc": 5}},
-    {"xp": _lx(250, 1.3), "title": "حرفه‌ای",    "tokens": 20 * T,  "perks": {"mb": 40, "files": 20}},
-    {"xp": _lx(430, 1.35), "title": "ناظر",      "tokens": 30 * T,  "perks": {"bots": 3, "daily": 2 * T}},
-    {"xp": _lx(680, 1.4), "title": "Ai منیجر",     "tokens": 40 * T,  "perks": {"disc": 5, "ver": 4}},
-    {"xp": _lx(1000, 1.45), "title": "نخبه",      "tokens": 50 * T,  "perks": {"bc": 5000, "free_enhance": True}},
-    {"xp": _lx(1400, 1.5), "title": "لجند",  "tokens": 80 * T,  "perks": {"bots": 5, "disc": 10, "daily": 3 * T}},
+    {"xp": _lx(50, 1.5),  "title": "کاوشگر",    "tokens": 10 * T,  "perks": {"bots": 2}},
+    {"xp": _lx(130, 1.6), "title": "سازنده",    "tokens": 15 * T,  "perks": {"disc": 5}},
+    {"xp": _lx(250, 1.7), "title": "حرفه‌ای",    "tokens": 20 * T,  "perks": {"mb": 40, "files": 20}},
+    {"xp": _lx(430, 1.8), "title": "ناظر",      "tokens": 30 * T,  "perks": {"bots": 3, "daily": 2 * T}},
+    {"xp": _lx(680, 1.9), "title": "Ai منیجر",     "tokens": 40 * T,  "perks": {"disc": 5, "ver": 4}},
+    {"xp": _lx(1000, 2.0), "title": "نخبه",      "tokens": 50 * T,  "perks": {"bc": 5000, "free_enhance": True}},
+    {"xp": _lx(1400, 2.1), "title": "لجند",  "tokens": 80 * T,  "perks": {"bots": 5, "disc": 10, "daily": 3 * T}},
 ]
 
 # ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
@@ -3940,15 +3940,15 @@ def pack_from_payload(payload, uid):
 
 
 START_TEXT = (
-    "🟢 سیستم آنلاین\n\n"
-    "ابر رباتساز هوشمند\n"
-    "زیرساخت سرور، موتور هوش مصنوعی و داشبورد اختصاصی ساخت ربات شما کاملاً فعال و آماده‌ی اجراست.\n\n"
-    "ورود به داشبورد اختصاصی (برای بار اول حتماً VPN روشن باشد) 👇🏻"
+    "🟢 SYSTEM ONLINE\n\n"
+    "AI BotMaker Terminal\n"
+    "Server infrastructure, AI engine and your private bot-building dashboard are fully operational.\n\n"
+    "ورود به استودیو حرفه‌ای و ساخت ربات (VPN روشن) 👇🏻"
 )
 
 
 def start_keyboard():
-    return {"inline_keyboard": [[{"text": "⚡ ورود به مینی‌اپ هوشمند", "web_app": {"url": BASE_URL}}]]}
+    return {"inline_keyboard": [[{"text": "💎 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
 
 
 def send_start(uid):

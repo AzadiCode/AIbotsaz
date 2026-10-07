@@ -56,14 +56,14 @@ svg{display:block}
 
 
 /* ── Splash: لوگوی بزرگ وسط پس‌زمینه‌ی سیاه ── */
-#splash{position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;transition:opacity .6s ease,visibility .6s ease}
+#splash{position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;transition:opacity .6s ease,visibility .6s ease}
 #splash.out{opacity:0;visibility:hidden;pointer-events:none}
 #splash .sp-logo{position:relative;width:132px;height:132px;color:#3CCFE3;animation:spIn 1s cubic-bezier(.2,.9,.25,1.15) both}
 #splash .sp-logo svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 14px rgba(60,207,227,.55))}
 #splash .sp-logo::before{content:"";position:absolute;inset:-26px;border-radius:50%;background:radial-gradient(circle,rgba(60,207,227,.28),transparent 68%);animation:spPulse 2.4s ease-in-out infinite}
-#splash .sp-name{direction:ltr;font-family:"Oxanium",monospace;font-weight:800;font-size:30px;letter-spacing:.22em;padding-left:.22em;color:#fff;text-shadow:0 0 16px rgba(60,207,227,.45);animation:spText 1s .45s cubic-bezier(.2,.8,.2,1) both}
+#splash .sp-name{margin-top:-14px;direction:ltr;font-family:"Oxanium",monospace;font-weight:800;font-size:30px;letter-spacing:.22em;padding-left:.22em;color:#fff;text-shadow:0 0 16px rgba(60,207,227,.45);animation:spText 1s .45s cubic-bezier(.2,.8,.2,1) both}
 #splash .sp-name b{color:#3CCFE3;font-weight:800}
-#splash .sp-bar{width:84px;height:2px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden;animation:spText 1s .7s both}
+#splash .sp-bar{margin-top:22px;width:84px;height:2px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden;animation:spText 1s .7s both}
 #splash .sp-bar i{display:block;height:100%;width:40%;background:linear-gradient(90deg,transparent,#3CCFE3,transparent);animation:spBar 1.3s ease-in-out infinite}
 @keyframes spIn{0%{opacity:0;transform:scale(.4) rotate(-6deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
 @keyframes spText{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
@@ -616,9 +616,9 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 (function(){
   var t0 = Date.now(), done = false;
   function hide(){ if(done) return; done = true; var el = document.getElementById("splash"); if(!el) return; el.classList.add("out"); setTimeout(function(){ el.remove(); }, 800); }
-  function go(){ setTimeout(hide, Math.max(0, 2200 - (Date.now() - t0))); }
+  function go(){ setTimeout(hide, Math.max(0, 4200 - (Date.now() - t0))); }
   if(document.readyState === "complete") go(); else window.addEventListener("load", go);
-  setTimeout(hide, 5000);
+  setTimeout(hide, 7000);
 })();
 </script>
 <header class="top" id="top"></header>
@@ -919,14 +919,14 @@ const goIc = IC.go.replace("<svg", '<svg class="go"');
 function dailyCard(){
   const w = S.wallet;
   if(w.can_claim) return `<div class="daily"><div class="dt"><b>جایزه‌ی امروز آماده است</b>${N("+" + w.next_reward)} توکن${w.streak ? `، ${N(w.streak)} روز پیاپی` : ""}</div><button class="b amber sm" data-a="daily">دریافت</button></div>`;
-  return `<div class="daily done"><div class="dt"><b>جایزه‌ی امروز دریافت شد</b>${w.streak ? `${N(w.streak)} روز پیاپی. فردا ${N("+" + w.next_reward)} توکن` : "فردا دوباره بیا"}</div></div>`;
+  return `<div class="daily done"><div class="dt"><b>پاداش امروز دریافت شد</b>${w.streak ? `${N(w.streak)} روز پیاپی. فردا ${N("+" + w.next_reward)} توکن` : "فردا دوباره بیا"}</div></div>`;
 }
 function tplBlock(){
   const full = S.bots.length >= (S.cfg.max_bots || 10);
   let h = "";
   if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}Ai میسازه</div><div>${N(3)}فعال و متصلش کن</div></div>`;
   if((S.templates || []).length && !full){
-    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛ مناسب <small>شروع سریع و آشنایی با سیستم</small></h2></div>
+    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛  <small>مناسب شروع سریع و آشنایی با سیستم</small></h2></div>
       <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${t.cost ? `<span class="xbd">${N(t.cost)} توکن</span>` : ""}${goIc}</button>`).join("")}</div>`;
   }
   return h;
@@ -938,7 +938,7 @@ function renderCreate(){
     ${full ? `<div class="panel"><h2>به سقف ${N(c.max_bots)} ربات رسیدی</h2><p class="muted">یکی را حذف کن یا با هوش مصنوعی ارتقا بده.</p><div class="fgap"></div><button class="b o" data-go="bots">ربات‌های من</button></div>` : `
     <div class="console">
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="توضیح ربات" placeholder="${esc(EXAMPLES[0][1])}"></textarea>
-      <div class="chips">${EXAMPLES.map((e, i) => `<button class="chip" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="chip ai" data-a="enhance">${IC.spark}کامل‌ترش کن</button></div>
+      <div class="chips">${EXAMPLES.map((e, i) => `<button class="chip" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="chip ai" data-a="enhance">${IC.spark}تکمیل خودکار</button></div>
       <div class="cfoot">
         <div class="gauge" title="تعداد رباتی که با موجودی فعلی می‌توانی بسازی"><div class="cells">${cellsHTML(buildsLeft())}</div><span class="cost">مصرف توکن ${costTxt(false)}</span></div>
         <button class="b" id="gen" data-a="gen">ساخت ربات</button>
@@ -1179,7 +1179,7 @@ function tabWallet(){
       <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div>`
         : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>اطلاعیه ویژه<span class="n">1/${c.bc_per}</span></div>`}</div></div>
     ${dailyCard()}
-    <div class="sec"><h2>شارژ توکن  Ai</h2><span class="muted">با استارس تلگرام</span></div>
+    <div class="sec"><h2>شارژ توکن  Ai</h2><span class="muted">با استارز تلگرام</span></div>
     <div class="group">${packRows() || '<div class="gi static"><span class="muted">فعلاً بسته‌ای تعریف نشده.</span></div>'}</div>
     ${couponCard()}`;
 }
@@ -1765,7 +1765,7 @@ function saveBc(){
 function buySheet(){
   const m = S.sheet.msg, w = S.wallet, c = S.cfg;
   return head("توکن بیشتر") + `${m ? `<p class="muted" style="margin-bottom:12px">${digitsHTML(m)}</p>` : ""}
-    ${w.can_claim ? `<div class="daily" style="margin:0 0 12px"><div class="dt"><b>جایزه‌ی امروز آماده است</b>${N("+" + w.next_reward)} توکن</div><button class="b amber sm" data-a="daily">دریافت</button></div>` : ""}
+    ${w.can_claim ? `<div class="daily" style="margin:0 0 12px"><div class="dt"><b>پاداش امروزتو نگرفتی ! است</b>${N("+" + w.next_reward)} توکن</div><button class="b amber sm" data-a="daily">دریافت</button></div>` : ""}
     <div class="group">${packRows() || '<div class="gi static"><span class="muted">فعلاً بسته‌ای تعریف نشده.</span></div>'}</div>
     ${S.ref.link ? `<button class="b o mt" data-a="shareref">${IC.users}دعوت دوستان، ${N("+" + c.ref_inviter)} توکن برای هر نفر</button>` : ""}
     <div class="fgap"></div>`;
