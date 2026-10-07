@@ -195,6 +195,32 @@ def tg(token, method, **data):
         return {"ok": False, "description": str(e)}
 
 
+def tg_send_text(token, chat_id, text, parse_mode="", markup=None):
+    """ارسال پیام متنی با فرمت اختیاری (HTML/Markdown)؛ اگه فرمت خراب باشه بدون فرمت دوباره می‌فرسته."""
+    d = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        d["parse_mode"] = parse_mode
+    if markup:
+        d["reply_markup"] = markup
+    r = tg(token, "sendMessage", **d)
+    if not r.get("ok") and parse_mode and r.get("error_code") == 400:
+        d.pop("parse_mode", None)
+        r = tg(token, "sendMessage", **d)
+    return r
+
+
+def tg_action_ok(token, chat_id):
+    """بررسی فعال بودن گفتگو با کاربر بدون فرستادن پیام: با sendChatAction.
+    True = بلاک شده، False = سالم، None = نامشخص (مثل محدودیت نرخ)."""
+    r = tg(token, "sendChatAction", chat_id=chat_id, action="typing")
+    if r.get("ok"):
+        return False
+    desc = str(r.get("description", ""))
+    if r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found|user not found|kicked", desc, re.I):
+        return True
+    return None
+
+
 def now():
     return datetime.now(timezone.utc)
 
@@ -1984,21 +2010,7 @@ def media_delete(m):
     db.media.delete_one({"_id": m["_id"]})
 
 
-def tg_text(token, chat_id, text, markup=None):
-    """ارسال متن با فرمت HTML؛ اگه HTML خراب باشه بدون فرمت دوباره تلاش می‌کنه"""
-    if not text:
-        return {"ok": False}
-    text = str(text)[:4096]
-    kw = {"reply_markup": markup} if markup else {}
-    r = tg(token, "sendMessage", chat_id=chat_id, text=text, parse_mode="HTML", **kw)
-    if r.get("ok"):
-        return r
-    if "parse" in str(r.get("description", "")).lower() or "entities" in str(r.get("description", "")).lower():
-        return tg(token, "sendMessage", chat_id=chat_id, text=text, **kw)
-    return r
-
-
-def tg_media(token, bot_id, chat_id, mid, caption="", markup=None, parse="HTML"):
+def tg_media(token, bot_id, chat_id, mid, caption="", markup=None):
     """رسانه‌ی کتابخونه رو برای کاربر می‌فرسته. بار اول آپلود می‌شه و file_id همون ربات ذخیره می‌شه؛ بعدش فوری می‌ره."""
     m = get_media(mid)
     if not m:
@@ -2007,8 +2019,6 @@ def tg_media(token, bot_id, chat_id, mid, caption="", markup=None, parse="HTML")
     base = {"chat_id": chat_id}
     if caption:
         base["caption"] = caption[:1024]
-        if parse:
-            base["parse_mode"] = parse
     if markup:
         base["reply_markup"] = markup
     ck = f"{bot_id}:{mid}"
@@ -2016,12 +2026,7 @@ def tg_media(token, bot_id, chat_id, mid, caption="", markup=None, parse="HTML")
     if c:
         if tg(token, method, **base, **{kind: c["fid"]}).get("ok"):
             return True
-        # شاید خطای parse باشه؛ بدون parse_mode دوباره امتحان کن
-        if base.pop("parse_mode", None) and tg(token, method, **base, **{kind: c["fid"]}).get("ok"):
-            return True
         db.mfid.delete_one({"_id": ck})
-        if parse and caption:
-            base.pop("parse_mode", None)
     form = {k: (json.dumps(v) if isinstance(v, (dict, list)) else str(v)) for k, v in base.items()}
     if kind == "video":
         form["supports_streaming"] = "true"
@@ -2032,18 +2037,8 @@ def tg_media(token, bot_id, chat_id, mid, caption="", markup=None, parse="HTML")
         log.warning("media upload failed: %s", e)
         return False
     if not resp.get("ok"):
-        # خطای parse در کپشن؛ بدون parse_mode دوباره تلاش کن
-        if parse and "parse" in str(resp.get("description", "")).lower() and "parse_mode" in form:
-            form.pop("parse_mode", None)
-            try:
-                resp = requests.post(f"https://api.telegram.org/bot{token}/{method}", data=form, timeout=120,
-                                     files={kind: (m.get("name") or "file", media_bytes(m), m.get("mime") or "application/octet-stream")}).json()
-            except Exception as e:
-                log.warning("media upload failed: %s", e)
-                return False
-        if not resp.get("ok"):
-            log.warning("media send rejected: %s", resp.get("description"))
-            return False
+        log.warning("media send rejected: %s", resp.get("description"))
+        return False
     res = resp["result"]
     if kind == "photo":
         fid = (res.get("photo") or [{}])[-1].get("file_id")
@@ -2668,21 +2663,57 @@ def api_submissions(uid, bot_id):
         return jsonify(error="ربات پیدا نشد"), 404
     rows = db.submissions.find({"bot_id": bot_id}).sort("t", -1).limit(50)
     return jsonify(items=[{"title": r.get("title", ""), "name": r.get("name", ""), "un": r.get("un", ""), "qa": r.get("qa", []),
-                           "text": r.get("text", ""), "t": aware(r["t"]).isoformat()} for r in rows])
+                           "uid": r.get("uid"), "text": r.get("text", ""), "t": aware(r["t"]).isoformat()} for r in rows])
 
 
-def run_broadcast(bot, chats, text, mid, owner, parse_html=True):
+# ───── بررسی زنده‌ی بلاک‌کردن کاربران و اطلاعیه‌ها ─────
+def probe_chats(token, chats, bot_id=None, limit=None):
+    """برای هر کاربر با sendChatAction وضعیت بلاک رو تازه می‌کنه (بدون فرستادن پیام).
+    True=بلاک‌شده، False=سالم، None=نامشخص (شمارش نمی‌شه). خروجی: دیکشنری chat→وضعیت"""
+    out, n = {}, 0
+    for chat in chats:
+        if limit is not None and n >= limit:
+            break
+        st = tg_action_ok(token, chat)
+        if st is None:
+            continue
+        n += 1
+        out[chat] = st
+        if bot_id is not None:
+            db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": bool(st)}})
+        time.sleep(0.05)
+    return out
+
+
+def _bot_chats(bot_id):
+    """همه‌ی کاربرهای ثبت‌شده‌ی یک ربات"""
+    return [s["chat"] for s in db.subs.find({"bot": bot_id}, {"chat": 1})]
+
+
+def probe_bot_async(bot_id):
+    """در پس‌زمینه وضعیت بلاک همه‌ی کاربرهای ربات را با sendChatAction به‌روز می‌کند (بدون فرستادن پیام)."""
+    def work():
+        try:
+            b = _admin_bot(bot_id)
+            if not b or not b.get("token_enc"):
+                return
+            probe_chats(dec(b["token_enc"]), _bot_chats(bot_id), bot_id)
+        except Exception:
+            log.exception("probe bot failed")
+    threading.Thread(target=work, daemon=True).start()
+
+
+def run_broadcast(bot, chats, text, mid, owner, parse_mode=""):
     bot_id, token, ok = str(bot["_id"]), dec(bot["token_enc"]), 0
     try:
         for chat in chats:
             sent = False
-            parse = parse_html and "HTML" or None
             if mid:
-                sent = tg_media(token, bot_id, chat, mid, text if len(text) <= 1000 else "", parse=parse)
+                sent = tg_media(token, bot_id, chat, mid, text if len(text) <= 1000 else "")
                 if sent and len(text) > 1000:
-                    sent = bool(tg_text(token, chat, text).get("ok"))
+                    sent = bool(tg_send_text(token, chat, text, parse_mode).get("ok"))
             if not sent and text:
-                r = tg_text(token, chat, text)
+                r = tg_send_text(token, chat, text, parse_mode)
                 sent = bool(r.get("ok"))
                 if not sent and (r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I)):
                     db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": True}})
@@ -2709,20 +2740,39 @@ def api_broadcast(uid, bot_id):
     mid = str(b.get("media") or "")
     if mid and not get_media(mid, uid):
         mid = ""
+    fmt = str(b.get("parse_mode") or "").strip().lower()
+    parse_mode = {"html": "HTML", "markdown": "Markdown", "md": "Markdown"}.get(fmt, "")
     if not text and not mid:
         return jsonify(error="متن یا رسانه‌ی پیام رو وارد کن"), 400
     if bot.get("bc_at") and age_sec(bot["bc_at"]) < 1800:
         return jsonify(error="یه پیام همگانی دیگه هنوز در حال ارساله"), 409
-    chats = [s["chat"] for s in db.subs.find({"bot": bot_id, "blocked": {"$ne": True}}, {"chat": 1})][:BROADCAST_MAX + perks_of(uid)["bc"]]
+    q = {"bot": bot_id, "blocked": {"$ne": True}}
+    picked = [str(x) for x in (b.get("uids") or []) if str(x).isdigit()][:20000]
+    if picked:
+        chats = [s["chat"] for s in db.subs.find({**q, "uid": {"$in": [int(x) for x in picked]}}, {"chat": 1})]
+    else:
+        chats = [s["chat"] for s in db.subs.find(q, {"chat": 1})][:BROADCAST_MAX + perks_of(uid)["bc"]]
     if not chats:
         return jsonify(error="هنوز کاربری نداری که بهش پیام بدی"), 400
     cost = cut(uid, max(TOKEN_SCALE, math.ceil(len(chats) / BROADCAST_PER_TOKEN)))
     if not spend(uid, cost, "broadcast"):
         return jsonify(error=f"توکن کافی نداری. این ارسال {cost} توکن می‌خواد.", need=cost, wallet=wallet_info(uid)), 402
     db.bots.update_one({"_id": bot["_id"]}, {"$set": {"bc_at": now()}})
-    parse_html = bool(b.get("html", True))
-    threading.Thread(target=run_broadcast, args=(bot, chats, text, mid, uid, parse_html), daemon=True).start()
+    threading.Thread(target=run_broadcast, args=(bot, chats, text, mid, uid, parse_mode), daemon=True).start()
     return jsonify(queued=len(chats), cost=cost, wallet=wallet_info(uid))
+
+
+@app.post("/api/bots/<bot_id>/probe")
+@authed
+def api_bot_probe(uid, bot_id):
+    """وضعیت بلاک کاربرهای این ربات را زنده بررسی می‌کند (دکمه‌ی به‌روزرسانی بالای بخش کاربران)."""
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    if not (bot.get("active") and bot.get("token_enc")):
+        return jsonify(error="اول ربات رو فعال کن"), 400
+    probe_bot_async(bot_id)
+    return jsonify(ok=True, total=db.subs.count_documents({"bot": bot_id}), started=True)
 
 
 # ───── رسانه ─────
@@ -2821,13 +2871,19 @@ def api_admin_users(uid):
     by = {}
     for bt in db.bots.find({"owner": {"$in": [x["_id"] for x in users]}}, {"owner": 1, "username": 1, "name": 1, "active": 1}):
         by.setdefault(bt["owner"], []).append({"id": str(bt["_id"]), "name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active"))})
+    bk = {r["_id"]: r["n"] for r in db.subs.aggregate([{"$match": {"blocked": True}}, {"$group": {"_id": "$bot", "n": {"$sum": 1}}}])}
+    ub = {r["_id"]: r["n"] for r in db.subs.aggregate([{"$match": {"blocked": True}}, {"$group": {"_id": "$uid", "n": {"$sum": 1}}}])}
+    for items in by.values():
+        for it in items:
+            it["bk"] = int(bk.get(it["id"], 0))
     out = []
     for x in users:
         seen = naive(x["seen"]) if x.get("seen") else None
         out.append({"id": x["_id"], "un": x.get("tg_user", ""), "name": x.get("tg_name", ""), "tokens": int(x.get("tokens", 0)),
-                    "online": bool(seen and seen >= cut), "seen": seen.isoformat() + "Z" if seen else "", "bots": by.get(x["_id"], [])})
+                    "blocked": int(ub.get(x["_id"], 0)), "online": bool(seen and seen >= cut), "seen": seen.isoformat() + "Z" if seen else "",
+                    "bots": by.get(x["_id"], [])})
     out.sort(key=lambda r: (not r["online"], r["seen"] == "", ""))
-    return jsonify(items=out, total=total, online=online)
+    return jsonify(items=out, total=total, online=online, blocked=db.subs.count_documents({"blocked": True}))
 
 
 @app.post("/api/admin/grant")
@@ -2877,22 +2933,20 @@ def audience_targets():
             yield bt, bid, chats
 
 
-def run_announce(text, mid, admin, builders=True, audience=False):
+def run_announce(text, admin, builders=True, audience=False, parse_mode="", mid=""):
     ok_b = ok_a = tot_a = 0
-    btn = {"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": BASE_URL}}]]}
+    markup = {"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": BASE_URL}}]]}
     try:
         if builders:
             for u in db.users.find({}, {"_id": 1}):
                 sent = False
                 if mid:
-                    sent = tg_media(MOTHER_TOKEN, "mother", u["_id"], mid, text if len(text) <= 1000 else "", btn)
-                    if sent:
-                        ok_b += 1
-                        if len(text) > 1000 and tg_text(MOTHER_TOKEN, u["_id"], text, btn).get("ok"):
-                            pass
-                        time.sleep(0.05)
-                        continue
-                if tg_text(MOTHER_TOKEN, u["_id"], text, btn).get("ok"):
+                    sent = tg_media(MOTHER_TOKEN, "mother", u["_id"], mid, text if len(text) <= 1000 else "", markup)
+                    if sent and len(text) > 1000:
+                        sent = bool(tg_send_text(MOTHER_TOKEN, u["_id"], text, parse_mode, markup).get("ok"))
+                if not sent and text:
+                    sent = bool(tg_send_text(MOTHER_TOKEN, u["_id"], text, parse_mode, markup).get("ok"))
+                if sent:
                     ok_b += 1
                 time.sleep(0.05)
         if audience:
@@ -2904,14 +2958,12 @@ def run_announce(text, mid, admin, builders=True, audience=False):
                     if mid:
                         sent = tg_media(token, bid, chat, mid, text if len(text) <= 1000 else "")
                         if sent and len(text) > 1000:
-                            sent = bool(tg_text(token, chat, text).get("ok"))
+                            sent = bool(tg_send_text(token, chat, text, parse_mode).get("ok"))
                     if not sent and text:
-                        r = tg_text(token, chat, text)
-                    else:
-                        r = {"ok": sent}
-                    if r.get("ok"):
+                        sent = bool(tg_send_text(token, chat, text, parse_mode).get("ok"))
+                    if sent:
                         ok_a += 1
-                    elif r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I):
+                    elif text:
                         db.subs.update_one({"_id": f"{bid}:{chat}"}, {"$set": {"blocked": True}})
                     time.sleep(0.04)
     except Exception:
@@ -2926,14 +2978,11 @@ def run_announce(text, mid, admin, builders=True, audience=False):
     tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text="اعلان همگانی تموم شد.\n" + "\n".join(parts))
 
 
-def start_announce(text, admin, builders=True, audience=False, mid=""):
+def start_announce(text, admin, builders=True, audience=False, parse_mode="", mid=""):
     """(تعداد گیرنده، پیام خطا)"""
     text = str(text or "").strip()[:3500]
-    mid = str(mid or "")
-    if mid and not get_media(mid):
-        mid = ""
     if len(text) < 3 and not mid:
-        return 0, "متن یا رسانه‌ی اعلان رو بنویس"
+        return 0, "متن اعلان رو بنویس"
     if not (builders or audience):
         return 0, "حداقل یکی از گیرنده‌ها رو انتخاب کن"
     try:
@@ -2943,11 +2992,20 @@ def start_announce(text, admin, builders=True, audience=False, mid=""):
         if lk and age_sec(lk["t"]) < 3600:
             return 0, "یه اعلان دیگه هنوز در حال ارساله"
         db.locks.update_one({"_id": "announce"}, {"$set": {"t": now()}})
-    threading.Thread(target=run_announce, args=(text, mid, admin, builders, audience), daemon=True).start()
+    threading.Thread(target=run_announce, args=(text, admin, builders, audience, parse_mode, mid), daemon=True).start()
     n = db.users.count_documents({}) if builders else 0
     if audience:
         n += sum(len(c) for _, _, c in audience_targets())
     return n, ""
+
+
+def _parse_mode(b):
+    fmt = str((b or {}).get("parse_mode") or "").strip().lower()
+    return {"html": "HTML", "markdown": "Markdown", "md": "Markdown"}.get(fmt, "")
+
+
+def _uids_of(b):
+    return [int(x) for x in (b or {}).get("uids", []) if str(x).isdigit()][:20000]
 
 
 @app.post("/api/admin/announce")
@@ -2957,7 +3015,8 @@ def api_admin_announce(uid):
     mid = str(b.get("media") or "")
     if mid and not get_media(mid, uid):
         mid = ""
-    n, err = start_announce(b.get("text"), uid, builders=bool(b.get("builders", True)), audience=bool(b.get("audience", False)), mid=mid)
+    n, err = start_announce(b.get("text"), uid, builders=bool(b.get("builders", True)), audience=bool(b.get("audience", False)),
+                            parse_mode=_parse_mode(b), mid=mid)
     if err:
         return jsonify(error=err), 400
     return jsonify(queued=n)
@@ -2977,7 +3036,7 @@ def api_admin_bot_audience(uid, bot_id):
     if not bot:
         return jsonify(error="ربات پیدا نشد"), 404
     cut_on = naive() - timedelta(seconds=300)
-    rows = list(db.subs.find({"bot": bot_id}).sort("last", -1).limit(500))
+    rows = list(db.subs.find({"bot": bot_id}).sort("last", -1).limit(2000))
     known = {u["_id"]: u for u in db.users.find({"_id": {"$in": [r.get("uid") for r in rows]}}, {"tg_user": 1, "tg_name": 1})}
     items = []
     for r in rows:
@@ -2994,23 +3053,34 @@ def api_admin_bot_audience(uid, bot_id):
                    online=sum(1 for x in items if x["online"]))
 
 
-def run_admin_send(bot, chats, text, mid, admin):
+@app.post("/api/admin/bots/<bot_id>/probe")
+@admin_only
+def api_admin_bot_probe(uid, bot_id):
+    """به‌روزرسانی زنده‌ی وضعیت بلاک کاربرهای ربات (برای فهرست کاربران آنلاین و لیست کاربران ربات‌ها)."""
+    bot = _admin_bot(bot_id)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    if not (bot.get("active") and bot.get("token_enc")):
+        return jsonify(error="این ربات فعال نیست"), 400
+    probe_bot_async(bot_id)
+    return jsonify(ok=True, total=db.subs.count_documents({"bot": bot_id}), started=True)
+
+
+def run_admin_send(bot, chats, text, admin, parse_mode="", mid="", engine_bot_id=None):
     bot_id, token, ok = str(bot["_id"]), dec(bot["token_enc"]), 0
     try:
         for chat in chats:
             sent = False
             if mid:
-                sent = tg_media(token, bot_id, chat, mid, text if len(text) <= 1000 else "")
+                sent = tg_media(token, bot_id if engine_bot_id is None else engine_bot_id, chat, mid, text if len(text) <= 1000 else "")
                 if sent and len(text) > 1000:
-                    sent = bool(tg_text(token, chat, text).get("ok"))
+                    sent = bool(tg_send_text(token, chat, text, parse_mode).get("ok"))
             if not sent and text:
-                r = tg_text(token, chat, text)
-            else:
-                r = {"ok": sent}
-            if r.get("ok"):
-                ok += 1
-            elif r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I):
-                db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": True}})
+                r = tg_send_text(token, chat, text, parse_mode)
+                sent = bool(r.get("ok"))
+                if not sent and (r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I)):
+                    db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": True}})
+            ok += 1 if sent else 0
             time.sleep(0.04)
     except Exception:
         log.exception("admin send crashed")
@@ -3032,37 +3102,42 @@ def api_admin_bot_send(uid, bot_id):
     mid = str(b.get("media") or "")
     if mid and not get_media(mid, uid):
         mid = ""
-    if len(text) < 2 and not mid:
+    parse_mode = _parse_mode(b)
+    if not text and not mid:
         return jsonify(error="متن یا رسانه‌ی پیام رو بنویس"), 400
+    token = dec(bot["token_enc"])
+    uids = _uids_of(b)
     scope = b.get("scope")
-    if scope == "one":
+    if scope == "one" or (len(uids) == 1 and scope not in ("all", "except_owner")):
         try:
-            target = int(b.get("uid"))
+            target = int(uids[0]) if uids else int(b.get("uid"))
         except (TypeError, ValueError):
             return jsonify(error="کاربر نامعتبره"), 400
         sub = db.subs.find_one({"_id": f"{bot_id}:{target}"})
         if not sub:
             return jsonify(error="این کاربر مخاطب این ربات نیست"), 404
-        token = dec(bot["token_enc"])
-        sent = False
         if mid:
-            sent = tg_media(token, bot_id, sub["chat"], mid, text if len(text) <= 1000 else "")
-            if sent and len(text) > 1000:
-                sent = bool(tg_text(token, sub["chat"], text).get("ok"))
-        if not sent and text:
-            r = tg_text(token, sub["chat"], text)
+            ok = tg_media(token, bot_id, sub["chat"], mid, text if len(text) <= 1000 else "")
+            if ok and len(text) > 1000:
+                tg_send_text(token, sub["chat"], text, parse_mode)
+            if not ok:
+                return jsonify(error="ارسال نشد؛ احتمالاً کاربر ربات رو بلاک کرده"), 502
         else:
-            r = {"ok": sent}
-        if not r.get("ok"):
-            if r.get("error_code") == 403:
-                db.subs.update_one({"_id": sub["_id"]}, {"$set": {"blocked": True}})
-            return jsonify(error="ارسال نشد؛ احتمالاً کاربر ربات رو بلاک کرده"), 502
+            r = tg_send_text(token, sub["chat"], text, parse_mode)
+            if not r.get("ok"):
+                if r.get("error_code") == 403 or re.search(r"blocked|deactivated", str(r.get("description", "")), re.I):
+                    db.subs.update_one({"_id": sub["_id"]}, {"$set": {"blocked": True}})
+                return jsonify(error="ارسال نشد؛ احتمالاً کاربر ربات رو بلاک کرده"), 502
         return jsonify(queued=1)
     q = {"bot": bot_id, "blocked": {"$ne": True}}
     if scope == "except_owner":
         q["uid"] = {"$ne": bot["owner"]}
-    elif scope != "all":
-        return jsonify(error="نوع گیرنده نامعتبره"), 400
+    elif scope == "all":
+        pass
+    elif uids:
+        q["uid"] = {"$in": uids}
+    else:
+        return jsonify(error="گیرنده‌ای انتخاب نشده"), 400
     chats = [x["chat"] for x in db.subs.find(q, {"chat": 1})]
     if not chats:
         return jsonify(error="گیرنده‌ای پیدا نشد"), 400
@@ -3073,7 +3148,7 @@ def api_admin_bot_send(uid, bot_id):
         if lk and age_sec(lk["t"]) < 1800:
             return jsonify(error="یه ارسال دیگه برای این ربات هنوز در حاله"), 409
         db.locks.update_one({"_id": f"abc:{bot_id}"}, {"$set": {"t": now()}})
-    threading.Thread(target=run_admin_send, args=(bot, chats, text, mid, uid), daemon=True).start()
+    threading.Thread(target=run_admin_send, args=(bot, chats, text, uid, parse_mode, mid, bot_id), daemon=True).start()
     return jsonify(queued=len(chats))
 
 
@@ -4490,7 +4565,16 @@ def mother_command(msg):
                        f"ربات‌ها: {db.bots.count_documents({})}\nربات‌های فعال: {db.bots.count_documents({'active': True})}\n"
                        f"مخاطب ربات‌های ساخته‌شده: {db.subs.count_documents({})}", False)
         if cmd == "/announce":
-            n, err = start_announce(arg, uid)
+            mid, pm = "", ""
+            try:
+                mm = re.search(r"media=([A-Za-z0-9]+)", arg or "")
+                if mm:
+                    mid = mm.group(1); arg = (arg or "").replace(mm.group(0), "").strip()
+                if "html" in (arg or "").lower():
+                    pm = "HTML"
+            except Exception:
+                mid, pm = "", ""
+            n, err = start_announce(arg, uid, parse_mode=pm, mid=mid)
             return say(err or f"اعلان برای {n} نفر در حال ارساله.", False)
     if cmd == "/start":
         return send_start(uid)
