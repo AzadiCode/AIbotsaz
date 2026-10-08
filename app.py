@@ -4638,6 +4638,11 @@ MK_CANCEL = mk_kb([mk_btn("انصراف", "mk:x")])
 MK_NEW = mk_kb([mk_btn("ساخت ربات جدید", "mk:new")])
 
 
+def mk_home(chat, mid):
+    """بازگشت به منوی اصلی (همان متن و دکمه‌های استارت) داخل همین پیام، بدون ساخت پیام تازه"""
+    return mk_edit(chat, mid, START_TEXT, start_keyboard())
+
+
 def mk_say(chat, text, kb=None):
     d = {"chat_id": chat, "text": text[:4000], "parse_mode": "HTML", "disable_web_page_preview": True}
     if kb:
@@ -4700,15 +4705,18 @@ def mk_show(uid, chat, text, kb=None, mid=None):
 def mk_view(uid, st, note=""):
     """(متن، دکمه‌ها) برای مرحله‌ی فعلی"""
     step, user = st.get("step"), f"@{hx(st.get('username'))}"
-    tail = f"\n\n{note}" if note else ""
+    tail = f"\n\n⚠️ {note}" if note else ""
     if step == "token":
-        return (f"{MK_TITLE}\nمرحله ۱ از ۳ · توکن ربات\n\n"
-                "۱. در تلگرام @BotFather را باز کنید.\n۲. دستور /newbot را ارسال کنید.\n۳. توکن دریافتی را همین‌جا بفرستید.\n\n"
-                "توکن رمزنگاری می‌شود و پیام شما از گفتگو حذف می‌شود." + tail), MK_CANCEL
+        return (f"{MK_TITLE}\nمرحله 1 از 3: دریافت توکن\n\n"
+                "1. در تلگرام به @BotFather مراجعه کنید.\n"
+                "2. دستور /newbot را ارسال کنید و نام ربات را مشخص کنید.\n"
+                "3. توکنی که دریافت می‌کنید را همین‌جا بفرستید.\n\n"
+                "توکن به‌صورت رمزنگاری‌شده ذخیره می‌شود و پیام شما بلافاصله از گفتگو حذف خواهد شد." + tail), MK_CANCEL
     if step == "desc":
-        return (f"{MK_TITLE}\nمرحله ۲ از ۳ · توضیح ربات\nربات: {user}\n\n"
-                "توضیح دهید ربات چه کاری انجام دهد و چه بخش‌ها و دکمه‌هایی داشته باشد. هرچه دقیق‌تر باشد، نتیجه بهتر است.\n\n"
-                "توضیح را در یک پیام متنی ارسال کنید." + tail), MK_CANCEL
+        return (f"{MK_TITLE}\nمرحله 2 از 3: توضیح ربات\nربات: {user}\n\n"
+                "بنویسید ربات باید چه کاری انجام دهد و چه بخش‌ها و دکمه‌هایی داشته باشد. "
+                "هر چه توضیح کامل‌تر باشد، ربات دقیق‌تری ساخته می‌شود.\n\n"
+                "لطفاً توضیح را در قالب یک پیام متنی ارسال کنید." + tail), MK_CANCEL
     if step == "confirm":
         prompt = st.get("prompt", "")
         reserve, have = reserve_cost(prompt, None, uid), wallet_info(uid)["tokens"]
@@ -4716,14 +4724,14 @@ def mk_view(uid, st, note=""):
         rows = [[mk_btn("تأیید و شروع ساخت", "mk:ok")], [mk_btn("ویرایش توضیح", "mk:edit"), mk_btn("انصراف", "mk:x")]]
         extra = ""
         if have < reserve:
-            extra = "\nموجودی برای سقف هزینه کافی نیست؛ ابتدا موجودی را افزایش دهید."
+            extra = "\nموجودی شما برای ساخت کافی نیست. ابتدا موجودی خود را افزایش دهید."
             rows.insert(0, [mk_app("افزایش موجودی")])
-        return (f"<b>تأیید نهایی</b>\nمرحله ۳ از ۳\nربات: {user}\n\n<blockquote>{hx(shown)}</blockquote>\n"
-                f"از این توضیح اطمینان دارید؟\n\nسقف هزینه: {reserve} توکن · موجودی: {have} توکن\n"
-                f"در صورت ناموفق بودن ساخت، توکنی کسر نمی‌شود.{extra}" + tail), mk_kb(*rows)
+        return (f"<b>تأیید نهایی</b>\nمرحله 3 از 3\nربات: {user}\n\n<blockquote>{hx(shown)}</blockquote>\n"
+                f"آیا از این توضیح اطمینان دارید؟\n\nسقف هزینه: {reserve} توکن | موجودی شما: {have} توکن\n"
+                f"اگر ساخت با خطا مواجه شود، هزینه‌ای از شما کسر نمی‌شود.{extra}" + tail), mk_kb(*rows)
     if step == "activate":
-        return ("<b>فعال‌سازی انجام نشد</b>\nربات ساخته و ذخیره شده است، اما فعال‌سازی آن با خطا روبه‌رو شد.\n\n"
-                "اگر توکن را تغییر داده‌اید، توکن جدید را ارسال کنید؛ در غیر این صورت فعال‌سازی را دوباره امتحان کنید." + tail,
+        return ("<b>فعال‌سازی ربات انجام نشد</b>\nربات ساخته و ذخیره شده است، اما فعال‌سازی آن با خطا مواجه شد.\n\n"
+                "اگر توکن را تغییر داده‌اید، توکن جدید را بفرستید؛ در غیر این صورت دوباره تلاش کنید." + tail,
                 mk_kb([mk_btn("فعال‌سازی دوباره", "mk:act")], [mk_app("باز کردن در مینی‌اپ", f"?bot={st.get('bot')}")]))
     return "", None
 
@@ -4741,13 +4749,13 @@ def mk_begin(uid, chat):
     if st and st.get("step") == "building":
         return mk_resume(uid, chat)
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return mk_say(chat, f"{MK_TITLE}\n\nسقف ربات‌های شما {max_bots(uid)} عدد است و ظرفیت ساخت ربات جدید ندارید. "
-                            "با بالا رفتن سطح، سقف افزایش می‌یابد. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
+        return mk_say(chat, f"{MK_TITLE}\n\nسقف ربات‌های شما {max_bots(uid)} عدد است و امکان ساخت ربات جدید وجود ندارد. "
+                            "با افزایش سطح، این سقف بیشتر می‌شود. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
                       mk_kb([mk_app("ورود به مینی‌اپ")]))
     have, need = wallet_info(uid)["tokens"], typical_cost()
     if have < need:
-        return mk_say(chat, f"{MK_TITLE}\n\nموجودی شما ({have} توکن) برای ساخت ربات کافی نیست؛ حداقل حدود {need} توکن لازم است. "
-                            "از مینی‌اپ می‌توانید توکن بخرید، جایزه‌ی روزانه بگیرید یا دوستان را دعوت کنید.",
+        return mk_say(chat, f"{MK_TITLE}\n\nموجودی شما ({have} توکن) برای ساخت ربات کافی نیست و حداقل به حدود {need} توکن نیاز دارید. "
+                            "از مینی‌اپ می‌توانید توکن بخرید، جایزه روزانه دریافت کنید یا دوستان خود را دعوت کنید.",
                       mk_kb([mk_app("افزایش موجودی")]))
     if st:
         mk_del(chat, st.get("mid"))                      # پیام قبلی مسیر؛ همیشه فقط یک پیام فعال می‌ماند
@@ -4769,7 +4777,7 @@ def mother_flow(msg):
             mk_clear(uid)
             if cmd == "/cancel":
                 mk_del(chat, msg.get("message_id"))
-                mk_edit(chat, st.get("mid"), "ساخت ربات لغو شد.", MK_NEW)
+                mk_home(chat, st.get("mid"))
                 return True
             mk_del(chat, st.get("mid"))
         return False
@@ -4780,20 +4788,20 @@ def mother_flow(msg):
     if step in ("token", "activate"):
         m = re.search(r"\d{6,12}:[\w-]{30,50}", text)
         if not m:
-            mk_render(uid, chat, "متن ارسال‌شده شبیه توکن ربات نیست. توکن را مستقیم از BotFather کپی کنید.")
+            mk_render(uid, chat, "متنی که فرستادید شبیه توکن ربات نیست. لطفاً توکن را مستقیماً از BotFather کپی کنید.")
             return True
         tok = m.group(0)
         if not rate_ok(f"mkt:{uid}", 8, 600):
-            mk_render(uid, chat, "تعداد تلاش‌ها زیاد بود؛ چند دقیقه بعد دوباره امتحان کنید.")
+            mk_render(uid, chat, "تعداد تلاش‌ها زیاد بود. لطفاً چند دقیقه بعد دوباره امتحان کنید.")
             return True
         me = tg(tok, "getMe")
         if not me.get("ok"):
-            mk_render(uid, chat, "این توکن معتبر نیست یا باطل شده است.")
+            mk_render(uid, chat, "این توکن معتبر نیست یا باطل شده است. لطفاً توکن درست را ارسال کنید.")
             return True
         th, uname = thash(tok), (me.get("result") or {}).get("username", "")
         dup = db.bots.find_one({"token_hash": th})
         if dup and str(dup["_id"]) != st.get("bot"):
-            mk_render(uid, chat, "این توکن قبلاً برای ربات دیگری ثبت شده است. یک ربات تازه در BotFather بسازید.")
+            mk_render(uid, chat, "این توکن قبلاً برای ربات دیگری ثبت شده است. لطفاً در BotFather یک ربات جدید بسازید.")
             return True
         if step == "activate":
             mk_put(uid, token_enc=enc(tok), token_hash=th, username=uname)
@@ -4803,10 +4811,10 @@ def mother_flow(msg):
         return True
     if step in ("desc", "confirm"):
         if not text:
-            mk_render(uid, chat, "فقط توضیح متنی قابل قبول است.")
+            mk_render(uid, chat, "فقط توضیح متنی پذیرفته می‌شود.")
             return True
         if len(text) < 10:
-            mk_render(uid, chat, "توضیح خیلی کوتاه است؛ کمی دقیق‌تر بنویسید.")
+            mk_render(uid, chat, "توضیح شما بسیار کوتاه است. لطفاً کمی کامل‌تر بنویسید.")
             return True
         mk_put(uid, step="confirm", prompt=text[:MAX_PROMPT])
         mk_render(uid, chat)
@@ -4820,10 +4828,10 @@ def mk_progress_text(j, tick):
     on = int(p / 100 * 12)
     out = ["<b>در حال ساخت ربات</b>", "",
            f"مرحله: {MK_STAGE.get(pr.get('st') or 'analyze', 'پردازش')}{'.' * (tick % 3 + 1)}",
-           f"{'▰' * on}{'▱' * (12 - on)}  {int(p)}٪"]
+           f"{'▰' * on}{'▱' * (12 - on)}  {int(p)}%"]
     if pr.get("n"):
-        out.append(f"بخش‌های طراحی‌شده: {pr['n']}" + (f" · «{hx(pr['ti'])}»" if pr.get("ti") else ""))
-    out += ["", "نتیجه همین‌جا اعلام می‌شود."]
+        out.append(f"بخش‌های طراحی‌شده: {pr['n']}" + (f" | آخرین بخش: «{hx(pr['ti'])}»" if pr.get("ti") else ""))
+    out += ["", "نتیجه در همین پیام اعلام می‌شود."]
     return "\n".join(out)
 
 
@@ -4839,6 +4847,7 @@ def mk_watch(uid, chat, jid):
             j = db.jobs.find_one({"_id": jid})
             if not j or j["status"] in ("done", "error"):
                 break
+            tg(MOTHER_TOKEN, "sendChatAction", chat_id=chat, action="typing")      # بالای چت «در حال نوشتن…» تا پایان ساخت
             txt = mk_progress_text(j, tick)
             tick += 1
             if txt != last:
@@ -4851,7 +4860,7 @@ def mk_watch(uid, chat, jid):
             mk_activate(uid, chat)
         else:
             mk_put(uid, step="confirm")
-            mk_render(uid, chat, "ساخت ناموفق بود: " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + "\nتوکنی از موجودی شما کسر نشد.")
+            mk_render(uid, chat, "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد.")
     except Exception:
         log.exception("chat build watcher crashed")
     finally:
@@ -4872,7 +4881,7 @@ def mk_activate(uid, chat):
     bot = get_bot(st.get("bot"), uid)
     if not bot:
         mk_clear(uid)
-        return mk_edit(chat, mid, "ربات ساخته‌شده پیدا نشد. وضعیت را از مینی‌اپ بررسی کنید.", mk_kb([mk_app("ورود به مینی‌اپ")]))
+        return mk_edit(chat, mid, "ربات ساخته‌شده پیدا نشد. لطفاً وضعیت را از مینی‌اپ بررسی کنید.", mk_kb([mk_app("ورود به مینی‌اپ")]))
     try:
         token = dec(st["token_enc"])
     except Exception:
@@ -4884,17 +4893,17 @@ def mk_activate(uid, chat):
     mk_clear(uid)
     cfg = doc.get("config") or {}
     titles = [str(n.get("title") or "") for n in (cfg.get("nodes") or {}).values() if isinstance(n, dict) and n.get("title")]
-    t = f"<b>ربات ساخته و فعال شد</b>\n@{hx(doc.get('username'))} · «{hx(doc.get('name'))}»\n"
+    t = f"✅ <b>ربات شما ساخته و فعال شد</b>\n@{hx(doc.get('username'))} | «{hx(doc.get('name'))}»\n"
     if titles:
         t += f"\nبخش‌ها ({len(titles)}): " + "، ".join(hx(x[:30]) for x in titles[:5]) + ("، …" if len(titles) > 5 else "") + "\n"
     think = (doc.get("thinking") or "").strip()
     if think:
         t += f"\n<blockquote expandable>{hx(think[:500])}</blockquote>\n"
-    t += (f"\nهزینه‌ی ساخت: {int(st.get('cost') or 0)} توکن · موجودی: {wallet_info(uid)['tokens']} توکن\n\n"
-          "ادامه‌ی توسعه، ویرایش با هوش مصنوعی، رسانه، پیام همگانی و آمار فقط از طریق مینی‌اپ امکان‌پذیر است. "
+    t += (f"\nهزینه‌ی ساخت: {int(st.get('cost') or 0)} توکن | موجودی: {wallet_info(uid)['tokens']} توکن\n\n"
+          "ادامه‌ی توسعه، ویرایش با هوش مصنوعی، رسانه، پیام همگانی و آمار ربات فقط از طریق مینی‌اپ امکان‌پذیر است.\n"
           "برای دریافت پیام کاربران، یک بار ربات خود را استارت کنید.")
     kb = mk_kb([{"text": "ورود به ربات", "url": f"https://t.me/{doc.get('username')}"}],
-               [mk_app("ارتقا و ادامه‌ی توسعه در مینی‌اپ", f"?bot={bot['_id']}")],
+               [mk_app("ارتقا و ادامه توسعه در مینی‌اپ", f"?bot={bot['_id']}")],
                [mk_btn("ساخت ربات جدید", "mk:new")])
     return mk_edit(chat, mid, t, kb)
 
@@ -4908,16 +4917,16 @@ def mk_build(uid, chat):
         return None                                           # کلیک دوباره‌ی همزمان
     prompt, reserve, note = st["prompt"], 0, ""
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        note = f"سقف ربات‌های شما {max_bots(uid)} عدد است."
+        note = f"سقف ربات‌های شما {max_bots(uid)} عدد است و امکان ساخت ربات جدید وجود ندارد."
     elif not rate_ok(f"gen:{uid}", 10, 60):
-        note = "کمی آرام‌تر؛ چند لحظه بعد دوباره تلاش کنید."
+        note = "درخواست‌ها زیاد بود. لطفاً چند لحظه بعد دوباره تلاش کنید."
     elif any(age_sec(j["t"]) < JOB_TIMEOUT for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}})):
-        note = "یک کار دیگر شما هنوز در حال انجام است؛ چند لحظه صبر کنید."
+        note = "کار دیگری از شما هنوز در حال انجام است. لطفاً کمی صبر کنید."
     else:
         ensure_user(uid)
         reserve = reserve_cost(prompt, None, uid)
         if not hold(uid, reserve):
-            note = f"موجودی کافی نیست؛ این ساخت تا سقف {reserve} توکن می‌خواهد."
+            note = f"موجودی شما کافی نیست. این ساخت تا سقف {reserve} توکن هزینه دارد."
     if note:
         mk_put(uid, step="confirm")
         return mk_render(uid, chat, note)
@@ -4952,11 +4961,11 @@ def mother_callback(cq):
         if st and st.get("step") == "building":
             return ack("ساخت در حال انجام است و قابل لغو نیست.", True)
         mk_clear(uid)
-        ack("لغو شد")
-        return mk_edit(chat, (st or {}).get("mid") or cmid, "ساخت ربات لغو شد.", MK_NEW)
+        ack()
+        return mk_home(chat, (st or {}).get("mid") or cmid)
     if not st:
-        ack("این درخواست منقضی شده است.", True)
-        return mk_edit(chat, cmid, "این درخواست منقضی شده است.", MK_NEW)
+        ack()
+        return mk_home(chat, cmid)
     if act == "edit" and st.get("step") == "confirm":
         mk_put(uid, step="desc")
         ack()
