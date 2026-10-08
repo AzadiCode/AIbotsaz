@@ -4421,8 +4421,8 @@ START_TEXT = (
 
 
 def start_keyboard():
-    return {"inline_keyboard": [[{"text": "ساخت ربات در چت", "callback_data": "mk:new"}],
-                                [{"text": "ورود به مینی‌اپ حرفه‌ای", "web_app": {"url": BASE_URL}}]]}
+    return {"inline_keyboard": [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
+                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}}]]}
 
 
 def start_media():
@@ -4537,7 +4537,7 @@ def mother_media(msg):
 
 
 def mother_keyboard(uid):
-    rows = [[{"text": "ساخت ربات در چت", "callback_data": "mk:new"}],
+    rows = [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
             [{"text": "ساخت و مدیریت ربات", "web_app": {"url": BASE_URL}}]]
     link = mother_link(uid)
     if link:
@@ -4764,7 +4764,7 @@ def mk_begin(uid, chat):
 
 
 def mother_flow(msg):
-    """پیام‌های متنیِ کاربری که وسط ساخت ربات در چته. اگه پیام رو مصرف کرد True"""
+    """پیام‌های متنیِ کاربری که وسط Ai ساخت ربات در چته. اگه پیام رو مصرف کرد True"""
     uid, chat = msg["from"]["id"], msg["chat"]["id"]
     st = mk_get(uid)
     if not st:
