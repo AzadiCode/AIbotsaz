@@ -832,6 +832,8 @@ async function load(){
     $("#app").innerHTML = `<div class="empty"><div class="ib big">${IC.bot}</div><h2>فقط داخل تلگرام باز می‌شود</h2><p class="muted">از ربات مادر، دکمه‌ی «ساخت ربات» را بزن.</p></div>`;
     return;
   }
+  const want = new URLSearchParams(location.search).get("bot"), hit = want && S.bots.find(b => b.id === want);   // لینک مستقیم از چت ربات مادر
+  if(hit){ S.cur = hit; S.view = "bot"; S.btab = "nodes"; S.open = new Set(); S.ideas = []; S.stats = null; }
   render();
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }

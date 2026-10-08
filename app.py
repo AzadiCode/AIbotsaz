@@ -165,6 +165,7 @@ _index(db.ledger, "key", unique=True, sparse=True)
 _index(db.ledger, "uid")
 _index(db.jobs, "uid")
 _index(db.jobs, "t", expireAfterSeconds=86400)
+_index(db.mstate, "t", expireAfterSeconds=7200)
 _index(db.relay, "t", expireAfterSeconds=30 * 86400)
 _index(db.nvis, "bot")
 _index(db.tickets, "bot")
@@ -2583,25 +2584,21 @@ def api_health(uid, bot_id):
     return jsonify(issues=issues, nodes=len(bot["config"]["nodes"]))
 
 
-@app.post("/api/bots/<bot_id>/activate")
-@authed
-def api_activate(uid, bot_id):
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="ربات پیدا نشد"), 404
-    token = str((request.get_json(silent=True) or {}).get("token", "")).strip()
+def do_activate(bot, token):
+    """فعال‌سازی ربات با توکن (مشترک بین مینی‌اپ و چت). خروجی: (سند ربات، None) یا (None، (پیام، کد وضعیت))"""
+    bot_id, uid = str(bot["_id"]), bot["owner"]
     if not re.match(r"^\d{6,12}:[\w-]{30,50}$", token):
-        return jsonify(error="فرمت توکن درست نیست"), 400
+        return None, ("فرمت توکن درست نیست", 400)
     me = tg(token, "getMe")
     if not me.get("ok"):
-        return jsonify(error="توکن معتبر نیست"), 400
+        return None, ("توکن معتبر نیست", 400)
     th = thash(token)
     if db.bots.find_one({"token_hash": th, "_id": {"$ne": bot["_id"]}}):
-        return jsonify(error="این توکن قبلاً برای ربات دیگه‌ای ثبت شده"), 400
+        return None, ("این توکن قبلاً برای ربات دیگه‌ای ثبت شده", 400)
     r = tg(token, "setWebhook", url=f"{BASE_URL}/hook/{bot_id}", secret_token=bot["secret"],
            allowed_updates=["message", "callback_query", "pre_checkout_query"], drop_pending_updates=True)
     if not r.get("ok"):
-        return jsonify(error="اتصال وبهوک ناموفق بود"), 502
+        return None, ("اتصال وبهوک ناموفق بود", 502)
     tg(token, "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
         {"command": c, "description": c} for c in bot["config"]["commands"]])
     db.bots.update_one({"_id": bot["_id"]}, {"$set": {
@@ -2613,7 +2610,20 @@ def api_activate(uid, bot_id):
         log.exception("sync after activate failed")
     if REF_ON == "activate":
         settle_referral(uid)
-    return jsonify(bot=public(db.bots.find_one({"_id": bot["_id"]})))
+    return db.bots.find_one({"_id": bot["_id"]}), None
+
+
+@app.post("/api/bots/<bot_id>/activate")
+@authed
+def api_activate(uid, bot_id):
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    token = str((request.get_json(silent=True) or {}).get("token", "")).strip()
+    doc, err = do_activate(bot, token)
+    if err:
+        return jsonify(error=err[0]), err[1]
+    return jsonify(bot=public(doc))
 
 
 @app.post("/api/bots/<bot_id>/deactivate")
@@ -4411,7 +4421,8 @@ START_TEXT = (
 
 
 def start_keyboard():
-    return {"inline_keyboard": [[{"text": "💎 استودیو هوشمند", "web_app": {"url": BASE_URL}}]]}
+    return {"inline_keyboard": [[{"text": "🤖 ساخت ربات (سریع در چت)", "callback_data": "mk:new"}],
+                                [{"text": "💎 ورود به مینی‌اپ حرفه‌ای", "web_app": {"url": BASE_URL}}]]}
 
 
 def start_media():
@@ -4526,7 +4537,8 @@ def mother_media(msg):
 
 
 def mother_keyboard(uid):
-    rows = [[{"text": "ساخت و مدیریت ربات", "web_app": {"url": BASE_URL}}]]
+    rows = [[{"text": "🤖 ساخت ربات (سریع در چت)", "callback_data": "mk:new"}],
+            [{"text": "ساخت و مدیریت ربات", "web_app": {"url": BASE_URL}}]]
     link = mother_link(uid)
     if link:
         share = "https://t.me/share/url?url=" + quote(link, safe="") + "&text=" + quote("با این ربات هر رباتی که بخوای رو با هوش مصنوعی بساز", safe="")
@@ -4548,7 +4560,7 @@ def mother_paid(msg):
 HELP_TEXT = ("راهنمای ابر رباتساز\n\n"
              "/start باز کردن منو\n/balance موجودی توکن\n/daily جایزه‌ی روزانه\n"
              "/invite لینک دعوت (هر دعوت موفق = توکن رایگان)\n/coupon CODE ثبت کد هدیه\n\n"
-             "برای ساخت ربات روی «ساخت و مدیریت ربات» بزن و توضیح بده چی می‌خوای.")
+             "برای ساخت سریع ربات داخل همین چت، «ساخت ربات» رو بزن؛ برای مدیریت و توسعه‌ی حرفه‌ای وارد مینی‌اپ شو.")
 
 
 def mother_command(msg):
@@ -4599,6 +4611,349 @@ def mother_command(msg):
     send_start(uid)
 
 
+# ───────────────────────── ساخت ربات مستقیم داخل چت ربات مادر ─────────────────────────
+# مراحل: ۱) توکن (اعتبارسنجی، بدون کسر توکن)  ۲) توضیح ربات  ۳) تأیید نهایی  ۴) ساخت با استریم زنده  ۵) فعال‌سازی و پیام نهایی
+_mk_watch, _mk_lock = set(), threading.Lock()
+MK_STAGE = {"analyze": "تحلیل توضیحات", "build": "طراحی ساختار و بخش‌ها", "review": "بازبینی و بهینه‌سازی", "save": "ذخیره‌سازی نهایی"}
+MK_NOTE = ("⚠️ <b>نکته‌ی مهم</b>\nادامه‌ی توسعه‌ی ربات، ویرایش و ارتقا با هوش مصنوعی، رسانه، پیام همگانی، آمار و تنظیمات پیشرفته "
+           "<b>فقط از طریق مینی‌اپ</b> امکان‌پذیر است. از این چت فقط می‌توانید ربات جدید بسازید.")
+
+
+def hx(t):
+    return _html.escape(str(t or ""), quote=False)
+
+
+def mk_btn(text, data):
+    return {"text": text, "callback_data": data}
+
+
+def mk_app(text, path=""):
+    return {"text": text, "web_app": {"url": BASE_URL + path}}
+
+
+def mk_kb(*rows):
+    return {"inline_keyboard": [list(r) for r in rows]}
+
+
+MK_CANCEL = mk_kb([mk_btn("❌ انصراف", "mk:x")])
+
+
+def mk_say(chat, text, kb=None):
+    d = {"chat_id": chat, "text": text[:4000], "parse_mode": "HTML", "disable_web_page_preview": True}
+    if kb:
+        d["reply_markup"] = kb
+    r = tg(MOTHER_TOKEN, "sendMessage", **d)
+    if not r.get("ok") and parse_err(r):                 # تگ‌های HTML پذیرفته نشد؛ همان متن بدون تگ
+        d.pop("parse_mode")
+        d["text"] = plain_html(text)[:4000]
+        r = tg(MOTHER_TOKEN, "sendMessage", **d)
+    return r
+
+
+def mk_edit(chat, mid, text, kb=None):
+    """ویرایش پیام؛ اگه پیام پیدا نشد پیام تازه می‌فرسته. خروجی: message_id فعلی"""
+    if not mid:
+        r = mk_say(chat, text, kb)
+        return (r.get("result") or {}).get("message_id")
+    d = {"chat_id": chat, "message_id": mid, "text": text[:4000], "parse_mode": "HTML", "disable_web_page_preview": True}
+    if kb:
+        d["reply_markup"] = kb
+    r = tg(MOTHER_TOKEN, "editMessageText", **d)
+    if r.get("ok") or "not modified" in str(r.get("description", "")):
+        return mid
+    if r.get("error_code") == 429:
+        time.sleep(min(int((r.get("parameters") or {}).get("retry_after", 2)), 10))
+        return mid
+    r = mk_say(chat, text, kb)
+    return (r.get("result") or {}).get("message_id") or mid
+
+
+def mk_get(uid):
+    return db.mstate.find_one({"_id": uid})
+
+
+def mk_put(uid, **kw):
+    kw["t"] = now()
+    db.mstate.update_one({"_id": uid}, {"$set": kw}, upsert=True)
+
+
+def mk_fresh(uid, **kw):
+    db.mstate.replace_one({"_id": uid}, {"_id": uid, "t": now(), **kw}, upsert=True)
+
+
+def mk_clear(uid):
+    db.mstate.delete_one({"_id": uid})
+
+
+def mk_begin(uid, chat):
+    st = mk_get(uid)
+    if st and st.get("step") == "building":
+        return mk_resume(uid, chat)
+    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
+        return mk_say(chat, f"⚠️ سقف ربات‌های شما <b>{max_bots(uid)}</b> عدد است و ظرفیت ساخت ربات جدید ندارید.\n"
+                            "با بالا رفتن سطح، سقف افزایش می‌یابد. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
+                      mk_kb([mk_app("💎 ورود به مینی‌اپ")]))
+    have, need = wallet_info(uid)["tokens"], typical_cost()
+    if have < need:
+        return mk_say(chat, f"⚠️ موجودی شما (<b>{have}</b> توکن) برای ساخت ربات کافی نیست؛ حداقل حدود <b>{need}</b> توکن لازم است.\n"
+                            "از مینی‌اپ می‌توانید توکن بخرید، جایزه‌ی روزانه بگیرید یا دوستان را دعوت کنید.",
+                      mk_kb([mk_app("💳 افزایش موجودی")]))
+    mk_fresh(uid, step="token")
+    return mk_say(chat, "🤖 <b>ساخت ربات جدید</b>\n<i>مرحله ۱ از ۳ — اتصال توکن</i>\n\n"
+                        "۱) در تلگرام <b>@BotFather</b> را باز کنید\n"
+                        "۲) دستور <code>/newbot</code> را بفرستید و نام و آیدی ربات را انتخاب کنید\n"
+                        "۳) توکنی که BotFather می‌دهد را همین‌جا ارسال کنید\n\n"
+                        "🔒 توکن رمزنگاری می‌شود و پیام شما بلافاصله از چت پاک می‌شود.\n"
+                        "🛡 تا پیش از تأیید نهایی، هیچ توکنی از موجودی شما کم نمی‌شود.", MK_CANCEL)
+
+
+def mk_confirm_card(uid, chat, mid=None):
+    st = mk_get(uid) or {}
+    prompt = st.get("prompt", "")
+    reserve, have = reserve_cost(prompt, None, uid), wallet_info(uid)["tokens"]
+    shown = prompt if len(prompt) <= 900 else prompt[:900] + "…"
+    t = (f"🧾 <b>تأیید نهایی</b>\n<i>مرحله ۳ از ۳</i>\n\n🤖 ربات: <b>@{hx(st.get('username'))}</b>\n\n"
+         f"📝 <b>توضیح شما:</b>\n<blockquote>{hx(shown)}</blockquote>\n"
+         "❓ <b>آیا از این توضیح اطمینان دارید؟</b>\nپس از تأیید، هوش مصنوعی ربات را طراحی می‌کند، می‌سازد و روی توکن شما فعال می‌کند.\n\n"
+         f"💰 سقف هزینه: <b>{reserve}</b> توکن (هزینه‌ی واقعی معمولاً کمتر است) · موجودی: <b>{have}</b>\n"
+         "🛡 اگر ساخت ناموفق باشد، هیچ توکنی کسر نمی‌شود.")
+    rows = [[mk_btn("✅ تأیید و شروع ساخت", "mk:ok")], [mk_btn("✏️ ویرایش توضیح", "mk:edit"), mk_btn("❌ لغو", "mk:x")]]
+    if have < reserve:
+        t += "\n\n⚠️ موجودی برای سقف هزینه کافی نیست؛ ابتدا موجودی را افزایش دهید."
+        rows.insert(0, [mk_app("💳 افزایش موجودی")])
+    return mk_edit(chat, mid, t, mk_kb(*rows)) if mid else mk_say(chat, t, mk_kb(*rows))
+
+
+def mother_flow(msg):
+    """پیام‌های متنیِ کاربری که وسط ساخت ربات در چته. اگه پیام رو مصرف کرد True"""
+    uid, chat = msg["from"]["id"], msg["chat"]["id"]
+    st = mk_get(uid)
+    if not st:
+        return False
+    text = (msg.get("text") or "").strip()
+    step = st.get("step")
+    if text.startswith("/"):
+        cmd = text.split()[0].split("@")[0].lower()
+        if cmd in ("/start", "/cancel") and step != "building":
+            mk_clear(uid)
+            if cmd == "/cancel":
+                mk_say(chat, "✅ ساخت ربات لغو شد.", mk_kb([mk_btn("🤖 ساخت ربات", "mk:new")]))
+                return True
+        return False
+    if step == "building":
+        mk_say(chat, "⏳ ساخت ربات شما در حال انجام است؛ لطفاً چند لحظه صبر کنید.")
+        mk_resume(uid, chat, quiet=True)
+        return True
+    if step in ("token", "activate"):
+        m = re.search(r"\d{6,12}:[\w-]{30,50}", text)
+        if not m:
+            mk_say(chat, "⚠️ این متن شبیه توکن ربات نیست. توکن را مستقیم از @BotFather کپی کنید؛ شکلش این‌طور است:\n<code>123456789:AAH…</code>", MK_CANCEL)
+            return True
+        tok = m.group(0)
+        tg(MOTHER_TOKEN, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        if not rate_ok(f"mkt:{uid}", 8, 600):
+            mk_say(chat, "⚠️ تعداد تلاش‌ها زیاد بود؛ چند دقیقه بعد دوباره امتحان کنید.")
+            return True
+        me = tg(tok, "getMe")
+        if not me.get("ok"):
+            mk_say(chat, "❌ این توکن معتبر نیست یا باطل شده است. توکن درست را از BotFather بفرستید.", MK_CANCEL)
+            return True
+        th, uname = thash(tok), (me.get("result") or {}).get("username", "")
+        dup = db.bots.find_one({"token_hash": th})
+        if dup and str(dup["_id"]) != st.get("bot"):
+            mk_say(chat, "❌ این توکن قبلاً برای یک ربات دیگر ثبت شده است. یک ربات تازه در BotFather بسازید.", MK_CANCEL)
+            return True
+        if step == "activate":
+            mk_put(uid, token_enc=enc(tok), token_hash=th, username=uname)
+            return mk_activate(uid, chat, None)
+        mk_put(uid, step="desc", token_enc=enc(tok), token_hash=th, username=uname)
+        mk_say(chat, f"✅ توکن تأیید شد: <b>@{hx(uname)}</b>\n\n📝 <b>مرحله ۲ از ۳ — توضیح ربات</b>\n"
+                     "ربات را با جزئیات شرح دهید: چه کاری انجام دهد، چه بخش‌ها و دکمه‌هایی داشته باشد، لحن و پیام‌ها چطور باشد، "
+                     "آیا فرم، پشتیبانی، فروش یا بازی لازم است.\n\n"
+                     "💡 هرچه توضیح دقیق‌تر باشد، ربات بهتری ساخته می‌شود. توضیح را همین‌جا به‌صورت یک پیام متنی بفرستید.", MK_CANCEL)
+        return True
+    if step in ("desc", "confirm"):
+        if not text:
+            mk_say(chat, "⚠️ فقط توضیح متنی قابل قبول است. توضیح ربات را بنویسید.", MK_CANCEL)
+            return True
+        if len(text) < 10:
+            mk_say(chat, "⚠️ توضیح خیلی کوتاه است. کمی دقیق‌تر بنویسید تا نتیجه بهتر شود.", MK_CANCEL)
+            return True
+        mk_put(uid, step="confirm", prompt=text[:MAX_PROMPT])
+        mk_confirm_card(uid, chat)
+        return True
+    return False
+
+
+def mk_progress_text(j, tick):
+    pr = j.get("prog") or {}
+    p = max(2.0, min(float(pr.get("p") or 2), 99.0))
+    on = int(p / 100 * 12)
+    out = ["⚙️ <b>در حال ساخت ربات شما</b>", "",
+           f"▫️ <b>{MK_STAGE.get(pr.get('st') or 'analyze', 'در حال پردازش')}</b>{'.' * (tick % 3 + 1)}",
+           f"{'▰' * on}{'▱' * (12 - on)}  {int(p)}٪"]
+    if pr.get("n"):
+        out.append(f"🧩 بخش‌های طراحی‌شده: <b>{pr['n']}</b>" + (f" · «{hx(pr['ti'])}»" if pr.get("ti") else ""))
+    if pr.get("th"):
+        out += ["", "💭 <b>تحلیل هوش مصنوعی</b>", f"<blockquote>{hx(pr['th'][:260])}…</blockquote>"]
+    out += ["", "<i>لطفاً این گفتگو را نبندید؛ نتیجه همین‌جا اعلام می‌شود.</i>"]
+    return "\n".join(out)
+
+
+def mk_watch(uid, chat, mid, jid):
+    """پیام پیشرفت رو زنده ویرایش می‌کنه تا کار تموم بشه، بعد ربات رو فعال می‌کنه"""
+    with _mk_lock:
+        if uid in _mk_watch:
+            return
+        _mk_watch.add(uid)
+    try:
+        last, tick, t0 = "", 0, time.time()
+        while time.time() - t0 < JOB_TIMEOUT + 90:
+            j = db.jobs.find_one({"_id": jid})
+            if not j:
+                break
+            if j["status"] in ("done", "error"):
+                break
+            txt = mk_progress_text(j, tick)
+            tick += 1
+            if txt != last:
+                mid, last = mk_edit(chat, mid, txt), txt
+            time.sleep(2.6)
+        j = db.jobs.find_one({"_id": jid}) or {}
+        if j.get("status") == "done" and j.get("bot"):
+            mk_put(uid, step="activate", bot=j["bot"], cost=j.get("cost", 0))
+            mk_activate(uid, chat, mid)
+        else:
+            err = j.get("error") or "ساخت بیش از حد طول کشید."
+            mk_put(uid, step="confirm")
+            mk_edit(chat, mid, f"❌ <b>ساخت ربات ناموفق بود</b>\n\n{hx(err)}\n\n🛡 هیچ توکنی از موجودی شما کم نشد.",
+                    mk_kb([mk_btn("🔄 تلاش دوباره", "mk:ok")], [mk_btn("✏️ ویرایش توضیح", "mk:edit"), mk_btn("❌ لغو", "mk:x")]))
+    except Exception:
+        log.exception("chat build watcher crashed")
+    finally:
+        with _mk_lock:
+            _mk_watch.discard(uid)
+
+
+def mk_resume(uid, chat, quiet=False):
+    """اگه سرور وسط ساخت ری‌استارت شده یا ناظر قطع شده، وضعیت رو دوباره پیگیری می‌کنه"""
+    st = mk_get(uid) or {}
+    if uid in _mk_watch or not st.get("job"):
+        return None
+    mid = (mk_say(chat, "⏳ در حال پیگیری ساخت ربات شما…").get("result") or {}).get("message_id") if not quiet else None
+    threading.Thread(target=mk_watch, args=(uid, chat, mid, st["job"]), daemon=True).start()
+
+
+def mk_activate(uid, chat, mid):
+    st = mk_get(uid) or {}
+    bot = get_bot(st.get("bot"), uid)
+    if not bot:
+        mk_clear(uid)
+        return mk_edit(chat, mid, "❌ ربات ساخته‌شده پیدا نشد. از مینی‌اپ بررسی کنید.", mk_kb([mk_app("💎 ورود به مینی‌اپ")]))
+    try:
+        token = dec(st["token_enc"])
+    except Exception:
+        token = ""
+    doc, err = do_activate(bot, token)
+    if err:
+        mk_put(uid, step="activate")
+        return mk_edit(chat, mid, f"⚠️ ربات ساخته شد و ذخیره است، اما فعال‌سازی انجام نشد:\n<b>{hx(err[0])}</b>\n\n"
+                                  "اگر توکن را عوض کرده‌اید، توکن جدید را همین‌جا بفرستید؛ وگرنه دکمه‌ی تلاش دوباره را بزنید. "
+                                  "ربات در مینی‌اپ هم موجود است.",
+                       mk_kb([mk_btn("🔁 فعال‌سازی دوباره", "mk:act")], [mk_app("🛠 باز کردن در مینی‌اپ", f"?bot={bot['_id']}")]))
+    mk_clear(uid)
+    cfg = doc.get("config") or {}
+    titles = [str(n.get("title") or "") for n in (cfg.get("nodes") or {}).values() if isinstance(n, dict) and n.get("title")]
+    sections = "\n".join(f"  ▫️ {hx(t[:40])}" for t in titles[:6]) + (f"\n  … و {len(titles) - 6} بخش دیگر" if len(titles) > 6 else "")
+    think = (doc.get("thinking") or "").strip()
+    t = (f"🎉 <b>ربات شما ساخته و فعال شد</b>\n\n🤖 <b>@{hx(doc.get('username'))}</b> — «{hx(doc.get('name'))}»\n")
+    if think:
+        t += f"\n💭 <b>گزارش هوش مصنوعی</b>\n<blockquote expandable>{hx(think[:600])}</blockquote>\n"
+    if titles:
+        t += f"\n🧩 <b>بخش‌های ربات ({len(titles)})</b>\n{sections}\n"
+    t += (f"\n💰 هزینه‌ی ساخت: <b>{int(st.get('cost') or 0)}</b> توکن · موجودی: <b>{wallet_info(uid)['tokens']}</b>\n"
+          "👉 برای دریافت پیام کاربرها، یک بار ربات خودتان را استارت کنید.\n\n" + MK_NOTE)
+    kb = mk_kb([{"text": "🚀 ورود به ربات ساخته‌شده", "url": f"https://t.me/{doc.get('username')}"}],
+               [mk_app("🛠 ارتقا و ادامه‌ی توسعه در مینی‌اپ", f"?bot={bot['_id']}")],
+               [mk_btn("🤖 ساخت ربات جدید", "mk:new")])
+    return mk_edit(chat, mid, t, kb)
+
+
+def mk_build(uid, chat, mid):
+    """تأیید نهایی: بررسی‌ها، شروع کار هوش مصنوعی و ناظر پیشرفت"""
+    st = mk_get(uid)
+    if not st or st.get("step") != "confirm" or not st.get("prompt") or not st.get("token_enc"):
+        return mk_edit(chat, mid, "⚠️ این درخواست منقضی شده است. از «ساخت ربات» دوباره شروع کنید.", mk_kb([mk_btn("🤖 ساخت ربات", "mk:new")]))
+    if not db.mstate.find_one_and_update({"_id": uid, "step": "confirm"}, {"$set": {"step": "building", "t": now()}}):
+        return None                                           # کلیک دوباره‌ی همزمان
+    prompt = st["prompt"]
+    code = None
+    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
+        code, msg_ = "limit", f"سقف ربات‌های شما {max_bots(uid)} عدد است."
+    elif not rate_ok(f"gen:{uid}", 10, 60):
+        code, msg_ = "rate", "کمی آرام‌تر؛ چند لحظه بعد دوباره تلاش کنید."
+    elif any(age_sec(j["t"]) < JOB_TIMEOUT for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}})):
+        code, msg_ = "busy", "یک کار دیگر شما هنوز در حال انجام است؛ چند لحظه صبر کنید."
+    else:
+        ensure_user(uid)
+        reserve = reserve_cost(prompt, None, uid)
+        if not hold(uid, reserve):
+            code, msg_ = "funds", f"موجودی کافی نیست. این ساخت تا سقف {reserve} توکن می‌خواهد."
+    if code:
+        mk_put(uid, step="confirm")
+        rows = [[mk_btn("🔄 تلاش دوباره", "mk:ok")], [mk_btn("✏️ ویرایش توضیح", "mk:edit"), mk_btn("❌ لغو", "mk:x")]]
+        if code == "funds":
+            rows.insert(0, [mk_app("💳 افزایش موجودی")])
+        return mk_edit(chat, mid, f"⚠️ {hx(msg_)}", mk_kb(*rows))
+    jid = secrets.token_hex(8)
+    db.jobs.insert_one({"_id": jid, "uid": uid, "status": "running", "hold": 0, "t": now()})
+    mk_put(uid, job=jid)
+    threading.Thread(target=gen_job, args=(jid, uid, None, prompt, reserve), daemon=True).start()
+    mid = mk_edit(chat, mid, mk_progress_text({}, 0))
+    threading.Thread(target=mk_watch, args=(uid, chat, mid, jid), daemon=True).start()
+
+
+def mother_callback(cq):
+    uid, data = cq["from"]["id"], str(cq.get("data") or "")
+    m = cq.get("message") or {}
+    chat, mid = (m.get("chat") or {}).get("id"), m.get("message_id")
+
+    def ack(text="", alert=False):
+        d = {"callback_query_id": cq["id"]}
+        if text:
+            d.update(text=text, show_alert=alert)
+        tg(MOTHER_TOKEN, "answerCallbackQuery", **d)
+
+    if not data.startswith("mk:") or not chat or (m.get("chat") or {}).get("type") != "private":
+        return ack()
+    ensure_user(uid, cq["from"].get("first_name", ""))
+    touch_user(cq["from"])
+    act, st = data[3:], mk_get(uid)
+    if act == "new":
+        ack()
+        return mk_begin(uid, chat)
+    if act == "x":
+        if st and st.get("step") == "building":
+            return ack("ساخت در حال انجام است و قابل لغو نیست.", True)
+        mk_clear(uid)
+        ack("لغو شد")
+        return mk_edit(chat, mid, "✅ ساخت ربات لغو شد. هر زمان خواستید دوباره شروع کنید.", mk_kb([mk_btn("🤖 ساخت ربات", "mk:new")]))
+    if not st:
+        ack("این درخواست منقضی شده است.", True)
+        return mk_edit(chat, mid, "⚠️ این درخواست منقضی شده است.", mk_kb([mk_btn("🤖 ساخت ربات", "mk:new")]))
+    if act == "edit" and st.get("step") == "confirm":
+        mk_put(uid, step="desc")
+        ack()
+        return mk_edit(chat, mid, "✏️ <b>ویرایش توضیح</b>\nتوضیح تازه‌ی ربات را به‌صورت یک پیام متنی بفرستید.", MK_CANCEL)
+    if act == "ok":
+        ack("ساخت شروع شد")
+        return mk_build(uid, chat, mid)
+    if act == "act" and st.get("step") == "activate":
+        ack()
+        return mk_activate(uid, chat, mid)
+    ack()
+
+
 @app.post("/mother")
 def mother_hook():
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != MOTHER_SECRET:
@@ -4611,6 +4966,10 @@ def mother_hook():
             tg(MOTHER_TOKEN, "answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok=ok,
                **({} if ok else {"error_message": "این بسته معتبر نیست"}))
             return "ok"
+        cq = upd.get("callback_query")
+        if cq:
+            mother_callback(cq)
+            return "ok"
         msg = upd.get("message")
         if not msg or msg.get("chat", {}).get("type") != "private":
             return "ok"
@@ -4619,6 +4978,8 @@ def mother_hook():
         if msg.get("successful_payment"):
             mother_paid(msg)
         elif mother_media(msg):
+            pass
+        elif mother_flow(msg):
             pass
         else:
             mother_command(msg)
@@ -4632,7 +4993,7 @@ def setup_mother():
     if not MOTHER_USERNAME:
         MOTHER_USERNAME = ((tg(MOTHER_TOKEN, "getMe").get("result") or {}).get("username") or "")
     r = tg(MOTHER_TOKEN, "setWebhook", url=f"{BASE_URL}/mother", secret_token=MOTHER_SECRET,
-           allowed_updates=["message", "pre_checkout_query"])
+           allowed_updates=["message", "callback_query", "pre_checkout_query"])
     tg(MOTHER_TOKEN, "setChatMenuButton",
        menu_button={"type": "web_app", "text": "ساخت ربات", "web_app": {"url": BASE_URL}})
     tg(MOTHER_TOKEN, "setMyCommands", commands=[{"command": "start", "description": "شروع"}])
