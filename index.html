@@ -791,7 +791,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stc-media.ico{align-content:center;justify-items:center;gap:5px;color:var(--mut)}
 .stc-media.ico svg{width:30px;height:30px}
 .stc-media.ico b{font-size:11px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
-.stc-media .mk{position:absolute;top:7px;right:7px;font-size:10px;line-height:1.7;padding:0 8px;border-radius:99px;background:rgba(0,0,0,.65);color:#fff}
+.stc-media .mk{position:absolute;top:7px;right:7px;font-size:10px;line-height:1.7;padding:0 8px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .stc-media.bad img{display:none}
 .stc-media.bad::after{content:"پیش‌نمایش در دسترس نیست";font-size:11px;color:var(--mut)}
 .stc-media.bad.ico::after{content:none}
@@ -804,8 +804,8 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stk-cell{position:relative;flex:1;min-width:0}
 .stk-btn{width:100%;min-height:34px;display:flex;align-items:center;justify-content:center;gap:5px;padding:3px 9px 3px 22px;border-radius:11px;font-size:11.5px;font-weight:600;line-height:1.4;text-align:center;
   color:var(--ink);background:linear-gradient(150deg,color-mix(in srgb,var(--ac) 22%,transparent),color-mix(in srgb,var(--ac) 6%,transparent));
-  border:1px solid color-mix(in srgb,var(--ac) 40%,transparent);
-  transition:transform .12s}
+  border:1px solid color-mix(in srgb,var(--ac) 40%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 2px 8px rgba(0,0,0,.12);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:transform .12s,box-shadow .15s}
 .stk-btn:active{transform:scale(.97)}
 .stk-btn .ki{display:grid;place-items:center;flex:none;color:var(--ac)}
 .stk-btn .ki svg{width:12px;height:12px}
@@ -820,7 +820,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stk-btn.bad{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
 .stk-cell .p-out{left:6px;width:13px;height:13px;border-width:2.5px}
 .stk.rk{margin:0;padding:8px 10px 10px;background:var(--sf2);border-top:1px solid var(--line)}
-.stk.rk .stk-btn{border-radius:7px;background:var(--sf);border:1px solid var(--line);color:var(--ink)}
+.stk.rk .stk-btn{border-radius:7px;background:var(--sf);border:1px solid var(--line);box-shadow:0 1px 0 var(--line);-webkit-backdrop-filter:none;backdrop-filter:none;color:var(--ink)}
 .stk.rk .stk-btn .ki{display:none}
 .stc-act{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px dashed var(--line2)}
 .stc-act button{flex:1;min-height:32px;display:flex;align-items:center;justify-content:center;gap:5px;border-radius:10px;font-size:11.5px;font-weight:700;color:var(--ac);background:var(--acs)}
@@ -828,11 +828,6 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stc-act svg{width:13px;height:13px}
 .stc-sec{font-size:10.5px;color:var(--mut);padding:7px 14px 2px;border-top:1px dashed var(--line2)}
 .stc-row .p-out{left:-9px}
-#stw.far .stc-media img{display:none}
-#stw.far .stc-media{height:46px}
-.studio.many .wire .w-line{animation:none;stroke-dasharray:none}
-.studio.many .wire .w-glow{opacity:0}
-.w-dot{filter:none!important}
 /* مدیریت دکمه‌ها */
 .km-row{background:var(--sf2);border-radius:14px;padding:8px;margin-bottom:8px}
 .km-cap{font-size:11px;color:var(--mut);margin:0 4px 6px}
@@ -1484,7 +1479,7 @@ function stEnsurePositions(){
 /* ── دوربین ── */
 function stApply(){
   const c = ST.cam || {x: 40, y: 40, z: 1}, w = $("#stw"), cv = $("#stc");
-  if(w){ w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`; const far = c.z < .55; if(far !== w.classList.contains("far")) w.classList.toggle("far", far); }
+  if(w) w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`;
   if(cv){ const s = Math.round(24 * c.z); cv.style.backgroundSize = `${s}px ${s}px`; cv.style.backgroundPosition = `${c.x}px ${c.y}px`; }
   const z = $("#stz"); if(z) z.textContent = Math.round(c.z * 100) + "%";
   stMini();
@@ -1539,10 +1534,10 @@ const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", aud
 function stMediaHTML(n){
   const m = n.media ? mediaById(n.media) : null;
   if(m && (m.kind === "photo" || m.kind === "animation") && m.url)
-    return `<div class="stc-media"><img src="${API_BASE + esc(m.url)}" alt="" draggable="false" loading="lazy" decoding="async"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
+    return `<div class="stc-media"><img src="${API_BASE + esc(m.url)}" alt="" draggable="false"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
   if(m) return `<div class="stc-media ico">${IC[m.kind] || IC.document}<b>${esc(m.name || "")}</b><span class="mk">${ST_MEDIA[m.kind] || "فایل"}</span></div>`;
   if(n.media) return `<div class="stc-media ico bad">${IC.document}<b>رسانه از کتابخانه حذف شده</b></div>`;
-  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img src="${esc(n.photo)}" alt="" draggable="false" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
+  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img src="${esc(n.photo)}" alt="" draggable="false" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
   return "";
 }
 /* یک دکمه‌ی شیشه‌ای (یا کلیدِ کیبورد زیر چت) با دایره‌ی خروجیِ سیم */
@@ -1597,7 +1592,7 @@ function stPaintWires(){
   if(!svg || !cv) return;
   ST.wires.clear();
   let h = "", i = 0;
-  const edges = stEdges(), flow = !!S.cur?.active && !reduced() && edges.length <= 10;
+  const edges = stEdges(), flow = !!S.cur?.active && !reduced() && edges.length <= 40;
   for(const e of edges){
     const p = cv.querySelector(`.p-out[data-port="${e.key}"]`), t = cv.querySelector(`.stc-in[data-in="${e.to}"]`);
     if(!p || !t) continue;
@@ -1662,8 +1657,7 @@ function stPaintWorld(){
   if(!wr || !cv || !S.cur) return;
   stEnsurePositions();
   const seen = stReach();
-  const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
-  $("#stu")?.classList.toggle("many", _ed.length > 12 || Object.keys(S.cur.config.nodes).length > 14);
+  ST.inc = {}; for(const e of stEdges()) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
   let h = `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`;
   for(const id of Object.keys(S.cur.config.nodes)) h += stCardHTML(id, !seen.has(id));
   wr.innerHTML = h;
