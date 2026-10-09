@@ -158,6 +158,8 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .lbl{display:block;font-size:12.5px;font-weight:500;color:var(--mut);margin:16px 0 6px}
 .chk{display:flex;gap:10px;align-items:center;font-size:13.5px;margin-top:14px}
 .fgap{height:10px}
+.mt{margin-top:14px}
+.mt2{margin-top:10px}
 
 /* ── کنسول ساخت (نقطه‌ی اصلی صفحه) ── */
 .hero-t{margin:6px 2px 14px;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px}
@@ -345,23 +347,22 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .aibox .n{color:var(--tok)}
 .fl{margin-top:8px}
 
-/* ═════════════════ استودیو گرافیکی (کارت + سیم + انرژی) ═════════════════ */
+/* ═════════════════ استودیو گرافیکی (بخش + سیم + انرژی) ═════════════════ */
 html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .studio{position:fixed;inset:0;z-index:31;display:flex;flex-direction:column;direction:rtl;
-  background:color-mix(in srgb,var(--bg) 84%,#000);color:var(--ink)}
+  background:var(--bg);background-image:none;color:var(--ink)}
 .st-bar{display:flex;align-items:center;gap:7px;padding:calc(6px + env(safe-area-inset-top)) 10px 6px;
-  border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);
-  background:color-mix(in srgb,var(--sf) 55%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  border-bottom:1px solid var(--line);background:var(--sf)}
 .st-title{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:4px 8px;border-radius:12px;text-align:right}
 .st-title:active{background:var(--acs)}
 .st-title .tt{flex:1;min-width:0}
 .st-title b{display:block;font-size:14px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-title small{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-bar .b.sm{min-height:36px;padding:0 12px;font-size:12.5px}
-.st-canvas{position:relative;flex:1;overflow:hidden;touch-action:none;cursor:grab;
-  background-image:radial-gradient(color-mix(in srgb,var(--ink) 14%,transparent) 1px,transparent 1.3px)}
+.st-canvas{position:relative;flex:1;overflow:hidden;touch-action:none;cursor:grab;background:var(--bg)}
 .st-canvas.panning{cursor:grabbing}
-.st-world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.st-world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.st-world.glide{transition:transform .38s cubic-bezier(.22,.8,.24,1)}
 #stsvg{position:absolute;left:0;top:0;width:2px;height:2px;overflow:visible;pointer-events:none}
 #stsvg .wire{pointer-events:auto;cursor:pointer;transition:opacity .2s}
 .wire .w-hit{fill:none;stroke:transparent;stroke-width:18}
@@ -380,9 +381,12 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 @keyframes stFlow{to{stroke-dashoffset:-28}}
 @media (prefers-reduced-motion:reduce){.studio.live .wire .w-line{animation:none}}
 .w-tmp{fill:none;stroke:var(--ac);stroke-width:2.4;stroke-dasharray:4 6;opacity:.9}
-.stc-card{position:absolute;width:236px;border-radius:16px;background:var(--sf);border:1px solid var(--line);
-  box-shadow:0 4px 14px rgba(0,0,0,.16);user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
-.stc-card.drag{box-shadow:0 14px 34px rgba(0,0,0,.32);z-index:5}
+.stc-card{position:absolute;left:0;top:0;width:236px;border-radius:16px;background:var(--sf);border:1.5px solid color-mix(in srgb,var(--ink) 22%,var(--line));
+  box-shadow:0 2px 8px rgba(0,0,0,.10);user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+.stc-card.drag{box-shadow:0 12px 28px rgba(0,0,0,.28);z-index:5;will-change:transform}
+.studio.arranging .stc-card{transition:transform .5s cubic-bezier(.22,.8,.24,1)}
+.studio.arranging #stsvg{opacity:0}
+#stsvg{transition:opacity .25s}
 .stc-card.dim{opacity:.28}
 .stc-h{display:flex;align-items:center;gap:8px;padding:9px 10px 7px 14px;cursor:grab}
 .stc-ic{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--acs);color:var(--ac);flex:none}
@@ -404,10 +408,13 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .stc-row .rlb small{color:var(--mut);font-size:10.5px}
 .stc-row.plus{color:var(--ac);border-top-style:solid;font-weight:600}
 .stc-row.dead-btn{opacity:.72}
-.p-out{position:absolute;left:-9px;top:50%;transform:translateY(-50%);width:16px;height:16px;border-radius:50%;
-  background:var(--sf);border:2.5px solid var(--pc,var(--ac));cursor:crosshair;z-index:2;transition:transform .12s}
-.p-out::after{content:"";position:absolute;inset:-10px;border-radius:50%}
-.p-out:active{transform:translateY(-50%) scale(1.3)}
+.p-out{position:absolute;left:-9px;margin-top:-8px;width:16px;height:16px;border-radius:50%;
+  background:var(--sf);border:2.5px solid var(--pc,var(--ac));cursor:crosshair;z-index:2;transition:transform .12s,box-shadow .12s}
+.p-out::after{content:"";position:absolute;inset:-9px;border-radius:50%}
+.p-out:hover,.p-out:active{transform:scale(1.25);box-shadow:0 0 0 4px color-mix(in srgb,var(--pc,var(--ac)) 24%,transparent)}
+.pa{position:absolute;inset:0;pointer-events:none;visibility:hidden}
+.stk-btn.hl{box-shadow:0 0 0 2px var(--ac)}
+.stc-in.has{background:var(--ac);border-color:var(--ac)}
 .stc-in{position:absolute;right:-9px;top:26px;width:16px;height:16px;border-radius:50%;background:var(--sf);
   border:2.5px solid var(--line);z-index:2;transition:transform .15s,border-color .15s,box-shadow .15s}
 .stc-in::after{content:"";position:absolute;inset:-10px;border-radius:50%}
@@ -416,31 +423,33 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .stc-card.start .stc-ic{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
 .stc-card.dead{border-style:dashed;border-color:color-mix(in srgb,var(--bad) 50%,var(--line))}
 .stc-card.flash{animation:stFlash 1.1s ease}
-@keyframes stFlash{0%,60%{box-shadow:0 0 0 3px var(--ac),0 4px 14px rgba(0,0,0,.16)}100%{box-shadow:0 4px 14px rgba(0,0,0,.16)}}
+@keyframes stFlash{0%,60%{box-shadow:0 0 0 3px var(--ac),0 2px 8px rgba(0,0,0,.10)}100%{box-shadow:0 2px 8px rgba(0,0,0,.10)}}
 .studio.live .stc-card.start::after{content:"";position:absolute;inset:-5px;border-radius:20px;
   border:1.5px solid color-mix(in srgb,var(--ok) 55%,transparent);animation:stPow 2.2s ease-out infinite;pointer-events:none}
 @keyframes stPow{0%{opacity:.9;transform:scale(.97)}70%,100%{opacity:0;transform:scale(1.06)}}
 @media (prefers-reduced-motion:reduce){.studio.live .stc-card.start::after{animation:none;opacity:.35}}
 .st-tools{position:absolute;bottom:calc(12px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
   display:flex;align-items:center;gap:3px;padding:5px;border-radius:16px;direction:rtl;
-  background:color-mix(in srgb,var(--sf) 74%,transparent);border:1px solid color-mix(in srgb,var(--ac) 20%,var(--line));
-  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 8px 26px rgba(0,0,0,.25);z-index:6}
+  background:var(--sf);border:1px solid var(--line);
+  box-shadow:0 6px 18px rgba(0,0,0,.2);z-index:6}
 .st-tools .tb{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;color:var(--ink)}
 .st-tools .tb:active{background:var(--acs);transform:scale(.93)}
 .st-tools .tb svg{width:17px;height:17px}
+.st-tools .tb.lbl{width:auto;grid-auto-flow:column;gap:6px;padding:0 11px;font-size:12px;font-weight:700;color:var(--ac)}
+.st-tools .sep{width:1px;height:20px;background:var(--line);margin:0 3px}
 .st-z{min-width:44px;text-align:center;font-size:11.5px;color:var(--mut)}
 .st-energy{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;
   font-size:11.5px;font-weight:600;z-index:6;box-shadow:inset 0 0 0 1px var(--line);
-  background:color-mix(in srgb,var(--sf) 70%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:var(--mut)}
+  background:var(--sf);color:var(--mut)}
 .st-energy.live{color:var(--ok);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ok) 45%,transparent)}
 .st-energy svg{width:13px;height:13px}
 .st-energy.live svg{animation:stBolt 1.6s ease-in-out infinite}
 @keyframes stBolt{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}
 .st-search{position:absolute;top:10px;left:10px;z-index:6;width:150px}
 .st-search input{min-height:36px;padding:5px 12px;font-size:12.5px;border-radius:99px;
-  background:color-mix(in srgb,var(--sf) 72%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+  background:var(--sf)}
 .st-hint{position:absolute;bottom:calc(66px + env(safe-area-inset-bottom));left:12px;right:12px;margin:0 auto;max-width:430px;z-index:6;
-  padding:10px 14px;border-radius:14px;background:color-mix(in srgb,var(--sf) 90%,transparent);border:1px solid var(--line);
+  padding:10px 14px;border-radius:14px;background:var(--sf);border:1px solid var(--line);
   font-size:12px;line-height:1.9;color:var(--mut);box-shadow:0 8px 26px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center}
 .st-hint b{color:var(--ink)}
 .st-hint .b{width:auto;flex:none}
@@ -448,11 +457,13 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .st-pop button{display:flex;width:100%;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;font-size:13px;text-align:right}
 .st-pop button:active{background:var(--sf2)}
 .st-pop svg{width:15px;height:15px;color:var(--ac);flex:none}
+.wire.back .w-line{stroke-width:1.8;opacity:.5}
+.wire.back:hover .w-line,.wire.back.hot .w-line{opacity:1}
 .wire.hot .w-line{stroke-width:3.4;opacity:1}
 .wire.hot .w-glow{opacity:.35}
 .w-dot{fill:var(--wc,var(--ac));filter:drop-shadow(0 0 4px var(--wc,var(--ac)));pointer-events:none}
 .st-mini{position:absolute;top:54px;left:10px;width:96px;height:72px;z-index:6;border-radius:12px;overflow:hidden;cursor:pointer;touch-action:none;
-  background:color-mix(in srgb,var(--sf) 72%,transparent);border:1px solid var(--line);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+  background:var(--sf);border:1px solid var(--line)}
 .st-mini .mm{position:absolute;inset:0}
 .st-mini i{position:absolute;border-radius:2px;background:color-mix(in srgb,var(--ac) 55%,transparent)}
 .st-mini i.s{background:var(--ok)}
@@ -778,7 +789,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
   .rbfx{display:none}
 }
 
-/* ═══════ استودیوی حرفه‌ای: کارتِ پیام‌مانند ═══════ */
+/* ═══════ استودیوی حرفه‌ای: بخشِ پیام‌مانند ═══════ */
 .stc-card{width:268px;border-radius:18px}
 #stsvg{position:absolute;left:0;top:0;z-index:4;pointer-events:none}
 #stsvg .wire,#stsvg .w-hit{pointer-events:none}
@@ -791,7 +802,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stc-media.ico{align-content:center;justify-items:center;gap:5px;color:var(--mut)}
 .stc-media.ico svg{width:30px;height:30px}
 .stc-media.ico b{font-size:11px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
-.stc-media .mk{position:absolute;top:7px;right:7px;font-size:10px;line-height:1.7;padding:0 8px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.stc-media .mk{position:absolute;top:7px;right:7px;font-size:10px;line-height:1.7;padding:0 8px;border-radius:99px;background:rgba(0,0,0,.65);color:#fff}
 .stc-media.bad img{display:none}
 .stc-media.bad::after{content:"پیش‌نمایش در دسترس نیست";font-size:11px;color:var(--mut)}
 .stc-media.bad.ico::after{content:none}
@@ -802,10 +813,10 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stk.rk .stk-cap::before{background:var(--tok)}
 .stk-row{display:flex;gap:5px}
 .stk-cell{position:relative;flex:1;min-width:0}
-.stk-btn{width:100%;min-height:34px;display:flex;align-items:center;justify-content:center;gap:5px;padding:3px 9px 3px 22px;border-radius:11px;font-size:11.5px;font-weight:600;line-height:1.4;text-align:center;
+.stk-btn{width:100%;min-height:34px;display:flex;align-items:center;justify-content:center;gap:5px;padding:3px 9px;border-radius:11px;font-size:11.5px;font-weight:600;line-height:1.4;text-align:center;
   color:var(--ink);background:linear-gradient(150deg,color-mix(in srgb,var(--ac) 22%,transparent),color-mix(in srgb,var(--ac) 6%,transparent));
-  border:1px solid color-mix(in srgb,var(--ac) 40%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 2px 8px rgba(0,0,0,.12);
-  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:transform .12s,box-shadow .15s}
+  border:1px solid color-mix(in srgb,var(--ac) 40%,transparent);
+  transition:transform .12s}
 .stk-btn:active{transform:scale(.97)}
 .stk-btn .ki{display:grid;place-items:center;flex:none;color:var(--ac)}
 .stk-btn .ki svg{width:12px;height:12px}
@@ -818,16 +829,18 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stk-btn.k-alert .ki,.stk-btn.k-copy .ki{color:var(--mut)}
 .stk-btn.cond{border-style:dashed}
 .stk-btn.bad{border-color:var(--bad);color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
-.stk-cell .p-out{left:6px;width:13px;height:13px;border-width:2.5px}
 .stk.rk{margin:0;padding:8px 10px 10px;background:var(--sf2);border-top:1px solid var(--line)}
-.stk.rk .stk-btn{border-radius:7px;background:var(--sf);border:1px solid var(--line);box-shadow:0 1px 0 var(--line);-webkit-backdrop-filter:none;backdrop-filter:none;color:var(--ink)}
+.stk.rk .stk-btn{border-radius:7px;background:var(--sf);border:1px solid var(--line);color:var(--ink)}
 .stk.rk .stk-btn .ki{display:none}
 .stc-act{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px dashed var(--line2)}
 .stc-act button{flex:1;min-height:32px;display:flex;align-items:center;justify-content:center;gap:5px;border-radius:10px;font-size:11.5px;font-weight:700;color:var(--ac);background:var(--acs)}
 .stc-act button:active{transform:scale(.97)}
 .stc-act svg{width:13px;height:13px}
 .stc-sec{font-size:10.5px;color:var(--mut);padding:7px 14px 2px;border-top:1px dashed var(--line2)}
-.stc-row .p-out{left:-9px}
+#stw.far .stc-media img{display:none}
+.studio.many .wire .w-line{animation:none;stroke-dasharray:none}
+.studio.many .wire .w-glow{opacity:0}
+.w-dot{filter:none!important}
 /* مدیریت دکمه‌ها */
 .km-row{background:var(--sf2);border-radius:14px;padding:8px;margin-bottom:8px}
 .km-cap{font-size:11px;color:var(--mut);margin:0 4px 6px}
@@ -1292,10 +1305,10 @@ function tabAI(b){
     <div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
   if(S.ideas.length) h += `<div class="ideas">${S.ideas.map((t, i) => `<button class="chip" data-a="idea" data-i="${i}">${esc(t)}</button>`).join("")}</div>`;
   if(!b.active) h += `<div class="note"><div class="dt"><b>ربات هنوز فعال نیست</b>برای استفاده، فعالش کن.</div><button class="b sm" data-a="btab" data-k="publish">فعال‌سازی</button></div>`;
-  h += `<div class="panel mt" style="display:flex;align-items:center;gap:12px">
+  h += `<div class="panel mt" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
       <span class="ib">${IC.studio}</span>
-      <div style="flex:1;min-width:0"><b style="font-size:14px;display:block;line-height:1.6">استودیو گرافیکی</b><span class="muted" style="font-size:12px;line-height:1.7;display:block">کارت‌ها را با سیم به هم وصل کن، دکمه و مسیر جدید بساز؛ تغییرات همان لحظه در ربات اعمال می‌شود.</span></div>
-      <button class="b sm" data-a="studio">باز کن</button></div>`;
+      <div style="flex:1;min-width:0"><b style="font-size:14px;display:block;line-height:1.6">استودیو</b><span class="muted" style="font-size:12px;line-height:1.7;display:block">ساختار ربات را روی یک نقشه ببین، بخش‌ها را با سیم به هم وصل کن و دکمه یا مسیر تازه بساز. هر تغییر همان لحظه در ربات اعمال می‌شود.</span></div>
+      <button class="b sm" data-a="studio" style="flex:1 0 100%">ورود به استودیو</button></div>`;
   if(b.versions) h += `<button class="b t mt" id="undo" data-a="undo">برگشت به نسخه‌ی قبلی</button>`;
   return h;
 }
@@ -1353,8 +1366,9 @@ function typeText(el, text){
 }
 typeText.id = 0;
 
-/* ═════════════════ استودیو گرافیکی: کارت + سیم + انرژی ═════════════════ */
-const ST = { botId: null, cam: null, pos: {}, ptr: new Map(), mode: null, wires: new Map(), drop: null, dropAt: null, _la: null };
+/* ═════════════════ استودیو گرافیکی: بخش + سیم + انرژی ═════════════════ */
+const ST = { botId: null, cam: null, pos: {}, ptr: new Map(), mode: null, wires: new Map(), drop: null, dropAt: null, _la: null, size: {}, po: {}, pi: {} };
+const ST_W = 268, ST_GAP = 124;
 let OP_FA = null;                       // بعد از تعریف OPS پر می‌شود
 const condTxt = w => {
   if(!w) return "…";
@@ -1368,7 +1382,7 @@ function stLoad(){
   try{
     const d = JSON.parse(localStorage.getItem(stKey()) || "null");
     if(d && d.p) for(const [k, v] of Object.entries(d.p)) if(Array.isArray(v)) ST.pos[k] = {x: +v[0] || 0, y: +v[1] || 0};
-    if(d && Array.isArray(d.cam)) ST.cam = {x: +d.cam[0] || 0, y: +d.cam[1] || 0, z: Math.min(1.5, Math.max(.3, +d.cam[2] || 1))};
+    if(d && Array.isArray(d.cam)) ST.cam = {x: +d.cam[0] || 0, y: +d.cam[1] || 0, z: Math.min(1.5, Math.max(.16, +d.cam[2] || 1))};
   }catch(_){}
 }
 function stSaveNow(){
@@ -1421,7 +1435,7 @@ function stWireIn(cfg, src, tid){
     else if(n.buttons.length < 6) n.buttons.push([{text: "دکمه‌ی جدید", goto: tid}]);
   }
 }
-/* کارت‌های قابل دسترس از شروع/ناشناس/دستورها */
+/* بخش‌های قابل دسترس از شروع/ناشناس/دستورها */
 function stReach(){
   const cfg = S.cur.config, seen = new Set(), st = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})];
   while(st.length){
@@ -1436,61 +1450,80 @@ function stReach(){
   return seen;
 }
 /* چیدمان لایه‌ای از راست (شروع) به چپ */
+/* چیدمان لایه‌ای از راست (شروع) به چپ؛ هر بخش نزدیکِ میانگینِ بخش‌هایی قرار می‌گیرد که به آن می‌رسند تا سیم‌ها کوتاه و کم‌تقاطع باشند */
+const stH = id => (ST.size[id] ? ST.size[id].h : stCardH(S.cur.config.nodes[id]));
 function stAutoLayout(save){
-  const cfg = S.cur.config, col = {}, q = [], roots = new Set([cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})]);
-  for(const r of roots){ if(cfg.nodes[r] && col[r] === undefined){ col[r] = 0; q.push([r, 0]); } }
+  const cfg = S.cur.config, ids = Object.keys(cfg.nodes), col = {}, q = [];
+  const roots = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})].filter((r, i, a) => cfg.nodes[r] && a.indexOf(r) === i);
+  const edges = stEdges(), out = {};
+  for(const e of edges) (out[e.from] = out[e.from] || []).push(e.to);
+  for(const r of roots){ col[r] = 0; q.push(r); }
   while(q.length){
-    const [id, d] = q.shift();
-    const n = cfg.nodes[id]; if(!n) continue;
-    const nxt = [];
-    for(const row of n.buttons || []) for(const b of row){ if(b.goto && col[b.goto] === undefined) nxt.push(b.goto); if(b.pay?.goto && col[b.pay.goto] === undefined) nxt.push(b.pay.goto); }
-    for(const ru of n.route || []) if(col[ru.goto] === undefined) nxt.push(ru.goto);
-    if(n.next && col[n.next] === undefined) nxt.push(n.next);
-    for(const t of nxt){ if(cfg.nodes[t]){ col[t] = d + 1; q.push([t, d + 1]); } }
+    const id = q.shift();
+    for(const t of out[id] || []) if(cfg.nodes[t] && col[t] === undefined){ col[t] = col[id] + 1; q.push(t); }
   }
-  const maxCol = Math.max(0, ...Object.values(col));
-  for(const id of Object.keys(cfg.nodes)) if(col[id] === undefined) col[id] = maxCol + 1;
-  const perCol = {};
-  for(const [id, c] of Object.entries(col)) (perCol[c] = perCol[c] || []).push(id);
-  const DW = 372, DH = 56;
-  for(const ids of Object.values(perCol)){
-    let y = 40;
-    for(const id of ids){ ST.pos[id] = {x: -(col[id]) * DW, y}; y += stCardH(cfg.nodes[id]) + DH; }
+  for(const id of ids) if(col[id] === undefined) col[id] = -1;      // بخش‌های بی‌اتصال کنار شروع می‌روند، نه ته نقشه
+  const parents = {};
+  for(const e of edges) if(cfg.nodes[e.to] && col[e.from] < col[e.to]) (parents[e.to] = parents[e.to] || []).push(e.from);
+  const cols = {};
+  for(const id of [...new Set([...roots, ...ids])]) (cols[col[id]] = cols[col[id]] || []).push(id);
+  const cy = {}, DW = ST_W + ST_GAP, GAP = 52;
+  for(const c of Object.keys(cols).map(Number).sort((a, b) => a - b)){
+    const list = cols[c].map((id, i) => {
+      const ps = (parents[id] || []).filter(p => cy[p] !== undefined);
+      return {id, i, b: ps.length ? ps.reduce((a, p) => a + cy[p], 0) / ps.length : null};
+    });
+    list.sort((a, b) => ((a.b === null) - (b.b === null)) || ((a.b ?? 0) - (b.b ?? 0)) || (a.i - b.i));
+    let cur = 40;
+    for(const it of list){
+      const h = stH(it.id), y = it.b === null ? cur : Math.max(cur, it.b - h / 2);
+      ST.pos[it.id] = {x: -c * DW, y: Math.round(y)};
+      cy[it.id] = y + h / 2; cur = y + h + GAP;
+    }
   }
+  let minY = 1e9;
+  for(const id of ids) minY = Math.min(minY, ST.pos[id].y);
+  for(const id of ids) ST.pos[id].y += 40 - minY;
   if(save) stSave();
 }
-/* جای کارت‌های بدون مختصات ذخیره‌شده */
+/* جای بخش‌های بدون مختصات ذخیره‌شده */
+/* جای بخش‌های بدون مختصات ذخیره‌شده؛ اگر همه تازه بودند true برمی‌گرداند */
 function stEnsurePositions(){
   const ids = Object.keys(S.cur.config.nodes);
   const missing = ids.filter(id => !ST.pos[id]);
-  if(!missing.length) return;
+  if(!missing.length) return false;
   const keep = {...ST.pos};
   stAutoLayout(false);
   for(const id of ids) if(keep[id]) ST.pos[id] = keep[id];
   for(const id of missing){
-    let p = {...(ST.pos[id] || {x: 0, y: 0})}, guard = 0;
-    const clash = () => ids.some(o => o !== id && ST.pos[o] && Math.abs(ST.pos[o].x - p.x) < 80 && Math.abs(ST.pos[o].y - p.y) < 90);
-    while(clash() && guard++ < 30) p = {x: p.x + 24, y: p.y + 66};
+    let p = {...(ST.pos[id] || {x: 0, y: 0})}, guard = 0, hit;
+    const find = () => ids.find(o => o !== id && ST.pos[o] && o !== id && Math.abs(ST.pos[o].x - p.x) < ST_W + 24 && p.y < ST.pos[o].y + stH(o) + 24 && ST.pos[o].y < p.y + stH(id) + 24);
+    while((hit = find()) && guard++ < 40) p = {x: p.x, y: ST.pos[hit].y + stH(hit) + 40};
     ST.pos[id] = p;
   }
   stSave();
+  return missing.length === ids.length;
 }
 
 /* ── دوربین ── */
-function stApply(){
-  const c = ST.cam || {x: 40, y: 40, z: 1}, w = $("#stw"), cv = $("#stc");
-  if(w) w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`;
-  if(cv){ const s = Math.round(24 * c.z); cv.style.backgroundSize = `${s}px ${s}px`; cv.style.backgroundPosition = `${c.x}px ${c.y}px`; }
+function stApply(glide){
+  const c = ST.cam || {x: 40, y: 40, z: 1}, w = $("#stw");
+  if(w){
+    if(glide && !reduced()){ w.classList.add("glide"); clearTimeout(ST._gt); ST._gt = setTimeout(() => w.classList.remove("glide"), 460); }
+    else if(w.classList.contains("glide")){ w.classList.remove("glide"); clearTimeout(ST._gt); }
+    w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`;
+    const far = c.z < .5; if(far !== w.classList.contains("far")) w.classList.toggle("far", far);
+  }
   const z = $("#stz"); if(z) z.textContent = Math.round(c.z * 100) + "%";
-  stMini();
+  if(!ST._mr) ST._mr = requestAnimationFrame(() => { ST._mr = 0; stMini(); });
 }
-function stZoomAt(px, py, f){
+function stZoomAt(px, py, f, glide){
   const c = ST.cam || {x: 40, y: 40, z: 1};
-  const z = Math.min(1.5, Math.max(.3, c.z * f));
+  const z = Math.min(1.5, Math.max(.16, c.z * f));
   ST.cam = {z, x: px - (px - c.x) * z / c.z, y: py - (py - c.y) * z / c.z};
-  stApply(); stSave();
+  stApply(glide); stSave();
 }
-function stFit(){
+function stFit(glide){
   const cv = $("#stc"), ids = Object.keys(S.cur?.config.nodes || {});
   if(!cv || !ids.length) return;
   let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
@@ -1502,52 +1535,137 @@ function stFit(){
   }
   if(x1 > x2) return;
   const cw = cv.clientWidth, ch = cv.clientHeight, bw = x2 - x1, bh = y2 - y1;
-  const z = Math.min(1.25, Math.max(.3, Math.min((cw - 70) / Math.max(1, bw), (ch - 150) / Math.max(1, bh))));
+  const z = Math.min(1.25, Math.max(.16, Math.min((cw - 70) / Math.max(1, bw), (ch - 150) / Math.max(1, bh))));
   ST.cam = {z, x: (cw - bw * z) / 2 - x1 * z, y: (ch - bh * z) / 2 - y1 * z + 8};
-  stApply(); stSave();
+  stApply(glide); stSave();
 }
 function stCenter(id){
   const cv = $("#stc"), el = cv?.querySelector(`.stc-card[data-id="${id}"]`);
   if(!cv || !el || !ST.pos[id]) return;
   const c = ST.cam || {x: 40, y: 40, z: 1};
   ST.cam = {...c, x: cv.clientWidth / 2 - (ST.pos[id].x + el.offsetWidth / 2) * c.z, y: cv.clientHeight / 2 - (ST.pos[id].y + el.offsetHeight / 2) * c.z};
-  stApply(); stSave();
+  stApply(true); stSave();
   el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
 }
 
 /* ── هندسه‌ی سیم ── */
+/* مختصات مرکز یک عنصر داخل بخش، در دنیای بوم */
 function stWorldOf(el){
-  const w = $("#stw"); let x = 0, y = 0, n = el;
-  while(n && n !== w){ x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
-  return {x: x + el.offsetWidth / 2, y: y + el.offsetHeight / 2};
+  const card = el.closest(".stc-card"), p = (card && ST.pos[card.dataset.id]) || {x: 0, y: 0};
+  let x = card ? card.clientLeft : 0, y = card ? card.clientTop : 0, n = el;
+  while(n && n !== card){ x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+  return {x: p.x + x + el.offsetWidth / 2, y: p.y + y + el.offsetHeight / 2};
+}
+/* سیم‌کشی هوشمند: سیم از لبه‌ی چپ بخش مبدأ خارج و از لبه‌ی راست بخش مقصد وارد می‌شود، با زاویه‌ی قائم و بدون عبور از روی بخش‌ها */
+const stRects = () => { const r = []; for(const id of Object.keys(S.cur.config.nodes)){ const p = ST.pos[id], z = ST.size[id]; if(p && z) r.push({id, x: p.x, y: p.y, w: z.w, h: z.h}); } return r; };
+const stHit = (r, x1, y1, x2, y2, m = 10) => Math.min(x1, x2) < r.x + r.w + m && Math.max(x1, x2) > r.x - m && Math.min(y1, y2) < r.y + r.h + m && Math.max(y1, y2) > r.y - m;
+const stPortPos = key => { const o = ST.po[key], p = o && ST.pos[o.id]; return o && p ? {x: p.x + o.x, y: p.y + o.y} : null; };
+const stInPos = id => { const o = ST.pi[id], p = ST.pos[id]; return o && p ? {x: p.x + o.x, y: p.y + o.y} : null; };
+function stRoute(e, idx, rects){
+  const A = stPortPos(e.key), B = stInPos(e.to);
+  if(!A || !B) return null;
+  const lane = (idx % 5) * 7, free = (list, x1, y1, x2, y2) => !list.some(r => stHit(r, x1, y1, x2, y2));
+  const mid = rects.filter(r => r.id !== e.from && r.id !== e.to), noSrc = rects.filter(r => r.id !== e.from), noTgt = rects.filter(r => r.id !== e.to);
+  if(A.x - B.x > 70){
+    const lo = B.x + 20, hi = A.x - 20, base = (lo + hi) / 2 + lane - 14;
+    for(const d of [0, 14, -14, 28, -28, 42, -42, 56, -56, 70, -70]){
+      const xm = Math.min(hi, Math.max(lo, base + d));
+      if(free(mid, xm, A.y, xm, B.y) && free(noSrc, A.x, A.y, xm, A.y) && free(noTgt, xm, B.y, B.x, B.y))
+        return {pts: [A, {x: xm, y: A.y}, {x: xm, y: B.y}, B], back: false};
+    }
+  }
+  const ax = A.x - 22 - lane, bx = B.x + 22 + lane, lx = Math.min(ax, bx), hx = Math.max(ax, bx);
+  const ys = new Set(), sR = rects.find(r => r.id === e.from), tR = rects.find(r => r.id === e.to);
+  if(sR && tR){ ys.add(Math.min(sR.y, tR.y) - 26 - lane); ys.add(Math.max(sR.y + sR.h, tR.y + tR.h) + 26 + lane); }
+  for(const r of rects){ ys.add(r.y - 24 - lane); ys.add(r.y + r.h + 24 + lane); }
+  const cand = [...ys].map(y => ({y, c: Math.abs(y - A.y) + Math.abs(y - B.y)})).sort((a, b) => a.c - b.c);
+  for(const {y} of cand){
+    if(free(rects, lx, y, hx, y) && free(rects, ax, A.y, ax, y) && free(rects, bx, y, bx, B.y))
+      return {pts: [A, {x: ax, y: A.y}, {x: ax, y}, {x: bx, y}, {x: bx, y: B.y}, B], back: true};
+  }
+  return null;
+}
+function stPoly(pts){
+  const p = [pts[0]];
+  for(let i = 1; i < pts.length; i++){ const q = pts[i], l = p[p.length - 1]; if(Math.abs(q.x - l.x) > .5 || Math.abs(q.y - l.y) > .5) p.push(q); }
+  if(p.length < 2) return "";
+  const f = v => v.toFixed(1);
+  let d = `M${f(p[0].x)} ${f(p[0].y)}`;
+  for(let i = 1; i < p.length - 1; i++){
+    const a = p[i - 1], c = p[i], b = p[i + 1];
+    const l1 = Math.hypot(c.x - a.x, c.y - a.y), l2 = Math.hypot(b.x - c.x, b.y - c.y), r = Math.min(10, l1 / 2, l2 / 2);
+    d += `L${f(c.x + (a.x - c.x) / l1 * r)} ${f(c.y + (a.y - c.y) / l1 * r)}Q${f(c.x)} ${f(c.y)} ${f(c.x + (b.x - c.x) / l2 * r)} ${f(c.y + (b.y - c.y) / l2 * r)}`;
+  }
+  const e = p[p.length - 1];
+  return d + `L${f(e.x)} ${f(e.y)}`;
+}
+function stEdgeGeom(e, idx, rects){
+  const r = stRoute(e, idx, rects);
+  if(r) return {d: stPoly(r.pts), back: r.back};
+  const A = stPortPos(e.key), B = stInPos(e.to);
+  return A && B ? {d: stPath(A, B), back: B.x > A.x - 30} : null;
+}
+/* اندازه‌ی واقعی بخش‌ها و جای دقیق دایره‌های ورودی/خروجی را یک بار اندازه می‌گیرد */
+function stMeasure(){
+  const cv = $("#stc"); if(!cv) return;
+  ST.size = {}; ST.po = {}; ST.pi = {};
+  cv.querySelectorAll(".stc-card").forEach(card => {
+    const id = card.dataset.id;
+    ST.size[id] = {w: card.offsetWidth, h: card.offsetHeight};
+    const rel = el => { let x = card.clientLeft, y = card.clientTop, n = el; while(n && n !== card){ x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; } return {x: x + el.offsetWidth / 2, y: y + el.offsetHeight / 2}; };
+    card.querySelectorAll(".p-out").forEach(po => { if(po.dataset.port !== "+") ST.po[po.dataset.port] = {id, ...rel(po)}; });
+    const inn = card.querySelector(".stc-in"); if(inn) ST.pi[id] = rel(inn);
+  });
+}
+/* دایره‌های خروجی روی لبه‌ی چپ بخش، هم‌تراز با دکمه‌شان؛ اگر چند دکمه در یک ردیف باشند کمی بالا و پایین می‌روند */
+function stPlacePorts(card){
+  card.querySelectorAll(".p-out").forEach(po => po.remove());
+  const groups = new Map();
+  card.querySelectorAll(".pa").forEach(a => {
+    let y = 0, n = a;
+    while(n && n !== card){ y += n.offsetTop; n = n.offsetParent; }
+    const g = a.closest(".stk-row") || a;
+    if(!groups.has(g)) groups.set(g, []);
+    groups.get(g).push({a, cy: y + a.offsetHeight / 2});
+  });
+  let h = "";
+  for(const list of groups.values()) list.forEach((it, i) => {
+    const d = it.a.dataset, off = (i - (list.length - 1) / 2) * 13;
+    h += `<span class="p-out" data-port="${esc(d.pa)}" data-n="${esc(d.n)}"${d.r !== undefined ? ` data-r="${d.r}" data-c="${d.c}"` : ""} style="top:${(it.cy + off).toFixed(1)}px;--pc:${d.pc}"></span>`;
+  });
+  card.insertAdjacentHTML("beforeend", h);
+}
+function stPlaceCards(){
+  const cv = $("#stc"); if(!cv) return;
+  cv.querySelectorAll(".stc-card").forEach(el => { const p = ST.pos[el.dataset.id]; if(p) el.style.transform = `translate(${p.x}px,${p.y}px)`; });
 }
 function stPath(a, b){
   const d = Math.max(46, Math.min(170, Math.abs(a.x - b.x) * .55));
   return `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} C ${(a.x - d).toFixed(1)} ${a.y.toFixed(1)}, ${(b.x + d).toFixed(1)} ${b.y.toFixed(1)}, ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
 }
 
-/* ── رندر کارت‌ها و سیم‌ها ── */
-const ST_KIND = {goto: ["رفتن به کارت", IC.go], pay: ["پرداخت", IC.coin], url: ["لینک وب", IC.open], channel: ["کانال", IC.open], alert: ["پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["اشتراک دعوت", IC.users]};
+/* ── رندر بخش‌ها و سیم‌ها ── */
+const ST_KIND = {goto: ["رفتن به بخش", IC.go], pay: ["پرداخت", IC.coin], url: ["باز کردن لینک", IC.open], channel: ["کانال یا گروه", IC.open], alert: ["پیام پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["لینک دعوت", IC.users]};
 const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", audio: "موسیقی", voice: "ویس", document: "فایل"};
 
-/* پیش‌نمایش رسانه‌ی کارت: عکس و گیف خودشان، بقیه آیکن + نام فایل */
+/* پیش‌نمایش رسانه‌ی بخش: عکس و گیف خودشان، بقیه آیکن + نام فایل */
 function stMediaHTML(n){
   const m = n.media ? mediaById(n.media) : null;
   if(m && (m.kind === "photo" || m.kind === "animation") && m.url)
-    return `<div class="stc-media"><img src="${API_BASE + esc(m.url)}" alt="" draggable="false"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
+    return `<div class="stc-media"><img src="${API_BASE + esc(m.url)}" alt="" draggable="false" loading="lazy" decoding="async"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
   if(m) return `<div class="stc-media ico">${IC[m.kind] || IC.document}<b>${esc(m.name || "")}</b><span class="mk">${ST_MEDIA[m.kind] || "فایل"}</span></div>`;
   if(n.media) return `<div class="stc-media ico bad">${IC.document}<b>رسانه از کتابخانه حذف شده</b></div>`;
-  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img src="${esc(n.photo)}" alt="" draggable="false" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
+  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img src="${esc(n.photo)}" alt="" draggable="false" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
   return "";
 }
-/* یک دکمه‌ی شیشه‌ای (یا کلیدِ کیبورد زیر چت) با دایره‌ی خروجیِ سیم */
+/* یک دکمه‌ی شیشه‌ای (یا کلیدِ کیبورد پایین چت) با دایره‌ی خروجیِ سیم */
 function stBtnCell(id, r, c, b, cfg){
   const k = kindOf(b), [lab, ic] = ST_KIND[k] || ST_KIND.url;
   const tgt = k === "pay" ? b.pay?.goto : b.goto, wired = k === "goto" || (k === "pay" && !!b.pay?.goto);
   const broken = wired && !cfg.nodes[tgt];
   const tip = k === "goto" ? "رفتن به: " + titleOf(cfg, tgt) : k === "pay" ? `پرداخت ${b.pay.stars} ستاره` : lab;
-  const port = wired ? `<span class="p-out" data-port="b|${id}|${r}|${c}" data-n="${esc(id)}" style="--pc:${k === "pay" ? "var(--tok)" : "var(--ac)"}"></span>` : "";
-  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${port}</div>`;
+  const anchor = wired ? `<span class="pa" data-pa="b|${id}|${r}|${c}" data-n="${esc(id)}" data-r="${r}" data-c="${c}" data-pc="${k === "pay" ? "var(--tok)" : "var(--ac)"}"></span>` : "";
+  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${anchor}</div>`;
 }
 function stCardH(n){
   const rows = (n.buttons || []).length, lg = (n.route?.length || 0) + (n.next ? 1 : 0);
@@ -1562,29 +1680,29 @@ function stCardHTML(id, dead){
   if(isStart) tags.push('<span class="tag st">شروع ربات</span>');
   if(isFb) tags.push('<span class="tag">پاسخ پیش‌فرض</span>');
   if(n.ai) tags.push('<span class="tag ai">هوش مصنوعی</span>');
-  if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">گرفتن پیام</span>');
+  if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">دریافت پیام</span>');
   if(n.ticket) tags.push('<span class="tag">تیکت</span>');
   if(n.do?.length || n.route?.length || n.alt?.length) tags.push('<span class="tag">شرط و متغیر</span>');
   if(inc) tags.push(`<span class="tag cnt">${fa(inc)} ورودی</span>`);
-  if(dead) tags.push('<span class="tag warn">بدون ورودی</span>');
-  if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn">بن‌بست</span>');
+  if(dead) tags.push('<span class="tag warn" title="هیچ دکمه یا مسیری به این بخش نمی‌رسد">بدون ورودی</span>');
+  if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn" title="بعد از این بخش، کاربر راهی برای ادامه ندارد">بدون ادامه</span>');
   const txt = (n.text || "").trim();
-  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی ننوشتی"}</div></div>`;
+  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
   const keys = btns.map((row, r) => `<div class="stk-row">${row.map((b, c) => stBtnCell(id, r, c, b, cfg)).join("")}</div>`).join("");
-  const kb = keys ? `<div class="stk${rk ? " rk" : ""}"><div class="stk-cap">${rk ? "کیبورد زیر چت" : "دکمه‌های شیشه‌ای زیر پیام"}</div>${keys}</div>` : "";
+  const kb = keys ? `<div class="stk${rk ? " rk" : ""}"><div class="stk-cap">${rk ? "کیبورد پایین چت" : "دکمه‌های زیر پیام"}</div>${keys}</div>` : "";
   let logic = "";
-  (n.route || []).forEach((ru, i) => { logic += `<div class="stc-row"><span class="p-out" data-port="r|${id}|${i}" data-n="${esc(id)}" style="--pc:var(--vio)"></span><span class="ric">${IC.go}</span><span class="rlb">${esc(condTxt(ru.when))} <small>· هدایت شرطی</small></span></div>`; });
-  if(n.next) logic += `<div class="stc-row"><span class="p-out" data-port="x|${id}" data-n="${esc(id)}" style="--pc:var(--ok)"></span><span class="ric">${IC.go}</span><span class="rlb">بعد از ثبت <small>· ادامه‌ی فرم یا پیام</small></span></div>`;
-  return `<div class="stc-card${isStart ? " start" : ""}${dead ? " dead" : ""}" data-id="${esc(id)}" style="left:${p.x}px;top:${p.y}px">
-    <span class="stc-in" data-in="${esc(id)}"></span>
+  (n.route || []).forEach((ru, i) => { logic += `<div class="stc-row"><span class="pa" data-pa="r|${id}|${i}" data-n="${esc(id)}" data-pc="var(--vio)"></span><span class="ric">${IC.go}</span><span class="rlb">${esc(condTxt(ru.when))} <small>· مسیر شرطی</small></span></div>`; });
+  if(n.next) logic += `<div class="stc-row"><span class="pa" data-pa="x|${id}" data-n="${esc(id)}" data-pc="var(--ok)"></span><span class="ric">${IC.go}</span><span class="rlb">بعد از ثبت پاسخ <small>· رفتن به بخش بعدی</small></span></div>`;
+  return `<div class="stc-card${isStart ? " start" : ""}${dead ? " dead" : ""}" data-id="${esc(id)}" style="transform:translate(${p.x}px,${p.y}px)">
+    <span class="stc-in${inc ? " has" : ""}" data-in="${esc(id)}"></span>
     <div class="stc-h"><span class="stc-ic">${stNodeIcon(n)}</span>
       <div class="stc-t"><b>${esc(titleOf(cfg, id))}</b><span class="ids">${esc(id)}</span></div>
-      <button class="stc-menu" data-a="stmenu" data-n="${esc(id)}" aria-label="گزینه‌های کارت">⋮</button></div>
+      <button class="stc-menu" data-a="stmenu" data-n="${esc(id)}" aria-label="گزینه‌های بخش">⋮</button></div>
     ${tags.length ? `<div class="stc-badges">${tags.join("")}</div>` : ""}
     ${bub}${kb}
-    ${logic ? `<div class="stc-sec">مسیرهای خودکار</div>${logic}` : ""}
-    <div class="stc-row plus"><span class="p-out" data-port="+" data-n="${esc(id)}"></span><span class="ric">${IC.plus}</span><span class="rlb">از اینجا سیم بکش تا دکمه‌ی تازه بسازی</span></div>
-    <div class="stc-act"><button data-a="stbtn" data-n="${esc(id)}">${IC.plus}دکمه</button><button data-a="stkm" data-n="${esc(id)}">${IC.layers}دکمه‌ها و کیبورد</button></div>
+    ${logic ? `<div class="stc-sec">مسیرهای شرطی و خودکار</div>${logic}` : ""}
+    <div class="stc-row plus"><span class="pa" data-pa="+" data-n="${esc(id)}" data-pc="var(--ac)"></span><span class="ric">${IC.plus}</span><span class="rlb">سیم بکش تا دکمه‌ی جدید بسازی</span></div>
+    <div class="stc-act"><button data-a="stbtn" data-n="${esc(id)}">${IC.plus}دکمه‌ی جدید</button><button data-a="stkm" data-n="${esc(id)}">${IC.layers}مدیریت دکمه‌ها</button></div>
   </div>`;
 }
 function stPaintWires(){
@@ -1592,28 +1710,27 @@ function stPaintWires(){
   if(!svg || !cv) return;
   ST.wires.clear();
   let h = "", i = 0;
-  const edges = stEdges(), flow = !!S.cur?.active && !reduced() && edges.length <= 40;
+  const edges = stEdges(), flow = !!S.cur?.active && !reduced() && edges.length <= 10, rects = stRects();
   for(const e of edges){
-    const p = cv.querySelector(`.p-out[data-port="${e.key}"]`), t = cv.querySelector(`.stc-in[data-in="${e.to}"]`);
-    if(!p || !t) continue;
-    const d = stPath(stWorldOf(p), stWorldOf(t));
-    const dot = flow ? `<circle class="w-dot" r="3.2"><animateMotion dur="${(2 + (i % 5) * .4).toFixed(1)}s" begin="-${(i * .43).toFixed(2)}s" repeatCount="indefinite" path="${d}"/></circle>` : "";
-    h += `<g class="wire k-${e.kind}" data-w="${e.key}"><path class="w-glow" d="${d}"/><path class="w-line" d="${d}"/><path class="w-hit" d="${d}"/>${dot}</g>`;
-    ST.wires.set(e.key, e); i++;
+    const g = stEdgeGeom(e, i, rects);
+    if(!g) continue;
+    const dot = flow ? `<circle class="w-dot" r="3.2"><animateMotion dur="${(2 + (i % 5) * .4).toFixed(1)}s" begin="-${(i * .43).toFixed(2)}s" repeatCount="indefinite" path="${g.d}"/></circle>` : "";
+    h += `<g class="wire k-${e.kind}${g.back ? " back" : ""}" data-w="${e.key}"><path class="w-glow" d="${g.d}"/><path class="w-line" d="${g.d}"/><path class="w-hit" d="${g.d}"/>${dot}</g>`;
+    e.i = i; ST.wires.set(e.key, e); i++;
   }
   svg.innerHTML = h + `<path class="w-tmp" id="sttmp" d=""/>`;
 }
 function stUpdateWiresFor(id){
-  const cv = $("#stc"), svg = $("#stsvg");
-  if(!cv || !svg) return;
+  const svg = $("#stsvg");
+  if(!svg) return;
+  const rects = stRects();
   for(const [key, e] of ST.wires){
     if(e.from !== id && e.to !== id) continue;
-    const g = svg.querySelector(`.wire[data-w="${key}"]`);
-    const p = cv.querySelector(`.p-out[data-port="${key}"]`), t = cv.querySelector(`.stc-in[data-in="${e.to}"]`);
-    if(!g || !p || !t) continue;
-    const d = stPath(stWorldOf(p), stWorldOf(t));
-    g.querySelectorAll("path").forEach(pp => pp.setAttribute("d", d));
-    g.querySelector("animateMotion")?.setAttribute("path", d);
+    const g = svg.querySelector(`.wire[data-w="${key}"]`), geo = g && stEdgeGeom(e, e.i || 0, rects);
+    if(!g || !geo) continue;
+    g.querySelectorAll("path").forEach(pp => pp.setAttribute("d", geo.d));
+    g.classList.toggle("back", geo.back);
+    g.querySelector("animateMotion")?.setAttribute("path", geo.d);
   }
 }
 function stHot(id, on){
@@ -1627,21 +1744,21 @@ function stMini(full){
     const cfg = S.cur.config, r = []; let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
     for(const id of Object.keys(cfg.nodes)){
       const p = ST.pos[id]; if(!p) continue;
-      const h = stCardH(cfg.nodes[id]); r.push([id, p.x, p.y, h]);
-      x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + 268); y2 = Math.max(y2, p.y + h);
+      const h = stH(id); r.push([id, p.x, p.y, h]);
+      x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + ST_W); y2 = Math.max(y2, p.y + h);
     }
     if(!r.length) return;
     x1 -= 140; y1 -= 140; x2 += 140; y2 += 140;
     const W = 96, H = 72, sc = Math.min(W / (x2 - x1), H / (y2 - y1));
     const m = ST.mini = {x1, y1, s: sc, ox: (W - (x2 - x1) * sc) / 2, oy: (H - (y2 - y1) * sc) / 2};
-    mm.innerHTML = r.map(([id, x, y, h]) => `<i${id === cfg.start ? ' class="s"' : ""} style="left:${(m.ox + (x - x1) * sc).toFixed(1)}px;top:${(m.oy + (y - y1) * sc).toFixed(1)}px;width:${(268 * sc).toFixed(1)}px;height:${(h * sc).toFixed(1)}px"></i>`).join("") + '<b id="stmv"></b>';
+    mm.innerHTML = r.map(([id, x, y, h]) => `<i${id === cfg.start ? ' class="s"' : ""} style="left:${(m.ox + (x - x1) * sc).toFixed(1)}px;top:${(m.oy + (y - y1) * sc).toFixed(1)}px;width:${(ST_W * sc).toFixed(1)}px;height:${(h * sc).toFixed(1)}px"></i>`).join("") + '<b id="stmv"></b>';
   }
   const m = ST.mini, v = $("#stmv"); if(!m || !v) return;
   const c = ST.cam || {x: 40, y: 40, z: 1};
   v.style.left = (m.ox + (-c.x / c.z - m.x1) * m.s) + "px"; v.style.top = (m.oy + (-c.y / c.z - m.y1) * m.s) + "px";
   v.style.width = (cv.clientWidth / c.z * m.s) + "px"; v.style.height = (cv.clientHeight / c.z * m.s) + "px";
 }
-/* دید اولیه: اگر نمایش کل گراف خیلی ریز شود، روی کارت شروع با زوم خوانا باز می‌شود */
+/* دید اولیه: اگر نمایش کل گراف خیلی ریز شود، روی بخش شروع با زوم خوانا باز می‌شود */
 function stHome(){
   const cv = $("#stc"), cfg = S.cur?.config; if(!cv || !cfg) return;
   stFit();
@@ -1655,32 +1772,40 @@ function stHome(){
 function stPaintWorld(){
   const wr = $("#stw"), cv = $("#stc");
   if(!wr || !cv || !S.cur) return;
-  stEnsurePositions();
+  const fresh = stEnsurePositions();
   const seen = stReach();
-  ST.inc = {}; for(const e of stEdges()) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
+  const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
+  $("#stu")?.classList.toggle("many", _ed.length > 12 || Object.keys(S.cur.config.nodes).length > 14);
   let h = `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`;
   for(const id of Object.keys(S.cur.config.nodes)) h += stCardHTML(id, !seen.has(id));
   wr.innerHTML = h;
+  cv.querySelectorAll(".stc-card").forEach(stPlacePorts);
+  stMeasure();
+  if(fresh){ stAutoLayout(false); stPlaceCards(); stSave(); }      // بار اول: با اندازه‌ی واقعی بخش‌ها دوباره بچین
   stPaintWires();
   stMini(true);
   stApply();
+  if(document.fonts?.ready && !ST._fw){            // بعد از آمدن فونت، ارتفاع‌ها عوض می‌شود؛ جای دایره‌ها را دوباره بسنج
+    ST._fw = 1;
+    document.fonts.ready.then(() => { ST._fw = 0; if(S.view === "studio" && $("#stc")){ stMeasure(); stPaintWires(); stMini(true); } });
+  }
 }
 
 /* ── ورود به استودیو ── */
 function stHintHTML(){
   try{ if(localStorage.getItem("azadi.studio.hint") === "1") return ""; }catch(_){}
-  return `<div class="st-hint"><span><b>راهنما:</b> هر کارت یک پیامِ ربات است. روی کارت بزن تا متن و رسانه را ویرایش کنی، روی هر دکمه بزن تا همان دکمه را ویرایش کنی و از دایره‌ی کنار دکمه سیم بکش تا به کارت دیگری وصل شود.</span><button class="b sm" data-a="sthint">فهمیدم</button></div>`;
+  return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
 }
 function renderStudio(){
   if(!S.bots.length){
-    $("#app").innerHTML = `<div class="empty" style="padding-top:70px"><div class="ib big">${IC.studio}</div><h2>استودیو</h2><p class="muted">اول یک ربات بساز؛ بعد اینجا کارت‌هایش را ویرایش و به هم وصل کن.</p><button class="b sm" data-go="create">ساخت ربات</button></div>`;
+    $("#app").innerHTML = `<div class="empty" style="padding-top:70px"><div class="ib big">${IC.studio}</div><h2>استودیو</h2><p class="muted">اول یک ربات بساز؛ بعد اینجا بخش‌هایش را ویرایش می‌کنی و به هم وصل می‌کنی.</p><button class="b sm" data-go="create">ساخت ربات</button></div>`;
     return;
   }
   let bot = S.cur && S.bots.find(b => b.id === S.cur.id) ? S.cur : (S.sbot ? S.bots.find(b => b.id === S.sbot) : null);
   if(!bot){
     $("#app").innerHTML = `<div class="st-picker"><div class="ph"><h1>استودیو</h1></div>
-      <p class="muted" style="margin:-4px 4px 14px">رباتی را که می‌خواهی ویرایش کنی انتخاب کن؛ کارت‌هایش را ببین، ویرایش کن و با سیم به هم وصل کن.</p>
-      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} کارت</span></span>${goIc}</button>`).join("")}</div></div>`;
+      <p class="muted" style="margin:-4px 4px 14px">رباتی را که می‌خواهی ویرایش کنی انتخاب کن. بخش‌هایش را می‌بینی، تغییر می‌دهی و با سیم به هم وصل می‌کنی.</p>
+      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} بخش</span></span>${goIc}</button>`).join("")}</div></div>`;
     return;
   }
   S.cur = bot; S.sbot = bot.id;
@@ -1692,24 +1817,25 @@ function renderStudio(){
         <button class="iconb" data-a="stback" aria-label="بازگشت">${IC.back}</button>
         <button class="st-title" data-a="stbots" aria-label="تغییر ربات">
           <span class="dot ${bot.active ? "on" : ""}"></span>
-          <span class="tt"><b>${esc(bot.name)}</b><small id="stsub" class="${bot.active ? "ltr" : ""}">${bot.active ? "@" + esc(bot.username) : "غیرفعال"} · ${N(nodes)} کارت</small></span>
+          <span class="tt"><b>${esc(bot.name)}</b><small id="stsub" class="${bot.active ? "ltr" : ""}">${bot.active ? "@" + esc(bot.username) : "غیرفعال"} · ${N(nodes)} بخش</small></span>
         </button>
         ${bot.versions ? `<button class="iconb" data-a="undo" aria-label="برگشت به نسخه‌ی قبلی" title="برگشت به نسخه‌ی قبلی">${IC.refresh}</button>` : ""}
         <button class="iconb" data-a="health" aria-label="بررسی مسیرها" title="بررسی مسیرها">${IC.heal}</button>
-        <button class="b sm" id="stadd" data-a="stadd">${IC.plus}کارت</button>
+        <button class="b sm" id="stadd" data-a="stadd">${IC.plus}بخش جدید</button>
       </div>
       <div class="st-canvas" id="stc">
         <div class="st-world" id="stw"></div>
         <div class="st-mini" id="stmini" aria-hidden="true"><div class="mm" id="stmm"></div></div>
-        <div class="st-search"><input id="stq" placeholder="جستجوی کارت…" autocomplete="off" aria-label="جستجوی کارت"></div>
-        <button class="st-energy${bot.active ? " live" : ""}" data-a="stenergy">${IC.bolt}${bot.active ? "انرژی فعال" : "ربات خاموش"}</button>
+        <div class="st-search"><input id="stq" placeholder="جستجوی بخش…" autocomplete="off" aria-label="جستجوی بخش"></div>
+        <button class="st-energy${bot.active ? " live" : ""}" data-a="stenergy">${IC.bolt}${bot.active ? "ربات روشن است" : "ربات خاموش است"}</button>
         ${stHintHTML()}
         <div class="st-tools">
           <button class="tb" data-a="stzout" aria-label="کوچک‌نمایی">${IC.minus}</button>
           <span class="st-z n" id="stz">100%</span>
           <button class="tb" data-a="stzin" aria-label="بزرگ‌نمایی">${IC.plus}</button>
-          <button class="tb" data-a="stfit" aria-label="نمایش همه">${IC.fit}</button>
-          <button class="tb" data-a="stlay" aria-label="چیدمان خودکار">${IC.layers}</button>
+          <span class="sep"></span>
+          <button class="tb" data-a="stfit" aria-label="نمایش همه‌ی بخش‌ها" title="نمایش همه‌ی بخش‌ها">${IC.fit}</button>
+          <button class="tb lbl" data-a="stlay" aria-label="چیدمان خودکار" title="بخش‌ها را خودکار مرتب می‌کند">${IC.layers}<span>مرتب‌سازی</span></button>
         </div>
       </div>
     </div>`;
@@ -1736,12 +1862,27 @@ function refreshStudio(){
   if(!$("#stc")) return renderStudio();
   stPaintWorld();
   const t = $("#stsub"), b = S.cur;
-  if(t) t.textContent = `${b.active ? "@" + b.username : "غیرفعال"} · ${fa(Object.keys(b.config.nodes).length)} کارت`;
+  if(t) t.textContent = `${b.active ? "@" + b.username : "غیرفعال"} · ${fa(Object.keys(b.config.nodes).length)} بخش`;
 }
 
-/* ── لمس و ماوس: پن، پینچ، درگ کارت، کشیدن سیم ── */
+/* ── لمس و ماوس: پن، پینچ، درگ بخش، کشیدن سیم ── */
 function stClosePop(){ $("#stpop")?.remove(); }
 function stTmpWireTo(wp){ const tp = $("#sttmp"); if(tp && ST._la) tp.setAttribute("d", stPath(ST._la, wp)); }
+/* لغزشِ نرم بعد از رها کردن بوم */
+function stInertia(vx, vy){
+  cancelAnimationFrame(ST._in);
+  let last = performance.now();
+  const step = t => {
+    const dt = Math.min(32, t - last); last = t;
+    const f = Math.pow(.93, dt / 16); vx *= f; vy *= f;
+    const c = ST.cam || {x: 40, y: 40, z: 1};
+    ST.cam = {...c, x: c.x + vx * dt, y: c.y + vy * dt};
+    stApply();
+    if(Math.hypot(vx, vy) > .04) ST._in = requestAnimationFrame(step); else { ST._in = 0; stSave(); }
+  };
+  ST._in = requestAnimationFrame(step);
+}
+const stBtnOf = po => (po && po.dataset.r !== undefined) ? $(`#stc .stk-btn[data-n="${CSS.escape(po.dataset.n)}"][data-r="${po.dataset.r}"][data-c="${po.dataset.c}"]`) : null;
 const stDist = P => { const v = [...P.values()]; return Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); };
 const stMid = P => { const v = [...P.values()]; return {x: (v[0].x + v[1].x) / 2, y: (v[0].y + v[1].y) / 2}; };
 function stTap(e){
@@ -1765,6 +1906,7 @@ function stBindCanvas(){
     if(e.pointerType === "mouse" && e.button !== 0) return;
     if(e.target.closest(".st-tools,.st-search,.st-hint,.st-energy,.st-pop,.st-mini,.stc-menu")) return;   // دکمه‌های روی بوم: بدون capture تا کلیکشان به خودشان برسد
     stClosePop();
+    cancelAnimationFrame(ST._in); $("#stw")?.classList.remove("glide");
     P.set(e.pointerId, {x: e.clientX, y: e.clientY});
     const port = e.target.closest(".p-out"), card = e.target.closest(".stc-card");
     if(P.size >= 2){
@@ -1777,6 +1919,7 @@ function stBindCanvas(){
     if(port){
       ST.mode = {t: "link", n: port.dataset.n, p: port.dataset.port, moved: false};
       ST._la = stWorldOf(port);
+      stBtnOf(port)?.classList.add("hl");
       $("#stu")?.classList.add("linking");
       try{ cv.setPointerCapture(e.pointerId); }catch(_){}
       stTmpWireTo(w2p(e));
@@ -1799,13 +1942,16 @@ function stBindCanvas(){
     P.set(e.pointerId, {x: e.clientX, y: e.clientY});
     if(m.t === "pan"){
       if(Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 6) m.moved = true;
+      const now = performance.now();
+      if(m.lt){ const dt = Math.max(1, now - m.lt); m.vx = .75 * (m.vx || 0) + .25 * (e.clientX - m.lx) / dt; m.vy = .75 * (m.vy || 0) + .25 * (e.clientY - m.ly) / dt; }
+      m.lt = now; m.lx = e.clientX; m.ly = e.clientY;
       ST.cam = {z: m.c0.z, x: m.c0.x + (e.clientX - m.sx), y: m.c0.y + (e.clientY - m.sy)};
       stApply();
     }
     else if(m.t === "pinch"){
       if(P.size < 2) return;
       const d = stDist(P), md = stMid(P), r = cv.getBoundingClientRect();
-      const z = Math.min(1.5, Math.max(.3, m.z0 * d / Math.max(20, m.d0)));
+      const z = Math.min(1.5, Math.max(.16, m.z0 * d / Math.max(20, m.d0)));
       const wx = (m.m0.x - r.left - m.c0.x) / m.z0, wy = (m.m0.y - r.top - m.c0.y) / m.z0;
       ST.cam = {z, x: (md.x - r.left) - wx * z, y: (md.y - r.top) - wy * z};
       stApply();
@@ -1814,11 +1960,11 @@ function stBindCanvas(){
       if(Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 6) m.moved = true;
       if(m.moved){
         const wp = w2p(e), p = ST.pos[m.id] || (ST.pos[m.id] = {x: 0, y: 0});
-        p.x = Math.round((wp.x - m.dx) / 8) * 8;
-        p.y = Math.round((wp.y - m.dy) / 8) * 8;
-        const el = cv.querySelector(`.stc-card[data-id="${m.id}"]`);
-        if(el){ el.style.left = p.x + "px"; el.style.top = p.y + "px"; }
-        stUpdateWiresFor(m.id);
+        p.x = Math.round(wp.x - m.dx);
+        p.y = Math.round(wp.y - m.dy);
+        m.el = m.el || cv.querySelector(`.stc-card[data-id="${m.id}"]`);
+        if(m.el) m.el.style.transform = `translate(${p.x}px,${p.y}px)`;
+        if(!ST._wr){ ST._wr = requestAnimationFrame(() => { ST._wr = 0; if(ST.mode?.t === "card") stUpdateWiresFor(ST.mode.id); }); }
       }
     }
     else if(m.t === "link"){
@@ -1835,24 +1981,29 @@ function stBindCanvas(){
     cv.querySelectorAll(".stc-card.tgt").forEach(c => c.classList.remove("tgt"));
     if(!m) return;
     if(m.t === "link"){
+      cv.querySelectorAll(".stk-btn.hl").forEach(b => b.classList.remove("hl"));
       $("#stu")?.classList.remove("linking");
       const tp = $("#sttmp"); if(tp) tp.setAttribute("d", "");
       const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest(".stc-card")?.dataset.id;
       ST.noClick = Date.now();
       if(tid && tid !== m.n) stConnect(m, tid);
       else if(m.moved && !tid) stDropNew(m, e);
-      else if(m.moved) toast("سیم را به کارت دیگری وصل کن");
+      else if(m.moved) toast("سیم را به یک بخش دیگر وصل کن");
       haptic();
     }
     else if(m.t === "card"){
       cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
       stHot(m.id, false);
-      if(m.moved){ stSave(); stMini(true); }
+      if(m.moved){ stUpdateWiresFor(m.id); stSave(); stMini(true); }
       else if(Date.now() - m.t0 < 500) openNode(m.id);
     }
     else if(m.t === "pan"){
       cv.classList.remove("panning");
-      if(m.moved){ stSave(); ST.noClick = Date.now(); }
+      if(m.moved){
+        stSave(); ST.noClick = Date.now();
+        const sp = Math.hypot(m.vx || 0, m.vy || 0);
+        if(!reduced() && performance.now() - (m.lt || 0) < 90 && sp > .3) stInertia(m.vx, m.vy);
+      }
       else stTap(e);
     }
     if(P.size === 0) ST.mode = null;
@@ -1885,6 +2036,8 @@ function stBindCanvas(){
     if(ed) stWireMenu(ed);
   });
   cv.addEventListener("contextmenu", e => e.preventDefault());
+  cv.addEventListener("pointerover", e => { const po = e.target.closest?.(".p-out"); if(po) stBtnOf(po)?.classList.add("hl"); });
+  cv.addEventListener("pointerout", e => { const po = e.target.closest?.(".p-out"); if(po && !ST.mode) stBtnOf(po)?.classList.remove("hl"); });
   const mini = $("#stmini");
   if(mini){
     const jump = e => {
@@ -1906,8 +2059,8 @@ function stConnect(m, tid){
   let src;
   if(m.p === "+"){
     const rows = S.cur.config.nodes[m.n]?.buttons || [];
-    if(rows.length >= 6 && rows.every(r => r.length >= 3)) return toast("این کارت به سقف دکمه‌ها رسیده");
-    if(rows.some(r => r.some(b => b.goto === tid))) return toast("این کارت از قبل دکمه‌ای به همان مقصد دارد");
+    if(rows.length >= 6 && rows.every(r => r.length >= 3)) return toast("این بخش به حداکثر تعداد دکمه رسیده");
+    if(rows.some(r => r.some(b => b.goto === tid))) return toast("این بخش از قبل دکمه‌ای به همان مقصد دارد");
     src = {t: "new", n: m.n};
   } else src = stParsePort(m.p);
   busy(null, () => commit(cfg => stWireIn(cfg, src, tid), `سیم به «${t}» وصل شد`));
@@ -1923,7 +2076,7 @@ function stDropNew(m, e){
   pop.className = "st-pop"; pop.id = "stpop";
   pop.style.left = Math.min(cv.clientWidth - 190, Math.max(6, e.clientX - r.left)) + "px";
   pop.style.top = Math.min(cv.clientHeight - 96, Math.max(6, e.clientY - r.top)) + "px";
-  pop.innerHTML = `<button data-a="stnew">${IC.plus}<span>کارت جدید + اتصال</span></button><button data-a="stpopx">${IC.x}<span>بی‌خیال</span></button>`;
+  pop.innerHTML = `<button data-a="stnew">${IC.plus}<span>ساخت بخش جدید و اتصال</span></button><button data-a="stpopx">${IC.x}<span>انصراف</span></button>`;
   cv.appendChild(pop);
 }
 function stCreateConnected(){
@@ -1936,9 +2089,9 @@ function stCreateConnected(){
   const src = m.p === "+" ? {t: "new", n: m.n} : stParsePort(m.p);
   busy(null, async () => {
     await commit(cfg => {
-      cfg.nodes[id] = {title: "کارت جدید", text: "متن این کارت را اینجا بنویس", ask: false, buttons: []};
+      cfg.nodes[id] = {title: "بخش جدید", text: "متن این بخش را اینجا بنویس", ask: false, buttons: []};
       stWireIn(cfg, src, id);
-    }, "کارت ساخته و وصل شد");
+    }, "بخش ساخته و وصل شد");
     stCenter(id);
     openNode(id);
   });
@@ -1951,7 +2104,7 @@ function stCopy(id){
     const n = cp(cfg.nodes[id]);
     if(n.title) n.title = (n.title + " (کپی)").slice(0, 30);
     cfg.nodes[nid] = n;
-  }, "کارت کپی شد"));
+  }, "بخش کپی شد"));
 }
 
 /* ── منوها ── */
@@ -1959,13 +2112,13 @@ const stBadIc = ic => `<span class="ib" style="color:var(--bad);background:color
 function stCardMenu(id){
   const cfg = S.cur.config, isRoot = id === cfg.start || id === cfg.fallback;
   S.sheet = {kind: "info"};
-  showSheet(head("کارتِ «" + esc(titleOf(cfg, id)) + "»") + `<div class="group" style="margin-top:10px">
-    <button class="gi" data-sh="stedit" data-n="${esc(id)}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش کارت</b><span>متن، رسانه، فرم، هوش مصنوعی و شرط‌ها</span></span>${goIc}</button>
+  showSheet(head("بخشِ «" + esc(titleOf(cfg, id)) + "»") + `<div class="group" style="margin-top:10px">
+    <button class="gi" data-sh="stedit" data-n="${esc(id)}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش بخش</b><span>متن، عکس، فرم، هوش مصنوعی و شرط‌ها</span></span>${goIc}</button>
     <button class="gi" data-sh="stkm" data-n="${esc(id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>افزودن، ویرایش، ترتیب و نوع نمایش</span></span>${goIc}</button>
-    <button class="gi" data-sh="stcopy" data-n="${esc(id)}"><span class="ib">${IC.copy}</span><span class="gt"><b>کپی کارت</b><span>همراه با همه‌ی تنظیماتش</span></span>${goIc}</button>
-    <button class="gi" data-sh="stcenter" data-n="${esc(id)}"><span class="ib">${IC.fit}</span><span class="gt"><b>نمایش در مرکز</b><span>دوربین روی این کارت می‌آید</span></span>${goIc}</button>
-    ${id === cfg.start ? "" : `<button class="gi" data-sh="stsetstart" data-n="${esc(id)}"><span class="ib">${IC.bolt}</span><span class="gt"><b>شروع ربات از این کارت</b><span>با /start همین کارت باز می‌شود</span></span>${goIc}</button>`}
-    ${isRoot ? "" : `<button class="gi" data-sh="stdel" data-n="${esc(id)}">${stBadIc(IC.trash)}<span class="gt"><b>حذف کارت</b><span>دکمه‌هایی که به آن وصل‌اند هم برداشته می‌شوند</span></span>${goIc}</button>`}
+    <button class="gi" data-sh="stcopy" data-n="${esc(id)}"><span class="ib">${IC.copy}</span><span class="gt"><b>کپی بخش</b><span>با همه‌ی دکمه‌ها و تنظیماتش</span></span>${goIc}</button>
+    <button class="gi" data-sh="stcenter" data-n="${esc(id)}"><span class="ib">${IC.fit}</span><span class="gt"><b>نمایش در وسط صفحه</b><span>نقشه روی همین بخش می‌آید</span></span>${goIc}</button>
+    ${id === cfg.start ? "" : `<button class="gi" data-sh="stsetstart" data-n="${esc(id)}"><span class="ib">${IC.bolt}</span><span class="gt"><b>شروع ربات از این بخش</b><span>کاربر بعد از زدن /start اول همین بخش را می‌بیند</span></span>${goIc}</button>`}
+    ${isRoot ? "" : `<button class="gi" data-sh="stdel" data-n="${esc(id)}">${stBadIc(IC.trash)}<span class="gt"><b>حذف بخش</b><span>دکمه‌هایی که به این بخش می‌رسند هم برداشته می‌شوند</span></span>${goIc}</button>`}
   </div><div class="fgap"></div>`);
 }
 function stWireMenu(ed){
@@ -1978,12 +2131,12 @@ function stWireMenu(ed){
       <button class="gi" data-sh="stwx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>حذف دکمه</b><span>دکمه و سیمش برداشته می‌شود</span></span>${goIc}</button>`;
   } else if(ed.kind === "route"){
     title = "سیمِ هدایت شرطی";
-    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش شرط</b><span>در بخش «منطق پیشرفته»ِ کارت</span></span>${goIc}</button>
+    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش شرط</b><span>از قسمت «منطق پیشرفته» در ویرایش بخش</span></span>${goIc}</button>
       <button class="gi" data-sh="stwrx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>حذف شرط</b><span>این مسیر شرطی برداشته می‌شود</span></span>${goIc}</button>`;
   } else {
     title = "سیمِ ادامه بعد از ثبت";
-    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش کارت</b><span>مقصد بعد از ثبت را عوض کن</span></span>${goIc}</button>
-      <button class="gi" data-sh="stnx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>قطع این مسیر</b><span>بعد از ثبت، کاربر به کارت شروع برمی‌گردد</span></span>${goIc}</button>`;
+    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش بخش</b><span>مقصد بعد از ثبت پاسخ را عوض کن</span></span>${goIc}</button>
+      <button class="gi" data-sh="stnx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>قطع این مسیر</b><span>بعد از ثبت پاسخ، کاربر به بخش شروع برمی‌گردد</span></span>${goIc}</button>`;
   }
   S.sheet = {kind: "info"};
   showSheet(head(title) + `<div class="group" style="margin-top:10px">${body}</div><div class="fgap"></div>`);
@@ -2169,7 +2322,7 @@ function showSheet(html){
   sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
   stSheetDirty.touched = false;
 }
-/* اگر در استودیو فرمِ ویرایشِ کارت/دکمه چیزی عوض شده باشد، بستنِ ناگهانی با تایید همراه می‌شود */
+/* اگر در استودیو فرمِ ویرایشِ بخش/دکمه چیزی عوض شده باشد، بستنِ ناگهانی با تایید همراه می‌شود */
 document.addEventListener("input", e => { if(S.sheet && $("#sheet")?.contains(e.target)) stSheetDirty.touched = true; });
 document.addEventListener("change", e => { if(S.sheet && $("#sheet")?.contains(e.target)) stSheetDirty.touched = true; });
 function stSheetDirty(){
@@ -2291,20 +2444,20 @@ function kbPicker(cur){
   return `<span class="lbl">محل نمایش دکمه‌ها</span>
     <div class="seg">
       <button class="${cur !== "reply" ? "on" : ""}" data-sh="kbt" data-v="inline">${inl}<b>زیر پیام</b><small>چسبیده به همین پیام</small></button>
-      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد زیر چت</b><small>مثل منوی ثابت پایین</small></button>
+      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد پایین چت</b><small>مثل منوی ثابت پایین</small></button>
     </div>
     ${cur === "reply" ? `<p class="muted mt">لینک، پاپ‌آپ، کپی و اشتراک در کیبورد چت هم کار می‌کنند، ولی یک پیام کوچک می‌فرستند.</p>` : ""}`;
 }
 function nodeSheet(){
   const cfg = S.cur.config, d = D;
   const advOpen = d.adv || d.do.length || d.route.length || d.alt.length || d.bvar;
-  return head("ویرایش کارت") + `
-    <span class="lbl">نام کارت (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
+  return head("ویرایش بخش") + `
+    <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
     <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
     <p class="muted mt">برای شخصی‌سازی پیام از متغیر استفاده کن؛ مثل <b dir="ltr">{name}</b> برای اسم کاربر یا <b dir="ltr">{coins}</b> برای متغیر خودت. فهرست کامل در تنظیمات ربات است.</p>
     <span class="lbl">رسانه (عکس، ویدیو، گیف، موسیقی، ویس یا فایل)</span>${mediaPicker("media", d.media)}
-    ${d.media ? `<p class="muted">متن کارت به‌عنوان کپشنِ رسانه فرستاده می‌شود.</p>` : `<span class="lbl">یا لینک مستقیم عکس (اختیاری)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">`}
-    <span class="lbl">این کارت چه کاری انجام بدهد؟</span>
+    ${d.media ? `<p class="muted">متن بخش همراه رسانه، به‌عنوان توضیحِ زیر آن فرستاده می‌شود.</p>` : `<span class="lbl">یا لینک مستقیم عکس (اختیاری)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">`}
+    <span class="lbl">این بخش چه کاری انجام بدهد؟</span>
     <select id="f-mode" data-sh="mode">
       <option value="show"${d.mode === "show" ? " selected" : ""}>نمایش پیام (با دکمه)</option>
       <option value="ai"${d.mode === "ai" ? " selected" : ""}>گفتگو با هوش مصنوعی</option>
@@ -2325,12 +2478,12 @@ function nodeSheet(){
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent ? " checked" : ""}> نتیجه‌ی فرم برای من فرستاده نشود</label>` : ""}
     ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
       <span class="lbl">رسانه‌ی پیام تشکر (اختیاری)</span>${mediaPicker("doneMedia", d.doneMedia)}
-      <span class="lbl">بعد از ثبت، کدام کارت نمایش داده شود؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
+      <span class="lbl">بعد از ثبت پاسخ، کدام بخش نمایش داده شود؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
       <label class="chk"><input type="checkbox" id="f-ticket"${d.ticket ? " checked" : ""}> هر پیام یک تیکت شماره‌دار شود (دکمه‌ی «پاسخ» برای من و پشتیبان‌ها)</label>
       ${d.ticket ? `<span class="lbl">برچسب تیکت (اختیاری، مثلاً فروش یا فنی)</span><input class="fa" id="f-tag" value="${esc(d.tag)}" maxlength="20">` : ""}
       <p class="muted mt">${d.ticket ? "پیام کاربر با شماره‌ی تیکت برایت می‌آید و زیرش دکمه‌های پاسخ، سابقه، بستن و مسدود کردن است. با /tickets تیکت‌های باز را می‌بینی." : "پیام کاربرها برای تو فرستاده می‌شود. داخل ربات با Reply روی هر کدام، جوابت به خودش می‌رسد."}</p>` : ""}
     <div class="sub"><span>دکمه‌ها</span></div>
-    <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${d.kb === "reply" ? "کیبورد زیر چت" : "دکمه‌های شیشه‌ای زیر پیام"}</span></span>${goIc}</button></div>
+    <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${d.kb === "reply" ? "کیبورد پایین چت" : "دکمه‌های شیشه‌ای زیر پیام"}</span></span>${goIc}</button></div>
     <details class="adv"${advOpen ? " open" : ""}><summary>منطق پیشرفته: متغیر و شرط</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقداری ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
       ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
@@ -2338,9 +2491,9 @@ function nodeSheet(){
       <div class="sub"><span>جدول برترین‌ها</span></div><p class="muted" style="margin:-3px 0 8px">زیر متن این بخش رتبه‌بندی کاربرها بر اساس یک متغیر عددی (یا refs برای دعوت‌ها) نشان داده می‌شود. خالی یعنی غیرفعال.</p>
       <div class="cmd"><input class="ltr" id="f-bvar" list="vdl" value="${esc(d.bvar)}" placeholder="متغیر عددی، مثلاً coins" maxlength="20" autocomplete="off"><input id="f-btop" type="number" min="3" max="20" value="${esc(d.btop)}" placeholder="چند نفر؟"></div>
     </div></details>${joinBox(d, "این بخش")}${dlist()}
-    <label class="chk"><input type="checkbox" id="f-start"${d.start ? " checked disabled" : ""}> کارت شروع ربات (/start)</label>
+    <label class="chk"><input type="checkbox" id="f-start"${d.start ? " checked disabled" : ""}> بخش شروع ربات (/start)</label>
     <label class="chk"><input type="checkbox" id="f-fb"${d.fb ? " checked disabled" : ""}> پاسخ به پیام‌هایی که ربات متوجه‌شان نمی‌شود</label>
-    <div class="bar"><button class="b" data-sh="save">ذخیره</button>${d.start || d.fb ? "" : `<button class="b r" data-sh="del">حذف کارت</button>`}</div>`;
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button>${d.start || d.fb ? "" : `<button class="b r" data-sh="del">حذف بخش</button>`}</div>`;
 }
 function readNode(){
   const g = s => $(s)?.value ?? null;
@@ -2364,10 +2517,10 @@ function saveNode(){
   const id = S.sheet.id, node = S.cur.config.nodes[id];
   if(!D.text.trim()) return toast("متن پیام نباید خالی باشد");
   if(D.mode === "form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
-  if(D.mode === "show" && D.kb === "reply" && !node.buttons.length) return toast("برای کیبورد زیر چت، اول یک دکمه به این کارت اضافه کن");
+  if(D.mode === "show" && D.kb === "reply" && !node.buttons.length) return toast("برای کیبورد پایین چت، اول یک دکمه به این بخش اضافه کن");
   if(D.mode === "ai"){
     if(!D.aip.trim()) return toast("دستور دستیار را بنویس");
-    if(!node.buttons.length) return toast("برای خروج کاربر از گفتگو، اول یک دکمه‌ی بازگشت به این کارت اضافه کن");
+    if(!node.buttons.length) return toast("برای خروج کاربر از گفتگو، اول یک دکمه‌ی بازگشت به این بخش اضافه کن");
   }
   const err = ruleErr(); if(err) return toast(err);
   const nj = chOut(D.jch, D.jtx); if(typeof nj === "string") return toast(nj);
@@ -2428,7 +2581,7 @@ function addNode(at){
   }
   ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
   busy($("#stadd"), async () => {
-    await commit(c => { c.nodes[id] = {title: "کارت جدید", text: "متن این کارت را اینجا بنویس", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "کارت اضافه شد");
+    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متن این بخش را اینجا بنویس", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
     stCenter(id);
     openNode(id);
   });
@@ -2449,11 +2602,11 @@ function openBtn(nid, r, c){
   }
   renderSheet();
 }
-const KINDS = [["goto", "رفتن به یک کارت"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"]];
+const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"]];
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
-    goto: `<span class="lbl">به کدام کارت برود؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
+    goto: `<span class="lbl">به کدام بخش برود؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
     channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
     url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
     alert: `<span class="lbl">متنی که کاربر در پاپ‌آپ می‌بیند</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌توانی از <b dir="ltr">{coins}</b> یا هر متغیر دیگری استفاده کنی؛ بعد از اجرای اکشن‌ها محاسبه می‌شود.</p>`,
@@ -2475,7 +2628,7 @@ function btnSheet(){
     <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اقدام‌ها (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشان دادن پیام اجرا می‌شوند", "do", cfg, 6)
-              : `<p class="muted">اقدام‌ها فقط برای دکمه‌های «رفتن به یک کارت»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنند.</p>`}
+              : `<p class="muted">اقدام‌ها فقط برای دکمه‌های «رفتن به یک بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنند.</p>`}
     </div></details>${canDo ? joinBox(d, "این دکمه") : ""}${dlist()}
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف دکمه</button>`}</div>`;
 }
@@ -2696,7 +2849,7 @@ function shAction(a, ds){
   readSheet();
   if(a.startsWith("km")) return kmAct(a, ds);
   if(a === "stkm"){ const n = ds.n; return stGuardClose(() => { closeSheet(); openKm(n); }); }
-  if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این کارت شروع می‌شود")); }
+  if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این بخش شروع می‌شود")); }
   if(a === "save") return SHEETS[S.sheet.kind].save();
   if(a === "del") return SHEETS[S.sheet.kind].del();
   if(a === "upmedia"){ S.pickKey = ds.k; return $("#fileIn").click(); }
@@ -2835,10 +2988,21 @@ Object.assign(A, {
   stbots: () => stGuardClose(() => { stSaveNow(); S.view = "studio"; S.cur = null; S.sbot = null; ST.botId = null; render(); }),
   spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.view = "studio"; ST.botId = null; render(); },
   stadd: () => addNode(),
-  stzin: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1.22); },
-  stzout: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / 1.22); },
-  stfit: () => stFit(),
-  stlay: () => { stAutoLayout(true); stApply(); requestAnimationFrame(() => stPaintWires()); toast("چیدمان مرتب شد"); },
+  stzin: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1.22, true); },
+  stzout: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / 1.22, true); },
+  stfit: () => stFit(true),
+  stlay: () => {
+    const u = $("#stu"); if(!u || !S.cur) return;
+    stMeasure();
+    u.classList.add("arranging");              // سیم‌ها تا تمام شدن حرکت پنهان می‌مانند
+    stAutoLayout(true);
+    stPlaceCards();
+    stMini(true);
+    stFit(true);
+    clearTimeout(ST._lt);
+    ST._lt = setTimeout(() => { stPaintWires(); requestAnimationFrame(() => u.classList.remove("arranging")); }, 540);
+    toast("بخش‌ها مرتب شدند");
+  },
   stmenu: (el, e) => { e?.stopPropagation?.(); stCardMenu(el.dataset.n); },
   stenergy: () => { const b = S.cur; if(!b) return; S.view = "bot"; S.btab = "publish"; render(); scrollTo(0, 0); },
   stnew: () => stCreateConnected(),
@@ -2853,7 +3017,7 @@ Object.assign(A, {
     S.sheet = {kind: "info"};
     showSheet(head("بررسی مسیرها") + (d.issues.length
       ? `<div class="group" style="margin-top:10px">${d.issues.map(s => `<div class="gi static"><span class="ib" style="color:var(--tok);background:var(--toks)">${IC.heal}</span><span class="gt" style="white-space:normal;font-size:13px;line-height:1.8">${fa(s)}</span></div>`).join("")}</div>`
-      : `<div class="empty"><div class="ib big" style="color:var(--ok)">${IC.check}</div><h2>همه‌چیز سالم است</h2><p class="muted">همه‌ی کارت‌ها از شروع قابل‌دسترس‌اند و بن‌بستی وجود ندارد.</p></div>`) + `<div class="fgap"></div>`);
+      : `<div class="empty"><div class="ib big" style="color:var(--ok)">${IC.check}</div><h2>همه‌چیز سالم است</h2><p class="muted">از بخش شروع به همه‌ی بخش‌ها می‌شود رسید و هیچ بخشی بدون ادامه نیست.</p></div>`) + `<div class="fgap"></div>`);
   }),
   enhance: el => { const t = $("#prompt"), p = t?.value.trim() || ""; if(p.length < 5) return toast("اول یک توضیح کوتاه بنویس");
     if(S.wallet.tokens < (S.cfg.enhance || 1)) return openBuy("برای کامل‌تر کردن توضیح، توکن کافی نداری.");
@@ -3051,7 +3215,7 @@ if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").cat
 load();
 
 /* ═════════ استودیو: ابزارهای تازه ═════════ */
-/* کدام سیم زیر نقطه‌ی لمس است؟ (سیم‌ها بالای کارت‌ها رسم می‌شوند و لمس را نمی‌گیرند؛ تشخیص با هندسه) */
+/* کدام سیم زیر نقطه‌ی لمس است؟ (سیم‌ها بالای بخش‌ها رسم می‌شوند و لمس را نمی‌گیرند؛ تشخیص با هندسه) */
 function stWireAt(e){
   const svg = $("#stsvg"); if(!svg || !svg.getScreenCTM) return null;
   const ctm = svg.getScreenCTM(); if(!ctm) return null;
@@ -3081,9 +3245,9 @@ function kmSheet(){
   const cfg = S.cur.config, id = S.sheet.id, n = cfg.nodes[id], rows = n.buttons || [];
   const total = rows.reduce((a, r) => a + r.length, 0), full = rows.length >= 6 && rows[rows.length - 1].length >= 3;
   const list = rows.length ? rows.map((row, r) => `<div class="km-row"><div class="km-cap">ردیف ${N(r + 1)}</div>${row.map((b, c) => kmBtn(cfg, b, r, c, row.length)).join("")}</div>`).join("")
-    : `<div class="km-empty">این کارت هنوز دکمه‌ای ندارد.</div>`;
+    : `<div class="km-empty">این بخش هنوز دکمه‌ای ندارد.</div>`;
   return head("دکمه‌های «" + esc(titleOf(cfg, id)) + "»") + `
-    <p class="muted" style="margin-bottom:4px">هر ردیف تا ${N(3)} دکمه و هر کارت تا ${N(6)} ردیف دارد. روی هر دکمه بزن تا ویرایشش کنی؛ با فلش‌ها جابه‌جایش کن.</p>
+    <p class="muted" style="margin-bottom:4px">هر ردیف تا ${N(3)} دکمه و هر بخش تا ${N(6)} ردیف دارد. روی هر دکمه بزن تا ویرایشش کنی و با فلش‌ها جابه‌جایش کن.</p>
     ${kbPicker(n.kb).replace(/data-sh="kbt"/g, 'data-sh="kmkb"')}
     <div class="sub"><span>${N(total)} دکمه</span><button class="b sm" data-sh="kmadd"${full ? " disabled" : ""}>${IC.plus}دکمه‌ی تازه</button></div>
     ${list}<div class="fgap"></div>`;
@@ -3116,10 +3280,10 @@ function kmAct(a, ds){
     const want = ds.v === "reply";
     if(want === (n.kb === "reply")) return;
     if(want){
-      if(n.ask || n.fields || n.ai) return toast("کیبورد زیر چت فقط برای کارتِ پیامِ ساده کار می‌کند");
-      if(!(n.buttons || []).length) return toast("اول یک دکمه بساز، بعد کیبورد زیر چت را روشن کن");
+      if(n.ask || n.fields || n.ai) return toast("کیبورد پایین چت فقط برای بخش‌های پیامِ ساده کار می‌کند");
+      if(!(n.buttons || []).length) return toast("اول یک دکمه بساز، بعد کیبورد پایین چت را روشن کن");
     }
-    return run(cfg => { if(want) cfg.nodes[id].kb = "reply"; else delete cfg.nodes[id].kb; }, want ? "دکمه‌ها به کیبورد زیر چت رفتند" : "دکمه‌ها زیر پیام قرار گرفتند");
+    return run(cfg => { if(want) cfg.nodes[id].kb = "reply"; else delete cfg.nodes[id].kb; }, want ? "دکمه‌ها به کیبورد پایین چت رفتند" : "دکمه‌ها زیر پیام قرار گرفتند");
   }
 }
 
@@ -3128,7 +3292,7 @@ Object.assign(A, {
     if(!$("#stc")) return;
     const id = el.dataset.n, n = S.cur.config.nodes[id]; if(!n) return;
     const rows = n.buttons || [], last = rows.length - 1;
-    if(rows.length >= 6 && rows[last].length >= 3) return toast("این کارت به سقف دکمه‌ها رسیده (۶ ردیف، هر ردیف ۳ دکمه)");
+    if(rows.length >= 6 && rows[last].length >= 3) return toast("این بخش به حداکثر تعداد دکمه رسیده (۶ ردیف، هر ردیف ۳ دکمه)");
     openBtn(id, rows.length && rows[last].length < 3 ? last : null, null);
   },
   stkm: el => openKm(el.dataset.n),

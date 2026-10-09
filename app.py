@@ -2570,6 +2570,36 @@ def api_export(uid, bot_id):
     return jsonify(format="botmaker/2", config=bot["config"])
 
 
+def lint_fa(cfg, issues):
+    """همان خروجی lint را به فارسیِ ساده برای نمایش به کاربر برمی‌گرداند (lint خودش برای AI انگلیسی می‌ماند)"""
+    nodes = cfg.get("nodes", {})
+    name = lambda i: "«" + (nodes.get(i, {}).get("title") or i) + "»"
+    names = lambda tail: "، ".join(name(x.strip()) for x in tail.split(",") if x.strip())
+    out = []
+    for m in issues:
+        try:
+            if m.startswith("unreachable nodes"):
+                out.append("این بخش‌ها از هیچ‌جا قابل‌دسترس نیستند: " + names(m.rsplit("): ", 1)[1])
+                           + ". آن‌ها را با یک دکمه یا مسیر به بخش دیگری وصل کن، یا حذفشان کن.")
+            elif m.startswith("dead-end nodes"):
+                out.append("بعد از این بخش‌ها کاربر راهی برای ادامه ندارد: " + names(m.rsplit("): ", 1)[1])
+                           + ". یک دکمه‌ی «بازگشت» یا «منوی اصلی» به آن‌ها اضافه کن.")
+            elif m.startswith("leaderboard variable"):
+                v = m.split("'")[1]; i = m.split("'")[3]
+                out.append(f"جدول برترین‌های بخش {name(i)} بر پایه‌ی متغیر «{v}» است، اما هیچ اقدامی این متغیر را زیاد نمی‌کند. یک اقدام «افزودن» یا «تنظیم» برایش بگذار یا جدول را بردار.")
+            elif m.startswith("ticket node"):
+                i = m.split("'")[1]
+                out.append(f"بخشِ تیکتِ {name(i)} دکمه‌ی بازگشت و بخش بعدی ندارد؛ کاربر نمی‌تواند از آن بیرون بیاید.")
+            elif m.startswith("variables that are read"):
+                out.append("این متغیرها در متن‌ها یا شرط‌ها استفاده شده‌اند، ولی هیچ اقدام یا فرمی مقدارشان را نمی‌نویسد: "
+                           + "، ".join(x.strip() for x in m.rsplit("): ", 1)[1].split(",") if x.strip()))
+            else:
+                out.append(m)
+        except Exception:
+            out.append(m)
+    return out
+
+
 @app.get("/api/bots/<bot_id>/health")
 @authed
 def api_health(uid, bot_id):
@@ -2578,7 +2608,7 @@ def api_health(uid, bot_id):
     if not bot:
         return jsonify(error="ربات پیدا نشد"), 404
     try:
-        issues = lint(bot["config"])
+        issues = lint_fa(bot["config"], lint(bot["config"]))
     except Exception:
         issues = []
     return jsonify(issues=issues, nodes=len(bot["config"]["nodes"]))
