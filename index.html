@@ -18,13 +18,13 @@
   --bg:#E8ECEE; --sf:#F7F9FA; --sf2:#EDF1F3; --ink:#0E1D24; --mut:#566A73; --line:#C9D4D9; --line2:#DAE2E6;
   --ac:#00778A; --acx:#FFFFFF; --acs:rgba(0,119,138,.10);
   --tok:#A86500; --toks:rgba(201,127,0,.13);
-  --ok:#168A5B; --bad:#CC3547; --cell:#C3CFD5; --dot:rgba(14,29,36,.09);
+  --ok:#168A5B; --bad:#CC3547; --cell:#C3CFD5; --dot:rgba(14,29,36,.09); --vio:#6C5CE7;
 }
 :root[data-theme=dark]{
   --bg:#081116; --sf:#0F1D24; --sf2:#142630; --ink:#E5F0F3; --mut:#8AA0A9; --line:#1F3743; --line2:#182B34;
   --ac:#3CCFE3; --acx:#041A1F; --acs:rgba(60,207,227,.12);
   --tok:#FFC24A; --toks:rgba(255,194,74,.12);
-  --ok:#47D79B; --bad:#FF7B88; --cell:#23404D; --dot:rgba(229,240,243,.065);
+  --ok:#47D79B; --bad:#FF7B88; --cell:#23404D; --dot:rgba(229,240,243,.065); --vio:#A78BFA;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{color-scheme:light}
@@ -326,6 +326,13 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .mthumb .mi img{width:100%;height:100%;object-fit:cover}
 .mthumb .mi svg{width:22px;height:22px}
 .mthumb span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mpick{display:flex;gap:8px;overflow-x:auto;padding:4px 0 6px;scrollbar-width:none}
+.mpick::-webkit-scrollbar{display:none}
+.mpick button{flex:none;width:74px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;font-size:10.5px;color:var(--mut);box-shadow:inset 0 0 0 1px var(--line)}
+.mpick button.on{box-shadow:inset 0 0 0 2px var(--ac);color:var(--ink)}
+.mpick .mi{width:38px;height:38px;border-radius:8px;background:var(--sf2);display:grid;place-items:center;overflow:hidden}
+.mpick .mi img{width:100%;height:100%;object-fit:cover}
+.mpick .mi svg{width:18px;height:18px}
 .krow{display:flex;gap:6px;margin-top:6px}
 .kb{flex:1;min-width:0;text-align:center;background:var(--sf2);padding:7px 6px;font-size:13.5px;border-radius:10px;line-height:1.5;font-weight:500;box-shadow:inset 0 0 0 1px var(--line)}
 .kb:active{box-shadow:inset 0 0 0 1px var(--ac)}
@@ -337,6 +344,121 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .aibox{background:var(--toks);border-radius:12px;padding:10px 14px;margin-top:10px;font-size:12.5px;line-height:1.8}
 .aibox .n{color:var(--tok)}
 .fl{margin-top:8px}
+
+/* ═════════════════ استودیو گرافیکی (کارت + سیم + انرژی) ═════════════════ */
+html.st-lock,html.st-lock body{overflow:hidden;height:100%}
+.studio{position:fixed;inset:0;z-index:31;display:flex;flex-direction:column;direction:rtl;
+  background:color-mix(in srgb,var(--bg) 84%,#000);color:var(--ink)}
+.st-bar{display:flex;align-items:center;gap:7px;padding:calc(6px + env(safe-area-inset-top)) 10px 6px;
+  border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);
+  background:color-mix(in srgb,var(--sf) 55%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.st-title{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:4px 8px;border-radius:12px;text-align:right}
+.st-title:active{background:var(--acs)}
+.st-title .tt{flex:1;min-width:0}
+.st-title b{display:block;font-size:14px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-title small{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-bar .b.sm{min-height:36px;padding:0 12px;font-size:12.5px}
+.st-canvas{position:relative;flex:1;overflow:hidden;touch-action:none;cursor:grab;
+  background-image:radial-gradient(color-mix(in srgb,var(--ink) 14%,transparent) 1px,transparent 1.3px)}
+.st-canvas.panning{cursor:grabbing}
+.st-world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#stsvg{position:absolute;left:0;top:0;width:2px;height:2px;overflow:visible;pointer-events:none}
+#stsvg .wire{pointer-events:auto;cursor:pointer;transition:opacity .2s}
+.wire .w-hit{fill:none;stroke:transparent;stroke-width:18}
+.wire .w-line{fill:none;stroke:var(--wc,var(--mut));stroke-width:2.2;opacity:.85;transition:opacity .2s}
+.wire .w-glow{fill:none;stroke:var(--wc,var(--mut));stroke-width:6;opacity:0;transition:opacity .3s}
+.wire:hover .w-line,.wire.sel .w-line{stroke-width:3;opacity:1}
+.wire.k-btn{--wc:var(--ac)}
+.wire.k-pay{--wc:var(--tok)}
+.wire.k-route{--wc:var(--vio)}
+.wire.k-next{--wc:var(--ok)}
+.studio:not(.live) .wire{--wc:color-mix(in srgb,var(--mut) 60%,transparent)}
+.studio:not(.live) .wire .w-line{opacity:.55}
+.studio.live .wire .w-line{stroke-dasharray:5 9;animation:stFlow 1s linear infinite}
+.studio.live .wire .w-glow{opacity:.14}
+.wire.dim{opacity:.12}
+@keyframes stFlow{to{stroke-dashoffset:-28}}
+@media (prefers-reduced-motion:reduce){.studio.live .wire .w-line{animation:none}}
+.w-tmp{fill:none;stroke:var(--ac);stroke-width:2.4;stroke-dasharray:4 6;opacity:.9}
+.stc-card{position:absolute;width:236px;border-radius:16px;background:var(--sf);border:1px solid var(--line);
+  box-shadow:0 4px 14px rgba(0,0,0,.16);user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+.stc-card.drag{box-shadow:0 14px 34px rgba(0,0,0,.32);z-index:5}
+.stc-card.dim{opacity:.28}
+.stc-h{display:flex;align-items:center;gap:8px;padding:9px 10px 7px 14px;cursor:grab}
+.stc-ic{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--acs);color:var(--ac);flex:none}
+.stc-ic svg{width:16px;height:16px}
+.stc-t{flex:1;min-width:0}
+.stc-t b{display:block;font-size:13.5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stc-t .ids{display:block;font-size:10.5px;color:var(--mut);direction:ltr;text-align:right;unicode-bidi:isolate;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stc-menu{width:26px;height:26px;border-radius:8px;color:var(--mut);flex:none;display:grid;place-items:center;font-weight:800;font-size:15px;line-height:1}
+.stc-menu:active{background:var(--sf2);color:var(--ink)}
+.stc-badges{display:flex;flex-wrap:wrap;gap:4px;padding:0 13px 7px}
+.stc-prev{padding:8px 13px;border-top:1px dashed var(--line2);font-size:12px;line-height:1.7;color:var(--mut);
+  max-height:58px;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.stc-row{position:relative;display:flex;align-items:center;gap:7px;padding:6px 13px 6px 15px;font-size:12px;line-height:1.5;
+  border-top:1px dashed var(--line2);cursor:pointer}
+.stc-row:first-of-type{border-top-style:solid}
+.stc-row .ric{width:14px;height:14px;flex:none;color:var(--mut)}
+.stc-row .ric svg{width:14px;height:14px;display:block}
+.stc-row .rlb{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stc-row .rlb small{color:var(--mut);font-size:10.5px}
+.stc-row.plus{color:var(--ac);border-top-style:solid;font-weight:600}
+.stc-row.dead-btn{opacity:.72}
+.p-out{position:absolute;left:-9px;top:50%;transform:translateY(-50%);width:16px;height:16px;border-radius:50%;
+  background:var(--sf);border:2.5px solid var(--pc,var(--ac));cursor:crosshair;z-index:2;transition:transform .12s}
+.p-out::after{content:"";position:absolute;inset:-10px;border-radius:50%}
+.p-out:active{transform:translateY(-50%) scale(1.3)}
+.stc-in{position:absolute;right:-9px;top:26px;width:16px;height:16px;border-radius:50%;background:var(--sf);
+  border:2.5px solid var(--line);z-index:2;transition:transform .15s,border-color .15s,box-shadow .15s}
+.stc-in::after{content:"";position:absolute;inset:-10px;border-radius:50%}
+.studio.linking .stc-card.tgt .stc-in{border-color:var(--ok);transform:scale(1.45);box-shadow:0 0 0 5px color-mix(in srgb,var(--ok) 20%,transparent)}
+.stc-card.start .stc-in{border-color:var(--ok)}
+.stc-card.start .stc-ic{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.stc-card.dead{border-style:dashed;border-color:color-mix(in srgb,var(--bad) 50%,var(--line))}
+.stc-card.flash{animation:stFlash 1.1s ease}
+@keyframes stFlash{0%,60%{box-shadow:0 0 0 3px var(--ac),0 4px 14px rgba(0,0,0,.16)}100%{box-shadow:0 4px 14px rgba(0,0,0,.16)}}
+.studio.live .stc-card.start::after{content:"";position:absolute;inset:-5px;border-radius:20px;
+  border:1.5px solid color-mix(in srgb,var(--ok) 55%,transparent);animation:stPow 2.2s ease-out infinite;pointer-events:none}
+@keyframes stPow{0%{opacity:.9;transform:scale(.97)}70%,100%{opacity:0;transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){.studio.live .stc-card.start::after{animation:none;opacity:.35}}
+.st-tools{position:absolute;bottom:calc(12px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:3px;padding:5px;border-radius:16px;direction:rtl;
+  background:color-mix(in srgb,var(--sf) 74%,transparent);border:1px solid color-mix(in srgb,var(--ac) 20%,var(--line));
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 8px 26px rgba(0,0,0,.25);z-index:6}
+.st-tools .tb{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;color:var(--ink)}
+.st-tools .tb:active{background:var(--acs);transform:scale(.93)}
+.st-tools .tb svg{width:17px;height:17px}
+.st-z{min-width:44px;text-align:center;font-size:11.5px;color:var(--mut)}
+.st-energy{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;
+  font-size:11.5px;font-weight:600;z-index:6;box-shadow:inset 0 0 0 1px var(--line);
+  background:color-mix(in srgb,var(--sf) 70%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:var(--mut)}
+.st-energy.live{color:var(--ok);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ok) 45%,transparent)}
+.st-energy svg{width:13px;height:13px}
+.st-energy.live svg{animation:stBolt 1.6s ease-in-out infinite}
+@keyframes stBolt{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}
+.st-search{position:absolute;top:10px;left:10px;z-index:6;width:150px}
+.st-search input{min-height:36px;padding:5px 12px;font-size:12.5px;border-radius:99px;
+  background:color-mix(in srgb,var(--sf) 72%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.st-hint{position:absolute;bottom:calc(66px + env(safe-area-inset-bottom));left:12px;right:12px;margin:0 auto;max-width:430px;z-index:6;
+  padding:10px 14px;border-radius:14px;background:color-mix(in srgb,var(--sf) 90%,transparent);border:1px solid var(--line);
+  font-size:12px;line-height:1.9;color:var(--mut);box-shadow:0 8px 26px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center}
+.st-hint b{color:var(--ink)}
+.st-hint .b{width:auto;flex:none}
+.st-pop{position:absolute;z-index:8;min-width:180px;padding:5px;border-radius:14px;background:var(--sf);border:1px solid var(--line);box-shadow:0 12px 34px rgba(0,0,0,.3)}
+.st-pop button{display:flex;width:100%;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;font-size:13px;text-align:right}
+.st-pop button:active{background:var(--sf2)}
+.st-pop svg{width:15px;height:15px;color:var(--ac);flex:none}
+.wire.hot .w-line{stroke-width:3.4;opacity:1}
+.wire.hot .w-glow{opacity:.35}
+.w-dot{fill:var(--wc,var(--ac));filter:drop-shadow(0 0 4px var(--wc,var(--ac)));pointer-events:none}
+.st-mini{position:absolute;top:54px;left:10px;width:96px;height:72px;z-index:6;border-radius:12px;overflow:hidden;cursor:pointer;touch-action:none;
+  background:color-mix(in srgb,var(--sf) 72%,transparent);border:1px solid var(--line);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.st-mini .mm{position:absolute;inset:0}
+.st-mini i{position:absolute;border-radius:2px;background:color-mix(in srgb,var(--ac) 55%,transparent)}
+.st-mini i.s{background:var(--ok)}
+.st-mini b{position:absolute;border:1.5px solid var(--ink);border-radius:3px;background:color-mix(in srgb,var(--ink) 8%,transparent);pointer-events:none}
+.st-picker{max-width:560px;margin:0 auto;padding:6px 16px 0}
+
 
 /* ── شیت پایین ── */
 .sheet{position:fixed;inset:0;z-index:50;display:none}
@@ -692,9 +814,9 @@ const WK = (() => { try{
 const API_BASE = "";
 
 let S = {
-  view: "create", btab: "nodes", atab: "wallet",
+  view: "create", btab: "ai", atab: "wallet", sbot: null,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
-  ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, open: new Set(), busy: false, fresh: false,
+  ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
   ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], lv: null
 };
 let D = null;   // پیش‌نویس فرمِ باز
@@ -792,6 +914,10 @@ const IC = {
   chart: svg('<path d="M5 19v-8M12 19V5M19 19v-5"/>', 2),
   key: svg('<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H20M17 12v3M14.5 12v2"/>'),
   stats: svg('<path d="M4 19h16M7 16v-5M12 16V6M17 16v-8"/>'),
+  studio: svg('<circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="8" r="2.4"/><circle cx="9.5" cy="18" r="2.4"/><path d="M8.3 6.8l7.4 1M7 8.3l1.8 7.3M16.7 10.2l-5.6 5.8"/>'),
+  bolt: svg('<path d="M13 2.5L5.5 13H11l-1.2 8.5L18.5 11H13z"/>'),
+  fit: svg('<path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/>'),
+  minus: svg('<path d="M5 12h14"/>', 2),
 };
 const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g>', 1.7);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
@@ -811,11 +937,6 @@ const buildsLeft = () => Math.min(10, Math.floor(S.wallet.tokens / (costOf(false
 const mediaById = id => S.media.find(m => m.id === id);
 const miInner = m => (m.kind === "photo" || m.kind === "animation") ? `<img src="${API_BASE + esc(m.url)}" alt="" loading="lazy">` : IC[m.kind] || IC.document;
 const sizeHTML = b => b < 1048576 ? N(Math.max(1, Math.round(b / 1024))) + " KB" : N((b / 1048576).toFixed(1)) + " MB";
-function mthumb(id){
-  const m = mediaById(id);
-  return m ? `<div class="mthumb"><div class="mi">${miInner(m)}</div><span>${esc(KIND_FA[m.kind])}: ${esc(m.name)}</span></div>`
-           : `<div class="mthumb"><span class="muted">این فایل پاک شده است</span></div>`;
-}
 function mediaPicker(key, cur){
   const items = S.media.map(m => `<button class="${m.id === cur ? "on" : ""}" data-sh="pickmedia" data-k="${key}" data-v="${m.id}"><div class="mi">${miInner(m)}</div><small>${esc(m.name)}</small></button>`).join("");
   return `<div class="mpick"><button class="${!cur ? "on" : ""}" data-sh="pickmedia" data-k="${key}" data-v=""><div class="mi">بدون</div><small>بدون رسانه</small></button>${items}<button class="up" data-sh="upmedia" data-k="${key}">آپلود</button></div>`;
@@ -833,18 +954,22 @@ async function load(){
     return;
   }
   const want = new URLSearchParams(location.search).get("bot"), hit = want && S.bots.find(b => b.id === want);   // لینک مستقیم از چت ربات مادر
-  if(hit){ S.cur = hit; S.view = "bot"; S.btab = "nodes"; S.open = new Set(); S.ideas = []; S.stats = null; }
+  if(hit){ S.cur = hit; S.view = "bot"; S.btab = "ai"; S.sbot = hit.id; S.ideas = []; S.stats = null; }
   render();
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
 
-const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["media", "photo", "رسانه"], ["account", "wallet", "حساب"]];
+const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["media", "photo", "رسانه"], ["account", "wallet", "حساب"]];
 $("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}" aria-label="${t}" title="${t}">${IC[ic]}</button>`).join("");
 function setDock(on){ $("#dock").classList.toggle("open", on); $("#dscrim").classList.toggle("on", on); }
 document.addEventListener("click", e => {
   const dk = e.target.closest("#dock");
   if(dk){                                  // وقتی نوار بسته است، فقط آیکونِ بیرون‌زده قابل لمس است و نوار را باز می‌کند
-    if(!$("#dock").classList.contains("open")){ e.stopImmediatePropagation(); setDock(true); }
+    if(!$("#dock").classList.contains("open")){
+      e.stopImmediatePropagation();
+      if(stSheetDirty()) return stGuardClose(() => setDock(true));
+      setDock(true);
+    }
     return;
   }
   if(e.target.closest("#dscrim")) setDock(false);
@@ -872,6 +997,7 @@ function renderTop(){
 }
 function render(){
   renderTop();
+  document.documentElement.classList.toggle("st-lock", S.view === "studio");
   VIEWS[S.view]();
   const cur = S.view === "bot" ? "bots" : S.view;
   document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.go === cur));
@@ -879,8 +1005,11 @@ function render(){
 function goTo(where){
   setDock(false);
   if(S.busy) return toast("صبر کن کار فعلی تموم شه");
+  stGuardClose(() => stGo(where));
+}
+function stGo(where){
   closeSheet();
-  if(S.view === "bot"){ S.cur = null; S.open = new Set(); S.ideas = []; }
+  if(S.view === "bot" && where !== "studio"){ S.cur = null; S.ideas = []; }
   S.view = where; render(); scrollTo({top: 0, behavior: "smooth"}); haptic();
   if(["create", "bots", "account"].includes(where)) sync().then(ok => {
     if(!ok || S.view !== where) return;
@@ -984,7 +1113,7 @@ function submitPrompt(){
       const r = await runJob(p, botId);
       const was = !!botId;
       S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
-      S.cur = r.bot; S.view = "bot"; S.btab = "nodes"; S.fresh = true; S.ideas = r.ideas || []; S.open = new Set(); S.stats = null;
+      S.cur = r.bot; S.view = "bot"; S.btab = "ai"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null;
       render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? `، ${r.cost} توکن` : "")); haptic("ok");
       scrollTo(0, 0);
     }catch(e){
@@ -1072,78 +1201,24 @@ const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
 const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
 const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text || "").replace(/\s+/g, " ").slice(0, 24) || id) : "؟"; };
 const kindOf = b => b.pay ? "pay" : b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.share !== undefined ? "share" : CH_RE.test(b.url || "") ? "channel" : "url";
-const btnInfo0 = (cfg, b) => {
-  const k = kindOf(b);
-  return k === "pay" ? "پرداخت " + N(b.pay.stars) + " ستاره" : k === "goto" ? "به: " + esc(titleOf(cfg, b.goto)) : k === "channel" ? "کانال @" + esc(CH_RE.exec(b.url)[1])
-    : k === "alert" ? "پیام پاپ‌آپ" : k === "copy" ? "کپی متن" : k === "share" ? "اشتراک لینک دعوت" : "لینک " + esc((b.url || "").replace(/^https:\/\//, "").slice(0, 22));
-};
-const btnInfo = (cfg, b) => btnInfo0(cfg, b) + (b.when ? " (شرطی)" : "") + (b.join ? " (عضویت)" : "") + (b.do?.length ? " (اکشن)" : "");
-
-function nodeCard(cfg, id){
-  const n = cfg.nodes[id], tags = [], isRk = n.kb === "reply";
-  if(id === cfg.start) tags.push('<span class="tag st">شروع</span>');
-  if(id === cfg.fallback) tags.push('<span class="tag">پیام ناشناس</span>');
-  if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">دریافت پیام</span>');
-  if(n.ai) tags.push('<span class="tag ai">هوش مصنوعی</span>');
-  if(n.ticket) tags.push('<span class="tag ai">تیکت' + (n.tag ? " · " + esc(n.tag) : "") + '</span>');
-  if(n.board) tags.push('<span class="tag">جدول برترین‌ها</span>');
-  if(isRk) tags.push('<span class="tag">کیبورد چت</span>');
-  if(n.join) tags.push('<span class="tag">عضویت اجباری</span>');
-  if(n.media) tags.push('<span class="tag">رسانه</span>'); else if(n.photo) tags.push('<span class="tag">عکس</span>');
-  if(n.do?.length || n.route?.length || n.alt?.length) tags.push('<span class="tag">منطق</span>');
-  const open = S.open.has(id), nb = n.buttons.reduce((a, r) => a + r.length, 0);
-  const prev = (n.text || "").replace(/\s+/g, " ").slice(0, 70);
-  const kb = n.buttons.map((row, r) => `<div class="krow${isRk ? " rk" : ""}">${row.map((b, c) =>
-      `<button class="kb" data-sa="btn" data-n="${esc(id)}" data-r="${r}" data-c="${c}">${esc(b.text)}<small>${btnInfo(cfg, b)}</small></button>`).join("")}${row.length < 3 ? `<button class="kb add" data-sa="newbtn" data-n="${esc(id)}" data-r="${r}" aria-label="دکمه‌ی جدید در این ردیف">+</button>` : ""}</div>`).join("");
-  return `
-    <div class="nd${open ? " open" : ""}">
-      <div class="nh" role="button" tabindex="0" aria-expanded="${open}" data-sa="toggle" data-n="${esc(id)}">
-        <div class="nr"><div class="nt"><b>${esc(titleOf(cfg, id))}</b><span class="ns">${esc(prev)}</span></div>${IC.chev.replace("<svg", '<svg class="chev"')}</div>
-        <div class="nm">${tags.join("")}<span class="tag cnt">${nb ? N(nb) + " دکمه" : "بدون دکمه"}</span></div>
-      </div>
-      <div class="nbody"><div><div class="nbi">
-        ${n.media ? mthumb(n.media) : ""}
-        <div class="bubble" data-sa="node" data-n="${esc(id)}">${esc(n.text)}<span class="pen">ویرایش</span></div>
-        ${n.ai ? `<div class="aibox">گفتگوی هوشمند: ${esc(n.ai.prompt.slice(0, 140))}${n.ai.prompt.length > 140 ? "…" : ""}<br>سقف هر کاربر در روز: ${N(n.ai.daily)} پیام</div>` : ""}
-        ${n.fields ? `<div class="muted fl">سؤال‌ها: ${n.fields.map((q, i) => esc(q) + (n.save?.[i] ? ' <span class="tag ltr">{' + esc(n.save[i]) + '}</span>' : "")).join(" ← ")}</div>` : ""}
-        ${isRk ? `<div class="tray">${kb}</div>` : kb}
-        ${n.buttons.length < 6 ? `<button class="kb add wide" data-sa="newrow" data-n="${esc(id)}">+ دکمه‌ی جدید</button>` : ""}
-      </div></div></div>
-    </div>`;
-}
-function toggleNode(id, head){
-  const card = head.closest(".nd"), o = card.classList.toggle("open");
-  head.setAttribute("aria-expanded", o); o ? S.open.add(id) : S.open.delete(id); syncAll(); haptic();
-}
-function toggleAll(){
-  const ids = Object.keys(S.cur.config.nodes), all = ids.every(i => S.open.has(i));
-  S.open = all ? new Set() : new Set(ids);
-  document.querySelectorAll(".nd").forEach(el => { el.classList.toggle("open", !all); el.querySelector(".nh").setAttribute("aria-expanded", !all); });
-  syncAll();
-}
-function syncAll(){
-  const b = $("#allbtn"); if(!b || !S.cur) return;
-  b.textContent = Object.keys(S.cur.config.nodes).every(i => S.open.has(i)) ? "بستن همه" : "باز کردن همه";
-}
 
 function renderBot(){
   const b = S.cur;
-  const body = ({nodes: tabNodes, stats: tabStats, publish: tabPublish, more: tabMore}[S.btab] || tabNodes)(b);
+  const body = ({ai: tabAI, stats: tabStats, publish: tabPublish, more: tabMore}[S.btab] || tabAI)(b);
   $("#app").innerHTML = `
     <div class="bh2"><button class="iconb" data-a="back" aria-label="بازگشت">${IC.back}</button>
       <div class="bt"><h1>${esc(b.name)}</h1><span class="muted ${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"}</span></div>
       <button class="iconb" data-sa="bot" aria-label="تنظیمات ربات">${IC.gear}</button></div>
-    ${tabsHTML([["nodes", "بخش‌ها"], ["stats", "آمار"], ["publish", "انتشار"], ["more", "بیشتر"]], S.btab, "btab")}
+    ${tabsHTML([["ai", "هوش مصنوعی"], ["stats", "آمار"], ["publish", "انتشار"], ["more", "بیشتر"]], S.btab, "btab")}
     ${body}`;
-  if(S.btab === "nodes"){
-    syncAll();
+  if(S.btab === "ai"){
     if(S.fresh && b.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior: "smooth", block: "nearest"}); }
     S.fresh = false;
   }
   if(S.btab === "stats" && b.active){ if(S.stats?._id === b.id) paintStats(S.stats); loadStats(); }
 }
-function tabNodes(b){
-  const c = S.cfg, ids = Object.keys(b.config.nodes);
+function tabAI(b){
+  const c = S.cfg;
   let h = `<div class="console slim">
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="درخواست ارتقا" placeholder="چه چیزی را تغییر بدهم؟ مثلاً: یک بخش سوالات متداول اضافه کن"></textarea>
       <div class="cfoot"><div class="gauge"><span class="cost">مصرف توکن ${costTxt(true)}</span></div><button class="b" id="gen" data-a="gen">${IC.spark}ارتقا</button></div>
@@ -1152,9 +1227,10 @@ function tabNodes(b){
     <div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
   if(S.ideas.length) h += `<div class="ideas">${S.ideas.map((t, i) => `<button class="chip" data-a="idea" data-i="${i}">${esc(t)}</button>`).join("")}</div>`;
   if(!b.active) h += `<div class="note"><div class="dt"><b>ربات هنوز فعال نیست</b>برای استفاده، فعالش کن.</div><button class="b sm" data-a="btab" data-k="publish">فعال‌سازی</button></div>`;
-  h += `<div class="sec"><h2>بخش‌ها</h2><button class="b t sm" id="allbtn" data-sa="toggleall">باز کردن همه</button></div>
-    <div class="nodes">${ids.map(id => nodeCard(b.config, id)).join("")}</div>
-    <button class="b o mt" data-sa="addnode">${IC.plus}بخش جدید</button>`;
+  h += `<div class="panel mt" style="display:flex;align-items:center;gap:12px">
+      <span class="ib">${IC.studio}</span>
+      <div style="flex:1;min-width:0"><b style="font-size:14px;display:block;line-height:1.6">استودیو گرافیکی</b><span class="muted" style="font-size:12px;line-height:1.7;display:block">کارت‌ها را با سیم به هم وصل کن، دکمه و مسیر جدید بساز؛ تغییرات همان لحظه در ربات اعمال می‌شود.</span></div>
+      <button class="b sm" data-a="studio">باز کن</button></div>`;
   if(b.versions) h += `<button class="b t mt" id="undo" data-a="undo">برگشت به نسخه‌ی قبلی</button>`;
   return h;
 }
@@ -1211,6 +1287,623 @@ function typeText(el, text){
   })();
 }
 typeText.id = 0;
+
+/* ═════════════════ استودیو گرافیکی: کارت + سیم + انرژی ═════════════════ */
+const ST = { botId: null, cam: null, pos: {}, ptr: new Map(), mode: null, wires: new Map(), drop: null, dropAt: null, _la: null };
+let OP_FA = null;                       // بعد از تعریف OPS پر می‌شود
+const condTxt = w => {
+  if(!w) return "…";
+  if(!OP_FA) OP_FA = Object.fromEntries(OPS);
+  return simpleCond(w) ? `${w.var} ${OP_FA[w.op] || w.op}${w.op === "empty" || w.op === "filled" ? "" : " " + (w.value ?? "")}` : "شرط ترکیبی";
+};
+
+function stKey(){ return "azadi.studio." + (S.cur?.id || ""); }
+function stLoad(){
+  ST.pos = {}; ST.cam = null;
+  try{
+    const d = JSON.parse(localStorage.getItem(stKey()) || "null");
+    if(d && d.p) for(const [k, v] of Object.entries(d.p)) if(Array.isArray(v)) ST.pos[k] = {x: +v[0] || 0, y: +v[1] || 0};
+    if(d && Array.isArray(d.cam)) ST.cam = {x: +d.cam[0] || 0, y: +d.cam[1] || 0, z: Math.min(1.5, Math.max(.3, +d.cam[2] || 1))};
+  }catch(_){}
+}
+function stSaveNow(){
+  if(!S.cur) return;
+  const p = {};
+  for(const id of Object.keys(S.cur.config.nodes)) if(ST.pos[id]) p[id] = [Math.round(ST.pos[id].x), Math.round(ST.pos[id].y)];
+  const c = ST.cam || {x: 0, y: 0, z: 1};
+  try{ localStorage.setItem(stKey(), JSON.stringify({p, cam: [Math.round(c.x), Math.round(c.y), +c.z.toFixed(3)]})); }catch(_){}
+}
+let stSaveT = null;
+function stSave(){ clearTimeout(stSaveT); stSaveT = setTimeout(stSaveNow, 400); }
+addEventListener("pagehide", () => { if(S.view === "studio") stSaveNow(); });
+
+function stNextId(){
+  const cfg = S.cur.config;
+  let k = Object.keys(cfg.nodes).length + 1;
+  while(cfg.nodes["page_" + k]) k++;
+  return "page_" + k;
+}
+const stNodeIcon = n => n.ai ? IC.spark : n.fields ? IC.form : n.ask ? IC.inbox : n.board ? IC.medal : IC.bot;
+
+/* همه‌ی سیم‌های ربات: هر goto یک سیم است */
+function stEdges(){
+  const cfg = S.cur.config, out = [];
+  for(const [id, n] of Object.entries(cfg.nodes)){
+    (n.buttons || []).forEach((row, r) => row.forEach((b, c) => {
+      if(b.goto !== undefined) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.goto, kind: "btn", n: id, r, c});
+      else if(b.pay?.goto) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.pay.goto, kind: "pay", n: id, r, c});
+    }));
+    (n.route || []).forEach((ru, i) => out.push({key: `r|${id}|${i}`, from: id, to: ru.goto, kind: "route", n: id, ri: i}));
+    if(n.next) out.push({key: `x|${id}`, from: id, to: n.next, kind: "next", n: id});
+  }
+  return out;
+}
+function stParsePort(p){
+  const t = p.split("|");
+  return t[0] === "b" ? {t: "btn", n: t[1], r: +t[2], c: +t[3]} : t[0] === "r" ? {t: "route", n: t[1], ri: +t[2]} : {t: "next", n: t[1]};
+}
+/* اعمال یک اتصال روی کانفیگ */
+function stWireIn(cfg, src, tid){
+  const n = cfg.nodes[src.n];
+  if(!n || !cfg.nodes[tid]) return;
+  if(src.t === "btn"){ const b = n.buttons[src.r]?.[src.c]; if(!b) return; if(b.pay) b.pay.goto = tid; else b.goto = tid; }
+  else if(src.t === "route"){ const ru = n.route?.[src.ri]; if(ru) ru.goto = tid; }
+  else if(src.t === "next"){ n.next = tid; }
+  else if(src.t === "new"){
+    n.buttons = (n.buttons || []).filter(r => r.length);
+    const row = n.buttons.find(r => r.length < 3);
+    if(row) row.push({text: "گزینه جدید", goto: tid});
+    else if(n.buttons.length < 6) n.buttons.push([{text: "گزینه جدید", goto: tid}]);
+  }
+}
+/* کارت‌های قابل دسترس از شروع/ناشناس/دستورها */
+function stReach(){
+  const cfg = S.cur.config, seen = new Set(), st = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})];
+  while(st.length){
+    const i = st.pop();
+    if(seen.has(i) || !cfg.nodes[i]) continue;
+    seen.add(i);
+    const n = cfg.nodes[i];
+    for(const row of n.buttons || []) for(const b of row){ if(b.goto) st.push(b.goto); if(b.pay?.goto) st.push(b.pay.goto); }
+    for(const ru of n.route || []) st.push(ru.goto);
+    if(n.next) st.push(n.next);
+  }
+  return seen;
+}
+function stCardH(n){
+  const rows = (n.buttons || []).reduce((a, r) => a + r.length, 0) + (n.route?.length || 0) + (n.next ? 1 : 0) + 1;
+  return 100 + Math.min(3, Math.ceil(((n.text || "").length) / 42)) * 20 + rows * 30;
+}
+/* چیدمان لایه‌ای از راست (شروع) به چپ */
+function stAutoLayout(save){
+  const cfg = S.cur.config, col = {}, q = [], roots = new Set([cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})]);
+  for(const r of roots){ if(cfg.nodes[r] && col[r] === undefined){ col[r] = 0; q.push([r, 0]); } }
+  while(q.length){
+    const [id, d] = q.shift();
+    const n = cfg.nodes[id]; if(!n) continue;
+    const nxt = [];
+    for(const row of n.buttons || []) for(const b of row){ if(b.goto && col[b.goto] === undefined) nxt.push(b.goto); if(b.pay?.goto && col[b.pay.goto] === undefined) nxt.push(b.pay.goto); }
+    for(const ru of n.route || []) if(col[ru.goto] === undefined) nxt.push(ru.goto);
+    if(n.next && col[n.next] === undefined) nxt.push(n.next);
+    for(const t of nxt){ if(cfg.nodes[t]){ col[t] = d + 1; q.push([t, d + 1]); } }
+  }
+  const maxCol = Math.max(0, ...Object.values(col));
+  for(const id of Object.keys(cfg.nodes)) if(col[id] === undefined) col[id] = maxCol + 1;
+  const perCol = {};
+  for(const [id, c] of Object.entries(col)) (perCol[c] = perCol[c] || []).push(id);
+  const DW = 320, DH = 44;
+  for(const ids of Object.values(perCol)){
+    let y = 40;
+    for(const id of ids){ ST.pos[id] = {x: -(col[id]) * DW, y}; y += stCardH(cfg.nodes[id]) + DH; }
+  }
+  if(save) stSave();
+}
+/* جای کارت‌های بدون مختصات ذخیره‌شده */
+function stEnsurePositions(){
+  const ids = Object.keys(S.cur.config.nodes);
+  const missing = ids.filter(id => !ST.pos[id]);
+  if(!missing.length) return;
+  const keep = {...ST.pos};
+  stAutoLayout(false);
+  for(const id of ids) if(keep[id]) ST.pos[id] = keep[id];
+  for(const id of missing){
+    let p = {...(ST.pos[id] || {x: 0, y: 0})}, guard = 0;
+    const clash = () => ids.some(o => o !== id && ST.pos[o] && Math.abs(ST.pos[o].x - p.x) < 80 && Math.abs(ST.pos[o].y - p.y) < 90);
+    while(clash() && guard++ < 30) p = {x: p.x + 24, y: p.y + 66};
+    ST.pos[id] = p;
+  }
+  stSave();
+}
+
+/* ── دوربین ── */
+function stApply(){
+  const c = ST.cam || {x: 40, y: 40, z: 1}, w = $("#stw"), cv = $("#stc");
+  if(w) w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`;
+  if(cv){ const s = Math.round(24 * c.z); cv.style.backgroundSize = `${s}px ${s}px`; cv.style.backgroundPosition = `${c.x}px ${c.y}px`; }
+  const z = $("#stz"); if(z) z.textContent = Math.round(c.z * 100) + "%";
+  stMini();
+}
+function stZoomAt(px, py, f){
+  const c = ST.cam || {x: 40, y: 40, z: 1};
+  const z = Math.min(1.5, Math.max(.3, c.z * f));
+  ST.cam = {z, x: px - (px - c.x) * z / c.z, y: py - (py - c.y) * z / c.z};
+  stApply(); stSave();
+}
+function stFit(){
+  const cv = $("#stc"), ids = Object.keys(S.cur?.config.nodes || {});
+  if(!cv || !ids.length) return;
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  for(const id of ids){
+    const p = ST.pos[id]; if(!p) continue;
+    const el = cv.querySelector(`.stc-card[data-id="${id}"]`);
+    const w = el ? el.offsetWidth : 236, h = el ? el.offsetHeight : stCardH(S.cur.config.nodes[id]);
+    x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + w); y2 = Math.max(y2, p.y + h);
+  }
+  if(x1 > x2) return;
+  const cw = cv.clientWidth, ch = cv.clientHeight, bw = x2 - x1, bh = y2 - y1;
+  const z = Math.min(1.25, Math.max(.3, Math.min((cw - 70) / Math.max(1, bw), (ch - 150) / Math.max(1, bh))));
+  ST.cam = {z, x: (cw - bw * z) / 2 - x1 * z, y: (ch - bh * z) / 2 - y1 * z + 8};
+  stApply(); stSave();
+}
+function stCenter(id){
+  const cv = $("#stc"), el = cv?.querySelector(`.stc-card[data-id="${id}"]`);
+  if(!cv || !el || !ST.pos[id]) return;
+  const c = ST.cam || {x: 40, y: 40, z: 1};
+  ST.cam = {...c, x: cv.clientWidth / 2 - (ST.pos[id].x + el.offsetWidth / 2) * c.z, y: cv.clientHeight / 2 - (ST.pos[id].y + el.offsetHeight / 2) * c.z};
+  stApply(); stSave();
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+}
+
+/* ── هندسه‌ی سیم ── */
+function stWorldOf(el){
+  const w = $("#stw"); let x = 0, y = 0, n = el;
+  while(n && n !== w){ x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+  return {x: x + el.offsetWidth / 2, y: y + el.offsetHeight / 2};
+}
+function stPath(a, b){
+  const d = Math.max(46, Math.min(170, Math.abs(a.x - b.x) * .55));
+  return `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} C ${(a.x - d).toFixed(1)} ${a.y.toFixed(1)}, ${(b.x + d).toFixed(1)} ${b.y.toFixed(1)}, ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+}
+
+/* ── رندر کارت‌ها و سیم‌ها ── */
+function stRows(id){
+  const cfg = S.cur.config, n = cfg.nodes[id], rows = [];
+  (n.buttons || []).forEach((row, r) => row.forEach((b, c) => {
+    const k = kindOf(b);
+    if(k === "goto" || (k === "pay" && b.pay?.goto))
+      rows.push({port: `b|${id}|${r}|${c}`, pc: k === "pay" ? "var(--tok)" : "var(--ac)", label: esc(b.text),
+        hint: (k === "pay" ? `پرداخت ${N(b.pay.stars)} ستاره` : "به: " + esc(titleOf(cfg, b.goto))) + (b.when ? " · شرطی" : "")});
+    else
+      rows.push({dead: k, label: esc(b.text), hint: k === "channel" ? "کانال" : k === "url" ? "لینک" : k === "alert" ? "پاپ‌آپ" : k === "copy" ? "کپی" : k === "share" ? "اشتراک" : "پرداخت", n: id, r, c});
+  }));
+  (n.route || []).forEach((ru, i) => rows.push({port: `r|${id}|${i}`, pc: "var(--vio)", label: esc(condTxt(ru.when)), hint: "هدایت شرطی"}));
+  if(n.next) rows.push({port: `x|${id}`, pc: "var(--ok)", label: "بعد از ثبت", hint: "ادامه‌ی فرم/پیام"});
+  return rows;
+}
+function stCardHTML(id, dead){
+  const cfg = S.cur.config, n = cfg.nodes[id], p = ST.pos[id] || {x: 0, y: 0};
+  const isStart = id === cfg.start, isFb = id === cfg.fallback && id !== cfg.start;
+  const tags = [];
+  if(isStart) tags.push('<span class="tag st">شروع</span>');
+  if(isFb) tags.push('<span class="tag">ناشناس</span>');
+  if(n.ai) tags.push('<span class="tag ai">هوش مصنوعی</span>');
+  if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">دریافت پیام</span>');
+  if(n.ticket) tags.push('<span class="tag">تیکت</span>');
+  if(n.media || n.photo) tags.push('<span class="tag">رسانه</span>');
+  if(n.do?.length || n.route?.length || n.alt?.length) tags.push('<span class="tag">منطق</span>');
+  if(dead) tags.push('<span class="tag" style="color:var(--bad)">بدون ورودی</span>');
+  const RIC = {channel: IC.open, url: IC.open, alert: IC.mega, copy: IC.copy, share: IC.users, pay: IC.coin};
+  const rows = stRows(id).map(row => row.port
+    ? `<div class="stc-row"><span class="p-out" data-port="${row.port}" data-n="${esc(id)}" style="--pc:${row.pc}"></span><span class="ric">${IC.go}</span><span class="rlb">${row.label}${row.hint ? ` <small>· ${row.hint}</small>` : ""}</span></div>`
+    : `<div class="stc-row dead-btn" data-a="strow" data-n="${esc(row.n)}" data-r="${row.r}" data-c="${row.c}"><span class="ric">${RIC[row.dead] || IC.open}</span><span class="rlb">${row.label}${row.hint ? ` <small>· ${row.hint}</small>` : ""}</span></div>`
+  ).join("");
+  return `<div class="stc-card${isStart ? " start" : ""}${dead ? " dead" : ""}" data-id="${esc(id)}" style="left:${p.x}px;top:${p.y}px">
+    <span class="stc-in" data-in="${esc(id)}"></span>
+    <div class="stc-h"><span class="stc-ic">${stNodeIcon(n)}</span>
+      <div class="stc-t"><b>${esc(titleOf(cfg, id))}</b><span class="ids">${esc(id)}</span></div>
+      <button class="stc-menu" data-a="stmenu" data-n="${esc(id)}" aria-label="گزینه‌های کارت">⋮</button></div>
+    ${tags.length ? `<div class="stc-badges">${tags.join("")}</div>` : ""}
+    <div class="stc-prev">${esc((n.text || "").slice(0, 130))}</div>
+    ${rows}
+    <div class="stc-row plus"><span class="p-out" data-port="+" data-n="${esc(id)}"></span><span class="ric">${IC.plus}</span><span class="rlb">خروجی جدید (دکمه)</span></div>
+  </div>`;
+}
+function stPaintWires(){
+  const svg = $("#stsvg"), cv = $("#stc");
+  if(!svg || !cv) return;
+  ST.wires.clear();
+  let h = "", i = 0;
+  const edges = stEdges(), flow = !!S.cur?.active && !reduced() && edges.length <= 40;
+  for(const e of edges){
+    const p = cv.querySelector(`.p-out[data-port="${e.key}"]`), t = cv.querySelector(`.stc-in[data-in="${e.to}"]`);
+    if(!p || !t) continue;
+    const d = stPath(stWorldOf(p), stWorldOf(t));
+    const dot = flow ? `<circle class="w-dot" r="3.2"><animateMotion dur="${(2 + (i % 5) * .4).toFixed(1)}s" begin="-${(i * .43).toFixed(2)}s" repeatCount="indefinite" path="${d}"/></circle>` : "";
+    h += `<g class="wire k-${e.kind}" data-w="${e.key}"><path class="w-glow" d="${d}"/><path class="w-line" d="${d}"/><path class="w-hit" d="${d}"/>${dot}</g>`;
+    ST.wires.set(e.key, e); i++;
+  }
+  svg.innerHTML = h + `<path class="w-tmp" id="sttmp" d=""/>`;
+}
+function stUpdateWiresFor(id){
+  const cv = $("#stc"), svg = $("#stsvg");
+  if(!cv || !svg) return;
+  for(const [key, e] of ST.wires){
+    if(e.from !== id && e.to !== id) continue;
+    const g = svg.querySelector(`.wire[data-w="${key}"]`);
+    const p = cv.querySelector(`.p-out[data-port="${key}"]`), t = cv.querySelector(`.stc-in[data-in="${e.to}"]`);
+    if(!g || !p || !t) continue;
+    const d = stPath(stWorldOf(p), stWorldOf(t));
+    g.querySelectorAll("path").forEach(pp => pp.setAttribute("d", d));
+    g.querySelector("animateMotion")?.setAttribute("path", d);
+  }
+}
+function stHot(id, on){
+  const sv = $("#stsvg"); if(!sv) return;
+  for(const [k, e] of ST.wires) if(e.from === id || e.to === id) sv.querySelector(`.wire[data-w="${k}"]`)?.classList.toggle("hot", on);
+}
+/* نقشه‌ی کوچک: چیدمان کل گراف + کادر دید فعلی؛ لمس/کشیدن روی آن دوربین را جابه‌جا می‌کند */
+function stMini(full){
+  const mm = $("#stmm"), cv = $("#stc"); if(!mm || !cv || !S.cur) return;
+  if(full || !ST.mini){
+    const cfg = S.cur.config, r = []; let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+    for(const id of Object.keys(cfg.nodes)){
+      const p = ST.pos[id]; if(!p) continue;
+      const h = stCardH(cfg.nodes[id]); r.push([id, p.x, p.y, h]);
+      x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + 236); y2 = Math.max(y2, p.y + h);
+    }
+    if(!r.length) return;
+    x1 -= 140; y1 -= 140; x2 += 140; y2 += 140;
+    const W = 96, H = 72, sc = Math.min(W / (x2 - x1), H / (y2 - y1));
+    const m = ST.mini = {x1, y1, s: sc, ox: (W - (x2 - x1) * sc) / 2, oy: (H - (y2 - y1) * sc) / 2};
+    mm.innerHTML = r.map(([id, x, y, h]) => `<i${id === cfg.start ? ' class="s"' : ""} style="left:${(m.ox + (x - x1) * sc).toFixed(1)}px;top:${(m.oy + (y - y1) * sc).toFixed(1)}px;width:${(236 * sc).toFixed(1)}px;height:${(h * sc).toFixed(1)}px"></i>`).join("") + '<b id="stmv"></b>';
+  }
+  const m = ST.mini, v = $("#stmv"); if(!m || !v) return;
+  const c = ST.cam || {x: 40, y: 40, z: 1};
+  v.style.left = (m.ox + (-c.x / c.z - m.x1) * m.s) + "px"; v.style.top = (m.oy + (-c.y / c.z - m.y1) * m.s) + "px";
+  v.style.width = (cv.clientWidth / c.z * m.s) + "px"; v.style.height = (cv.clientHeight / c.z * m.s) + "px";
+}
+/* دید اولیه: اگر نمایش کل گراف خیلی ریز شود، روی کارت شروع با زوم خوانا باز می‌شود */
+function stHome(){
+  const cv = $("#stc"), cfg = S.cur?.config; if(!cv || !cfg) return;
+  stFit();
+  const c = ST.cam; if(!c || c.z >= .62) return;
+  const p = ST.pos[cfg.start], el = cv.querySelector(`.stc-card[data-id="${cfg.start}"]`);
+  if(!p || !el) return;
+  const z = .85;
+  ST.cam = {z, x: cv.clientWidth - (p.x + el.offsetWidth) * z - 16, y: 136 - p.y * z};
+  stApply(); stSave();
+}
+function stPaintWorld(){
+  const wr = $("#stw"), cv = $("#stc");
+  if(!wr || !cv || !S.cur) return;
+  stEnsurePositions();
+  const seen = stReach();
+  let h = `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`;
+  for(const id of Object.keys(S.cur.config.nodes)) h += stCardHTML(id, !seen.has(id));
+  wr.innerHTML = h;
+  stPaintWires();
+  stMini(true);
+  stApply();
+}
+
+/* ── ورود به استودیو ── */
+function stHintHTML(){
+  try{ if(localStorage.getItem("azadi.studio.hint") === "1") return ""; }catch(_){}
+  return `<div class="st-hint"><span><b>استودیو:</b> کارت‌ها را بگیر و جابه‌جا کن؛ از دایره‌ی خروجیِ (سمت چپ کارت) سیم بکش و به دایره‌ی ورودیِ کارت دیگر وصل کن. «خروجی جدید» یعنی دکمه‌ی تازه. برای ویرایش، روی کارت بزن.</span><button class="b sm" data-a="sthint">فهمیدم</button></div>`;
+}
+function renderStudio(){
+  if(!S.bots.length){
+    $("#app").innerHTML = `<div class="empty" style="padding-top:70px"><div class="ib big">${IC.studio}</div><h2>استودیو</h2><p class="muted">اول هوش مصنوعی یک ربات برایت بسازد، بعد اینجا کارت به کارتش کن و ارتقایش بده.</p><button class="b sm" data-go="create">ساخت ربات</button></div>`;
+    return;
+  }
+  let bot = S.cur && S.bots.find(b => b.id === S.cur.id) ? S.cur : (S.sbot ? S.bots.find(b => b.id === S.sbot) : null);
+  if(!bot){
+    $("#app").innerHTML = `<div class="st-picker"><div class="ph"><h1>استودیو</h1></div>
+      <p class="muted" style="margin:-4px 4px 14px">رباتت را انتخاب کن؛ کارت‌هایش را با سیم به هم وصل کن و انرژی ربات را هدایت کن.</p>
+      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} کارت</span></span>${goIc}</button>`).join("")}</div></div>`;
+    return;
+  }
+  S.cur = bot; S.sbot = bot.id;
+  if(ST.botId !== bot.id){ ST.botId = bot.id; stLoad(); }
+  const nodes = Object.keys(bot.config.nodes).length;
+  $("#app").innerHTML = `
+    <div class="studio${bot.active ? " live" : ""}" id="stu">
+      <div class="st-bar">
+        <button class="iconb" data-a="stback" aria-label="بازگشت">${IC.back}</button>
+        <button class="st-title" data-a="stbots" aria-label="تغییر ربات">
+          <span class="dot ${bot.active ? "on" : ""}"></span>
+          <span class="tt"><b>${esc(bot.name)}</b><small id="stsub" class="${bot.active ? "ltr" : ""}">${bot.active ? "@" + esc(bot.username) : "غیرفعال"} · ${N(nodes)} کارت</small></span>
+        </button>
+        ${bot.versions ? `<button class="iconb" data-a="undo" aria-label="برگشت به نسخه‌ی قبلی" title="برگشت به نسخه‌ی قبلی">${IC.refresh}</button>` : ""}
+        <button class="b sm" id="stadd" data-a="stadd">${IC.plus}کارت</button>
+      </div>
+      <div class="st-canvas" id="stc">
+        <div class="st-world" id="stw"></div>
+        <div class="st-mini" id="stmini" aria-hidden="true"><div class="mm" id="stmm"></div></div>
+        <div class="st-search"><input id="stq" placeholder="جستجوی کارت…" autocomplete="off" aria-label="جستجوی کارت"></div>
+        <button class="st-energy${bot.active ? " live" : ""}" data-a="stenergy">${IC.bolt}${bot.active ? "انرژی فعال" : "ربات خاموش"}</button>
+        ${stHintHTML()}
+        <div class="st-tools">
+          <button class="tb" data-a="stzout" aria-label="کوچک‌نمایی">${IC.minus}</button>
+          <span class="st-z n" id="stz">100%</span>
+          <button class="tb" data-a="stzin" aria-label="بزرگ‌نمایی">${IC.plus}</button>
+          <button class="tb" data-a="stfit" aria-label="نمایش همه">${IC.fit}</button>
+          <button class="tb" data-a="stlay" aria-label="چیدمان خودکار">${IC.layers}</button>
+        </div>
+      </div>
+    </div>`;
+  stPaintWorld();
+  if(!ST.cam) requestAnimationFrame(stHome);
+  stBindCanvas();
+  const q = $("#stq");
+  q?.addEventListener("input", () => {
+    const v = q.value.trim().toLowerCase(), cv = $("#stc");
+    if(!cv) return;
+    let first = null;
+    cv.querySelectorAll(".stc-card").forEach(el => {
+      const n = S.cur.config.nodes[el.dataset.id] || {};
+      const hit = !v || el.dataset.id.includes(v) || (n.title || "").toLowerCase().includes(v) || (n.text || "").toLowerCase().includes(v);
+      el.classList.toggle("dim", !!v && !hit);
+      if(v && hit && !first) first = el.dataset.id;
+    });
+    cv.querySelectorAll(".wire").forEach(w => w.classList.toggle("dim", !!v));
+    if(v && first) stCenter(first);
+  });
+}
+function refreshStudio(){
+  if(S.view !== "studio" || !S.cur) return;
+  if(!$("#stc")) return renderStudio();
+  stPaintWorld();
+  const t = $("#stsub"), b = S.cur;
+  if(t) t.textContent = `${b.active ? "@" + b.username : "غیرفعال"} · ${fa(Object.keys(b.config.nodes).length)} کارت`;
+}
+
+/* ── لمس و ماوس: پن، پینچ، درگ کارت، کشیدن سیم ── */
+function stClosePop(){ $("#stpop")?.remove(); }
+function stTmpWireTo(wp){ const tp = $("#sttmp"); if(tp && ST._la) tp.setAttribute("d", stPath(ST._la, wp)); }
+const stDist = P => { const v = [...P.values()]; return Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); };
+const stMid = P => { const v = [...P.values()]; return {x: (v[0].x + v[1].x) / 2, y: (v[0].y + v[1].y) / 2}; };
+function stTap(e){
+  const now = Date.now(), cv = $("#stc");
+  if(stTap.last && now - stTap.last < 320 && Math.hypot(e.clientX - (stTap.x || 0), e.clientY - (stTap.y || 0)) < 44){
+    stTap.last = 0;
+    const c = ST.cam;
+    if(c && cv){ if(c.z < .85) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / c.z); else stFit(); }
+    return;
+  }
+  stTap.last = now; stTap.x = e.clientX; stTap.y = e.clientY;
+}
+function stBindCanvas(){
+  const cv = $("#stc"); if(!cv) return;
+  const P = ST.ptr;
+  const w2p = e => {
+    const r = cv.getBoundingClientRect(), c = ST.cam || {x: 40, y: 40, z: 1};
+    return {x: (e.clientX - r.left - c.x) / c.z, y: (e.clientY - r.top - c.y) / c.z};
+  };
+  cv.addEventListener("pointerdown", e => {
+    if(e.pointerType === "mouse" && e.button !== 0) return;
+    if(e.target.closest(".st-tools,.st-search,.st-hint,.st-energy,.st-pop,.st-mini,.stc-menu")) return;   // دکمه‌های روی بوم: بدون capture تا کلیکشان به خودشان برسد
+    stClosePop();
+    P.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    const port = e.target.closest(".p-out"), card = e.target.closest(".stc-card");
+    if(P.size >= 2){
+      if(ST.mode?.t === "card") cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
+      if(ST.mode?.t === "link"){ $("#stu")?.classList.remove("linking"); const tp = $("#sttmp"); if(tp) tp.setAttribute("d", ""); }
+      ST.mode = {t: "pinch", d0: stDist(P), z0: (ST.cam || {z: 1}).z, m0: stMid(P), c0: {...(ST.cam || {x: 40, y: 40, z: 1})}};
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      return;
+    }
+    if(port){
+      ST.mode = {t: "link", n: port.dataset.n, p: port.dataset.port, moved: false};
+      ST._la = stWorldOf(port);
+      $("#stu")?.classList.add("linking");
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      stTmpWireTo(w2p(e));
+      return;
+    }
+    if(card && !e.target.closest("button,[data-a],.stc-in")){
+      const wp = w2p(e), id = card.dataset.id, p0 = ST.pos[id] || {x: 0, y: 0};
+      ST.mode = {t: "card", id, dx: wp.x - p0.x, dy: wp.y - p0.y, sx: e.clientX, sy: e.clientY, moved: false, t0: Date.now()};
+      card.classList.add("drag"); stHot(id, true);
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      return;
+    }
+    ST.mode = {t: "pan", sx: e.clientX, sy: e.clientY, c0: {...(ST.cam || {x: 40, y: 40, z: 1})}, moved: false, t0: Date.now()};
+    cv.classList.add("panning");
+    if(!e.target.closest("[data-a]")) try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  cv.addEventListener("pointermove", e => {
+    const m = ST.mode;
+    if(!m || !P.has(e.pointerId)) return;
+    P.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if(m.t === "pan"){
+      if(Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 6) m.moved = true;
+      ST.cam = {z: m.c0.z, x: m.c0.x + (e.clientX - m.sx), y: m.c0.y + (e.clientY - m.sy)};
+      stApply();
+    }
+    else if(m.t === "pinch"){
+      if(P.size < 2) return;
+      const d = stDist(P), md = stMid(P), r = cv.getBoundingClientRect();
+      const z = Math.min(1.5, Math.max(.3, m.z0 * d / Math.max(20, m.d0)));
+      const wx = (m.m0.x - r.left - m.c0.x) / m.z0, wy = (m.m0.y - r.top - m.c0.y) / m.z0;
+      ST.cam = {z, x: (md.x - r.left) - wx * z, y: (md.y - r.top) - wy * z};
+      stApply();
+    }
+    else if(m.t === "card"){
+      if(Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 6) m.moved = true;
+      if(m.moved){
+        const wp = w2p(e), p = ST.pos[m.id] || (ST.pos[m.id] = {x: 0, y: 0});
+        p.x = Math.round((wp.x - m.dx) / 8) * 8;
+        p.y = Math.round((wp.y - m.dy) / 8) * 8;
+        const el = cv.querySelector(`.stc-card[data-id="${m.id}"]`);
+        if(el){ el.style.left = p.x + "px"; el.style.top = p.y + "px"; }
+        stUpdateWiresFor(m.id);
+      }
+    }
+    else if(m.t === "link"){
+      m.moved = true;
+      stTmpWireTo(w2p(e));
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest(".stc-card");
+      cv.querySelectorAll(".stc-card.tgt").forEach(c => c.classList.remove("tgt"));
+      if(el && el.dataset.id !== m.n) el.classList.add("tgt");
+    }
+  });
+  const finish = e => {
+    const m = ST.mode;
+    P.delete(e.pointerId);
+    cv.querySelectorAll(".stc-card.tgt").forEach(c => c.classList.remove("tgt"));
+    if(!m) return;
+    if(m.t === "link"){
+      $("#stu")?.classList.remove("linking");
+      const tp = $("#sttmp"); if(tp) tp.setAttribute("d", "");
+      const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest(".stc-card")?.dataset.id;
+      if(tid && tid !== m.n) stConnect(m, tid);
+      else if(m.moved && !tid) stDropNew(m, e);
+      else if(m.moved) toast("سیم را به کارت دیگری وصل کن");
+      haptic();
+    }
+    else if(m.t === "card"){
+      cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
+      stHot(m.id, false);
+      if(m.moved){ stSave(); stMini(true); }
+      else if(Date.now() - m.t0 < 500) openNode(m.id);
+    }
+    else if(m.t === "pan"){
+      cv.classList.remove("panning");
+      if(m.moved) stSave();
+      else stTap(e);
+    }
+    if(P.size === 0) ST.mode = null;
+    else if(P.size === 1 && m.t === "pinch"){
+      const rem = [...P.values()][0];
+      ST.mode = {t: "pan", sx: rem.x, sy: rem.y, c0: {...(ST.cam || {x: 40, y: 40, z: 1})}, moved: true, t0: 0};
+    }
+  };
+  cv.addEventListener("pointerup", finish);
+  cv.addEventListener("pointercancel", e => {
+    P.delete(e.pointerId);
+    cv.classList.remove("panning");
+    cv.querySelectorAll(".stc-card.drag,.stc-card.tgt").forEach(c => c.classList.remove("drag", "tgt"));
+    $("#stsvg")?.querySelectorAll(".wire.hot").forEach(w => w.classList.remove("hot"));
+    $("#stu")?.classList.remove("linking");
+    const tp = $("#sttmp"); if(tp) tp.setAttribute("d", "");
+    if(!P.size) ST.mode = null;
+  });
+  cv.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    stZoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * .0016));
+  }, {passive: false});
+  cv.addEventListener("dblclick", e => { if(!e.target.closest(".stc-card,.st-tools,.st-pop,.st-search,.st-hint")) stFit(); });
+  cv.addEventListener("click", e => {
+    if(!e.target.closest("#stpop") && Date.now() - (ST.popT || 0) > 450) stClosePop();
+    const w = e.target.closest(".wire");
+    if(!w) return;
+    const ed = ST.wires.get(w.dataset.w);
+    if(ed) stWireMenu(ed);
+  });
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  const mini = $("#stmini");
+  if(mini){
+    const jump = e => {
+      const m = ST.mini; if(!m) return;
+      const r = mini.getBoundingClientRect(), c = ST.cam || {x: 40, y: 40, z: 1};
+      const wx = (e.clientX - r.left - m.ox) / m.s + m.x1, wy = (e.clientY - r.top - m.oy) / m.s + m.y1;
+      ST.cam = {z: c.z, x: cv.clientWidth / 2 - wx * c.z, y: cv.clientHeight / 2 - wy * c.z}; stApply();
+    };
+    mini.addEventListener("pointerdown", e => { e.stopPropagation(); try{ mini.setPointerCapture(e.pointerId); }catch(_){} mini._d = true; jump(e); });
+    mini.addEventListener("pointermove", e => { if(mini._d) jump(e); });
+    const end = () => { if(mini._d){ mini._d = false; stSave(); } };
+    mini.addEventListener("pointerup", end); mini.addEventListener("pointercancel", end);
+  }
+}
+
+/* ── اتصال و ساخت ── */
+function stConnect(m, tid){
+  const t = titleOf(S.cur.config, tid);
+  let src;
+  if(m.p === "+"){
+    const rows = S.cur.config.nodes[m.n]?.buttons || [];
+    if(rows.length >= 6 && rows.every(r => r.length >= 3)) return toast("این کارت به سقف دکمه‌ها رسیده");
+    src = {t: "new", n: m.n};
+  } else src = stParsePort(m.p);
+  busy(null, () => commit(cfg => stWireIn(cfg, src, tid), `سیم به «${t}» وصل شد`));
+}
+function stDropNew(m, e){
+  stClosePop();
+  const cv = $("#stc"); if(!cv) return;
+  const r = cv.getBoundingClientRect(), c = ST.cam || {x: 40, y: 40, z: 1};
+  ST.popT = Date.now();
+  ST.drop = m;
+  ST.dropAt = {x: (e.clientX - r.left - c.x) / c.z - 110, y: (e.clientY - r.top - c.y) / c.z - 40};
+  const pop = document.createElement("div");
+  pop.className = "st-pop"; pop.id = "stpop";
+  pop.style.left = Math.min(cv.clientWidth - 190, Math.max(6, e.clientX - r.left)) + "px";
+  pop.style.top = Math.min(cv.clientHeight - 96, Math.max(6, e.clientY - r.top)) + "px";
+  pop.innerHTML = `<button data-a="stnew">${IC.plus}<span>کارت جدید + اتصال</span></button><button data-a="stpopx">${IC.x}<span>بی‌خیال</span></button>`;
+  cv.appendChild(pop);
+}
+function stCreateConnected(){
+  const m = ST.drop, at = ST.dropAt;
+  ST.drop = null; ST.dropAt = null;
+  if(!m || !at || !S.cur) return;
+  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیدی");
+  const id = stNextId();
+  ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
+  const src = m.p === "+" ? {t: "new", n: m.n} : stParsePort(m.p);
+  busy(null, async () => {
+    await commit(cfg => {
+      cfg.nodes[id] = {title: "بخش جدید", text: "متن این بخش را بنویس", ask: false, buttons: []};
+      stWireIn(cfg, src, id);
+    }, "کارت ساخته و وصل شد");
+    stCenter(id);
+    openNode(id);
+  });
+}
+function stCopy(id){
+  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیدی");
+  const nid = stNextId(), p = ST.pos[id] || {x: 0, y: 0};
+  ST.pos[nid] = {x: p.x + 40, y: p.y + 80};
+  busy(null, () => commit(cfg => {
+    const n = cp(cfg.nodes[id]);
+    if(n.title) n.title = (n.title + " (کپی)").slice(0, 30);
+    cfg.nodes[nid] = n;
+  }, "کارت کپی شد"));
+}
+
+/* ── منوها ── */
+const stBadIc = ic => `<span class="ib" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)">${ic}</span>`;
+function stCardMenu(id){
+  const cfg = S.cur.config;
+  S.sheet = {kind: "info"};
+  showSheet(head("کارتِ " + esc(titleOf(cfg, id))) + `<div class="group" style="margin-top:10px">
+    <button class="gi" data-sh="stedit" data-n="${esc(id)}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش کامل</b><span>متن، دکمه‌ها، فرم، هوش مصنوعی و منطق</span></span>${goIc}</button>
+    <button class="gi" data-sh="stcopy" data-n="${esc(id)}"><span class="ib">${IC.copy}</span><span class="gt"><b>کپی کارت</b><span>با همه‌ی تنظیماتش</span></span>${goIc}</button>
+    <button class="gi" data-sh="stcenter" data-n="${esc(id)}"><span class="ib">${IC.fit}</span><span class="gt"><b>نمایش در مرکز</b><span>دوربین می‌آید سراغش</span></span>${goIc}</button>
+    ${id === cfg.start || id === cfg.fallback ? "" : `<button class="gi" data-sh="stdel" data-n="${esc(id)}">${stBadIc(IC.trash)}<span class="gt"><b>حذف کارت</b><span>همراه سیم‌های وصل به آن</span></span>${goIc}</button>`}
+  </div><div class="fgap"></div>`);
+}
+function stWireMenu(ed){
+  const cfg = S.cur.config;
+  let title, body;
+  if(ed.kind === "btn" || ed.kind === "pay"){
+    const b = cfg.nodes[ed.n]?.buttons[ed.r]?.[ed.c] || {};
+    title = `سیمِ دکمه‌ی «${esc(b.text || "")}»`;
+    body = `<button class="gi" data-sh="stwe" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش دکمه</b><span>متن، نوع و مقصد</span></span>${goIc}</button>
+      <button class="gi" data-sh="stwx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>قطع و حذف دکمه</b><span>این دکمه و سیمش برداشته می‌شود</span></span>${goIc}</button>`;
+  } else if(ed.kind === "route"){
+    title = "سیمِ هدایت شرطی";
+    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش قانون</b><span>در ویرایش کامل کارت</span></span>${goIc}</button>
+      <button class="gi" data-sh="stwrx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>حذف قانون</b><span>این مسیر شرطی برداشته می‌شود</span></span>${goIc}</button>`;
+  } else {
+    title = "سیمِ ادامه‌ی فرم";
+    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش بخش</b><span>در ویرایش کامل کارت</span></span>${goIc}</button>
+      <button class="gi" data-sh="stnx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>قطع ادامه</b><span>بعد از ثبت به منوی شروع برمی‌گردد</span></span>${goIc}</button>`;
+  }
+  S.sheet = {kind: "info"};
+  showSheet(head(title) + `<div class="group" style="margin-top:10px">${body}</div><div class="fgap"></div>`);
+}
+
 
 /* ═════════════════ رسانه ═════════════════ */
 function renderMedia(){
@@ -1306,7 +1999,7 @@ function renderAccount(){
   animBars();
 }
 
-const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount };
+const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount, studio: renderStudio };
 
 /* ═════════════════ اکشن‌های صفحه ═════════════════ */
 const setBot = bot => { S.cur = bot; S.bots = S.bots.map(b => b.id === bot.id ? bot : b); };
@@ -1314,7 +2007,7 @@ const A = {
   gen: () => submitPrompt(),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
   idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
-  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "bot"; S.btab = "nodes"; S.open = new Set(); S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
+  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "bot"; S.btab = "ai"; S.sbot = S.cur.id; S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
   back: () => { S.view = "bots"; S.cur = null; S.ideas = []; closeSheet(); render(); scrollTo(0, 0); sync().then(ok => { if(ok && S.view === "bots") render(); }); },
   btab: el => { if(S.busy) return toast("صبر کن کار فعلی تموم شه"); S.btab = el.dataset.k; renderBot(); },
   atab: el => { S.atab = el.dataset.k; renderAccount(); },
@@ -1352,22 +2045,13 @@ document.addEventListener("click", e => {
   const a = e.target.closest("[data-a]"); if(a) return A[a.dataset.a]?.(a);
   const x = e.target.closest("[data-x],[data-sa],[data-sh]"); if(!x || x.tagName === "SELECT") return;
   const ds = x.dataset;
-  if(ds.x) return closeSheet();
+  if(ds.x) return stGuardClose(closeSheet);
   if(ds.sh) return shAction(ds.sh, ds);
   const r = ds.r !== undefined ? +ds.r : null;
-  if(ds.sa === "node") openNode(ds.n);
-  else if(ds.sa === "btn") openBtn(ds.n, r, +ds.c);
-  else if(ds.sa === "newbtn") openBtn(ds.n, r, null);
-  else if(ds.sa === "newrow") openBtn(ds.n, null, null);
-  else if(ds.sa === "bot") openBot();
-  else if(ds.sa === "addnode") addNode();
-  else if(ds.sa === "toggle") toggleNode(ds.n, x);
-  else if(ds.sa === "toggleall") toggleAll();
+  if(ds.sa === "bot") openBot();
 });
 document.addEventListener("keydown", e => {
   if(e.key !== "Enter" && e.key !== " ") return;
-  const h = e.target.closest?.('[data-sa="toggle"]');
-  if(h){ e.preventDefault(); return toggleNode(h.dataset.n, h); }
   const r = e.target.closest?.(".botrow");
   if(r){ e.preventDefault(); A.open(r); }
 });
@@ -1388,13 +2072,27 @@ async function commit(fn, msg = "ذخیره شد"){
   const cfg = cp(S.cur.config); fn(cfg);
   const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: cfg});
   setBot(d.bot);
-  closeSheet(); renderBot(); toast(msg); haptic("ok");
+  stSheetDirty.touched = false;   // همین فرم ذخیره شد؛ هشدار تغییرات لازم نیست
+  closeSheet();
+  if(S.view === "studio") refreshStudio(); else renderBot();
+  toast(msg); haptic("ok");
 }
-function closeSheet(){ clearInterval(window.__ut); clearInterval(window.__at); clearTimeout(window.__ut); clearTimeout(window.__at); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; }
+function closeSheet(){ clearInterval(window.__ut); clearInterval(window.__at); clearTimeout(window.__ut); clearTimeout(window.__at); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; stSheetDirty.touched = false; }
 function showSheet(html){
   const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
   sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp" role="dialog" aria-modal="true">${html}</div>`;
   sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
+  stSheetDirty.touched = false;
+}
+/* اگر در استودیو فرمِ ویرایشِ کارت/دکمه چیزی عوض شده باشد، بستنِ ناگهانی با تایید همراه می‌شود */
+document.addEventListener("input", e => { if(S.sheet && $("#sheet")?.contains(e.target)) stSheetDirty.touched = true; });
+document.addEventListener("change", e => { if(S.sheet && $("#sheet")?.contains(e.target)) stSheetDirty.touched = true; });
+function stSheetDirty(){
+  return !!(stSheetDirty.touched && S.view === "studio" && S.sheet && (S.sheet.kind === "node" || S.sheet.kind === "btn"));
+}
+function stGuardClose(go){
+  if(!stSheetDirty()) return go();
+  confirmQ("تغییرهای این فرم ذخیره نشده. بسته شود؟", ok => { if(ok) go(); });
 }
 const nodeOpts = (cfg, cur, extra = "") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i === cur ? " selected" : ""}>${esc(titleOf(cfg, i))}</option>`).join("");
 const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div>`;
@@ -1623,22 +2321,28 @@ function delNode(){
   const go = ok => ok && busy($('[data-sh="del"]'), () => commit(cfg => {
     delete cfg.nodes[id];
     for(const n of Object.values(cfg.nodes)){
-      n.buttons = n.buttons.map(r => r.filter(b => b.goto !== id)).filter(r => r.length);
+      n.buttons = n.buttons.map(r => r.map(b => { if(b.pay?.goto === id){ const c = {...b}; delete c.pay.goto; return c; } return b; })
+        .filter(b => b.goto !== id)).filter(r => r.length);
       if(n.next === id) delete n.next;
       if(n.route){ n.route = n.route.filter(r => r.goto !== id); if(!n.route.length) delete n.route; }
     }
     for(const k of Object.keys(cfg.commands || {})) if(cfg.commands[k] === id) delete cfg.commands[k];
+    delete ST.pos[id];
   }, "بخش حذف شد"));
   confirmQ("این بخش و دکمه‌هایی که به آن وصل‌اند حذف شوند؟", go);
 }
-function addNode(){
+function addNode(at){
   const cfg = S.cur.config, ids = Object.keys(cfg.nodes), max = S.cfg.max_nodes || 60;
   if(ids.length >= max) return toast(`حداکثر ${max} بخش`);
-  let k = ids.length + 1; while(cfg.nodes["page_" + k]) k++;
-  const id = "page_" + k;
-  S.open.add(id);
-  busy($('[data-sa="addnode"]'), async () => {
-    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متن این بخش را بنویس", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
+  const id = stNextId();
+  if(!at){
+    const cv = $("#stc"), c = ST.cam || {x: 40, y: 40, z: 1};
+    at = cv ? {x: (cv.clientWidth / 2 - c.x) / c.z - 110, y: (cv.clientHeight / 2 - c.y) / c.z - 60} : {x: 40, y: 40};
+  }
+  ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
+  busy($("#stadd"), async () => {
+    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متن این بخش را بنویس", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "کارت اضافه شد");
+    stCenter(id);
     openNode(id);
   });
 }
@@ -1905,6 +2609,16 @@ function shAction(a, ds){
   if(a === "save") return SHEETS[S.sheet.kind].save();
   if(a === "del") return SHEETS[S.sheet.kind].del();
   if(a === "upmedia"){ S.pickKey = ds.k; return $("#fileIn").click(); }
+  if(a === "stedit"){ const n = ds.n; closeSheet(); openNode(n); return; }
+  if(a === "stcopy"){ closeSheet(); return stCopy(ds.n); }
+  if(a === "stcenter"){ closeSheet(); return stCenter(ds.n); }
+  if(a === "stdel"){ const n = ds.n; closeSheet(); S.sheet = {kind: "node", id: n}; return delNode(); }
+  if(a === "stwe" || a === "stwr"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return; return ed.kind === "route" || ed.kind === "next" ? openNode(ed.n) : openBtn(ed.n, ed.r, ed.c); }
+  if(a === "stwx"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return; S.sheet = {kind: "btn", n: ed.n, r: ed.r, c: ed.c}; return delBtn(); }
+  if(a === "stwrx"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return;
+    return busy(null, () => commit(cfg => { const n = cfg.nodes[ed.n]; if(n?.route){ n.route.splice(ed.ri, 1); if(!n.route.length) delete n.route; } }, "قانون حذف شد")); }
+  if(a === "stnx"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return;
+    return busy(null, () => commit(cfg => { const n = cfg.nodes[ed.n]; if(n) delete n.next; }, "ادامه قطع شد")); }
   if(a === "pickmedia") D[ds.k] = ds.v;
   else if(a === "bkind"){
     const k = D.kind, wasText = prev === "channel" || prev === "url";
@@ -2025,6 +2739,31 @@ const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""'
   return ["time,section,name,username,answers", ...items.map(r => [r.t, r.title, r.name, r.un, (r.qa || []).map(([a, b]) => a + ": " + b).join(" | ") || r.text].map(q).join(","))].join("\n"); };
 
 Object.assign(A, {
+  studio: () => { const b = S.cur; if(!b) return toast("اول یک ربات انتخاب کن"); S.view = "studio"; S.btab = "ai"; S.sbot = b.id; closeSheet(); render(); },
+  stback: () => stGuardClose(() => { stSaveNow(); S.view = "bot"; S.btab = "ai"; closeSheet(); render(); scrollTo(0, 0); }),
+  stbots: () => stGuardClose(() => { stSaveNow(); S.view = "studio"; S.cur = null; S.sbot = null; ST.botId = null; render(); }),
+  spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.view = "studio"; ST.botId = null; render(); },
+  stadd: () => addNode(),
+  stzin: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1.22); },
+  stzout: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / 1.22); },
+  stfit: () => stFit(),
+  stlay: () => { stAutoLayout(true); stApply(); requestAnimationFrame(() => stPaintWires()); toast("چیدمان مرتب شد"); },
+  stmenu: (el, e) => { e?.stopPropagation?.(); stCardMenu(el.dataset.n); },
+  stenergy: () => { const b = S.cur; if(!b) return; S.view = "bot"; S.btab = "publish"; render(); scrollTo(0, 0); },
+  stnew: () => stCreateConnected(),
+  stpopx: () => { ST.drop = null; ST.dropAt = null; stClosePop(); },
+  sthint: () => { try{ localStorage.setItem("azadi.studio.hint", "1"); }catch(_){} $(".st-hint")?.remove(); },
+  strow: el => { if(!$("#stc")) return; openBtn(el.dataset.n, +el.dataset.r, +el.dataset.c); },
+  health: el => busy(el, async () => {
+    const d = await api(`/api/bots/${S.cur.id}/health`);
+    const fa = s => { const m = [["unreachable nodes", "بخش‌های بدون مسیر ورود"], ["dead-end nodes", "بن‌بست‌ها"], ["variables that are read", "متغیرهای بدون مقدار"]].find(([k]) => s.startsWith(k));
+      if(!m) return esc(s);
+      return `<b>${m[1]}:</b> ` + esc(s.slice(s.indexOf(":") + 1).trim().split(",").map(x => titleOf(S.cur.config, x.trim()) || x.trim()).join("، ")); };
+    S.sheet = {kind: "info"};
+    showSheet(head("بررسی مسیرها") + (d.issues.length
+      ? `<div class="group" style="margin-top:10px">${d.issues.map(s => `<div class="gi static"><span class="ib" style="color:var(--tok);background:var(--toks)">${IC.heal}</span><span class="gt" style="white-space:normal;font-size:13px;line-height:1.8">${fa(s)}</span></div>`).join("")}</div>`
+      : `<div class="empty"><div class="ib big" style="color:var(--ok)">${IC.check}</div><h2>همه‌چیز سالم است</h2><p class="muted">همه‌ی کارت‌ها reachable هستند و بن‌بستی وجود ندارد.</p></div>`) + `<div class="fgap"></div>`);
+  }),
   enhance: el => { const t = $("#prompt"), p = t?.value.trim() || ""; if(p.length < 5) return toast("اول یک توضیح کوتاه بنویس");
     if(S.wallet.tokens < (S.cfg.enhance || 1)) return openBuy("برای کامل‌تر کردن توضیح، توکن کافی نداری.");
     busy(el, async () => { const d = await api("/api/enhance", "POST", {prompt: p}); t.value = d.prompt; S.wallet = d.wallet; renderTop(); bumpTokens(); toast("توضیح کامل‌تر شد؛ بخوان و اگر خوب بود بساز"); haptic("ok"); }); },
@@ -2034,7 +2773,7 @@ Object.assign(A, {
       try{
         const d = await api(`/api/templates/${el.dataset.id}/create`, "POST");
         if(d.wallet) S.wallet = d.wallet;
-        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "nodes"; S.fresh = true; S.open = new Set(); S.ideas = []; S.stats = null;
+        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "ai"; S.sbot = d.bot.id; S.fresh = true; S.ideas = []; S.stats = null;
         render(); bumpTokens(); celebrate(); toast("قالب آماده شد" + (d.cost ? `، ${d.cost} توکن` : "")); scrollTo(0, 0);
       }catch(e){ if(e.status === 402){ if(e.data?.wallet){ S.wallet = e.data.wallet; renderTop(); } openBuy(e.message); } else throw e; }
     }); },
