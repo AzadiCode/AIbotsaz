@@ -739,6 +739,15 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .urow.sel .ck{background:var(--ac);box-shadow:none}
 .urow.sel .ck svg{opacity:1}
 .scrl{max-height:34vh;overflow:auto}
+.pack .pbtns{display:flex;flex-direction:column;gap:6px}
+.cardbox{border-radius:16px;padding:4px 14px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--line);margin-bottom:12px}
+.cdrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.cdrow:last-child{border-bottom:0}
+.cdv{font-weight:700;font-size:16px;margin-top:2px;letter-spacing:.3px}
+.cdnote{font-size:13px;color:var(--mut);margin:0 0 12px}
+.cdp{display:flex;align-items:center;gap:10px;margin:6px 0}.cdp span{flex:1;font-size:13px}.cdp input{flex:1.4}
+.cdo{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.7}
+.cdb{display:flex;gap:6px}
 .fjt{white-space:pre-wrap;text-align:right;margin:10px 0;line-height:1.9}.fjt a{color:var(--ac)}
 .fjb{display:flex;flex-direction:column;gap:8px;margin-top:12px;width:100%}
 .fmtbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
@@ -1002,7 +1011,7 @@ const IC = {
 const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g>', 1.7);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
-  referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
+  referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", card:"خرید کارت‌به‌کارت", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
   enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", levelup:"پاداش ارتقای سطح"};
 
 /* ═════════ هزینه‌ها ═════════ */
@@ -1025,7 +1034,7 @@ function mediaPicker(key, cur){
 /* ═════════ بارگذاری و رندر ═════════ */
 function takeMe(d){
   for(const b of d.bots || []) for(const n of Object.values(b.config?.nodes || {})) if(n.kb === "reply"){ (n.buttons || []).forEach(r => r.forEach(x => { x.kb = "reply"; })); delete n.kb; }
-  Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null, me: d.me || null });
+  Object.assign(S, { card: d.card || { on: false, prices: {} }, bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null, me: d.me || null });
 }
 const tgHtml = t => esc(t).replace(/&lt;(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)&gt;/gi, "<$1$2>").replace(/&lt;a href=&quot;(https?:\/\/[^&"<>]*)&quot;&gt;/gi, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/gi, "</a>").replace(/&lt;\/?tg-spoiler&gt;/gi, "");
 function showFj(f){
@@ -2193,8 +2202,10 @@ async function handleFiles(files, pickKey){
 function packRows(){
   const best = S.packs.reduce((m, p) => p.tokens / p.stars > m.r ? {id: p.id, r: p.tokens / p.stars} : m, {id: "", r: 0}).id;
   return S.packs.map(p => { const bt = p.id === best && S.packs.length > 1;
+    const cp = S.card?.on ? S.card.prices?.[p.id] : 0;
     return `<div class="pack${bt ? " best" : ""}"><div class="pt">${N(p.tokens)}<span>توکن</span></div>
-    <div class="pr">${N(p.stars)} ستاره${bt ? "<br>به‌صرفه‌ترین" : ""}</div><button class="b" data-a="buy" data-id="${esc(p.id)}">خرید</button></div>`; }).join("");
+    <div class="pr">${N(p.stars)} ستاره${cp ? `<br>${N(Number(cp).toLocaleString("en"))} تومان` : ""}${bt ? "<br>به‌صرفه‌ترین" : ""}</div>
+    <div class="pbtns"><button class="b" data-a="buy" data-id="${esc(p.id)}">خرید</button>${cp ? `<button class="b o" data-a="cardbuy" data-id="${esc(p.id)}">کارت‌به‌کارت</button>` : ""}</div></div>`; }).join("");
 }
 function inviteCard(){
   const c = S.cfg, n = S.ref.count;
@@ -2834,6 +2845,17 @@ function buySheet(){
     ${S.ref.link ? `<button class="b o mt" data-a="shareref">${IC.users}دعوت دوستان، ${N("+" + c.ref_inviter)} توکن برای هر نفر</button>` : ""}
     <div class="fgap"></div>`;
 }
+function cardSheet(){
+  const o = S.sheet.o, row = (l, v, raw) => `<div class="cdrow"><div><span class="muted">${l}</span><div class="cdv">${v}</div></div>${raw ? `<button class="b o sm" data-a="cardcopy" data-v="${esc(raw)}">کپی</button>` : ""}</div>`;
+  return head("پرداخت کارت‌به‌کارت") + `<div class="cardbox">
+    ${row("مبلغ قابل پرداخت", N(Number(o.toman).toLocaleString("en")) + " تومان", String(o.toman))}
+    ${row("شماره کارت", esc(o.number), o.raw)}
+    ${o.holder ? row("به نام", esc(o.holder)) : ""}${o.bank ? row("بانک", esc(o.bank)) : ""}
+  </div>
+  <div class="fjt cdnote">${tgHtml(o.text)}</div>
+  <button class="b" data-a="cardrcpt">ارسال رسید</button>
+  <p class="muted mt">سفارش ${N("#" + o.order)} · ${N(o.tokens)} توکن</p><div class="fgap"></div>`;
+}
 function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
 async function refreshWallet(waitInc){
   const t0 = S.wallet.tokens;
@@ -2864,6 +2886,7 @@ const SHEETS = {
   media: {html: mediaSheet, read: readMedia, save: saveMedia, del: delMedia},
   bc:    {html: bcSheet,    read: readBc,    save: saveBc},
   buy:   {html: buySheet},
+  card:  {html: cardSheet},
   km:    {html: kmSheet},
 };
 function renderSheet(){ showSheet(SHEETS[S.sheet.kind].html()); }
@@ -3084,7 +3107,21 @@ document.addEventListener("click", e => { const c = e.target.closest("[data-pf=c
 function adminCard(){
   if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; if(S.atab === "admin") render(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
   const fj = S.fj || {on: false, channels: "", text: ""};
-  return `<div class="panel"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
+  if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; if(S.atab === "admin") render(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
+  const cd = S.cd || {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []};
+  return `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
+      <label class="chk"><input type="checkbox" id="cd-on"${cd.on ? " checked" : ""}> فعال باشد</label>
+      <span class="lbl">شماره کارت (۱۶ رقم)</span><input class="ltr" id="cd-num" inputmode="numeric" value="${esc(cd.number)}" placeholder="6037 0000 0000 0000" autocomplete="off" aria-label="شماره کارت">
+      <span class="lbl">به نام (اختیاری)</span><input class="fa" id="cd-holder" value="${esc(cd.holder)}" maxlength="60" aria-label="نام صاحب کارت">
+      <span class="lbl">بانک (اختیاری)</span><input class="fa" id="cd-bank" value="${esc(cd.bank)}" maxlength="40" aria-label="بانک">
+      <span class="lbl">قیمت هر بسته (تومان؛ خالی = بدون کارت‌به‌کارت)</span>
+      ${S.packs.map(p => `<div class="cdp"><span>${N(p.tokens)} توکن</span><input class="ltr" id="cd-p-${esc(p.id)}" inputmode="numeric" value="${esc((cd.prices || {})[p.id] || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت بسته ${esc(p.tokens)} توکن"></div>`).join("")}
+      <span class="lbl">متن راهنما زیر مشخصات کارت (قالب HTML)</span><textarea class="fa" id="cd-tx" data-fmt maxlength="1200" style="min-height:90px" aria-label="متن راهنما">${esc(cd.text)}</textarea>${fmtTools("cd-tx")}
+      <button class="b o" data-a="cdsave">ذخیره</button>
+      <h3 class="mt" style="font-size:14px">آخرین سفارش‌ها</h3>
+      ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${N(o.tokens)} توکن · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
+      <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div>
+    ` + `<div class="panel"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">آیدی کانال‌ها (تا ۳ تا، با فاصله)</span><input class="ltr" id="fj-ch" value="${esc(fj.channels)}" placeholder="@channel1 @channel2" autocomplete="off" aria-label="آیدی کانال‌ها">
       <p class="muted">کانال خصوصی: <b dir="ltr">-1001234567890=https://t.me/+invite</b></p>
@@ -3130,7 +3167,21 @@ const cpReset = p => { CPS[p] = cpNew(); const t = $("#" + p + "-text"); if(t) t
 document.addEventListener("input", e => { const p = e.target.dataset?.cp; if(p) cpSt(p).text = e.target.value; });
 document.addEventListener("change", e => { const p = e.target.dataset?.cpfmt; if(!p) return; cpSt(p).fmt = e.target.value;
   const t = $("#" + p + "-tools"); if(t) t.style.display = e.target.value === "html" ? "" : "none"; });
+const CD_ST = {wait: "منتظر رسید", sent: "رسید آمد", ok: "تأیید شد", no: "رد شد"};
+const cdReload = async () => { S.cd = await api("/api/admin/card"); render(); };
+const cdDecide = (el, ok) => confirmQ(ok ? "این پرداخت تأیید و توکن شارژ شود؟" : "این سفارش رد شود؟", yes => yes && busy(el, async () => {
+  await api("/api/admin/card-orders/" + el.dataset.id, "POST", {ok}); toast(ok ? "تأیید شد" : "رد شد"); await cdReload(); }));
 Object.assign(A, {
+  cardbuy: el => busy(el, async () => { const o = await api("/api/card/order", "POST", {pack: el.dataset.id}); S.sheet = {kind: "card", o}; D = null; renderSheet(); }),
+  cardrcpt: () => { const l = S.sheet?.o?.link; if(l) openLink(l); else toast("لینک ربات آماده نیست؛ رسید را مستقیم در ربات بفرست"); },
+  cardcopy: el => navigator.clipboard?.writeText(el.dataset.v).then(() => toast("کپی شد"), () => toast(el.dataset.v)),
+  cdsave: el => busy(el, async () => { const v = id => $(id).value.trim(), prices = {}; S.packs.forEach(p => { prices[p.id] = v("#cd-p-" + p.id); });
+    await api("/api/admin/card", "POST", {on: $("#cd-on").checked, number: v("#cd-num"), holder: v("#cd-holder"), bank: v("#cd-bank"), text: v("#cd-tx"), prices});
+    try{ S.card = (await api("/api/me")).card; }catch(_){}
+    toast("ذخیره شد"); await cdReload(); }),
+  cdok: el => cdDecide(el, true),
+  cdno: el => cdDecide(el, false),
+  cdrefresh: el => busy(el, cdReload),
   fmtb: el => { const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
     if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد قالب را انتخاب کن"); fmtInsert(t, +el.dataset.i); },
   fjopen: el => openLink(el.dataset.u),

@@ -2312,7 +2312,7 @@ def api_me(uid):
           "username": (d.get("tg_user") or "") if web else (u.get("username") or ""), "web": web}
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
     items = media_list(uid)
-    return jsonify(me=me, bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, media=items, lv=lv_info(uid), tasks=tasks_state(uid),
+    return jsonify(me=me, bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, card=card_public(), media=items, lv=lv_info(uid), tasks=tasks_state(uid),
                    used=sum(i["size"] for i in items), admin=uid in ADMIN_IDS,
                    ref={"link": mother_link(uid), "count": int(d.get("refs", 0)), "earned": int(d.get("ref_earned", 0))},
                    joined=aware(d.get("created") or now()).isoformat(),
@@ -4651,6 +4651,8 @@ def mother_command(msg):
         if cmd == "/announce":
             n, err = start_announce(arg, uid)
             return say(err or f"اعلان برای {n} نفر در حال ارساله.", False)
+    if cmd == "/start" and arg.startswith("rcpt_") and arg[5:].isdigit():
+        return card_ask_receipt(uid, int(arg[5:]))
     if cmd == "/start":
         return send_start(uid)
     tokens = wallet_info(uid)["tokens"]
@@ -5205,6 +5207,210 @@ def api_admin_fj_set(uid):
     return jsonify(ok=True, warn=warn)
 
 
+# ───────────────────────── کارت‌به‌کارت (تنظیمات از پنل ادمین، تأیید دستی با دکمه) ─────────────────────────
+CARD_DEFAULT_TEXT = "مبلغ را دقیقاً به شماره کارت بالا واریز کن، بعد «ارسال رسید» را بزن و عکس رسید را در ربات بفرست.\nبعد از بررسی، توکن‌ها به حسابت اضافه می‌شود."
+CARD_CONF = [0.0, None]
+_DIG = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def card_conf():
+    """تنظیمات فعال کارت‌به‌کارت یا None؛ ۱۵ ثانیه کش می‌شه"""
+    t = time.time()
+    if t - CARD_CONF[0] > 15:
+        d = db.settings.find_one({"_id": "card"}) or {}
+        CARD_CONF[:] = [t, d if d.get("on") and d.get("number") else None]
+    return CARD_CONF[1]
+
+
+def card_price(conf, pid):
+    try:
+        return max(0, int(((conf or {}).get("prices") or {}).get(pid) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def card_public():
+    """چیزی که به مینی‌اپ می‌ره: فقط روشن/خاموش و قیمت بسته‌ها (مشخصات کارت بعد از ثبت سفارش نشون داده می‌شه)"""
+    c = card_conf()
+    pr = {p["id"]: card_price(c, p["id"]) for p in PACKS if c and card_price(c, p["id"]) > 0}
+    return {"on": bool(pr), "prices": pr}
+
+
+def luhn_ok(n):
+    tot = 0
+    for i, ch in enumerate(reversed(n)):
+        d = int(ch) * (2 if i % 2 else 1)
+        tot += d - 9 if d > 9 else d
+    return tot % 10 == 0
+
+
+def card_fmt(n):
+    return " ".join(n[i:i + 4] for i in range(0, len(n), 4))
+
+
+def card_say(uid, text, **kw):
+    return tg_html(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=text, **kw)
+
+
+@app.post("/api/card/order")
+@authed
+def api_card_order(uid):
+    conf = card_conf()
+    pid = str((request.get_json(silent=True) or {}).get("pack", ""))
+    p = next((x for x in PACKS if x.get("id") == pid), None)
+    toman = card_price(conf, pid) if (conf and p) else 0
+    if not toman:
+        return jsonify(error="پرداخت کارت‌به‌کارت برای این بسته فعال نیست"), 400
+    since = time.time() - 86400
+    o = db.card_orders.find_one({"uid": uid, "pack": pid, "status": "wait", "toman": toman, "t": {"$gt": since}})
+    if not o:
+        if not rate_ok(f"cardo:{uid}", 6, 3600):
+            return jsonify(error="تعداد تلاش زیاد بود، کمی صبر کن."), 429
+        if db.card_orders.count_documents({"uid": uid, "status": {"$in": ["wait", "sent"]}, "t": {"$gt": since}}) >= 3:
+            return jsonify(error="چند سفارش باز داری؛ اول رسید اون‌ها رو بفرست یا صبر کن بررسی بشن."), 429
+        no = db.counters.find_one_and_update({"_id": "card"}, {"$inc": {"n": 1}}, upsert=True,
+                                             return_document=ReturnDocument.AFTER)["n"] + 1000
+        o = {"_id": no, "uid": uid, "pack": pid, "tokens": int(p["tokens"]), "toman": toman, "status": "wait", "t": time.time()}
+        db.card_orders.insert_one(o)
+    link = f"https://t.me/{MOTHER_USERNAME}?start=rcpt_{o['_id']}" if MOTHER_USERNAME else ""
+    return jsonify(order=o["_id"], tokens=o["tokens"], toman=o["toman"], number=card_fmt(conf["number"]), raw=conf["number"],
+                   holder=conf.get("holder") or "", bank=conf.get("bank") or "", text=conf.get("text") or CARD_DEFAULT_TEXT, link=link)
+
+
+def card_ask_receipt(uid, no):
+    o = db.card_orders.find_one({"_id": no, "uid": uid})
+    if not o or o["status"] != "wait" or o["t"] < time.time() - 86400:
+        return card_say(uid, "این سفارش دیگه باز نیست. از مینی‌اپ یک سفارش تازه ثبت کن.")
+    db.settings.replace_one({"_id": f"rcpt:{uid}"}, {"_id": f"rcpt:{uid}", "no": no, "t": time.time()}, upsert=True)
+    card_say(uid, f"عکس رسید واریز سفارش <b>#{no}</b> ({o['toman']:,} تومان) را همین‌جا بفرست.")
+
+
+def card_receipt(msg):
+    """عکس رسید کاربر → برای ادمین‌ها با دکمه‌ی تأیید/رد. اگه پیام رو مصرف کرد True"""
+    uid = msg["from"]["id"]
+    ph, doc = msg.get("photo"), msg.get("document")
+    if ph:
+        fid, kind = ph[-1]["file_id"], "photo"
+    elif doc and str(doc.get("mime_type", "")).startswith("image/"):
+        fid, kind = doc["file_id"], "document"
+    else:
+        return False
+    since = time.time() - 86400
+    ptr = db.settings.find_one({"_id": f"rcpt:{uid}"})
+    o = None
+    if ptr and time.time() - ptr.get("t", 0) < 86400:
+        o = db.card_orders.find_one({"_id": ptr["no"], "uid": uid, "status": "wait", "t": {"$gt": since}})
+    if not o:
+        opens = list(db.card_orders.find({"uid": uid, "status": "wait", "t": {"$gt": since}}).limit(2))
+        if len(opens) > 1:
+            card_say(uid, "چند سفارش باز داری؛ از مینی‌اپ دکمه‌ی «ارسال رسید» همون سفارش رو بزن.")
+            return True
+        o = opens[0] if opens else None
+    if not o:
+        return False
+    if not db.card_orders.update_one({"_id": o["_id"], "status": "wait"}, {"$set": {"status": "sent", "rcpt": fid, "ts": time.time()}}).modified_count:
+        return True
+    db.settings.delete_one({"_id": f"rcpt:{uid}"})
+    f = msg["from"]
+    who = _html.escape(f"{f.get('first_name') or ''} {('@' + f['username']) if f.get('username') else ''}".strip() or "بدون نام")
+    cap = f"💳 رسید کارت‌به‌کارت #{o['_id']}\nکاربر: {who} ({uid})\nبسته: {o['tokens']} توکن\nمبلغ: {o['toman']:,} تومان"
+    kb = {"inline_keyboard": [[{"text": "✅ تأیید و شارژ", "callback_data": f"cd:ok:{o['_id']}"},
+                               {"text": "❌ رد", "callback_data": f"cd:no:{o['_id']}"}]]}
+    sent = []
+    for a in ADMIN_IDS:
+        r = tg_html(MOTHER_TOKEN, "sendPhoto" if kind == "photo" else "sendDocument", chat_id=a, caption=cap, reply_markup=kb, **{kind: fid})
+        if r.get("ok"):
+            sent.append([a, r["result"]["message_id"]])
+    if not sent:
+        log.warning("card receipt not delivered to any admin (order %s)", o["_id"])
+    db.card_orders.update_one({"_id": o["_id"]}, {"$set": {"adm": sent, "cap": cap}})
+    card_say(uid, f"رسید سفارش <b>#{o['_id']}</b> گرفته شد. بعد از بررسی، نتیجه همین‌جا بهت اعلام می‌شه.")
+    return True
+
+
+def card_decide(no, ok, by):
+    """تأیید/رد سفارش (فقط یک بار؛ از دکمه‌ی ربات یا پنل ادمین). اگه سفارش قبلاً رسیدگی شده بود None"""
+    o = db.card_orders.find_one_and_update({"_id": no, "status": {"$in": ["wait", "sent"]}},
+                                           {"$set": {"status": "ok" if ok else "no", "by": by, "t2": time.time()}},
+                                           return_document=ReturnDocument.AFTER)
+    if not o:
+        return None
+    if ok:
+        credit(o["uid"], o["tokens"], "card", key=f"card:{no}")
+        card_say(o["uid"], f"✅ پرداخت سفارش <b>#{no}</b> تأیید شد و <b>{o['tokens']}</b> توکن به حسابت اضافه شد.")
+    else:
+        card_say(o["uid"], f"❌ رسید سفارش <b>#{no}</b> تأیید نشد. اگه واریز انجام شده، یک سفارش تازه ثبت کن و رسید واضح بفرست.")
+    for a, mid in o.get("adm") or []:
+        tg_html(MOTHER_TOKEN, "editMessageCaption", chat_id=a, message_id=mid, reply_markup={"inline_keyboard": []},
+                caption=(o.get("cap") or "") + ("\n\n✅ تأیید شد" if ok else "\n\n❌ رد شد"))
+    return o
+
+
+def card_cb(cq):
+    uid, data = cq["from"]["id"], str(cq.get("data") or "")
+
+    def ans(t="", alert=False):
+        tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], **({"text": t, "show_alert": alert} if t else {}))
+    if uid not in ADMIN_IDS:
+        return ans("فقط ادمین", True)
+    m = re.fullmatch(r"cd:(ok|no):(\d{1,12})", data)
+    if not m:
+        return ans()
+    ok = m.group(1) == "ok"
+    o = card_decide(int(m.group(2)), ok, uid)
+    ans(("تأیید شد و توکن اضافه شد" if ok else "رد شد") if o else "قبلاً رسیدگی شده", not o)
+
+
+@app.get("/api/admin/card")
+@admin_only
+def api_admin_card_get(uid):
+    d = db.settings.find_one({"_id": "card"}) or {}
+    rows = list(db.card_orders.find().sort("_id", -1).limit(40))
+    names = {u["_id"]: (u.get("tg_name") or u.get("name") or "") + ((" @" + u["tg_user"]) if u.get("tg_user") else "")
+             for u in db.users.find({"_id": {"$in": list({r["uid"] for r in rows})}}, {"tg_name": 1, "name": 1, "tg_user": 1})}
+    return jsonify(on=bool(d.get("on")), number=d.get("number", ""), holder=d.get("holder", ""), bank=d.get("bank", ""),
+                   text=d.get("text") or CARD_DEFAULT_TEXT, prices=d.get("prices") or {},
+                   orders=[{"id": r["_id"], "uid": r["uid"], "name": names.get(r["uid"], "").strip(), "tokens": r["tokens"],
+                            "toman": r["toman"], "status": r["status"], "t": r["t"]} for r in rows])
+
+
+@app.post("/api/admin/card")
+@admin_only
+def api_admin_card_set(uid):
+    b = request.get_json(silent=True) or {}
+    number = re.sub(r"\D", "", str(b.get("number") or "").translate(_DIG))
+    if number and not (len(number) == 16 and luhn_ok(number)):
+        return jsonify(error="شماره کارت درست نیست (۱۶ رقم)"), 400
+    prices = {}
+    for p in PACKS:
+        try:
+            v = int(re.sub(r"\D", "", str((b.get("prices") or {}).get(p["id"]) or "0").translate(_DIG)) or 0)
+        except ValueError:
+            v = 0
+        if not 0 <= v <= 1_000_000_000:
+            return jsonify(error="قیمت بسته معتبر نیست"), 400
+        if v:
+            prices[p["id"]] = v
+    on = bool(b.get("on"))
+    if on and not number:
+        return jsonify(error="برای روشن کردن، شماره کارت را بنویس"), 400
+    if on and not prices:
+        return jsonify(error="قیمت (تومان) حداقل یک بسته را بنویس"), 400
+    db.settings.update_one({"_id": "card"}, {"$set": {
+        "on": on, "number": number, "holder": str(b.get("holder") or "").strip()[:60], "bank": str(b.get("bank") or "").strip()[:40],
+        "text": str(b.get("text") or "").strip()[:1200] or CARD_DEFAULT_TEXT, "prices": prices, "by": uid, "t": time.time()}}, upsert=True)
+    CARD_CONF[0] = 0.0
+    return jsonify(ok=True)
+
+
+@app.post("/api/admin/card-orders/<int:oid>")
+@admin_only
+def api_admin_card_decide(uid, oid):
+    if not card_decide(oid, bool((request.get_json(silent=True) or {}).get("ok")), uid):
+        return jsonify(error="این سفارش قبلاً رسیدگی شده یا پیدا نشد"), 409
+    return jsonify(ok=True)
+
+
 @app.post("/mother")
 def mother_hook():
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != MOTHER_SECRET:
@@ -5221,6 +5427,9 @@ def mother_hook():
         if cq:
             if fj_gate_cb(cq):
                 return "ok"
+            if str(cq.get("data") or "").startswith("cd:"):
+                card_cb(cq)
+                return "ok"
             mother_callback(cq)
             return "ok"
         msg = upd.get("message")
@@ -5233,6 +5442,8 @@ def mother_hook():
         if msg.get("successful_payment"):
             mother_paid(msg)
         elif mother_media(msg):
+            pass
+        elif card_receipt(msg):
             pass
         elif mother_flow(msg):
             pass
