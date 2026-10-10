@@ -281,6 +281,11 @@ def authed(fn):
         if not u:
             return jsonify(error="unauthorized"), 401
         g.user = u
+        if not u.get("_web") and u["id"] not in ADMIN_IDS:
+            conf = fj_conf()
+            miss = fj_missing(u["id"], conf) if conf else []
+            if miss:
+                return jsonify(error="برای ادامه باید عضو کانال بشی.", fj=fj_public(conf, miss)), 403
         return fn(u["id"], *a, **k)
     return wrapper
 
@@ -840,9 +845,9 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
                    {"text": "label", "url": "https://..."},
                    {"text": "label", "alert": "popup text shown when tapped"},
                    {"text": "label", "copy": "text copied to clipboard when tapped"},
-                   {"text": "label", "share": "message sent along with the user's invite link"} ]],
+                   {"text": "label", "share": "message sent along with the user's invite link"},
+                   {"text": "label", "goto": "<node_id>", "kb": "reply"} ]],      ("kb": "reply" optional on ANY button, see below)
      "ask": false,
-     "kb": "reply",                                                                 (optional)
      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
      "save": ["city", ""],                                                           (optional, see FORMS)
      "types": ["text", "number"],                                                    (optional, see FORMS)
@@ -866,7 +871,7 @@ BASIC ENGINE FEATURES
 - "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner. The owner can answer by replying to it inside the bot chat and the answer reaches the user. Good for simple one-way notes. For anything where the owner must answer users personally, add "ticket": true (see SUPPORT DESK), which gives numbered tickets and a Reply button.
 - "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary (the owner can reply to it too). Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
 - "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. Put it on the specific node (the section the user must unlock) or on a goto/alert/pay button ({"text": "...", "goto": "vip", "join": {"channels": ["x"], "text": "..."}}) so only that part is locked; use the top-level "join" only when the user wants the WHOLE bot locked. In "thinking" remind that the bot must be admin in that channel.
-- "kb": "reply" = show this node's buttons as a keyboard under the chat input box instead of buttons under the message. Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on nodes with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
+- "kb": "reply" on a BUTTON = that button is shown in the keyboard under the chat input box instead of a glass button under the message. Each button chooses by itself, so one section can have both kinds (glass buttons under the message + a main-menu keyboard under the chat). Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on sections with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
 
 MEDIA
@@ -880,7 +885,7 @@ AI CHAT (powerful, costs tokens, use deliberately)
 - Use it when the user wants a smart assistant, consultant, tutor, translator, writer, fortune-teller, character, support agent that answers free-form questions, or anything where fixed menus cannot work. NEVER use it for plain menus or fixed information.
 - "prompt" is written in the bot's language as instructions TO the assistant: its role and name, tone, what it may and may not do, and every real fact the user gave (prices, hours, products, rules). Max 1500 characters. If it should sell or support a business, include that business's facts and say "if you don't know, say so and offer the contact button". Never invent facts.
 - The section text is the greeting. ALWAYS add a back/home button so users can leave the conversation (the buttons are shown under every AI answer).
-- Not combinable with "ask", "fields" or "kb": "reply" in the same section.
+- Not combinable with "ask", "fields" or buttons with "kb": "reply" in the same section.
 - A bot can combine normal sections with one or several AI sections (e.g. a shop menu plus an "ask the expert" AI section).
 
 REFERRALS
@@ -1162,7 +1167,7 @@ def clean_pay(pay, label, valid, bad):
     return {"text": label, "pay": p}
 
 
-def clean_join(j, bad, where=""):
+def clean_join(j, bad, where=""):  # متن پیام عضویت: HTML تلگرام مجازه
     """عضویت اجباری (سراسری، روی یک بخش یا روی یک دکمه): تا ۳ کانال عمومی + پیام درخواست"""
     if not isinstance(j, dict):
         return None
@@ -1273,6 +1278,8 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                             it["do"] = acts
                     else:
                         bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنه (دکمه‌ی «{label}»)")
+                if b.get("kb") == "reply" or n.get("kb") == "reply":      # n.kb = کانفیگ‌های قدیمی (نوع برای کل بخش)
+                    it["kb"] = "reply"                                    # کیبورد پایین چت؛ بدونش = دکمه‌ی شیشه‌ای
                 r.append(it)
             if r:
                 rows.append(r)
@@ -1364,8 +1371,11 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                     nums.add(bv)
             else:
                 bad(f"متغیر جدول برترین‌ها در بخش «{nid}» باید یه متغیر شخصیِ عددی (یا refs) باشه")
-        if n.get("kb") == "reply" and rows and not node.get("fields") and not node["ask"] and not node.get("ai"):
-            node["kb"] = "reply"          # کیبورد زیر صفحه‌ی چت (فقط برای بخش‌های بدون ask/form)
+        if (node.get("fields") or node["ask"] or node.get("ai")) and any(b.get("kb") == "reply" for row in rows for b in row):
+            for row in rows:                # کیبورد پایین چت فقط برای بخش‌های بدون ask/form/ai
+                for b in row:
+                    b.pop("kb", None)
+            bad(f"کیبورد پایین چت روی بخش «{nid}» کار نمی‌کنه (فرم/دریافت پیام/هوش مصنوعی)؛ دکمه‌ها شیشه‌ای شدن")
         done = str(n.get("done") or "").strip()[:500]
         if done:
             node["done"] = done
@@ -1993,6 +2003,16 @@ def plain_html(s):
 
 def is_block_err(r):
     return bool(r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I))
+
+
+def tg_html(token, method, **data):
+    """ارسال/ویرایش با parse_mode=HTML (بولد، لینک و…)؛ اگه تلگرام تگ‌ها رو نپذیرفت همون متن بدون تگ می‌ره"""
+    key = "caption" if "caption" in data else "text"
+    r = tg(token, method, parse_mode="HTML", **data)
+    if not r.get("ok") and parse_err(r):
+        data[key] = plain_html(data.get(key, ""))
+        r = tg(token, method, **data)
+    return r
 
 
 def parse_err(r):
@@ -3376,8 +3396,9 @@ class Env:
             self.dirty = False
 
 
-def fill(t, env):
-    """{name} / {coins} / {city|پیش‌فرض} رو با مقدار جایگزین می‌کنه (اسم ناشناس دست‌نخورده می‌مونه)"""
+def fill(t, env, esc=False):
+    """{name} / {coins} / {city|پیش‌فرض} رو با مقدار جایگزین می‌کنه (اسم ناشناس دست‌نخورده می‌مونه).
+    esc=True: مقدارها برای ارسال با parse_mode=HTML امن (escape) می‌شن"""
     declared = env.cfg.get("vars") or {}
     shared = env.cfg.get("globals") or {}
 
@@ -3385,7 +3406,9 @@ def fill(t, env):
         k = m.group(1)
         if k in BUILTINS or k in declared or k in shared:
             v = env.get(k)
-            return v if (v != "" or m.group(2) is None) else m.group(2)
+            if v == "" and m.group(2) is not None:
+                return m.group(2)
+            return _html.escape(str(v), quote=False) if esc else v
         return m.group(0)
     return PH_RE.sub(rep, str(t))
 
@@ -3456,11 +3479,12 @@ def visible(b, env):
 
 
 def keyboard(node, node_id, env):
+    """دکمه‌های شیشه‌ای (زیر پیام)؛ دکمه‌هایی که kb=reply دارن اینجا نمیان"""
     kb = []
     for ri, row in enumerate(node["buttons"]):
         r = []
         for ci, b in enumerate(row):
-            if not visible(b, env):
+            if not visible(b, env) or b.get("kb") == "reply":
                 continue
             label = fill(b["text"], env)[:64] or "·"
             if "url" in b:
@@ -3483,8 +3507,10 @@ def keyboard(node, node_id, env):
 
 def reply_markup(node, env):
     """کیبورد زیر صفحه‌ی چت (Reply Keyboard)"""
-    rows = [[{"text": fill(b["text"], env)[:64] or "·"} for b in row if visible(b, env)] for row in node["buttons"]]
-    return {"keyboard": [r for r in rows if r], "resize_keyboard": True, "is_persistent": True}
+    rows = [[{"text": fill(b["text"], env)[:64] or "·"} for b in row
+             if b.get("kb") == "reply" and visible(b, env) and ("pay" not in b or PAYMENTS)] for row in node["buttons"]]
+    rows = [r for r in rows if r]
+    return {"keyboard": rows, "resize_keyboard": True, "is_persistent": True} if rows else None
 
 
 def clear_reply_kb(env):
@@ -3504,7 +3530,7 @@ def deliver(env, text, markup, mid=None, photo=None, edit=None, has_kb=True):
     token, chat_id = env.token, env.chat_id
     inline = "inline_keyboard" in (markup or {})
     if edit and not (mid or photo) and inline and not any(k in edit for k in MEDIA_KEYS):
-        r = tg(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
+        r = tg_html(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
         if r.get("ok") or "not modified" in str(r.get("description", "")):
             return
     if edit:
@@ -3513,16 +3539,16 @@ def deliver(env, text, markup, mid=None, photo=None, edit=None, has_kb=True):
     short = len(text) <= 1000                       # کپشن تلگرام حداکثر ۱۰۲۴ کاراکتره
     done = False
     if mid:
-        done = bool(tg_media(token, env.bot_id, chat_id, mid, text if short else "", mk if short else None)) and short
+        done = bool(tg_media(token, env.bot_id, chat_id, mid, text if short else "", mk if short else None, "HTML")) and short
     elif photo:
         data = {"chat_id": chat_id, "photo": photo}
         if short:
             data["caption"] = text
             if mk:
                 data["reply_markup"] = mk
-        done = bool(tg(token, "sendPhoto", **data).get("ok")) and short
+        done = bool(tg_html(token, "sendPhoto", **data).get("ok")) and short
     if not done:
-        tg(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": mk} if mk else {}))
+        tg_html(token, "sendMessage", chat_id=chat_id, text=text, **({"reply_markup": mk} if mk else {}))
 
 
 def send_node(env, node_id, edit=None, depth=0):
@@ -3546,21 +3572,28 @@ def send_node(env, node_id, edit=None, depth=0):
         if check(alt["when"], env):
             text = alt["text"]
             break
-    text = fill(text, env)[:4000]
+    text = fill(text, env, True)[:4000]
     if node.get("board"):
-        text = (text[:3000] + "\n\n" + board_text(env, node["board"]))[:4000]
-    kb = keyboard(node, node_id, env)
-    use_reply = node.get("kb") == "reply" and bool(kb)
-    if not use_reply:
+        text = (text[:3000] + "\n\n" + _html.escape(board_text(env, node["board"]), quote=False))[:4000]
+    kb = keyboard(node, node_id, env)                      # دکمه‌های شیشه‌ای
+    rk = reply_markup(node, env)                           # کیبورد پایین چت (None = ندارد)
+    if not rk:
         clear_reply_kb(env)
-    markup = reply_markup(node, env) if use_reply else {"inline_keyboard": kb}
-    deliver(env, text, markup, node.get("media"), node.get("photo"), edit, bool(kb))
+    if kb:
+        markup, has = {"inline_keyboard": kb}, True
+    elif rk:
+        markup, has = rk, True
+    else:
+        markup, has = {"inline_keyboard": []}, False
+    deliver(env, text, markup, node.get("media"), node.get("photo"), edit, has)
     sid = env.sid
-    if use_reply:
+    if rk:
+        if kb:      # تلگرام روی یک پیام فقط یک نوع کیبورد می‌ذاره؛ کیبورد پایین چت با یک پیام کوچک جدا می‌آد
+            tg(env.token, "sendMessage", chat_id=env.chat_id, text="👇", reply_markup=rk)
         db.rk.replace_one({"_id": sid}, {"_id": sid, "node": node_id, "t": now()}, upsert=True)
     if node.get("fields"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
-        tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(node["fields"][0], env))
+        tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=fill(node["fields"][0], env, True))
     elif node.get("ask"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "ask": node_id, "t": now()}, upsert=True)
     elif node.get("ai"):
@@ -3576,7 +3609,7 @@ def reply_press(env, rk, text):
         return False
     for row in node["buttons"]:
         for b in row:
-            if not visible(b, env) or text not in (fill(b["text"], env), b["text"]):
+            if b.get("kb") != "reply" or not visible(b, env) or text not in (fill(b["text"], env), b["text"]):
                 continue
             if button_gate(env, b, f"n:{rk.get('node')}"):
                 return True
@@ -3619,13 +3652,13 @@ def to_owner(env, text=None, copy_msg=None):
 
 
 def finish(env, node, default_done):
-    t = fill(node.get("done") or default_done, env)
+    t = fill(node.get("done") or default_done, env, True)
     sent = False
     if node.get("done_media"):
         short = len(t) <= 1000
-        sent = bool(tg_media(env.token, env.bot_id, env.chat_id, node["done_media"], t if short else "")) and short
+        sent = bool(tg_media(env.token, env.bot_id, env.chat_id, node["done_media"], t if short else "", None, "HTML")) and short
     if not sent:
-        tg(env.token, "sendMessage", chat_id=env.chat_id, text=t)
+        tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=t)
     send_node(env, node.get("next") or env.cfg["start"])
 
 
@@ -3662,7 +3695,7 @@ def send_gate(token, chat_id, cfg, j=None, retry="chk"):
     j = j or cfg["join"]
     kb = [[{"text": f"@{c}", "url": f"https://t.me/{c}"}] for c in j["channels"]]
     kb.append([{"text": "عضو شدم", "callback_data": retry[:64]}])
-    tg(token, "sendMessage", chat_id=chat_id, text=j["text"], reply_markup={"inline_keyboard": kb})
+    tg_html(token, "sendMessage", chat_id=chat_id, text=j["text"], reply_markup={"inline_keyboard": kb})
 
 
 def button_gate(env, b, retry):
@@ -3738,7 +3771,7 @@ def schedule_remind(env, a):
             return
         u = env.user
         db.sched.insert_one({**q, "chat": env.chat_id, "key": key, "goto": a.get("goto", ""),
-                             "text": fill(a.get("value", ""), env)[:2000],
+                             "text": fill(a.get("value", ""), env, True)[:2000],
                              "due": naive(now() + timedelta(minutes=int(a.get("minutes", 60)))),
                              "user": {k: u[k] for k in ("id", "first_name", "last_name", "username", "language_code", "is_premium")
                                       if u.get(k) is not None}})
@@ -3752,7 +3785,7 @@ def run_sched_job(job):
         return
     token = dec(bot["token_enc"])
     if job.get("text"):
-        if not tg(token, "sendMessage", chat_id=job["chat"], text=job["text"]).get("ok"):
+        if not tg_html(token, "sendMessage", chat_id=job["chat"], text=job["text"]).get("ok"):
             return
     g = job.get("goto")
     if g and g in bot["config"]["nodes"]:
@@ -4081,7 +4114,7 @@ def bot_paid(env, msg):
     except DuplicateKeyError:
         return
     run_actions(b.get("do"), env)
-    tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(p.get("text") or "پرداختت انجام شد. ممنون!", env)[:4000])
+    tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=fill(p.get("text") or "پرداختت انجام شد. ممنون!", env, True)[:4000])
     to_owner(env, text=f"پرداخت جدید — {p['title']}\n{p['stars']} ستاره\n{who(env)}\nکد پیگیری: {charge}")
     if p.get("goto") in env.cfg["nodes"]:
         send_node(env, p["goto"])
@@ -4191,7 +4224,7 @@ def child_referral(env):
     run_actions(cfg.get("on_ref"), renv)
     renv.save()
     if cfg.get("ref_text"):
-        tg(env.token, "sendMessage", chat_id=rid, text=fill(cfg["ref_text"], renv)[:4000])
+        tg_html(env.token, "sendMessage", chat_id=rid, text=fill(cfg["ref_text"], renv, True)[:4000])
 
 
 @app.post("/hook/<bot_id>")
@@ -4376,10 +4409,10 @@ def sub_hook(bot_id):
             ans = (state.get("a") or []) + [val[:500]]
             if len(ans) < len(fields):
                 db.states.update_one({"_id": sid}, {"$set": {"a": ans}})
-                tg(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], env))
+                tg_html(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], env, True))
             else:
                 db.states.delete_one({"_id": sid})
-                body = "\n\n".join(f"{q}\n» {a}" for q, a in zip(fields, ans))
+                body = "\n\n".join(f"{plain_html(q)}\n» {a}" for q, a in zip(fields, ans))
                 if node.get("ticket"):                              # فرم تیکتی: شماره‌دار + دکمه‌ی پاسخ برای پشتیبان‌ها
                     if is_blocked(bot_id, env.uid):
                         tg(token, "sendMessage", chat_id=chat_id, text="ارتباط شما با پشتیبانی محدود شده.")
@@ -5009,6 +5042,169 @@ def mother_callback(cq):
     ack()
 
 
+
+# ───────────────────────── عضویت اجباری ربات‌ساز (پنل ادمین) ─────────────────────────
+FJ_DEFAULT_TEXT = "برای استفاده از ربات‌ساز اول باید عضو کانال زیر بشی 👇\nبعد از عضویت روی «عضو شدم» بزن."
+FJ_CACHE, FJ_LOCK, FJ_CONF = {}, threading.Lock(), [0.0, None]
+
+
+def fj_conf():
+    """تنظیمات فعال عضویت اجباری یا None؛ ۱۵ ثانیه کش می‌شه"""
+    t = time.time()
+    if t - FJ_CONF[0] > 15:
+        d = db.settings.find_one({"_id": "force_join"}) or {}
+        FJ_CONF[:] = [t, d if d.get("on") and d.get("channels") else None]
+    return FJ_CONF[1]
+
+
+def fj_chat(c):
+    return int(c["id"]) if re.fullmatch(r"-?\d+", c["id"]) else c["id"]
+
+
+def fj_missing(uid, conf):
+    """کانال‌هایی که کاربر عضوشون نیست. اگه ربات مادر ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
+    if uid in ADMIN_IDS:
+        return []
+    t = time.time()
+    if FJ_CACHE.get(uid, 0) > t:
+        return []
+    miss = []
+    for c in conf["channels"]:
+        r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
+        res = r.get("result") or {}
+        if r.get("ok") and (res.get("status") in ("left", "kicked") or (res.get("status") == "restricted" and not res.get("is_member", True))):
+            miss.append(c)
+    if not miss:
+        with FJ_LOCK:
+            if len(FJ_CACHE) > 5000:
+                FJ_CACHE.clear()
+            FJ_CACHE[uid] = t + 120
+    return miss
+
+
+def fj_label(c, i):
+    return c["id"] if c["id"].startswith("@") else f"کانال {i}"
+
+
+def fj_public(conf, miss):
+    return {"text": conf.get("text") or FJ_DEFAULT_TEXT,
+            "channels": [{"label": fj_label(c, i), "url": c["url"]} for i, c in enumerate(miss or conf["channels"], 1)]}
+
+
+def fj_send(chat, conf, miss):
+    rows = [[{"text": "عضویت در " + x["label"], "url": x["url"]}] for x in fj_public(conf, miss)["channels"]]
+    rows.append([{"text": "✅ عضو شدم", "callback_data": "fj:chk"}])
+    tg_html(MOTHER_TOKEN, "sendMessage", chat_id=chat, text=(conf.get("text") or FJ_DEFAULT_TEXT)[:4000],
+            reply_markup={"inline_keyboard": rows}, disable_web_page_preview=True)
+
+
+def fj_gate_msg(msg):
+    """پیام کاربر عضو نیست؟ پیام عضویت می‌فرسته و True برمی‌گردونه. /start (با لینک دعوت) یادش می‌مونه"""
+    conf = fj_conf()
+    if not conf:
+        return False
+    uid = msg["from"]["id"]
+    miss = fj_missing(uid, conf)
+    if not miss:
+        return False
+    text = (msg.get("text") or "").strip()
+    if text.startswith("/start"):
+        db.fjp.replace_one({"_id": uid}, {"_id": uid, "text": text[:200], "t": now()}, upsert=True)
+    fj_send(msg["chat"]["id"], conf, miss)
+    return True
+
+
+def fj_gate_cb(cq):
+    conf, uid, data = fj_conf(), cq["from"]["id"], str(cq.get("data") or "")
+    ans = lambda **kw: tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], **kw)
+    if data == "fj:chk":
+        FJ_CACHE.pop(uid, None)
+        if conf and fj_missing(uid, conf):
+            ans(text="هنوز عضو نشدی.", show_alert=True)
+            return True
+        ans()
+        m = cq.get("message") or {}
+        if m.get("message_id"):
+            tg(MOTHER_TOKEN, "deleteMessage", chat_id=m["chat"]["id"], message_id=m["message_id"])
+        p = db.fjp.find_one_and_delete({"_id": uid})
+        mother_command({"from": cq["from"], "chat": {"id": uid, "type": "private"}, "text": (p or {}).get("text") or "/start"})
+        return True
+    if not conf:
+        return False
+    miss = fj_missing(uid, conf)
+    if not miss:
+        return False
+    ans(text="اول عضو کانال شو", show_alert=True)
+    fj_send(uid, conf, miss)
+    return True
+
+
+def fj_parse(raw):
+    """«@a t.me/b -1001234=https://t.me/+abc» → [{id, url}] (حداکثر ۳ تا)"""
+    items = [x for x in re.split(r"[\s,،]+", str(raw or "").strip()) if x][:3]
+    out = []
+    for it in items:
+        cid, _, link = it.partition("=")
+        if re.fullmatch(r"-?\d{5,20}", cid):
+            if not re.match(r"^https://t\.me/\S+$", link):
+                return None, f"برای کانال خصوصی «{cid}» لینک دعوت هم بده؛ مثل {cid}=https://t.me/+abc"
+            out.append({"id": cid, "url": link})
+            continue
+        u = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", it, flags=re.I).lstrip("@")
+        if not re.match(r"^[A-Za-z][A-Za-z0-9_]{4,31}$", u):
+            return None, f"آیدی کانال «{it}» معتبر نیست"
+        if not any(c["id"] == "@" + u for c in out):
+            out.append({"id": "@" + u, "url": "https://t.me/" + u})
+    return out, ""
+
+
+def fj_str(c):
+    return c["id"] if c["id"].startswith("@") else f'{c["id"]}={c["url"]}'
+
+
+@app.get("/api/fj")
+def api_fj_state():
+    u = request_user()
+    if not u:
+        return jsonify(error="unauthorized"), 401
+    conf = fj_conf()
+    if not conf:
+        return jsonify(required=False)
+    if not rate_ok(f"fj:{u['id']}", 20, 60):
+        return jsonify(error="تعداد تلاش زیاد بود، کمی صبر کن."), 429
+    FJ_CACHE.pop(u["id"], None)
+    miss = fj_missing(u["id"], conf)
+    return jsonify(required=bool(miss), **(fj_public(conf, miss) if miss else {}))
+
+
+@app.get("/api/admin/force-join")
+@admin_only
+def api_admin_fj_get(uid):
+    d = db.settings.find_one({"_id": "force_join"}) or {}
+    return jsonify(on=bool(d.get("on")), channels=" ".join(fj_str(c) for c in d.get("channels", [])), text=d.get("text") or FJ_DEFAULT_TEXT)
+
+
+@app.post("/api/admin/force-join")
+@admin_only
+def api_admin_fj_set(uid):
+    b = request.get_json(silent=True) or {}
+    chans, err = fj_parse(b.get("channels"))
+    if err:
+        return jsonify(error=err), 400
+    if b.get("on") and not chans:
+        return jsonify(error="برای روشن کردن، حداقل یک کانال بنویس"), 400
+    text = str(b.get("text") or "").strip()[:1500] or FJ_DEFAULT_TEXT
+    warn = []
+    for c in chans:
+        r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
+        if not r.get("ok"):
+            warn.append(f"{c['id']}: ربات مادر باید ادمین این کانال باشه (یا آیدی درست نیست)؛ تا اون موقع کسی قفل نمی‌شه")
+    db.settings.update_one({"_id": "force_join"}, {"$set": {"on": bool(b.get("on")) and bool(chans), "channels": chans, "text": text, "by": uid, "t": time.time()}}, upsert=True)
+    FJ_CONF[0] = 0.0
+    FJ_CACHE.clear()
+    return jsonify(ok=True, warn=warn)
+
+
 @app.post("/mother")
 def mother_hook():
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != MOTHER_SECRET:
@@ -5023,10 +5219,14 @@ def mother_hook():
             return "ok"
         cq = upd.get("callback_query")
         if cq:
+            if fj_gate_cb(cq):
+                return "ok"
             mother_callback(cq)
             return "ok"
         msg = upd.get("message")
         if not msg or msg.get("chat", {}).get("type") != "private":
+            return "ok"
+        if not msg.get("successful_payment") and (msg.get("from") or {}).get("id") and fj_gate_msg(msg):
             return "ok"
         if (msg.get("from") or {}).get("id"):
             db.users.update_one({"_id": msg["from"]["id"], "mb_blocked": True}, {"$set": {"mb_blocked": False}})

@@ -739,6 +739,8 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .urow.sel .ck{background:var(--ac);box-shadow:none}
 .urow.sel .ck svg{opacity:1}
 .scrl{max-height:34vh;overflow:auto}
+.fjt{white-space:pre-wrap;text-align:right;margin:10px 0;line-height:1.9}.fjt a{color:var(--ac)}
+.fjb{display:flex;flex-direction:column;gap:8px;margin-top:12px;width:100%}
 .fmtbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .fmtbar button{min-width:32px;height:30px;padding:0 9px;border-radius:8px;font-size:13px;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
 .iconb.spin svg{animation:rbSpin 1s linear infinite}
@@ -1022,12 +1024,20 @@ function mediaPicker(key, cur){
 
 /* ═════════ بارگذاری و رندر ═════════ */
 function takeMe(d){
+  for(const b of d.bots || []) for(const n of Object.values(b.config?.nodes || {})) if(n.kb === "reply"){ (n.buttons || []).forEach(r => r.forEach(x => { x.kb = "reply"; })); delete n.kb; }
   Object.assign(S, { bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null, me: d.me || null });
+}
+const tgHtml = t => esc(t).replace(/&lt;(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)&gt;/gi, "<$1$2>").replace(/&lt;a href=&quot;(https?:\/\/[^&"<>]*)&quot;&gt;/gi, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/gi, "</a>").replace(/&lt;\/?tg-spoiler&gt;/gi, "");
+function showFj(f){
+  $("#dock").hidden = true;
+  $("#app").innerHTML = `<div class="empty fjg"><div class="ib big">${IC.users}</div><h2>عضویت اجباری</h2><div class="fjt">${tgHtml(f.text)}</div>
+    <div class="fjb">${f.channels.map(c => `<button class="b o" data-a="fjopen" data-u="${esc(c.url)}">${esc(c.label)}</button>`).join("")}<button class="b" data-a="fjchk">✅ عضو شدم</button></div></div>`;
 }
 async function load(){
   try{ takeMe(await api("/api/me")); }
   catch(e){
     $("#dock").hidden = true;
+    if(e.status === 403 && e.data?.fj) return showFj(e.data.fj);
     $("#app").innerHTML = `<div class="empty"><div class="ib big">${IC.bot}</div><h2>فقط داخل تلگرام باز می‌شود</h2><p class="muted">از ربات مادر، دکمه‌ی «ساخت ربات» را بزن.</p></div>`;
     return;
   }
@@ -1668,14 +1678,14 @@ function stBtnCell(id, r, c, b, cfg){
   return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${anchor}</div>`;
 }
 function stCardH(n){
-  const rows = (n.buttons || []).length, lg = (n.route?.length || 0) + (n.next ? 1 : 0);
+  const gr = [false, true].map(x => (n.buttons || []).filter(row => row.some(b => (b.kb === "reply") === x)).length), rows = gr[0] + gr[1], caps = (gr[0] ? 1 : 0) + (gr[1] ? 1 : 0), lg = (n.route?.length || 0) + (n.next ? 1 : 0);
   const lines = Math.min(5, Math.ceil(((n.text || "").length || 1) / 34));
-  return 196 + ((n.media || n.photo) ? 118 : 0) + lines * 21 + (rows ? 24 + rows * 39 : 0) + (lg ? 22 + lg * 30 : 0);
+  return 196 + ((n.media || n.photo) ? 118 : 0) + lines * 21 + (rows ? 24 * caps + rows * 39 : 0) + (lg ? 22 + lg * 30 : 0);
 }
 function stCardHTML(id, dead){
   const cfg = S.cur.config, n = cfg.nodes[id], p = ST.pos[id] || {x: 0, y: 0};
   const isStart = id === cfg.start, isFb = id === cfg.fallback && id !== cfg.start;
-  const inc = (ST.inc || {})[id] || 0, rk = n.kb === "reply", btns = n.buttons || [];
+  const inc = (ST.inc || {})[id] || 0, btns = n.buttons || [];
   const tags = [];
   if(isStart) tags.push('<span class="tag st">شروع ربات</span>');
   if(isFb) tags.push('<span class="tag">پاسخ پیش‌فرض</span>');
@@ -1688,8 +1698,11 @@ function stCardHTML(id, dead){
   if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn" title="بعد از این بخش، کاربر راهی برای ادامه ندارد">بدون ادامه</span>');
   const txt = (n.text || "").trim();
   const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
-  const keys = btns.map((row, r) => `<div class="stk-row">${row.map((b, c) => stBtnCell(id, r, c, b, cfg)).join("")}</div>`).join("");
-  const kb = keys ? `<div class="stk${rk ? " rk" : ""}"><div class="stk-cap">${rk ? "کیبورد پایین چت" : "دکمه‌های زیر پیام"}</div>${keys}</div>` : "";
+  const grp = isRk => {
+    const keys = btns.map((row, r) => { const cells = row.map((b, c) => (b.kb === "reply") === isRk ? stBtnCell(id, r, c, b, cfg) : "").join(""); return cells ? `<div class="stk-row">${cells}</div>` : ""; }).join("");
+    return keys ? `<div class="stk${isRk ? " rk" : ""}"><div class="stk-cap">${isRk ? "کیبورد پایین چت" : "دکمه‌های شیشه‌ای زیر پیام"}</div>${keys}</div>` : "";
+  };
+  const kb = grp(false) + grp(true);
   let logic = "";
   (n.route || []).forEach((ru, i) => { logic += `<div class="stc-row"><span class="pa" data-pa="r|${id}|${i}" data-n="${esc(id)}" data-pc="var(--vio)"></span><span class="ric">${IC.go}</span><span class="rlb">${esc(condTxt(ru.when))} <small>· مسیر شرطی</small></span></div>`; });
   if(n.next) logic += `<div class="stc-row"><span class="pa" data-pa="x|${id}" data-n="${esc(id)}" data-pc="var(--ok)"></span><span class="ric">${IC.go}</span><span class="rlb">بعد از ثبت پاسخ <small>· رفتن به بخش بعدی</small></span></div>`;
@@ -2349,7 +2362,7 @@ const chOut = (v, text) => { const l = chList(v); if(l.length > 3) return "حد�
 const joinBox = (d, what) => `<details class="adv jn"${d.jch ? " open" : ""}><summary>عضویت اجباری در کانال</summary><div class="box">
       <p class="muted" style="margin-bottom:8px">${what} فقط وقتی کاربر عضو این کانال‌ها باشد کار می‌کند؛ وگرنه پیام عضویت می‌بیند و بعد از عضو شدن مستقیم به همین‌جا می‌رسد. ربات باید در کانال ادمین باشد. خالی یعنی غیرفعال.</p>
       <span class="lbl">کانال‌ها (تا ${N(3)} تا، با فاصله)</span><input class="ltr" id="j-ch" value="${esc(d.jch)}" placeholder="@channel1 @channel2" autocomplete="off">
-      <span class="lbl">پیام درخواست عضویت</span><input class="fa" id="j-tx" value="${esc(d.jtx)}" maxlength="500" placeholder="برای ادامه اول عضو کانال شو.">
+      <span class="lbl">پیام درخواست عضویت</span><input class="fa" id="j-tx" data-fmt value="${esc(d.jtx)}" maxlength="500" placeholder="برای ادامه اول عضو کانال شو.">${fmtTools("j-tx")}
     </div></details>`;
 const readJoin = () => { if($("#j-ch")){ D.jch = $("#j-ch").value; D.jtx = $("#j-tx").value; } };
 const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
@@ -2376,7 +2389,7 @@ function ruleHTML(list, o, i, cfg){
   } else {
     inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگر…"}</span>${del}</div>${condHTML(o.c)}`;
     if(list === "route") inner += `<span class="lbl">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
-    if(list === "alt") inner += `<div class="fgap"></div><textarea class="fa r-text" maxlength="3500" placeholder="متن جایگزین">${esc(o.text || "")}</textarea>`;
+    if(list === "alt") inner += `<div class="fgap"></div><textarea class="fa r-text" data-fmt maxlength="3500" placeholder="متن جایگزین">${esc(o.text || "")}</textarea>${fmtTools("@last")}`;
   }
   return `<div class="rl" data-list="${list}" data-i="${i}">${inner}</div>`;
 }
@@ -2430,7 +2443,7 @@ function openNode(id){
   S.sheet = {kind: "node", id};
   D = { title: n.title || "", text: n.text, photo: n.photo || "", media: n.media || "", doneMedia: n.done_media || "", done: n.done || "", next: n.next || "",
         fields: n.fields ? n.fields.map((q, i) => ({q, v: (n.save || [])[i] || "", t: (n.types || [])[i] || "text"})) : [{q: "", v: "", t: "text"}],
-        silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show", kb: n.kb === "reply" ? "reply" : "inline",
+        silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show",
         aip: n.ai?.prompt || "", aid: n.ai?.daily || 15, aim: n.ai?.memory ?? 3,
         start: id === cfg.start, fb: id === cfg.fallback,
         jch: (n.join?.channels || []).map(c => "@" + c).join(" "), jtx: n.join?.text || "",
@@ -2438,22 +2451,33 @@ function openNode(id){
         do: cp(n.do || []), route: (n.route || []).map(r => ({c: cp(r.when), goto: r.goto})), alt: (n.alt || []).map(r => ({c: cp(r.when), text: r.text})), adv: false };
   renderSheet();
 }
+function kbSummary(n){
+  const all = (n.buttons || []).flat(), rk = all.filter(b => b.kb === "reply").length, gl = all.length - rk;
+  return [gl ? N(gl) + " شیشه‌ای" : "", rk ? N(rk) + " کیبورد چت" : ""].filter(Boolean).join(" · ") || "بدون دکمه";
+}
 function kbPicker(cur){
   const inl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="40" height="17" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="4.7" y="24" width="23" height="8" rx="3.5"/><rect x="30.7" y="24" width="23" height="8" rx="3.5"/><rect x="4.7" y="34.5" width="49" height="7" rx="3.5"/></svg>`;
   const rpl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="2" width="40" height="15" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="1" y="24" width="56" height="19" rx="4" fill="currentColor" fill-opacity=".1" stroke="none"/><rect x="4" y="27" width="15" height="6" rx="2"/><rect x="21.5" y="27" width="15" height="6" rx="2"/><rect x="39" y="27" width="15" height="6" rx="2"/><rect x="4" y="35" width="50" height="5" rx="2"/></svg>`;
-  return `<span class="lbl">محل نمایش دکمه‌ها</span>
+  return `<span class="lbl">نوع این دکمه</span>
     <div class="seg">
-      <button class="${cur !== "reply" ? "on" : ""}" data-sh="kbt" data-v="inline">${inl}<b>زیر پیام</b><small>چسبیده به همین پیام</small></button>
-      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد پایین چت</b><small>مثل منوی ثابت پایین</small></button>
+      <button class="${cur !== "reply" ? "on" : ""}" data-sh="kbt" data-v="inline">${inl}<b>شیشه‌ای</b><small>زیر پیام، چسبیده به آن</small></button>
+      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد</b><small>پایین چت، مثل منوی ثابت</small></button>
     </div>
-    ${cur === "reply" ? `<p class="muted mt">لینک، پاپ‌آپ، کپی و اشتراک در کیبورد چت هم کار می‌کنند، ولی یک پیام کوچک می‌فرستند.</p>` : ""}`;
+    ${cur === "reply" ? `<p class="muted mt">دکمه‌های کیبورد با یک پیام کوچک (👇) زیر چت می‌آیند. در یک بخش می‌توانی هم دکمه‌ی شیشه‌ای داشته باشی هم کیبورد.</p>` : ""} : ""}`;
+}
+let FMT_LAST = null;
+document.addEventListener("focusin", e => { if(e.target.matches?.("[data-fmt]")) FMT_LAST = e.target; });
+const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}</div>`;
+function fmtInsert(t, i){
+  const tg_ = FMT_TAGS[i], o = tg_[2], c = tg_[3], a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
+  t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true}));
 }
 function nodeSheet(){
   const cfg = S.cur.config, d = D;
   const advOpen = d.adv || d.do.length || d.route.length || d.alt.length || d.bvar;
   return head("ویرایش بخش") + `
     <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
-    <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" maxlength="3500">${esc(d.text)}</textarea>
+    <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" data-fmt maxlength="3500">${esc(d.text)}</textarea>${fmtTools("f-text")}
     <p class="muted mt">برای شخصی‌سازی پیام از متغیر استفاده کن؛ مثل <b dir="ltr">{name}</b> برای اسم کاربر یا <b dir="ltr">{coins}</b> برای متغیر خودت. فهرست کامل در تنظیمات ربات است.</p>
     <span class="lbl">رسانه (عکس، ویدیو، گیف، موسیقی، ویس یا فایل)</span>${mediaPicker("media", d.media)}
     ${d.media ? `<p class="muted">متن بخش همراه رسانه، به‌عنوان توضیحِ زیر آن فرستاده می‌شود.</p>` : `<span class="lbl">یا لینک مستقیم عکس (اختیاری)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">`}
@@ -2464,26 +2488,26 @@ function nodeSheet(){
       <option value="ask"${d.mode === "ask" ? " selected" : ""}>گرفتن یک پیام از کاربر</option>
       <option value="form"${d.mode === "form" ? " selected" : ""}>فرم چندمرحله‌ای</option>
     </select>
-    ${d.mode === "show" ? kbPicker(d.kb) : ""}
     ${d.mode === "ai" ? `<span class="lbl">دستور دستیار (نقش، لحن، اطلاعات کسب‌وکار)</span>
       <textarea class="fa" id="f-aip" maxlength="1500" style="min-height:140px" placeholder="مثلاً: تو دستیار فروشگاه موبایل «نوید» هستی. محترم و کوتاه جواب بده. ساعت کاری ۹ تا ۲۱ است.">${esc(d.aip)}</textarea>
       <span class="lbl">سقف پیام هر کاربر در روز</span><input id="f-aid" type="number" min="1" max="100" value="${esc(d.aid)}">
       <span class="lbl">حافظه‌ی گفتگو (چند پیام قبلی، 0 تا 6)</span><input id="f-aim" type="number" min="0" max="6" value="${esc(d.aim)}">
       <div class="aibox">${billingFixed() ? `هر ${N(S.cfg.ai_per)} پیام هوشمند، ${N(1)} توکن` : "هزینه‌ی هر پیام هوشمند از روی مصرف واقعی حساب می‌شود (کسری از یک توکن تا ۱ توکن)؛"} از حساب تو کم می‌شود. موجودی تو ${N(S.wallet.tokens)} توکن است و با تمام شدنش این بخش برای کاربرها غیرفعال می‌شود. حتماً یک دکمه‌ی بازگشت به این بخش اضافه کن.</div>` : ""}
     ${d.mode === "form" ? `<span class="lbl">سؤال‌ها به ترتیب</span>
-      ${d.fields.map((f, i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" value="${esc(f.q)}" placeholder="مثلاً: اسمت چیست؟" maxlength="200"><button class="iconb sm" data-sh="delfld" data-i="${i}" aria-label="حذف سؤال">${IC.x}</button></div>
+      ${d.fields.map((f, i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" data-fmt value="${esc(f.q)}" placeholder="مثلاً: اسمت چیست؟" maxlength="200"><button class="iconb sm" data-sh="delfld" data-i="${i}" aria-label="حذف سؤال">${IC.x}</button></div>
         <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
         <select class="ft">${TYPES.map(([v, l]) => `<option value="${v}"${v === f.t ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>`).join("")}
+      ${fmtTools("@last")}
       ${d.fields.length < 6 ? `<button class="b o sm" data-sh="addfld">${IC.plus}سؤال</button>` : ""}
       <label class="chk"><input type="checkbox" id="f-silent"${d.silent ? " checked" : ""}> نتیجه‌ی فرم برای من فرستاده نشود</label>` : ""}
-    ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">
+    ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" data-fmt value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">${fmtTools("f-done")}
       <span class="lbl">رسانه‌ی پیام تشکر (اختیاری)</span>${mediaPicker("doneMedia", d.doneMedia)}
       <span class="lbl">بعد از ثبت پاسخ، کدام بخش نمایش داده شود؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
       <label class="chk"><input type="checkbox" id="f-ticket"${d.ticket ? " checked" : ""}> هر پیام یک تیکت شماره‌دار شود (دکمه‌ی «پاسخ» برای من و پشتیبان‌ها)</label>
       ${d.ticket ? `<span class="lbl">برچسب تیکت (اختیاری، مثلاً فروش یا فنی)</span><input class="fa" id="f-tag" value="${esc(d.tag)}" maxlength="20">` : ""}
       <p class="muted mt">${d.ticket ? "پیام کاربر با شماره‌ی تیکت برایت می‌آید و زیرش دکمه‌های پاسخ، سابقه، بستن و مسدود کردن است. با /tickets تیکت‌های باز را می‌بینی." : "پیام کاربرها برای تو فرستاده می‌شود. داخل ربات با Reply روی هر کدام، جوابت به خودش می‌رسد."}</p>` : ""}
     <div class="sub"><span>دکمه‌ها</span></div>
-    <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${d.kb === "reply" ? "کیبورد پایین چت" : "دکمه‌های شیشه‌ای زیر پیام"}</span></span>${goIc}</button></div>
+    <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${kbSummary(cfg.nodes[S.sheet.id])}</span></span>${goIc}</button></div>
     <details class="adv"${advOpen ? " open" : ""}><summary>منطق پیشرفته: متغیر و شرط</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقداری ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
       ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
@@ -2517,7 +2541,6 @@ function saveNode(){
   const id = S.sheet.id, node = S.cur.config.nodes[id];
   if(!D.text.trim()) return toast("متن پیام نباید خالی باشد");
   if(D.mode === "form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
-  if(D.mode === "show" && D.kb === "reply" && !node.buttons.length) return toast("برای کیبورد پایین چت، اول یک دکمه به این بخش اضافه کن");
   if(D.mode === "ai"){
     if(!D.aip.trim()) return toast("دستور دستیار را بنویس");
     if(!node.buttons.length) return toast("برای خروج کاربر از گفتگو، اول یک دکمه‌ی بازگشت به این بخش اضافه کن");
@@ -2526,10 +2549,10 @@ function saveNode(){
   const nj = chOut(D.jch, D.jtx); if(typeof nj === "string") return toast(nj);
   busy($('[data-sh="save"]'), () => commit(cfg => {
     const n = cfg.nodes[id], ob = n.board;
+    if(D.mode !== "show") (n.buttons || []).forEach(r => r.forEach(b => { delete b.kb; }));
     for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "done", "next", "kb", "do", "route", "alt", "ticket", "tag", "board", "join"]) delete n[k];
     if(nj) n.join = nj;
     if(D.bvar) n.board = {var: D.bvar, top: Math.max(3, Math.min(20, parseInt(D.btop) || 10)), ...(ob?.label ? {label: ob.label} : {})};
-    if(D.mode === "show" && D.kb === "reply") n.kb = "reply";
     n.text = D.text.trim();
     if(D.title.trim()) n.title = D.title.trim();
     if(D.media && mediaById(D.media)) n.media = D.media;
@@ -2591,10 +2614,10 @@ function addNode(at){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind: "btn", n: nid, r, c};
-  if(c === null) D = {text: "دکمه‌ی جدید", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
+  if(c === null) D = {text: "دکمه‌ی جدید", kb: "inline", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
-    D = {text: b.text, kind: k, goto: b.goto || cfg.start,
+    D = {text: b.text, kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
          val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || b.share || "",
          when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
          jch: (b.join?.channels || []).map(c => "@" + c).join(" "), jtx: b.join?.text || "",
@@ -2615,16 +2638,18 @@ function btnSheet(){
     pay: `<span class="lbl">قیمت (ستاره‌ی تلگرام، ۱ تا ۱۰٬۰۰۰)</span><input id="b-stars" type="number" min="1" max="10000" value="${esc(d.stars)}">
       <span class="lbl">عنوان فاکتور</span><input class="fa" id="b-ptitle" value="${esc(d.ptitle)}" maxlength="32" placeholder="مثلاً اشتراک ویژه">
       <span class="lbl">توضیح فاکتور (اختیاری)</span><input class="fa" id="b-pdesc" value="${esc(d.pdesc)}" maxlength="255">
-      <span class="lbl">پیام بعد از پرداخت موفق</span><input class="fa" id="b-ptext" value="${esc(d.ptext)}" maxlength="300" placeholder="پرداخت انجام شد، ممنون!">
+      <span class="lbl">پیام بعد از پرداخت موفق</span><input class="fa" id="b-ptext" data-fmt value="${esc(d.ptext)}" maxlength="300" placeholder="پرداخت انجام شد، ممنون!">${fmtTools("b-ptext")}
       <span class="lbl">بعد از پرداخت کدام بخش نشان داده شود؟</span><select id="b-pgoto">${nodeOpts(cfg, d.pgoto, '<option value="">هیچ‌کدام</option>')}</select>
       <p class="muted mt">ستاره‌ها به حساب تلگرامِ تو می‌رود. اکشن‌های این دکمه فقط بعد از پرداختِ موفق اجرا می‌شوند (مثلاً فعال کردن متغیر vip). پرداخت‌ها با /payments دیده می‌شوند و با /refund کد برگشت می‌خورند.</p>`
   }[d.kind];
   const canDo = d.kind === "goto" || d.kind === "alert" || d.kind === "pay";
+  const nn = cfg.nodes[S.sheet.n], kbOk = !(nn.ask || nn.fields || nn.ai);
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
     <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
     <span class="lbl">با لمس دکمه چه شود؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v, l]) => `<option value="${v}"${v === d.kind ? " selected" : ""}>${l}</option>`).join("")}</select>
     ${val}
+    ${kbOk ? kbPicker(d.kb) : `<p class="muted mt">این بخش فرم، دریافت پیام یا هوش مصنوعی است؛ دکمه‌هایش فقط شیشه‌ای می‌شوند.</p>`}
     <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اقدام‌ها (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشان دادن پیام اجرا می‌شوند", "do", cfg, 6)
@@ -2660,6 +2685,7 @@ function saveBtn(){
   }
   else btn.url = d.val.trim();
   if(bj) btn.join = bj;
+  { const nn = S.cur.config.nodes[nid]; if(d.kb === "reply" && !(nn.ask || nn.fields || nn.ai)) btn.kb = "reply"; }
   if(d.when.length) btn.when = d.when[0].c;
   if(d.do.length && (d.kind === "goto" || d.kind === "alert" || d.kind === "pay")) btn.do = outActs(d.do);
   busy($('[data-sh="save"]'), () => commit(cfg => {
@@ -2693,7 +2719,7 @@ function botSheet(){
     ${d.channels ? `<span class="lbl">عضویت اجباری کل ربات</span>
     <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
     <p class="muted mt">این قفلِ کل ربات است. برای قفل کردن فقط یک بخش یا دکمه، از ویرایش همان بخش یا دکمه استفاده کن. خالی کردن این فیلد قفل را برمی‌دارد.</p>
-    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" maxlength="500">${esc(d.jtext)}</textarea>` : ""}
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" data-fmt maxlength="500">${esc(d.jtext)}</textarea>${fmtTools("s-jtext")}` : ""}
     <div class="rowh"><span class="lbl">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="b o sm" data-sh="addcmd">${IC.plus}دستور</button>` : ""}</div>
     <div class="fgap"></div>
     ${d.cmds.map(([k, v], i) => `<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="iconb sm" data-sh="delcmd" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
@@ -2712,7 +2738,7 @@ function botSheet(){
     <details class="adv"${d.refVar ? " open" : ""}><summary>پاداش دعوت</summary><div class="box">
       <p class="muted" style="margin-bottom:8px">وقتی کسی با لینک دعوتِ یکی از کاربرهای ربات تو وارد شود، آن کاربر (دعوت‌کننده) این مقدار را می‌گیرد. لینک و تعداد دعوت‌ها با <b dir="ltr">{ref_link}</b> و <b dir="ltr">{refs}</b> در متن‌ها قابل نمایش است.</p>
       <div class="cmd"><input class="ltr" id="s-rv" list="vdl" value="${esc(d.refVar)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off"><input id="s-ra" value="${esc(d.refAmt)}" placeholder="مقدار (مثلاً 5)" maxlength="10" inputmode="numeric"></div>
-      <span class="lbl">پیام برای دعوت‌کننده (اختیاری)</span><input class="fa" id="s-rt" value="${esc(d.refText)}" maxlength="500" placeholder="یک نفر با لینک تو آمد. سکه‌های تو: {coins}">
+      <span class="lbl">پیام برای دعوت‌کننده (اختیاری)</span><input class="fa" id="s-rt" data-fmt value="${esc(d.refText)}" maxlength="500" placeholder="یک نفر با لینک تو آمد. سکه‌های تو: {coins}">${fmtTools("s-rt")}
       <p class="muted mt">برای هر کاربر فقط وقتی حساب می‌شود که برای اولین بار ربات را استارت کند.</p>
     </div></details>
     <details class="adv"><summary>متغیرهای آماده‌ی تلگرام</summary><div class="box">
@@ -3056,7 +3082,15 @@ document.addEventListener("click", e => { const c = e.target.closest("[data-pf=c
 
 /* ═════════════════ مدیریت ═════════════════ */
 function adminCard(){
-  return `<div class="panel"><h2>توکن کاربر</h2><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
+  if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; if(S.atab === "admin") render(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
+  const fj = S.fj || {on: false, channels: "", text: ""};
+  return `<div class="panel"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
+      <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
+      <span class="lbl">آیدی کانال‌ها (تا ۳ تا، با فاصله)</span><input class="ltr" id="fj-ch" value="${esc(fj.channels)}" placeholder="@channel1 @channel2" autocomplete="off" aria-label="آیدی کانال‌ها">
+      <p class="muted">کانال خصوصی: <b dir="ltr">-1001234567890=https://t.me/+invite</b></p>
+      <span class="lbl">متن پیام عضویت (قالب HTML)</span><textarea class="fa" id="fj-tx" data-fmt maxlength="1500" style="min-height:90px" aria-label="متن پیام عضویت">${esc(fj.text)}</textarea>${fmtTools("fj-tx")}
+      <button class="b o" data-a="afj">ذخیره</button></div>
+    ` + `<div class="panel"><h2>توکن کاربر</h2><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
       <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
       <button class="b o" data-a="agrant">اعمال</button></div>
     <div class="panel"><h2>کد هدیه</h2><div class="fgap"></div>
@@ -3097,6 +3131,15 @@ document.addEventListener("input", e => { const p = e.target.dataset?.cp; if(p) 
 document.addEventListener("change", e => { const p = e.target.dataset?.cpfmt; if(!p) return; cpSt(p).fmt = e.target.value;
   const t = $("#" + p + "-tools"); if(t) t.style.display = e.target.value === "html" ? "" : "none"; });
 Object.assign(A, {
+  fmtb: el => { const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
+    if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد قالب را انتخاب کن"); fmtInsert(t, +el.dataset.i); },
+  fjopen: el => openLink(el.dataset.u),
+  fjchk: el => busy(el, async () => { const d = await api("/api/fj");
+    if(d.required){ toast("هنوز عضو نشدی"); return showFj(d); }
+    $("#dock").hidden = false; await load(); }),
+  afj: el => busy(el, async () => { const v = id => $(id).value.trim(), on = $("#fj-on").checked;
+    const d = await api("/api/admin/force-join", "POST", {on, channels: v("#fj-ch"), text: v("#fj-tx")});
+    S.fj = {on: on && !!v("#fj-ch"), channels: v("#fj-ch"), text: v("#fj-tx")}; toast(d.warn?.length ? d.warn[0] : "ذخیره شد"); }),
   cpf: el => { const t = $("#" + el.dataset.p + "-text"); if(!t) return; const tg_ = FMT_TAGS[+el.dataset.i], o = tg_[2], c = tg_[3];
     const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
     t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true})); },
@@ -3238,7 +3281,7 @@ function kmBtn(cfg, b, r, c, len){
   const k = kindOf(b), [lab, ic] = ST_KIND[k] || ST_KIND.url, tgt = k === "pay" ? b.pay?.goto : b.goto;
   const sub = k === "goto" ? "← " + esc(titleOf(cfg, tgt)) : k === "pay" ? `پرداخت ${N(b.pay.stars)} ستاره` + (tgt ? " ← " + esc(titleOf(cfg, tgt)) : "") : lab;
   const op = (act, ch, aria, off) => `<button class="iconb sm" data-sh="${act}" data-r="${r}" data-c="${c}" aria-label="${aria}"${off ? " disabled" : ""}>${ch}</button>`;
-  return `<div class="km-b"><button class="km-t" data-sh="kmedit" data-r="${r}" data-c="${c}"><span class="ki">${ic}</span><span class="tt"><b>${esc(b.text)}</b><small>${sub}${b.when ? " · شرطی" : ""}</small></span></button>
+  return `<div class="km-b"><button class="km-t" data-sh="kmedit" data-r="${r}" data-c="${c}"><span class="ki">${ic}</span><span class="tt"><b>${esc(b.text)}</b><small>${sub}${b.kb === "reply" ? " · کیبورد" : " · شیشه‌ای"}${b.when ? " · شرطی" : ""}</small></span></button>
     <div class="km-ops">${op("kmr", "→", "یک جا جلوتر", c === 0)}${op("kml", "←", "یک جا عقب‌تر", c === len - 1)}${op("kmu", "↑", "به ردیف بالا", false)}${op("kmd", "↓", "به ردیف پایین", false)}${op("kmdel", IC.trash, "حذف دکمه", false)}</div></div>`;
 }
 function kmSheet(){
@@ -3248,7 +3291,6 @@ function kmSheet(){
     : `<div class="km-empty">این بخش هنوز دکمه‌ای ندارد.</div>`;
   return head("دکمه‌های «" + esc(titleOf(cfg, id)) + "»") + `
     <p class="muted" style="margin-bottom:4px">هر ردیف تا ${N(3)} دکمه و هر بخش تا ${N(6)} ردیف دارد. روی هر دکمه بزن تا ویرایشش کنی و با فلش‌ها جابه‌جایش کن.</p>
-    ${kbPicker(n.kb).replace(/data-sh="kbt"/g, 'data-sh="kmkb"')}
     <div class="sub"><span>${N(total)} دکمه</span><button class="b sm" data-sh="kmadd"${full ? " disabled" : ""}>${IC.plus}دکمه‌ی تازه</button></div>
     ${list}<div class="fgap"></div>`;
 }
@@ -3275,15 +3317,6 @@ function kmAct(a, ds){
     const dir = a === "kmu" ? -1 : 1;
     if(!kmMove(cp(n.buttons), r, c, dir)) return toast("آن طرف جا نیست؛ ردیف‌ها حداکثر ۳ دکمه دارند");
     return run(cfg => { kmMove(cfg.nodes[id].buttons, r, c, dir); }, "جابه‌جا شد");
-  }
-  if(a === "kmkb"){
-    const want = ds.v === "reply";
-    if(want === (n.kb === "reply")) return;
-    if(want){
-      if(n.ask || n.fields || n.ai) return toast("کیبورد پایین چت فقط برای بخش‌های پیامِ ساده کار می‌کند");
-      if(!(n.buttons || []).length) return toast("اول یک دکمه بساز، بعد کیبورد پایین چت را روشن کن");
-    }
-    return run(cfg => { if(want) cfg.nodes[id].kb = "reply"; else delete cfg.nodes[id].kb; }, want ? "دکمه‌ها به کیبورد پایین چت رفتند" : "دکمه‌ها زیر پیام قرار گرفتند");
   }
 }
 
