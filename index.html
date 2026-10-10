@@ -1375,6 +1375,7 @@ function tabMore(b){
   const row = (a, ic, t, s) => `<button class="gi" ${a}><span class="ib">${IC[ic]}</span><span class="gt"><b>${t}</b><span>${s}</span></span>${goIc}</button>`;
   return `<div class="group">
       ${row('data-sa="bot"', "gear", "تنظیمات ربات", "نام، کانال، دستورها و متغیرها")}
+      ${row('data-sa="mod"', "users", "مدیریت گروه و کانال", "قفل‌ها، کپچا، اخطار، خوش‌آمد و پست کانال")}
       ${row('data-a="health"', "heal", "بررسی مسیرها", "بخش‌های بدون مسیر و بن‌بست")}
       ${row('data-a="export"', "dl", "خروجی JSON", "نسخه‌ی پشتیبان از ربات")}
       ${row('data-a="subs"', "inbox", "پاسخ فرم‌ها", "آخرین پاسخ‌های ثبت‌شده")}
@@ -2320,6 +2321,7 @@ document.addEventListener("click", e => {
   if(ds.sh) return shAction(ds.sh, ds);
   const r = ds.r !== undefined ? +ds.r : null;
   if(ds.sa === "bot") openBot();
+  if(ds.sa === "mod") openMod();
 });
 document.addEventListener("keydown", e => {
   if(e.key !== "Enter" && e.key !== " ") return;
@@ -2723,6 +2725,78 @@ function delBtn(){
 }
 
 /* ── تنظیمات کلی ربات ── */
+/* ═════════════════ مدیریت گروه و کانال ═════════════════ */
+const MOD_LK = {link: "لینک", forward: "فوروارد", photo: "عکس", video: "ویدیو", sticker: "استیکر", voice: "ویس", document: "فایل", contact: "مخاطب",
+  mention: "منشن @", animation: "گیف", audio: "موزیک", poll: "نظرسنجی", location: "موقعیت", via_bot: "ربات اینلاین"};
+const MOD_CL = {join: "پیام ورود", leave: "پیام خروج", pin: "پیام سنجاق", title: "تغییر نام و عکس گروه"};
+const MOD_DEF = () => ({welcome: "", welcome_del: 60, goodbye: "", rules: "", captcha: {on: true, mins: 3}, lock: ["link", "forward"], words: [], flood: {n: 6, secs: 8},
+  action: "warn", warns: {max: 3, then: "mute", mins: 60}, clean: ["join", "leave"], report: true, channel: {}});
+function openMod(){
+  const m = S.cur.config.mod;
+  S.sheet = {kind: "mod"};
+  D = {on: !!m, m: Object.assign(MOD_DEF(), m ? JSON.parse(JSON.stringify(m)) : {})};
+  renderSheet();
+}
+function modSheet(){
+  const m = D.m, ch = m.channel || {}, bt = ch.button || {}, w = m.warns || {}, sel = (v, o) => Object.entries(o).map(([k, t]) => `<option value="${k}"${v === k ? " selected" : ""}>${t}</option>`).join("");
+  const box = (cls, key, on) => `<label class="chk" style="display:inline-flex;margin:0 0 6px 12px"><input type="checkbox" class="${cls}" value="${key}"${on ? " checked" : ""}> ${(cls === "m-lk" ? MOD_LK : MOD_CL)[key]}</label>`;
+  return head("مدیریت گروه و کانال") + `
+    <p class="muted">ربات را به گروه یا کانال اضافه کن و <b>ادمین</b> کن (حذف پیام، محدود کردن کاربران، سنجاق؛ در کانال: ارسال و ویرایش پیام). بدون ادمین بودن، تلگرام پیام‌ها را به ربات نشان نمی‌دهد. وقتی ربات اضافه شود در چت ربات خبرت می‌کند.</p>
+    <label class="chk"><input type="checkbox" id="m-on"${D.on ? " checked" : ""}> مدیریت فعال باشد</label>
+    <details class="adv" open><summary>خوش‌آمد و قوانین</summary><div class="box">
+      <span class="lbl">پیام خوش‌آمد (قالب HTML؛ {name} و {group})</span><textarea class="fa" id="m-w" data-fmt maxlength="1000" style="min-height:70px">${esc(m.welcome)}</textarea>${fmtTools("m-w")}
+      <span class="lbl">حذف خودکار خوش‌آمد بعد از (ثانیه، ۰ = نگه دار)</span><input class="ltr" id="m-wd" inputmode="numeric" value="${esc(m.welcome_del ?? 60)}">
+      <span class="lbl">پیام خداحافظی (اختیاری)</span><input class="fa" id="m-g" maxlength="500" value="${esc(m.goodbye)}">
+      <span class="lbl">قوانین گروه (با /rules نمایش داده می‌شود)</span><textarea class="fa" id="m-r" maxlength="2000" style="min-height:70px">${esc(m.rules)}</textarea>
+    </div></details>
+    <details class="adv" open><summary>امنیت ورود (کپچا)</summary><div class="box">
+      <label class="chk"><input type="checkbox" id="m-cp"${m.captcha?.on ? " checked" : ""}> عضو جدید تا زدن دکمه ساکت باشد</label>
+      <span class="lbl">مهلت (دقیقه؛ بعدش اخراج می‌شود)</span><input class="ltr" id="m-cpm" inputmode="numeric" value="${esc(m.captcha?.mins ?? 3)}">
+    </div></details>
+    <details class="adv" open><summary>قفل‌ها و ممنوعیت‌ها</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">این نوع پیام‌ها از اعضای عادی پاک می‌شود. مدیرها همیشه آزادند.</p>
+      ${Object.keys(MOD_LK).map(k => box("m-lk", k, (m.lock || []).includes(k))).join("")}
+      <span class="lbl">کلمات ممنوع (با خط جدید یا ویرگول جدا کن)</span><textarea class="fa" id="m-wo" maxlength="2000" style="min-height:60px">${esc((m.words || []).join("\n"))}</textarea>
+      <span class="lbl">ضد اسپم: بیشتر از (تعداد) پیام در (ثانیه)؛ تعداد ۰ = خاموش</span>
+      <div class="cmd"><input class="ltr" id="m-fn" inputmode="numeric" value="${esc(m.flood?.n ?? 0)}" aria-label="تعداد پیام"><input class="ltr" id="m-fs" inputmode="numeric" value="${esc(m.flood?.secs ?? 8)}" aria-label="ثانیه"></div>
+    </div></details>
+    <details class="adv"><summary>مجازات و اخطار</summary><div class="box">
+      <span class="lbl">وقتی عضوی قفل یا کلمه‌ی ممنوع را رعایت نکند</span>
+      <select id="m-ac">${sel(m.action || "warn", {warn: "پیام پاک شود و اخطار بگیرد", mute: "پیام پاک شود و ساکت شود", delete: "فقط پیام پاک شود"})}</select>
+      <span class="lbl">حداکثر اخطار</span><input class="ltr" id="m-wm" inputmode="numeric" value="${esc(w.max ?? 3)}">
+      <span class="lbl">بعد از رسیدن به سقف</span><select id="m-wt">${sel(w.then || "mute", {mute: "ساکت شود", ban: "بن شود", kick: "اخراج شود"})}</select>
+      <span class="lbl">مدت سکوت (دقیقه)</span><input class="ltr" id="m-wmin" inputmode="numeric" value="${esc(w.mins ?? 60)}">
+    </div></details>
+    <details class="adv"><summary>تمیزکاری</summary><div class="box">
+      ${Object.keys(MOD_CL).map(k => box("m-cl", k, (m.clean || []).includes(k))).join("")}
+      <label class="chk"><input type="checkbox" id="m-rp"${m.report !== false ? " checked" : ""}> اعضا بتوانند با /report پیام را به مدیران گزارش بدهند</label>
+    </div></details>
+    <details class="adv"${ch.id ? " open" : ""}><summary>کانال</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">ربات باید ادمین کانال باشد. زیر هر پست جدید دکمه می‌گذارد و واکنش می‌زند. برای انتشار از خود ربات: در چت ربات روی هر پیام ریپلای کن و <b dir="ltr">/post</b> یا <b dir="ltr">/post 30</b> (۳۰ دقیقه‌ی بعد) بنویس.</p>
+      <span class="lbl">آیدی کانال</span><input class="ltr" id="m-ci" value="${esc(ch.id || "")}" placeholder="@mychannel یا -1001234567890" autocomplete="off">
+      <span class="lbl">دکمه‌ی زیر پست‌ها (متن و لینک؛ اختیاری)</span>
+      <div class="cmd"><input class="fa" id="m-bt" maxlength="30" value="${esc(bt.text || "")}" placeholder="متن دکمه"><input class="ltr" id="m-bu" value="${esc(bt.url || "")}" placeholder="https://t.me/..." autocomplete="off"></div>
+      <span class="lbl">واکنش خودکار (یک ایموجی؛ اختیاری)</span><input class="ltr" id="m-re" maxlength="8" value="${esc(ch.react || "")}" placeholder="👍">
+    </div></details>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
+}
+function readMod(){
+  if(!$("#m-on")) return;
+  const g = id => $("#" + id)?.value ?? "", n = id => parseInt(String(g(id)).replace(/[۰-۹]/g, c => "۰۱۲۳۴۵۶۷۸۹".indexOf(c)), 10);
+  D.on = $("#m-on").checked;
+  D.m = {welcome: g("m-w").trim(), welcome_del: n("m-wd") || 0, goodbye: g("m-g").trim(), rules: g("m-r").trim(),
+    captcha: $("#m-cp").checked ? {on: true, mins: n("m-cpm") || 3} : undefined,
+    lock: [...document.querySelectorAll(".m-lk:checked")].map(x => x.value),
+    words: g("m-wo").split(/[\n,،]+/).map(x => x.trim()).filter(Boolean),
+    flood: n("m-fn") >= 2 ? {n: n("m-fn"), secs: n("m-fs") || 8} : undefined,
+    action: g("m-ac"), warns: {max: n("m-wm") || 3, then: g("m-wt"), mins: n("m-wmin") || 60},
+    clean: [...document.querySelectorAll(".m-cl:checked")].map(x => x.value), report: $("#m-rp").checked,
+    channel: {id: g("m-ci").trim(), button: {text: g("m-bt").trim(), url: g("m-bu").trim()}, react: g("m-re").trim()}};
+}
+function saveMod(){
+  const d = D;
+  busy($('[data-sh="save"]'), () => commit(cfg => { if(d.on) cfg.mod = d.m; else delete cfg.mod; }, d.on ? "مدیریت گروه و کانال ذخیره شد" : "مدیریت خاموش شد"));
+}
 function openBot(){
   const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
   S.sheet = {kind: "bot"};
@@ -2892,6 +2966,7 @@ const SHEETS = {
   node:  {html: nodeSheet,  read: readNode,  save: saveNode,  del: delNode},
   btn:   {html: btnSheet,   read: readBtn,   save: saveBtn,   del: delBtn},
   bot:   {html: botSheet,   read: readBot,   save: saveBot},
+  mod:   {html: modSheet,   read: readMod,   save: saveMod},
   media: {html: mediaSheet, read: readMedia, save: saveMedia, del: delMedia},
   bc:    {html: bcSheet,    read: readBc,    save: saveBc},
   buy:   {html: buySheet},

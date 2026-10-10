@@ -175,6 +175,8 @@ _index(db.uvars, "bot")
 _index(db.payments, "charge", unique=True, sparse=True)
 _index(db.payments, "bot")
 _index(db.blocked, "bot")
+_index(db.groups, "bot")
+_index(db.modp, "t", expireAfterSeconds=3600)
 try:
     db.bots.update_many({"xp_on": {"$exists": True}}, {"$unset": {k: "" for k in (
         "xp_on", "xp_desc", "xp_v", "xp_l", "xp_s", "xp_since", "xp_hasav", "xp_avts", "xp_av", "xp_avct", "xp_hidden", "xp_rep")}})
@@ -332,6 +334,9 @@ def sync_commands(bot, cfg):
                 tg(token, "setMyCommands", commands=owner_cmds if sid == bot["owner"] else staff_cmds,
                    scope={"type": "chat", "chat_id": sid})
             ensure_webhook(bot, cfg)
+            if cfg.get("mod"):
+                tg(token, "setMyCommands", commands=MOD_CMDS_ADMIN, scope={"type": "all_chat_administrators"})
+                tg(token, "setMyCommands", commands=MOD_CMDS_ALL, scope={"type": "all_group_chats"})
         except Exception:
             log.exception("staff commands failed")
 
@@ -823,6 +828,21 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
 
 "ideas": 2-3 short follow-up upgrades the user could ask next (OUTPUT LANGUAGE, max 60 chars each). Each must be a complete instruction that works as-is when sent back, e.g. "یه بخش سوالات متداول اضافه کن". Make them specific to THIS bot, never generic.
 
+GROUP & CHANNEL MANAGEMENT (use it whenever the user wants to manage, moderate or grow a Telegram group, supergroup or channel; Persian users ask for this a lot)
+- Config "mod" turns the bot into a professional group/channel manager. The bot still needs a small private-chat side (a start node explaining what it does and the steps to add it to a group or channel as admin). Add "mod" in addition to normal nodes, never instead of them.
+- "mod": {"welcome": "HTML welcome text, supports {name} and {group}", "welcome_del": 60 (seconds until the welcome is deleted, 0 keeps it), "goodbye": "text when someone leaves", "rules": "group rules text shown by /rules",
+  "captcha": {"on": true, "mins": 3} (new members are muted until they press a button; unverified ones are removed after mins),
+  "lock": ["link","forward","photo","video","sticker","voice","document","contact","mention","animation","audio","poll","location","via_bot"] (content types that normal members may NOT send; admins are always exempt),
+  "words": ["banned word"], "flood": {"n": 6, "secs": 8} (more than n messages in secs seconds = muted),
+  "action": "warn" | "mute" | "delete" (what happens when a member breaks a lock or uses a banned word; the message is always deleted),
+  "warns": {"max": 3, "then": "mute"|"ban"|"kick", "mins": 60},
+  "clean": ["join","leave","pin","title"] (service messages the bot deletes), "report": true (members can report with /report),
+  "channel": {"id": "@mychannel" or "-100...", "button": {"text": "label", "url": "https://t.me/..."}, "react": "👍"} (optional; for channels: the bot adds the button under every new post and reacts to it; the owner can also reply to any message in the bot chat with /post to publish it in the channel, or /post 30 to schedule it 30 minutes later)}
+- Admin commands inside groups (work for group admins and the bot owner): /ban /unban /kick /mute [minutes] /unmute /warn /unwarn /warns (reply to the user's message), /del, /pin /unpin (reply), /lock <type> /unlock <type> /locks. Everyone: /rules, /report.
+- A strong default for an anti-spam manager: captcha on, lock ["link","forward","via_bot"], flood {"n":6,"secs":8}, action "warn", warns {"max":3,"then":"mute","mins":60}, clean ["join","leave"], plus a clear welcome and rules written in the output language. Adapt every value to what the user asked; do not enable what they did not ask for unless it is part of a sensible default for their goal.
+- In "thinking" ALWAYS tell the owner: add the bot to the group/channel and make it ADMIN (delete messages, restrict users, pin messages; for channels: post/edit messages), because without admin rights Telegram hides messages from the bot and blocks moderation. Mention that the owner is notified in the bot chat when the bot is added.
+- For channels only the button, the reaction and /post publishing exist (Telegram offers no other control over channel posts). Never promise features outside this list, like auto-banning by AI judgement, member exports, or editing old posts.
+
 "config" schema:
 {
  "name": "short bot name",
@@ -833,6 +853,7 @@ Output ONLY one valid JSON object, no markdown fences, no comments. Top-level sh
  "vars": {"coins": "0", "city": ""},                                                 (optional, declare EVERY custom variable with its default value)
  "globals": {"votes_a": "0"},                                                       (optional, variables SHARED by all users, see GLOBALS)
  "desk": {"staff": [123456789], "closed": "text sent when a ticket is closed", "reply_btn": "label"},   (optional, see SUPPORT DESK)
+ "mod": {...},                                                                       (optional, group/channel manager, see GROUP & CHANNEL MANAGEMENT)
  "on_ref": [ ...actions... ],                                                        (optional, see REFERRALS)
  "ref_text": "message sent to the inviter",                                          (optional, see REFERRALS)
  "nodes": {
@@ -1192,6 +1213,78 @@ def clean_join(j, bad, where=""):  # متن پیام عضویت: HTML تلگرا
             "text": str(j.get("text") or "برای استفاده از ربات اول باید عضو کانال بشی.").strip()[:500]}
 
 
+
+MOD_LOCKS = {"link": "لینک", "forward": "فوروارد", "photo": "عکس", "video": "ویدیو", "sticker": "استیکر", "voice": "ویس", "document": "فایل",
+             "contact": "مخاطب", "mention": "منشن @", "animation": "گیف", "audio": "موزیک", "poll": "نظرسنجی", "location": "موقعیت", "via_bot": "ربات اینلاین"}
+MOD_CLEAN = {"join": "پیام ورود", "leave": "پیام خروج", "pin": "پیام سنجاق", "title": "تغییر نام و عکس گروه"}
+MOD_ACTIONS = ("warn", "mute", "delete")
+MOD_THEN = ("mute", "ban", "kick")
+CHAN_RE = re.compile(r"^(@[A-Za-z][A-Za-z0-9_]{4,31}|-100\d{5,15})$")
+
+
+def _mnum(v, lo, hi, d):
+    try:
+        return max(lo, min(hi, int(float(str(v).translate(_DIG).strip()))))
+    except (TypeError, ValueError):
+        return d
+
+
+def clean_mod(m, bad):
+    """تنظیمات مدیریت گروه و کانال (cfg["mod"]) رو تمیز می‌کنه"""
+    if not isinstance(m, dict):
+        return None
+    o = {}
+    for k, lim in (("welcome", 1000), ("goodbye", 500), ("rules", 2000)):
+        v = str(m.get(k) or "").strip()[:lim]
+        if v:
+            o[k] = v
+    if o.get("welcome"):
+        o["welcome_del"] = _mnum(m.get("welcome_del"), 0, 3600, 60)
+    cp = m.get("captcha")
+    if isinstance(cp, dict) and cp.get("on"):
+        o["captcha"] = {"on": True, "mins": _mnum(cp.get("mins"), 1, 30, 3)}
+    lk = [x for x in (m.get("lock") if isinstance(m.get("lock"), list) else []) if x in MOD_LOCKS]
+    if lk:
+        o["lock"] = list(dict.fromkeys(lk))
+    ws = []
+    for w in (m.get("words") if isinstance(m.get("words"), list) else [])[:60]:
+        w = str(w).strip().lower()[:30]
+        if w and w not in ws:
+            ws.append(w)
+    if ws:
+        o["words"] = ws
+    fl = m.get("flood")
+    if isinstance(fl, dict) and _mnum(fl.get("n"), 0, 20, 0) >= 2:
+        o["flood"] = {"n": _mnum(fl.get("n"), 2, 20, 6), "secs": _mnum(fl.get("secs"), 2, 60, 8)}
+    o["action"] = m.get("action") if m.get("action") in MOD_ACTIONS else "warn"
+    w = m.get("warns") if isinstance(m.get("warns"), dict) else {}
+    o["warns"] = {"max": _mnum(w.get("max"), 1, 10, 3), "then": w.get("then") if w.get("then") in MOD_THEN else "mute", "mins": _mnum(w.get("mins"), 1, 10080, 60)}
+    cl = [x for x in (m.get("clean") if isinstance(m.get("clean"), list) else []) if x in MOD_CLEAN]
+    if cl:
+        o["clean"] = list(dict.fromkeys(cl))
+    o["report"] = m.get("report") is not False
+    ch = m.get("channel")
+    if isinstance(ch, dict):
+        cid = str(ch.get("id") or "").strip()
+        if cid and not CHAN_RE.match(cid):
+            bad(f"آیدی کانال «{cid}» معتبر نیست؛ مثل @mychannel یا -1001234567890")
+            cid = ""
+        c = {}
+        if cid:
+            c["id"] = cid
+        bt = ch.get("button") if isinstance(ch.get("button"), dict) else {}
+        url = norm_url(bt.get("url"))
+        txt = str(bt.get("text") or "").strip()[:30]
+        if txt and url:
+            c["button"] = {"text": txt, "url": url}
+        rc = str(ch.get("react") or "").strip()[:8]
+        if rc:
+            c["react"] = rc
+        if c:
+            o["channel"] = c
+    return o
+
+
 def sanitize(cfg, strict=False, media=None, warns=None):
     """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه.
     media = مجموعه‌ی شناسه‌ی رسانه‌هایی که مال خود کاربره؛ بقیه بی‌صدا حذف می‌شن"""
@@ -1505,6 +1598,9 @@ def sanitize(cfg, strict=False, media=None, warns=None):
     jn = clean_join(cfg.get("join"), bad)
     if jn:
         out["join"] = jn
+    md = clean_mod(cfg.get("mod"), bad)
+    if md:
+        out["mod"] = md
     return out
 
 # ───── تشخیص زبان (برای اینکه «thinking» و متن‌ها هیچ‌وقت انگلیسی نشن) ─────
@@ -2890,14 +2986,14 @@ def do_activate(bot, token):
     if db.bots.find_one({"token_hash": th, "_id": {"$ne": bot["_id"]}}):
         return None, ("این توکن قبلاً برای ربات دیگه‌ای ثبت شده", 400)
     r = tg(token, "setWebhook", url=f"{BASE_URL}/hook/{bot_id}", secret_token=bot["secret"],
-           allowed_updates=["message", "callback_query", "pre_checkout_query"], drop_pending_updates=True)
+           allowed_updates=allowed_updates(bot["config"]), drop_pending_updates=True)
     if not r.get("ok"):
         return None, ("اتصال وبهوک ناموفق بود", 502)
     tg(token, "setMyCommands", commands=[{"command": "start", "description": "شروع"}] + [
         {"command": c, "description": c} for c in bot["config"]["commands"]])
     db.bots.update_one({"_id": bot["_id"]}, {"$set": {
         "token_enc": enc(token), "token_hash": th, "username": me["result"]["username"],
-        "active": True, "wh_pay": True, "updated": now()}})
+        "active": True, "wh_pay": True, "wh_mod": bool(bot["config"].get("mod")), "updated": now()}})
     try:
         sync_commands(db.bots.find_one({"_id": bot["_id"]}), bot["config"])
     except Exception:
@@ -4028,6 +4124,8 @@ def run_sched_job(job):
     if not bot or not bot.get("active") or not bot.get("token_enc"):
         return
     token = dec(bot["token_enc"])
+    if job.get("kind"):
+        return run_mod_job(job, token)
     if job.get("text"):
         if not tg_html(token, "sendMessage", chat_id=job["chat"], text=job["text"]).get("ok"):
             return
@@ -4058,6 +4156,397 @@ def sched_loop():
             sched_tick()
         except Exception:
             log.exception("sched_tick failed")
+
+
+# ───────────────────────── مدیریت گروه و کانال ─────────────────────────
+MOD_CMDS_ALL = [{"command": "rules", "description": "قوانین گروه"}, {"command": "report", "description": "گزارش پیام به مدیران (روی پیام ریپلای کن)"}]
+MOD_CMDS_ADMIN = MOD_CMDS_ALL + [{"command": c, "description": d} for c, d in (
+    ("ban", "بن کاربر"), ("unban", "رفع بن"), ("kick", "اخراج"), ("mute", "سکوت (دقیقه)"), ("unmute", "رفع سکوت"),
+    ("warn", "اخطار"), ("unwarn", "کم کردن اخطار"), ("warns", "اخطارهای کاربر"), ("del", "حذف پیام"),
+    ("pin", "سنجاق"), ("unpin", "برداشتن سنجاق"), ("lock", "قفل یک نوع پیام"), ("unlock", "باز کردن قفل"), ("locks", "لیست قفل‌ها"))]
+MOD_ADM, MOD_FLOOD, MOD_SEEN = {}, {}, set()
+MOD_NOPERM = {k: False for k in ("can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
+                                 "can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages", "can_add_web_page_previews")}
+MOD_LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/|\b[a-z0-9-]+\.(com|ir|org|net|io|me|xyz|info|top|club|link)\b)", re.I)
+
+
+def mod_later(bot_id, secs, **kw):
+    try:
+        db.sched.insert_one({"bot": bot_id, "uid": 0, "due": naive(now() + timedelta(seconds=secs)), **kw})
+    except Exception:
+        log.exception("mod_later failed")
+
+
+def mod_say(token, bot_id, chat, text, ttl=25, markup=None):
+    """پیام موقتِ ربات توی گروه؛ بعد از ttl ثانیه پاک می‌شه"""
+    r = tg_html(token, "sendMessage", chat_id=chat, text=text[:3500], disable_web_page_preview=True, **({"reply_markup": markup} if markup else {}))
+    if r.get("ok") and ttl:
+        mod_later(bot_id, ttl, kind="del", chat=chat, mid=r["result"]["message_id"])
+    return r
+
+
+def mod_is_admin(token, bot, chat, uid, msg=None):
+    if uid in staff_ids(bot) or (msg and (msg.get("sender_chat") or {}).get("id") == chat):
+        return True
+    k, t = (chat, uid), time.time()
+    hit = MOD_ADM.get(k)
+    if hit and hit[0] > t:
+        return hit[1]
+    r = tg(token, "getChatMember", chat_id=chat, user_id=uid)
+    ok = bool(r.get("ok") and (r["result"].get("status") in ("creator", "administrator")))
+    if len(MOD_ADM) > 5000:
+        MOD_ADM.clear()
+    MOD_ADM[k] = (t + 60, ok)
+    return ok
+
+
+def mod_perms(token, chat):
+    r = tg(token, "getChat", chat_id=chat)
+    p = (r.get("result") or {}).get("permissions")
+    return p if isinstance(p, dict) and p else {k: True for k in MOD_NOPERM}
+
+
+def mod_name(u):
+    n = (str(u.get("first_name") or "") + " " + str(u.get("last_name") or "")).strip() or str(u.get("username") or u.get("id"))
+    return f'<a href="tg://user?id={u.get("id")}">{plain_html(n)[:40]}</a>'
+
+
+def mod_kinds(m):
+    """نوع‌های محتوای یک پیام (برای قفل‌ها)"""
+    k = set()
+    ents = (m.get("entities") or []) + (m.get("caption_entities") or [])
+    text = m.get("text") or m.get("caption") or ""
+    if any(e.get("type") in ("url", "text_link") for e in ents) or MOD_LINK_RE.search(text):
+        k.add("link")
+    if any(e.get("type") in ("mention", "text_mention") for e in ents):
+        k.add("mention")
+    if m.get("forward_origin") or m.get("forward_date"):
+        k.add("forward")
+    for key in ("photo", "video", "sticker", "voice", "document", "contact", "animation", "audio", "poll", "location"):
+        if m.get(key):
+            k.add(key)
+    if m.get("via_bot"):
+        k.add("via_bot")
+    if m.get("animation"):
+        k.discard("document")
+    return k
+
+
+def mod_restrict(token, chat, uid, mins):
+    return tg(token, "restrictChatMember", chat_id=chat, user_id=uid, permissions=MOD_NOPERM,
+              until_date=int(time.time()) + max(1, mins) * 60)
+
+
+def mod_kick(token, chat, uid, ban=False):
+    r = tg(token, "banChatMember", chat_id=chat, user_id=uid)
+    if not ban:
+        tg(token, "unbanChatMember", chat_id=chat, user_id=uid, only_if_banned=True)
+    return r
+
+
+def mod_warn(bot_id, chat, uid, d=1):
+    r = db.modw.find_one_and_update({"_id": f"{bot_id}:{chat}:{uid}"}, {"$inc": {"n": d}}, upsert=True, return_document=ReturnDocument.AFTER)
+    n = max(0, int(r.get("n", 0)))
+    if n != r.get("n"):
+        db.modw.update_one({"_id": f"{bot_id}:{chat}:{uid}"}, {"$set": {"n": n}})
+    return n
+
+
+def mod_escalate(token, bot_id, mod, chat, user, why):
+    """اخطار می‌ده؛ اگه به سقف رسید طبق تنظیمات سکوت/بن/اخراج"""
+    uid, w = user["id"], mod["warns"]
+    n = mod_warn(bot_id, chat, uid)
+    if n >= w["max"]:
+        db.modw.delete_one({"_id": f"{bot_id}:{chat}:{uid}"})
+        if w["then"] == "ban":
+            mod_kick(token, chat, uid, True)
+            what = "بن شد"
+        elif w["then"] == "kick":
+            mod_kick(token, chat, uid)
+            what = "اخراج شد"
+        else:
+            mod_restrict(token, chat, uid, w["mins"])
+            what = f"{w['mins']} دقیقه ساکت شد"
+        mod_say(token, bot_id, chat, f"{mod_name(user)} به‌خاطر {why} و رسیدن به سقف اخطار {what}.")
+    else:
+        mod_say(token, bot_id, chat, f"{mod_name(user)}، {why} ممنوعه. اخطار {n} از {w['max']}.")
+
+
+def mod_violation(token, bot_id, mod, msg, why):
+    chat, user = msg["chat"]["id"], msg["from"]
+    tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+    act = mod.get("action", "warn")
+    if act == "mute":
+        mod_restrict(token, chat, user["id"], mod["warns"]["mins"])
+        mod_say(token, bot_id, chat, f"{mod_name(user)} به‌خاطر {why} {mod['warns']['mins']} دقیقه ساکت شد.")
+    elif act == "warn":
+        mod_escalate(token, bot_id, mod, chat, user, why)
+
+
+def mod_target(msg, args):
+    """هدف دستور: ریپلای، یا آیدی عددی اولِ آرگومان. (کاربر، بقیه‌ی آرگومان‌ها)"""
+    rp = msg.get("reply_to_message")
+    if rp and rp.get("from") and not rp["from"].get("is_bot"):
+        return rp["from"], args
+    if args and re.fullmatch(r"\d{5,15}", args[0].translate(_DIG)):
+        return {"id": int(args[0].translate(_DIG)), "first_name": args[0]}, args[1:]
+    return None, args
+
+
+def mod_link(chat, mid, username=None):
+    if username:
+        return f"https://t.me/{username}/{mid}"
+    c = str(chat)
+    return f"https://t.me/c/{c[4:]}/{mid}" if c.startswith("-100") else ""
+
+
+def mod_command(bot, bot_id, token, cfg, mod, msg, cmd, args, admin):
+    chat, user = msg["chat"]["id"], msg["from"]
+    say = lambda t, ttl=25: mod_say(token, bot_id, chat, t, ttl)
+    if cmd == "rules":
+        say(mod.get("rules") or "قوانینی تنظیم نشده.", 120)
+        return
+    if cmd == "report":
+        rp = msg.get("reply_to_message")
+        if not mod.get("report") or not rp:
+            return say("برای گزارش، روی پیام موردنظر ریپلای کن و /report بفرست.")
+        link = mod_link(chat, rp["message_id"], msg["chat"].get("username"))
+        txt = f"گزارش در «{plain_html(msg['chat'].get('title') or '')}»\nاز: {mod_name(user)}\nمتهم: {mod_name(rp.get('from') or {'id': 0})}\n" + (link or "")
+        for sid in staff_ids(bot):
+            tg_html(token, "sendMessage", chat_id=sid, text=txt, disable_web_page_preview=True)
+        tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        return say("گزارش برای مدیران ارسال شد.", 10)
+    if not admin:
+        return
+    tgt, rest = mod_target(msg, args)
+    if cmd in ("ban", "unban", "kick", "mute", "unmute", "warn", "unwarn", "warns"):
+        if not tgt:
+            return say("روی پیام کاربر ریپلای کن (یا آیدی عددی بنویس).")
+        if tgt["id"] != 0 and mod_is_admin(token, bot, chat, tgt["id"]) and cmd not in ("unban", "unmute", "warns"):
+            return say("روی مدیرها قابل‌اجرا نیست.")
+        tn = mod_name(tgt)
+        if cmd == "ban":
+            mod_kick(token, chat, tgt["id"], True)
+            say(f"{tn} بن شد.")
+        elif cmd == "unban":
+            tg(token, "unbanChatMember", chat_id=chat, user_id=tgt["id"], only_if_banned=True)
+            say(f"بن {tn} برداشته شد.")
+        elif cmd == "kick":
+            mod_kick(token, chat, tgt["id"])
+            say(f"{tn} اخراج شد.")
+        elif cmd == "mute":
+            mins = _mnum(rest[0] if rest else "", 1, 525600, mod["warns"]["mins"])
+            mod_restrict(token, chat, tgt["id"], mins)
+            say(f"{tn} به مدت {mins} دقیقه ساکت شد.")
+        elif cmd == "unmute":
+            tg(token, "restrictChatMember", chat_id=chat, user_id=tgt["id"], permissions=mod_perms(token, chat))
+            say(f"سکوت {tn} برداشته شد.")
+        elif cmd == "warn":
+            mod_escalate(token, bot_id, mod, chat, tgt, "رعایت‌نکردن قوانین")
+        elif cmd == "unwarn":
+            say(f"{tn}: اخطار {mod_warn(bot_id, chat, tgt['id'], -1)} از {mod['warns']['max']}.")
+        else:
+            d = db.modw.find_one({"_id": f"{bot_id}:{chat}:{tgt['id']}"}) or {}
+            say(f"{tn}: اخطار {d.get('n', 0)} از {mod['warns']['max']}.")
+        tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+    elif cmd == "del":
+        rp = msg.get("reply_to_message")
+        if rp:
+            tg(token, "deleteMessage", chat_id=chat, message_id=rp["message_id"])
+        tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+    elif cmd in ("pin", "unpin"):
+        rp = msg.get("reply_to_message")
+        if cmd == "pin" and rp:
+            tg(token, "pinChatMessage", chat_id=chat, message_id=rp["message_id"], disable_notification=True)
+        elif cmd == "unpin":
+            tg(token, "unpinChatMessage", chat_id=chat, **({"message_id": rp["message_id"]} if rp else {}))
+        tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+    elif cmd in ("lock", "unlock", "locks"):
+        cur = list(mod.get("lock") or [])
+        if cmd == "locks" or not args or args[0] not in MOD_LOCKS:
+            names = "، ".join(MOD_LOCKS[x] for x in cur) or "هیچ‌کدام"
+            return say(f"قفل‌های فعال: {names}\nنوع‌ها: " + " ".join(MOD_LOCKS) + "\nمثال: /lock link", 40)
+        if cmd == "lock" and args[0] not in cur:
+            cur.append(args[0])
+        elif cmd == "unlock" and args[0] in cur:
+            cur.remove(args[0])
+        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"config.mod.lock": cur}})
+        say(("قفل «%s» فعال شد." if cmd == "lock" else "قفل «%s» برداشته شد.") % MOD_LOCKS[args[0]])
+
+
+def mod_group(bot, bot_id, token, cfg, msg):
+    mod, chat, user = cfg["mod"], msg["chat"]["id"], msg.get("from") or {}
+    uid = user.get("id", 0)
+    if (bot_id, chat) not in MOD_SEEN:
+        if len(MOD_SEEN) > 20000:
+            MOD_SEEN.clear()
+        MOD_SEEN.add((bot_id, chat))
+        db.groups.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"bot": bot_id, "chat": chat, "title": str(msg["chat"].get("title") or "")[:80], "t": now()}}, upsert=True)
+    clean = mod.get("clean") or []
+    if msg.get("new_chat_members"):
+        if "join" in clean:
+            tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        for u in msg["new_chat_members"]:
+            if u.get("is_bot") or mod_is_admin(token, bot, chat, u["id"]):
+                continue
+            mod_join(bot, bot_id, token, mod, msg, u)
+        return
+    if msg.get("left_chat_member"):
+        if "leave" in clean:
+            tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        u = msg["left_chat_member"]
+        if mod.get("goodbye") and not u.get("is_bot"):
+            mod_say(token, bot_id, chat, mod["goodbye"].replace("{name}", mod_name(u)).replace("{group}", plain_html(msg["chat"].get("title") or "")), 30)
+        db.modp.delete_one({"_id": f"{bot_id}:{chat}:{u['id']}"})
+        return
+    if msg.get("pinned_message") and "pin" in clean or (("new_chat_title" in msg or "new_chat_photo" in msg or "delete_chat_photo" in msg) and "title" in clean):
+        tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        return
+    if not uid or msg.get("is_automatic_forward"):
+        return
+    text = (msg.get("text") or "").strip()
+    admin = mod_is_admin(token, bot, chat, uid, msg)
+    if text.startswith("/"):
+        parts = text[1:].split()
+        head = parts[0] if parts else ""
+        cmd, _, at = head.partition("@")
+        if not at or at.lower() == str(bot.get("username") or "").lower():
+            mod_command(bot, bot_id, token, cfg, mod, msg, cmd.lower(), parts[1:], admin)
+            return
+    if admin:
+        return
+    if db.modp.find_one({"_id": f"{bot_id}:{chat}:{uid}"}):          # هنوز کپچا رو حل نکرده
+        tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        return
+    low = (text or msg.get("caption") or "").lower()
+    kinds = mod_kinds(msg) & set(mod.get("lock") or [])
+    if kinds:
+        return mod_violation(token, bot_id, mod, msg, "ارسال " + "/".join(MOD_LOCKS[k] for k in sorted(kinds)))
+    if any(w in low for w in mod.get("words") or []):
+        return mod_violation(token, bot_id, mod, msg, "استفاده از کلمه‌ی ممنوع")
+    fl = mod.get("flood")
+    if fl:
+        k, t = (bot_id, chat, uid), time.time()
+        L = [x for x in MOD_FLOOD.get(k, []) if t - x < fl["secs"]] + [t]
+        MOD_FLOOD[k] = L
+        if len(MOD_FLOOD) > 20000:
+            MOD_FLOOD.clear()
+        if len(L) > fl["n"]:
+            MOD_FLOOD.pop(k, None)
+            mod_restrict(token, chat, uid, mod["warns"]["mins"])
+            tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+            mod_say(token, bot_id, chat, f"{mod_name(user)} به‌خاطر ارسال پشت‌سرهم {mod['warns']['mins']} دقیقه ساکت شد.")
+
+
+def mod_join(bot, bot_id, token, mod, msg, u):
+    chat = msg["chat"]["id"]
+    title = plain_html(msg["chat"].get("title") or "")
+    cp = mod.get("captcha")
+    if cp:
+        r = tg(token, "restrictChatMember", chat_id=chat, user_id=u["id"], permissions=MOD_NOPERM)
+        if r.get("ok"):
+            kb = {"inline_keyboard": [[{"text": "من ربات نیستم ✅", "callback_data": f"cp:{u['id']}"}]]}
+            sent = tg_html(token, "sendMessage", chat_id=chat, text=f"سلام {mod_name(u)} 👋\nبرای اینکه بتونی توی گروه پیام بدی، دکمه‌ی زیر رو بزن (تا {cp['mins']} دقیقه وقت داری).", reply_markup=kb)
+            mid = (sent.get("result") or {}).get("message_id")
+            db.modp.replace_one({"_id": f"{bot_id}:{chat}:{u['id']}"}, {"_id": f"{bot_id}:{chat}:{u['id']}", "mid": mid, "t": now()}, upsert=True)
+            mod_later(bot_id, cp["mins"] * 60, kind="cap", chat=chat, cuid=u["id"])
+            return
+    if mod.get("welcome"):
+        mod_say(token, bot_id, chat, mod["welcome"].replace("{name}", mod_name(u)).replace("{group}", title), mod.get("welcome_del", 60))
+
+
+def mod_captcha_cb(bot, bot_id, token, cfg, cq):
+    mod = cfg.get("mod") or {}
+    m = cq.get("message") or {}
+    chat, uid = (m.get("chat") or {}).get("id"), cq["from"]["id"]
+    ans = lambda **kw: tg(token, "answerCallbackQuery", callback_query_id=cq["id"], **kw)
+    try:
+        target = int(str(cq.get("data", ""))[3:])
+    except ValueError:
+        return ans()
+    if uid != target:
+        return ans(text="این دکمه برای تو نیست.", show_alert=True)
+    if not db.modp.find_one_and_delete({"_id": f"{bot_id}:{chat}:{uid}"}):
+        return ans()
+    tg(token, "restrictChatMember", chat_id=chat, user_id=uid, permissions=mod_perms(token, chat))
+    ans(text="خوش اومدی!")
+    tg(token, "deleteMessage", chat_id=chat, message_id=m.get("message_id"))
+    if mod.get("welcome"):
+        mod_say(token, bot_id, chat, mod["welcome"].replace("{name}", mod_name(cq["from"])).replace("{group}", plain_html((m.get("chat") or {}).get("title") or "")), mod.get("welcome_del", 60))
+
+
+def mod_channel(bot, bot_id, token, cfg, post):
+    """پست تازه‌ی کانال: دکمه‌ی ثابت و واکنش خودکار"""
+    ch = (cfg.get("mod") or {}).get("channel")
+    if not ch:
+        return
+    chat = post["chat"]
+    want = ch.get("id")
+    if want and not (want.lower() == "@" + str(chat.get("username") or "").lower() or want == str(chat["id"])):
+        return
+    if ch.get("button") and not post.get("reply_markup") and not post.get("media_group_id"):
+        tg(token, "editMessageReplyMarkup", chat_id=chat["id"], message_id=post["message_id"],
+           reply_markup={"inline_keyboard": [[{"text": ch["button"]["text"], "url": ch["button"]["url"]}]]})
+    if ch.get("react"):
+        tg(token, "setMessageReaction", chat_id=chat["id"], message_id=post["message_id"], reaction=[{"type": "emoji", "emoji": ch["react"]}])
+
+
+def mod_my_member(bot, bot_id, token, mc):
+    """ربات به گروه/کانالی اضافه یا ازش حذف شد: صاحب ربات خبردار می‌شه"""
+    chat, new = mc.get("chat") or {}, (mc.get("new_chat_member") or {})
+    if chat.get("type") not in ("group", "supergroup", "channel"):
+        return
+    st, key = new.get("status"), f"{bot_id}:{chat['id']}"
+    title = plain_html(chat.get("title") or "")
+    if st in ("left", "kicked"):
+        db.groups.delete_one({"_id": key})
+        return
+    db.groups.update_one({"_id": key}, {"$set": {"bot": bot_id, "chat": chat["id"], "title": str(chat.get("title") or "")[:80], "type": chat["type"], "adm": st == "administrator", "t": now()}}, upsert=True)
+    if (mc.get("old_chat_member") or {}).get("status") == st:
+        return
+    kind = "کانال" if chat["type"] == "channel" else "گروه"
+    tip = ("ربات ادمین است و آماده کار." if st == "administrator" else
+           f"برای کار کردن، ربات را ادمین {kind} کن (حذف پیام، محدود کردن کاربران، سنجاق)." )
+    tg_html(token, "sendMessage", chat_id=bot["owner"], text=f"ربات به {kind} «{title}» اضافه شد.\n{tip}")
+
+
+def mod_post(bot, bot_id, token, cfg, msg):
+    """صاحب ربات در چت خصوصی: ریپلای روی هر پیام + /post (فوری) یا /post 30 (۳۰ دقیقه‌ی دیگر) = ارسال به کانال"""
+    ch = ((cfg.get("mod") or {}).get("channel") or {})
+    cid = ch.get("id")
+    parts = (msg.get("text") or "").split()
+    rp = msg.get("reply_to_message")
+    chat = msg["chat"]["id"]
+    if not cid:
+        return tg(token, "sendMessage", chat_id=chat, text="اول آیدی کانال رو توی «مدیریت گروه و کانال» تنظیم کن.")
+    if not rp:
+        return tg(token, "sendMessage", chat_id=chat, text="روی پیامی که می‌خوای تو کانال بره ریپلای کن و بنویس:\n/post  (همین الان)\n/post 30  (۳۰ دقیقه‌ی دیگر)")
+    mins = _mnum(parts[1], 1, 10080, 0) if len(parts) > 1 else 0
+    if mins:
+        mod_later(bot_id, mins * 60, kind="post", chan=cid, src=chat, mid=rp["message_id"], btn=ch.get("button"))
+        return tg(token, "sendMessage", chat_id=chat, text=f"پست برای {mins} دقیقه‌ی دیگر زمان‌بندی شد.")
+    r = mod_copy_post(token, cid, chat, rp["message_id"], ch.get("button"))
+    tg(token, "sendMessage", chat_id=chat, text="در کانال منتشر شد." if r.get("ok") else "ارسال ناموفق بود؛ ربات باید ادمینِ کانال با دسترسی ارسال پیام باشد.")
+
+
+def mod_copy_post(token, chan, src, mid, btn):
+    kw = {"reply_markup": {"inline_keyboard": [[{"text": btn["text"], "url": btn["url"]}]]}} if btn else {}
+    return tg(token, "copyMessage", chat_id=int(chan) if re.fullmatch(r"-?\d+", str(chan)) else chan, from_chat_id=src, message_id=mid, **kw)
+
+
+def run_mod_job(job, token):
+    k = job.get("kind")
+    if k == "del":
+        tg(token, "deleteMessage", chat_id=job["chat"], message_id=job["mid"])
+    elif k == "cap":
+        key = f"{job['bot']}:{job['chat']}:{job['cuid']}"
+        p = db.modp.find_one_and_delete({"_id": key})
+        if p:
+            mod_kick(token, job["chat"], job["cuid"])
+            if p.get("mid"):
+                tg(token, "deleteMessage", chat_id=job["chat"], message_id=p["mid"])
+    elif k == "post":
+        mod_copy_post(token, job["chan"], job["src"], job["mid"], job.get("btn"))
 
 
 # ───────────────────────── میزکار پشتیبانی (تیکت) ─────────────────────────
@@ -4364,14 +4853,23 @@ def bot_paid(env, msg):
         send_node(env, p["goto"])
 
 
+def allowed_updates(cfg):
+    u = ["message", "callback_query", "pre_checkout_query"]
+    return u + ["channel_post", "my_chat_member"] if cfg.get("mod") else u
+
+
 def ensure_webhook(bot, cfg):
-    """رباتی که دکمه‌ی پرداخت داره باید pre_checkout_query هم بگیره (یک بار وبهوک رو به‌روز می‌کنیم)"""
-    if not PAYMENTS or not bot.get("active") or not bot.get("token_enc") or bot.get("wh_pay") or not has_pay(cfg):
+    """وبهوک رو با نیاز ربات هم‌گام نگه می‌داره: pre_checkout_query برای دکمه‌ی پرداخت، channel_post و my_chat_member برای مدیریت گروه/کانال"""
+    if not bot.get("active") or not bot.get("token_enc"):
+        return
+    mod = bool(cfg.get("mod"))
+    need_pay = PAYMENTS and not bot.get("wh_pay") and has_pay(cfg)
+    if not (need_pay or mod != bool(bot.get("wh_mod"))):
         return
     r = tg(dec(bot["token_enc"]), "setWebhook", url=f"{BASE_URL}/hook/{bot['_id']}", secret_token=bot["secret"],
-           allowed_updates=["message", "callback_query", "pre_checkout_query"])
+           allowed_updates=allowed_updates(cfg))
     if r.get("ok"):
-        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"wh_pay": True}})
+        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"wh_pay": True, "wh_mod": mod}})
 
 
 # ───── گفتگوی هوشمند داخل ربات‌ها ─────
@@ -4599,7 +5097,17 @@ def sub_hook(bot_id):
             tg(token, "answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok=bool(ok),
                **({} if ok else {"error_message": "این پرداخت دیگه معتبر نیست."}))
             return "ok"
+        if upd.get("channel_post"):                                 # پست کانال (مدیریت کانال)
+            mod_channel(bot, bot_id, token, cfg, upd["channel_post"])
+            return "ok"
+        if upd.get("my_chat_member"):                               # اضافه/حذف شدن ربات از گروه یا کانال
+            mod_my_member(bot, bot_id, token, upd["my_chat_member"])
+            return "ok"
         cq, msg = upd.get("callback_query"), upd.get("message")
+        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: فقط وقتی مدیریت روشنه
+            if cfg.get("mod"):
+                mod_group(bot, bot_id, token, cfg, msg)
+            return "ok"
         actor = (cq or msg or {}).get("from") or {}
         chat0 = (msg or {}).get("chat") or ((cq or {}).get("message") or {}).get("chat") or {}
         is_new = False
@@ -4618,6 +5126,9 @@ def sub_hook(bot_id):
             chat_id = (m.get("chat") or {}).get("id")
             if not chat_id:
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                return "ok"
+            if data.startswith("cp:") and (m.get("chat") or {}).get("type") in ("group", "supergroup"):   # کپچای گروه
+                mod_captcha_cb(bot, bot_id, token, cfg, cq)
                 return "ok"
             if data.startswith("t:"):                                   # دکمه‌های تیکت (فقط پشتیبان‌ها)؛ عضویت اجباری شاملشون نمی‌شه
                 staff_callback(bot, token, cq, data)
@@ -4720,6 +5231,9 @@ def sub_hook(bot_id):
             bot_paid(env, msg)
             return "ok"
         if is_staff(bot, user.get("id")) and staff_message(bot, env, msg, text):
+            return "ok"
+        if user.get("id") == bot["owner"] and re.match(r"^/post(@\w+)?(\s|$)", text) and cfg.get("mod"):   # ارسال/زمان‌بندی پست کانال
+            mod_post(bot, bot_id, token, cfg, msg)
             return "ok"
         # صاحب ربات با reply روی پیام کاربر جواب می‌ده
         if user.get("id") == bot["owner"] and msg.get("reply_to_message"):
