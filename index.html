@@ -253,6 +253,13 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .daily.done .dt b{color:var(--ink)}
 
 /* ── فهرست گروهی ── */
+.tplgrid{display:flex;flex-direction:column;gap:12px}
+.tplc{background:var(--sf);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.tplc .tplt{display:flex;align-items:center;gap:12px}
+.tplc .gt{flex:1;min-width:0;line-height:1.65}.tplc .gt b{display:block;font-size:15px}.tplc .gt span{display:block;font-size:12.5px;color:var(--mut)}
+.tplc .chips{padding:0}
+.tplc .tplf{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tplc .tplf .b{width:auto;min-height:38px;padding:0 18px;font-size:14px}
 .group{background:var(--sf);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .gi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid var(--line2);cursor:pointer;transition:background .15s}
 .gi:first-child{border-top:0}
@@ -1243,8 +1250,10 @@ function tplBlock(){
   let h = "";
   if(!S.bots.length) h += `<div class="steps"><div>${N(1)}توضیح بده</div><div>${N(2)}Ai میسازه</div><div>${N(3)}فعال و متصلش کن</div></div>`;
   if((S.templates || []).length && !full){
-    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛  <small>مناسب شروع سریع و آشنایی با سیستم</small></h2></div>
-      <div class="group">${S.templates.map(t => `<button class="gi" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span><span class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></span>${t.cost ? `<span class="xbd">${N(t.cost)} توکن</span>` : ""}${goIc}</button>`).join("")}</div>`;
+    h += `<div class="sec tplhead"><h2>قالب‌های آماده؛  <small>کامل و دوزبانه، با یک کلیک آماده‌ی استفاده</small></h2></div>
+      <div class="tplgrid">${S.templates.map(t => `<div class="tplc"><div class="tplt"><span class="ib">${IC[t.icon] || IC.bot}</span><div class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></div></div>
+        ${(t.feats || []).length ? `<div class="chips">${t.feats.map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div>` : ""}
+        <div class="tplf">${t.cost ? `<span class="xbd t">${N(t.cost)} توکن</span>` : `<span class="xbd t">رایگان</span>`}<button class="b sm" data-a="tpl" data-id="${esc(t.id)}">ساخت با این قالب</button></div></div>`).join("")}</div>`;
   }
   return h;
 }
