@@ -4471,6 +4471,112 @@ def child_referral(env):
         tg_html(env.token, "sendMessage", chat_id=rid, text=fill(cfg["ref_text"], renv, True)[:4000])
 
 
+# ───────────────────────── تبلیغ ربات‌ساز روی ورودی‌های جدیدِ ربات‌های بزرگ ─────────────────────────
+PROMO_DEF_TEXT = "📢 برای دیدن آموزش‌ها و ابزارهای تازه‌ی ربات‌ساز، عضو کانال ما شو 👇"
+PROMO_DEF_LOCK = "برای ادامه‌ی استفاده از ربات اول عضو کانال زیر شو 👇\nبعد روی «عضو شدم» بزن."
+PROMO_CONF = [0.0, None]
+
+
+def promo_conf():
+    """تنظیمات فعال تبلیغ یا None؛ ۱۵ ثانیه کش می‌شه. کانال خالی = همون کانال‌های عضویت اجباریِ ربات‌ساز"""
+    t = time.time()
+    if t - PROMO_CONF[0] > 15:
+        d = db.settings.find_one({"_id": "promo"}) or {}
+        ch = d.get("channels") or (db.settings.find_one({"_id": "force_join"}) or {}).get("channels") or []
+        PROMO_CONF[:] = [t, dict(d, channels=ch) if d.get("on") and ch else None]
+    return PROMO_CONF[1]
+
+
+def promo_roll(bot_id, uid, salt, pct):
+    """تصادفیِ ثابت: یک نفر در یک ربات همیشه یک نتیجه می‌گیره"""
+    h = int(hashlib.sha256(f"promo:{salt}:{bot_id}:{uid}".encode()).hexdigest()[:8], 16)
+    return h % 100 < pct
+
+
+def promo_decide(bot, bot_id, actor):
+    """ورودیِ تازه: فقط اگه ربات از آستانه گذشته باشه و صاحب/پشتیبان نباشه، با هش ثابت هدف می‌شه. نتیجه روی رکوردش ذخیره می‌شه"""
+    try:
+        conf = promo_conf()
+        uid = actor.get("id")
+        if not conf or not uid or actor.get("is_bot") or uid in staff_ids(bot):
+            return None
+        if db.subs.count_documents({"bot": bot_id}) <= conf["min_users"]:
+            return None
+        if not promo_roll(bot_id, uid, "t", conf["pct"]):
+            return None
+        ad = {"k": "l" if promo_roll(bot_id, uid, "k", conf["lock_pct"]) else "m", "d": False}
+        db.subs.update_one({"_id": f"{bot_id}:{uid}"}, {"$set": {"ad": ad}})
+        return ad
+    except Exception:
+        log.exception("promo_decide failed")
+        return None
+
+
+def promo_missing(uid, channels):
+    """کانال‌هایی که کاربر عضوشون نیست؛ با توکن ربات مادر. اگه مادر ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
+    miss = []
+    for c in channels:
+        r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
+        res = r.get("result") or {}
+        if r.get("ok") and (res.get("status") in ("left", "kicked") or (res.get("status") == "restricted" and not res.get("is_member", True))):
+            miss.append(c)
+    return miss
+
+
+def promo_done(bot_id, uid):
+    """اتمیک: فقط یک بار True برمی‌گردونه (جلوی دوبار نمایش با آپدیت‌های هم‌زمان)"""
+    return db.subs.update_one({"_id": f"{bot_id}:{uid}", "ad.d": False}, {"$set": {"ad.d": True}}).modified_count == 1
+
+
+def promo_stat(k):
+    try:
+        db.settings.update_one({"_id": "promo_stats"}, {"$inc": {k: 1}}, upsert=True)
+    except Exception:
+        pass
+
+
+def promo_send(token, chat_id, conf, miss, lock, retry="pm:chk"):
+    rows = [[{"text": "عضویت در " + x["label"], "url": x["url"]}] for x in fj_public(conf, miss)["channels"]]
+    if lock:
+        rows.append([{"text": "✅ عضو شدم", "callback_data": retry}])
+    body = (conf.get("lock_text") or PROMO_DEF_LOCK) if lock else (conf.get("text") or PROMO_DEF_TEXT)
+    tg_html(token, "sendMessage", chat_id=chat_id, text=("<i>تبلیغ ربات‌ساز</i>\n\n" + body)[:4000],
+            reply_markup={"inline_keyboard": rows}, disable_web_page_preview=True)
+
+
+def promo_lock(bot, token, chat_id, uid, ad):
+    """ورودیِ تازه‌ی قفل‌شده و عضو نیست؟ پیام عضویت می‌فرسته و True برمی‌گردونه"""
+    if not ad or ad.get("k") != "l" or ad.get("d") or uid in staff_ids(bot):
+        return False
+    try:
+        conf = promo_conf()
+        if not conf:
+            return False
+        miss = promo_missing(uid, conf["channels"])
+        if not miss:
+            promo_done(str(bot["_id"]), uid)
+            return False
+        promo_send(token, chat_id, conf, miss, True)
+        promo_stat("lock")
+        return True
+    except Exception:
+        log.exception("promo_lock failed")
+        return False
+
+
+def promo_msg(bot, token, bot_id, chat_id, uid):
+    """پیام تبلیغیِ غیرمسدودکننده، بعد از جواب ربات به اولین تعاملِ کاربر؛ هر نفر فقط یک بار"""
+    conf = promo_conf()
+    if not conf or uid in staff_ids(bot):
+        return
+    miss = promo_missing(uid, conf["channels"])
+    if not promo_done(bot_id, uid):
+        return
+    if miss:                                    # اگه از قبل عضو کانال بوده، تبلیغ نشونش نمی‌دیم
+        promo_send(token, chat_id, conf, miss, False)
+        promo_stat("msg")
+
+
 @app.post("/hook/<bot_id>")
 def sub_hook(bot_id):
     try:
@@ -4484,6 +4590,7 @@ def sub_hook(bot_id):
     upd = request.get_json(silent=True) or {}
     token, cfg = dec(bot["token_enc"]), bot["config"]
     env = None
+    ad, ad_chat, ad_uid = None, 0, 0                                 # تبلیغ ربات‌ساز برای ورودی‌های جدید
     try:
         pcq = upd.get("pre_checkout_query")                         # تأیید فاکتور ستاره قبل از کم شدن پول (۱۰ ثانیه وقت داریم)
         if pcq:
@@ -4504,6 +4611,8 @@ def sub_hook(bot_id):
                  "$setOnInsert": {"bot": bot_id, "uid": actor["id"], "chat": chat0["id"], "t": now()}},
                 upsert=True, return_document=ReturnDocument.BEFORE)
             is_new = prev is None
+            ad_chat, ad_uid = chat0["id"], actor["id"]
+            ad = promo_decide(bot, bot_id, actor) if is_new else (prev.get("ad") or None)
         if cq:
             data, user, m = cq.get("data", ""), cq.get("from", {}), cq.get("message") or {}
             chat_id = (m.get("chat") or {}).get("id")
@@ -4520,6 +4629,21 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_gate(token, chat_id, cfg)
+                return "ok"
+            if data == "pm:chk":                                         # «عضو شدم» روی قفل تبلیغ ربات‌ساز
+                pc = promo_conf()
+                pend = bool(ad and ad.get("k") == "l" and not ad.get("d"))
+                if pend and pc and promo_missing(user["id"], pc["channels"]):
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="هنوز عضو نشدی.", show_alert=True)
+                    return "ok"
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                if pend and promo_done(bot_id, user["id"]):
+                    promo_stat("joined")
+                tg(token, "deleteMessage", chat_id=chat_id, message_id=m.get("message_id"))
+                send_node(env, cfg["start"])
+                return "ok"
+            if promo_lock(bot, token, chat_id, user["id"], ad):
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                 return "ok"
             if data.startswith("u:t:"):                                  # کاربر زیر پاسخ پشتیبان «پاسخ به پشتیبانی» رو زد
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
@@ -4618,6 +4742,8 @@ def sub_hook(bot_id):
         if not gate_ok(token, cfg, user.get("id", chat_id)):
             send_gate(token, chat_id, cfg)
             return "ok"
+        if promo_lock(bot, token, chat_id, user.get("id", chat_id), ad):
+            return "ok"
         sid = env.sid
         if text.startswith("/"):
             if cmd == "start":
@@ -4705,6 +4831,11 @@ def sub_hook(bot_id):
                 env.save()
             except Exception:
                 log.exception("saving user vars failed")
+        if ad and ad.get("k") == "m" and not ad.get("d") and ad_chat:
+            try:
+                promo_msg(bot, token, bot_id, ad_chat, ad_uid)
+            except Exception:
+                log.exception("promo_msg failed")
     return "ok"
 
 
@@ -5448,6 +5579,49 @@ def api_admin_fj_set(uid):
     db.settings.update_one({"_id": "force_join"}, {"$set": {"on": bool(b.get("on")) and bool(chans), "channels": chans, "text": text, "by": uid, "t": time.time()}}, upsert=True)
     FJ_CONF[0] = 0.0
     FJ_CACHE.clear()
+    return jsonify(ok=True, warn=warn)
+
+
+# ───────────────────────── تنظیمات تبلیغ روی ورودی‌های جدید (پنل ادمین) ─────────────────────────
+def _clamp(v, lo, hi, d):
+    try:
+        return max(lo, min(hi, int(float(str(v).translate(_DIG).strip()))))
+    except (TypeError, ValueError):
+        return d
+
+
+@app.get("/api/admin/promo")
+@admin_only
+def api_admin_promo_get(uid):
+    d = db.settings.find_one({"_id": "promo"}) or {}
+    st = db.settings.find_one({"_id": "promo_stats"}) or {}
+    return jsonify(on=bool(d.get("on")), min_users=int(d.get("min_users", 10)), pct=int(d.get("pct", 30)), lock_pct=int(d.get("lock_pct", 20)),
+                   channels=" ".join(fj_str(c) for c in d.get("channels", [])), text=d.get("text") or PROMO_DEF_TEXT,
+                   lock_text=d.get("lock_text") or PROMO_DEF_LOCK, stats={k: int(st.get(k, 0)) for k in ("msg", "lock", "joined")})
+
+
+@app.post("/api/admin/promo")
+@admin_only
+def api_admin_promo_set(uid):
+    b = request.get_json(silent=True) or {}
+    chans, err = fj_parse(b.get("channels"))
+    if err:
+        return jsonify(error=err), 400
+    eff = chans or (db.settings.find_one({"_id": "force_join"}) or {}).get("channels") or []
+    if b.get("on") and not eff:
+        return jsonify(error="برای روشن کردن، یک کانال بنویس (یا اول عضویت اجباری ربات‌ساز را تنظیم کن)"), 400
+    warn = []
+    for c in eff:
+        r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
+        if not r.get("ok"):
+            warn.append(f"{c['id']}: ربات مادر باید ادمین این کانال باشه (یا آیدی درست نیست)؛ تا اون موقع کسی قفل نمی‌شه")
+    db.settings.update_one({"_id": "promo"}, {"$set": {
+        "on": bool(b.get("on")) and bool(eff), "channels": chans,
+        "min_users": _clamp(b.get("min_users"), 0, 10_000_000, 10), "pct": _clamp(b.get("pct"), 0, 100, 30),
+        "lock_pct": _clamp(b.get("lock_pct"), 0, 100, 20),
+        "text": str(b.get("text") or "").strip()[:1500] or PROMO_DEF_TEXT,
+        "lock_text": str(b.get("lock_text") or "").strip()[:1500] or PROMO_DEF_LOCK, "by": uid, "t": time.time()}}, upsert=True)
+    PROMO_CONF[0] = 0.0
     return jsonify(ok=True, warn=warn)
 
 

@@ -3116,6 +3116,9 @@ document.addEventListener("click", e => { const c = e.target.closest("[data-pf=c
 function adminCard(){
   if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; if(S.atab === "admin") render(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
   const fj = S.fj || {on: false, channels: "", text: ""};
+  const PRD = {on: false, min_users: 10, pct: 30, lock_pct: 20, channels: "", text: "", lock_text: "", stats: {}};
+  if(S.pr === undefined){ S.pr = null; api("/api/admin/promo").then(d => { S.pr = d; if(S.atab === "admin") render(); }).catch(() => { S.pr = PRD; }); }
+  const pr = S.pr || PRD;
   if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; if(S.atab === "admin") render(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
   const cd = S.cd || {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []};
   return `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
@@ -3136,6 +3139,16 @@ function adminCard(){
       <p class="muted">کانال خصوصی: <b dir="ltr">-1001234567890=https://t.me/+invite</b></p>
       <span class="lbl">متن پیام عضویت (قالب HTML)</span><textarea class="fa" id="fj-tx" data-fmt maxlength="1500" style="min-height:90px" aria-label="متن پیام عضویت">${esc(fj.text)}</textarea>${fmtTools("fj-tx")}
       <button class="b o" data-a="afj">ذخیره</button></div>
+    ` + `<div class="panel"><h2>تبلیغ روی ورودی‌های جدید</h2><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
+      <label class="chk"><input type="checkbox" id="pr-on"${pr.on ? " checked" : ""}> فعال باشد</label>
+      <span class="lbl">حداقل مخاطب هر ربات (بیشتر از این عدد)</span><input class="ltr" id="pr-min" inputmode="numeric" value="${esc(pr.min_users)}" autocomplete="off" aria-label="حداقل مخاطب">
+      <span class="lbl">درصد ورودی‌های جدیدی که هدف می‌شوند</span><input class="ltr" id="pr-pct" inputmode="numeric" value="${esc(pr.pct)}" autocomplete="off" aria-label="درصد هدف">
+      <span class="lbl">از هدف‌ها، چند درصد قفل عضویت بگیرند (بقیه فقط پیام می‌گیرند؛ ۰ = فقط پیام)</span><input class="ltr" id="pr-lock" inputmode="numeric" value="${esc(pr.lock_pct)}" autocomplete="off" aria-label="درصد قفل">
+      <span class="lbl">کانال‌ها (خالی = همان کانال‌های عضویت اجباری)</span><input class="ltr" id="pr-ch" value="${esc(pr.channels)}" placeholder="@channel" autocomplete="off" aria-label="کانال‌های تبلیغ">
+      <span class="lbl">متن پیام تبلیغی (قالب HTML)</span><textarea class="fa" id="pr-tx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن پیام تبلیغی">${esc(pr.text)}</textarea>${fmtTools("pr-tx")}
+      <span class="lbl">متن قفل عضویت (قالب HTML)</span><textarea class="fa" id="pr-ltx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن قفل عضویت">${esc(pr.lock_text)}</textarea>${fmtTools("pr-ltx")}
+      <p class="muted">نمایش تا الان: پیام ${N(pr.stats?.msg || 0)} · قفل ${N(pr.stats?.lock || 0)} · عضو شدند از قفل ${N(pr.stats?.joined || 0)}</p>
+      <button class="b o" data-a="apr">ذخیره</button></div>
     ` + `<div class="panel"><h2>توکن کاربر</h2><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
       <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
       <button class="b o" data-a="agrant">اعمال</button></div>
@@ -3200,6 +3213,9 @@ Object.assign(A, {
   afj: el => busy(el, async () => { const v = id => $(id).value.trim(), on = $("#fj-on").checked;
     const d = await api("/api/admin/force-join", "POST", {on, channels: v("#fj-ch"), text: v("#fj-tx")});
     S.fj = {on: on && !!v("#fj-ch"), channels: v("#fj-ch"), text: v("#fj-tx")}; toast(d.warn?.length ? d.warn[0] : "ذخیره شد"); }),
+  apr: el => busy(el, async () => { const v = id => $(id).value.trim(), on = $("#pr-on").checked;
+    const body = {on, min_users: v("#pr-min"), pct: v("#pr-pct"), lock_pct: v("#pr-lock"), channels: v("#pr-ch"), text: v("#pr-tx"), lock_text: v("#pr-ltx")};
+    const d = await api("/api/admin/promo", "POST", body); S.pr = undefined; toast(d.warn?.length ? d.warn[0] : "ذخیره شد"); render(); }),
   cpf: el => { const t = $("#" + el.dataset.p + "-text"); if(!t) return; const tg_ = FMT_TAGS[+el.dataset.i], o = tg_[2], c = tg_[3];
     const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
     t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true})); },
