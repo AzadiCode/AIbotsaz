@@ -41,8 +41,8 @@ from core import (
     dec, _DIG, enc, ensure_user, FJ_CACHE, fj_chat, FJ_CONF, fj_conf, FJ_DEFAULT_TEXT, fj_missing,
     fj_public, get_bot, get_media, hold, _int, is_block_err, JOB_TIMEOUT, link_referral, log, max_bots,
     MAX_PROMPT, MAX_VERSIONS, media_list, mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now,
-    ONLINE_SECS, PACKS, parse_err, perks_of, plain_html, rate_ok, redeem, REF_INVITEE, REF_INVITER,
-    REF_ON, request_user, send_rich, settle_referral, tehran_day, tg, tg_html, thash, touch_user,
+    ONLINE_SECS, PACKS, parse_err, perks_of, plain_html, PLANS, plan_info, rate_ok, redeem, REF_INVITEE, REF_INVITER,
+    REF_ON, request_user, send_rich, settle_referral, SUB_DAYS, tehran_day, tg, tg_html, thash, touch_user,
     wallet_info,
 )
 from ai import (
@@ -198,8 +198,26 @@ def mother_keyboard(uid):
 
 
 def mother_paid(msg):
+    from core import activate_plan
     sp, uid = msg["successful_payment"], msg["from"]["id"]
-    p = pack_from_payload(sp.get("invoice_payload"), uid)
+    payload = str(sp.get("invoice_payload") or "")
+    if sp.get("currency") == "XTR" and payload.startswith("sub:"):
+        try:
+            _, pid, owner = payload.split(":")
+            owner = int(owner)
+        except ValueError:
+            log.warning("sub payment mismatch: %s", sp)
+            return
+        p = PLANS.get(pid)
+        if owner != uid or not p or int(sp.get("total_amount", 0)) != int(p["stars"]):
+            log.warning("sub payment mismatch: %s", sp)
+            return
+        ensure_user(uid)
+        activate_plan(uid, pid, SUB_DAYS, int(p["tokens"]), key=f"subpay:{sp['telegram_payment_charge_id']}")
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=uid,
+           text=f"اشتراک {p['title']} برای {SUB_DAYS} روز فعال شد و {p['tokens']} توکن هدیه به حسابت اضافه شد.")
+        return
+    p = pack_from_payload(payload, uid)
     if not p or sp.get("currency") != "XTR" or int(sp.get("total_amount", 0)) != int(p["stars"]):
         log.warning("payment mismatch: %s", sp)
         return
@@ -211,6 +229,7 @@ def mother_paid(msg):
 HELP_TEXT = ("راهنمای ابر رباتساز\n\n"
              "/start باز کردن منو\n/balance موجودی توکن\n/daily جایزه‌ی روزانه\n"
              "/invite لینک دعوت (هر دعوت موفق = توکن رایگان)\n/coupon CODE ثبت کد هدیه\n\n"
+             "اشتراک پرمیوم و پرو (ایموجی پرمیوم، دکمه‌ی رنگی، سقف بیشتر و یوزربات) از تب «اشتراک» داخل مینی‌اپ فعال می‌شود.\n\n"
              "برای ساخت سریع ربات داخل همین چت، «ساخت ربات» رو بزن؛ برای مدیریت و توسعه‌ی حرفه‌ای وارد مینی‌اپ شو.")
 
 
@@ -403,7 +422,7 @@ def mk_begin(uid, chat):
         return mk_resume(uid, chat)
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
         return mk_say(chat, f"{MK_TITLE}\n\nسقف ربات‌های شما {max_bots(uid)} عدد است و امکان ساخت ربات جدید وجود ندارد. "
-                            "با افزایش سطح، این سقف بیشتر می‌شود. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
+                            "با اشتراک پرمیوم یا پرو این سقف بیشتر می‌شود. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
                       mk_kb([mk_app("ورود به مینی‌اپ")]))
     have, need = wallet_info(uid)["tokens"], typical_cost()
     if have < need:
@@ -1700,8 +1719,9 @@ def ub_guard(uid):
 @authed
 def api_ub_list(uid):
     items = [ub_public(d) for d in db.userbots.find({"owner": uid}).sort("created", 1)]
-    return jsonify(items=items, max=MAX_USERBOTS, ok=ub_ready(), own_api=not (TG_API_ID and TG_API_HASH), pending=bool(ub_pending(uid)),
-                   cost=AI_MSG_COST, per=ai_per(uid))
+    has = bool(perks_of(uid)["userbot"])
+    return jsonify(items=items, max=MAX_USERBOTS if has else 0, ok=ub_ready(), own_api=not (TG_API_ID and TG_API_HASH), pending=bool(ub_pending(uid)),
+                   cost=AI_MSG_COST, per=ai_per(uid), locked=not has)
 
 
 @app.post("/api/userbots/login/start")
@@ -1710,6 +1730,8 @@ def api_ub_login_start(uid):
     bad = ub_guard(uid)
     if bad:
         return bad
+    if not perks_of(uid)["userbot"]:
+        return jsonify(error="یوزربات مخصوص اشتراک پرو است. از تب «اشتراک» در حساب، اشتراکت را فعال کن"), 403
     if not rate_ok(f"ubl:{uid}", 5, 3600):
         return jsonify(error="درخواست کد زیاد بود، یک ساعت بعد دوباره امتحان کن"), 429
     j = request.get_json(silent=True) or {}
@@ -1819,6 +1841,8 @@ def api_ub_start(uid, ubid):
     bad = ub_guard(uid)
     if bad:
         return bad
+    if not perks_of(uid)["userbot"]:
+        return jsonify(error="یوزربات مخصوص اشتراک پرو است. از تب «اشتراک» در حساب، اشتراکت را فعال کن"), 403
     d = get_ub(ubid, uid)
     if not d:
         return jsonify(error="یوزربات پیدا نشد"), 404

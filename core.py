@@ -18,21 +18,22 @@ core.py — هسته‌ی مشترک (پایین‌ترین لایه)
 
 نام‌های پایدار — فایل‌های دیگه این‌ها رو از همین فایل import می‌کنن (حذف یا تغییر نام، بقیه رو می‌شکنه).
 اگه چیزی تازه برای بقیه لازمه، همین‌جا اضافه کن و در فایلِ مصرف‌کننده import کن:
-  add_xp, ADMIN_IDS, admin_only, age_sec, AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS,
+  activate_plan, ADMIN_IDS, admin_only, age_sec, AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS,
   AI_MODEL, AI_MSG_COST, AI_MSGS_PER_TOKEN, AI_NODE_MAX_TOKENS, ai_per, ai_tick, app, authed, aware,
-  balance, BASE_URL, BILLING, BOARD_SCAN, BROADCAST_MAX, BROADCAST_PER_TOKEN, calc_cost, charge_up_to,
-  CHUNK, claim_daily, credit, cut, DAILY_BONUS, DAILY_XP, db, DEBUG, dec, _DIG, EDIT_COST, enc,
+  balance, BASE_URL, BILLING, BOARD_SCAN, BROADCAST_MAX, BROADCAST_PER_TOKEN, BTN_COLORS, calc_cost, charge_up_to,
+  CHUNK, claim_daily, credit, cut, DAILY_BONUS, db, DEBUG, dec, _DIG, EDIT_COST, enc,
   ENHANCE_COST, ensure_user, est_tokens, FJ_CACHE, fj_chat, FJ_CONF, fj_conf, FJ_DEFAULT_TEXT,
   fj_missing, fj_public, GEN_COST, get_bot, get_media, hold, _int, is_block_err, JOB_TIMEOUT,
-  levels_public, link_referral, log, low_balance_notice, lv_info, MAX_BOTS, max_bots, MAX_GLOBALS,
+  link_referral, log, low_balance_notice, MAX_BOTS, max_bots, MAX_GLOBALS,
   MAX_MEDIA, MAX_NODES, MAX_PENDING_REMIND, MAX_PROMPT, MAX_STAFF, MAX_STARS, MAX_VERSIONS, media_bytes,
   media_delete, MEDIA_KEYS, media_kind, media_list, MEDIA_MAX_MB, MEDIA_QUOTA_MB, media_sig, MONGO_URI,
   mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now, ONLINE_SECS, PACKS, parse_err, PAYMENTS,
-  perks_of, plain_html, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
+  perks_of, perk_texts, PLANS, plain_html, plan_info, plan_of, plans_public, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
   REF_MAX_PER_USER, REF_MILESTONES, REF_ON, refund, request_user, SAFE_INLINE, SCHED_ON, send_rich,
-  settle_referral, setup_mother, spend, task_metrics, task_steps, TASKS, tasks_state, tehran_day,
+  settle_referral, setup_mother, spend, style_label, style_text, SUB_DAYS, SUB_PREMIUM_STARS, SUB_PREMIUM_TOKENS,
+  SUB_PRO_STARS, SUB_PRO_TOKENS, task_metrics, task_steps, TASKS, tasks_state, tehran_day,
   TEMPLATE_FACTOR, TEMPLATE_MAX_COST, TEMPLATE_MIN_COST, TEMPLATE_UNIT_COST, tg, tg_html, tg_media,
-  thash, TOKEN_MIN_COST, TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, up_dict, wallet_info
+  thash, TOKEN_MIN_COST, TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, wallet_info
 """
 
 import html as _html
@@ -78,10 +79,9 @@ def _float(name, default):
         return default
 
 
-# ضریب اقتصاد: همه‌ی توکن‌ها (هدیه‌ها، پاداش‌ها، هزینه‌ها، بسته‌ها) و XP با این ضریب بالا می‌رن.
+# ضریب اقتصاد: همه‌ی توکن‌ها (هدیه‌ها، پاداش‌ها، هزینه‌ها، بسته‌ها) با این ضریب بالا می‌رن.
 # هدیه‌ی ثبت‌نام = ۱۰۰ × TOKEN_SCALE = ۱۰۰۰ توکن؛ بقیه دقیقاً با همین نسبت.
 TOKEN_SCALE = max(1, _int("TOKEN_SCALE", 10))
-XP_SCALE    = max(1, _int("XP_SCALE", 13))
 
 MAX_BOTS      = _int("MAX_BOTS", 1)            # سقف ربات هر کاربر
 AI_MAX_TOKENS = _int("AI_MAX_TOKENS", 9000)     # سقف طول خروجی هوش مصنوعی ساخت ربات
@@ -127,9 +127,16 @@ MEDIA_MAX_MB   = _int("MEDIA_MAX_MB", 15)       # سقف حجم هر فایل
 MEDIA_QUOTA_MB = _int("MEDIA_QUOTA_MB", 60)     # سقف کل فایل‌های هر کاربر
 MAX_MEDIA      = _int("MAX_MEDIA", 60)          # سقف تعداد فایل هر کاربر
 
-# سطح و ماموریت‌ها (جدول سطح‌ها و ماموریت‌ها پایین‌تر، بخش «سطح و ماموریت‌ها»)
-DAILY_XP     = 2 * XP_SCALE   # XP هر بار دریافت جایزه‌ی روزانه
-MAX_DISCOUNT = 20          # سقف کاهش نرخ مصرف توکن از راه سطح (درصد)
+# اشتراک (جایگزین سیستم سطح): سه پلن ساده — رایگان، پرمیوم، پرو.
+# قیمت‌ها به ستاره‌ی تلگرام و مدت به روز است؛ با Environment قابل تنظیم‌اند.
+SUB_DAYS           = _int("SUB_DAYS", 30)          # مدت هر دوره‌ی اشتراک پولی (روز)
+SUB_PREMIUM_STARS  = _int("SUB_PREMIUM_STARS", 150)
+SUB_PRO_STARS      = _int("SUB_PRO_STARS", 350)
+SUB_PREMIUM_TOKENS = _int("SUB_PREMIUM_TOKENS", 200 * TOKEN_SCALE)   # هدیه‌ی توکنیِ فعال‌سازی پرمیوم
+SUB_PRO_TOKENS     = _int("SUB_PRO_TOKENS", 600 * TOKEN_SCALE)       # هدیه‌ی توکنیِ فعال‌سازی پرو
+
+# سطح و ماموریت‌ها (جدول پلن‌ها پایین‌تر، بخش «اشتراک، ماموریت‌ها و دعوت»)
+MAX_DISCOUNT = 20          # سقف کاهش نرخ مصرف توکن از راه اشتراک (درصد)
 
 MAX_PROMPT   = 4000
 MAX_VERSIONS = 6
@@ -466,7 +473,7 @@ def claim_daily(uid):
     d, _ = ensure_user(uid)
     today, yest = tehran_day(), tehran_day(1)
     streak = d.get("streak", 0) + 1 if d.get("last_claim") == yest else 1
-    reward = DAILY_BONUS + min(streak - 1, 4) * TOKEN_SCALE + perks_at(lvl_of(int(d.get("xp", 0))))["daily"]
+    reward = DAILY_BONUS + min(streak - 1, 4) * TOKEN_SCALE + perks_of(uid)["daily"]
     r = db.users.find_one_and_update(
         {"_id": uid, "last_claim": {"$ne": today}},
         {"$set": {"last_claim": today, "streak": streak}, "$inc": {"tokens": reward}, "$max": {"best_streak": streak}},
@@ -474,7 +481,7 @@ def claim_daily(uid):
     if not r:
         return None
     log_ledger(uid, reward, "daily")
-    return reward, streak, add_xp(uid, DAILY_XP)
+    return reward, streak
 
 
 def wallet_info(uid):
@@ -482,7 +489,7 @@ def wallet_info(uid):
     last = d.get("last_claim")
     streak = d.get("streak", 0) if last in (tehran_day(), tehran_day(1)) else 0
     return {"tokens": int(d.get("tokens", 0)), "streak": streak, "can_claim": last != tehran_day(),
-            "next_reward": DAILY_BONUS + min(streak, 4) * TOKEN_SCALE + perks_at(lvl_of(int(d.get("xp", 0))))["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
+            "next_reward": DAILY_BONUS + min(streak, 4) * TOKEN_SCALE + perks_of(uid)["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
 
 
 def redeem(uid, code):
@@ -501,88 +508,125 @@ def redeem(uid, code):
     return int(c["tokens"]), ""
 
 
-# ───────────────────────── سطح، ماموریت‌ها و دعوت ─────────────────────────
-# هر سطح: XP لازم، عنوان، توکنِ هدیه‌ی رسیدن به سطح و مزایای ماندگار (مزایای سطح‌ها روی هم جمع می‌شن)
+# ───────────────────────── اشتراک، ماموریت‌ها و دعوت ─────────────────────────
+# سه پلن ساده (رایگان / پرمیوم / پرو). هر پلن: قیمت به ستاره، مدت به روز، هدیه‌ی توکنیِ فعال‌سازی و مزایای ماندگار تا پایان دوره.
 #   bots = + سقف ساخت ربات      disc = ٪ کاهش نرخ مصرف توکن   daily = + جایزه‌ی روزانه
 #   mb / files = + فضا و تعداد رسانه   ver = + نسخه‌ی قابل بازگشت   bc = + سقف گیرنده‌ی پیام همگانی
 #   free_enhance = «کامل‌ترش کن» رایگان
-def _lx(base_xp, slow):
-    """آستانه‌ی XP هر سطح: مقدار پایه × XP_SCALE × ضریب کندی (سطح‌های بالاتر کندتر می‌رسن)، رُند به مضرب ۵۰"""
-    return int(round(base_xp * XP_SCALE * slow / 50.0)) * 50 if base_xp else 0
-
-
+#   emoji = ایموجی پرمیوم (tg-emoji) در متن ربات‌ها   color = دکمه‌های رنگی   userbot = دسترسی به بخش یوزربات
 T = TOKEN_SCALE
-LEVELS = [
-    {"xp": _lx(0, 1),     "title": "تازه‌کار",  "tokens": 0,       "perks": {}},
-    {"xp": _lx(50, 1.5),  "title": "کاوشگر",    "tokens": 10 * T,  "perks": {"bots": 2}},
-    {"xp": _lx(130, 1.6), "title": "سازنده",    "tokens": 15 * T,  "perks": {"disc": 5}},
-    {"xp": _lx(250, 1.7), "title": "حرفه‌ای",    "tokens": 20 * T,  "perks": {"mb": 40, "files": 20}},
-    {"xp": _lx(430, 1.8), "title": "ناظر",      "tokens": 30 * T,  "perks": {"bots": 3, "daily": 2 * T}},
-    {"xp": _lx(680, 1.9), "title": "Ai منیجر",     "tokens": 40 * T,  "perks": {"disc": 5, "ver": 4}},
-    {"xp": _lx(1000, 2.0), "title": "نخبه",      "tokens": 50 * T,  "perks": {"bc": 5000, "free_enhance": True}},
-    {"xp": _lx(1400, 2.1), "title": "لجند",  "tokens": 80 * T,  "perks": {"bots": 5, "disc": 10, "daily": 3 * T}},
-]
+PLANS = {
+    "free":    {"title": "رایگان",  "stars": 0, "days": 0, "tokens": 0,
+                "perks": {}},
+    "premium": {"title": "پرمیوم",  "stars": SUB_PREMIUM_STARS, "days": SUB_DAYS, "tokens": SUB_PREMIUM_TOKENS,
+                "perks": {"bots": 2, "disc": 10, "daily": 2 * T, "mb": 60, "files": 30, "ver": 2, "bc": 2000,
+                          "emoji": True, "color": True}},
+    "pro":     {"title": "پرو",     "stars": SUB_PRO_STARS, "days": SUB_DAYS, "tokens": SUB_PRO_TOKENS,
+                "perks": {"bots": 5, "disc": 20, "daily": 5 * T, "mb": 200, "files": 100, "ver": 6, "bc": 10000,
+                          "free_enhance": True, "emoji": True, "color": True, "userbot": True}},
+}
+PLAN_ORDER = ["free", "premium", "pro"]
 
-# ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن، XP) بعد از دریافت جایزه‌ی قبلی باز می‌شه
+# رنگ‌های مجاز دکمه (اشتراک پرمیوم و پرو): موقع ارسال، نقطه‌ی رنگی اولِ متن دکمه می‌آد
+BTN_COLORS = {"blue": "🔵", "green": "🟢", "red": "🔴", "yellow": "🟡",
+              "purple": "🟣", "orange": "🟠", "black": "⚫"}
+BTN_COLOR_FA = {"blue": "آبی", "green": "سبز", "red": "قرمز", "yellow": "زرد",
+                "purple": "بنفش", "orange": "نارنجی", "black": "مشکی"}
+EMOJI_RE = re.compile(r'<tg-emoji\s+emoji-id="(\d+)"\s*>(.*?)</tg-emoji\s*>', re.S)
+
+
+def style_text(text, perks):
+    """متن آماده‌ی ارسال: اگه اشتراک ایموجی پرمیوم نداشته باشه، تگ‌های tg-emoji به همون شکلک ساده‌ی داخلشون تبدیل می‌شن"""
+    if not text or (perks or {}).get("emoji"):
+        return text or ""
+    return EMOJI_RE.sub(lambda m: m.group(2), text)
+
+
+def style_label(label, color, perks):
+    """متن روی دکمه موقع ارسال: با اشتراک رنگی، نقطه‌ی رنگی اولش می‌آد؛ بدون اشتراک، ساده"""
+    label = str(label or "")
+    dot = BTN_COLORS.get(str(color or "").strip().lower())
+    if dot and (perks or {}).get("color"):
+        label = f"{dot} {label}".strip()[:64]
+    return label
+
+
+# ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن) بعد از دریافت جایزه‌ی قبلی باز می‌شه و فقط پاداش توکنی می‌ده
 TASKS = [
-    # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن، XP, معیار, کلید, عنوان, توضیح)
+    # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن, معیار, کلید, عنوان, توضیح)
     {"id": "bots",     "icon": "bot",    "title": "ساخت ربات",        "metric": "bots",     "text": "ساخت {n} ربات", "rich": True,
      "desc": "از ایده تا ربات حرفه‌ای در سه قدم",
-     "steps": [(1, 5, 20, "bots", "bots:1", "ساخت ربات", "اولین ربات خودت رو بساز"),
-               (1, 10, 40, "live", "bots:live", "فعال‌سازی", "ربات رو با توکن BotFather فعال کن"),
-               (1, 15, 60, "edits", "bots:edit", "توسعه و ارتقا", "ربات رو یک بار با هوش مصنوعی ارتقا بده")]},
+     "steps": [(1, 5, "bots", "bots:1", "ساخت ربات", "اولین ربات خودت رو بساز"),
+               (1, 10, "live", "bots:live", "فعال‌سازی", "ربات رو با توکن BotFather فعال کن"),
+               (1, 15, "edits", "bots:edit", "توسعه و ارتقا", "ربات رو یک بار با هوش مصنوعی ارتقا بده")]},
     {"id": "audience", "icon": "users",  "title": "رشد مخاطب",       "metric": "audience", "text": "رسیدن مجموع کاربران ربات‌هات به {n} نفر", "rich": True,
      "desc": "مجموع کاربران همه‌ی ربات‌هات", "names": ["اولین رشد کاربران", "محله‌ی پرجمعیت", "شهرت محلی", "کانون توجه", "ستاره‌ی تلگرام"],
-     "steps": [(10, 10, 30), (50, 20, 60), (100, 40, 100), (500, 80, 200), (1000, 150, 350)]},
+     "steps": [(10, 10), (50, 20), (100, 40), (500, 80), (1000, 150)]},
     {"id": "refs",     "icon": "medal",  "title": "تشکیل ناوگان",          "metric": "refs",     "text": "دعوت موفق {n} دوست", "rich": True,
      "desc": "دوستات رو دعوت کن و با هم رشد کنید", "names": ["رشد ناوگان", "تیم کوچک", "ناخدا"],
-     "steps": [(1, 5, 30), (5, 15, 80), (15, 40, 150)]},
+     "steps": [(1, 5), (5, 15), (15, 40)]},
     {"id": "edits",    "icon": "spark",  "title": "ارتقا با هوش مصنوعی", "metric": "edits",  "text": "ارتقای ربات با هوش مصنوعی {n} بار", "rich": True,
      "desc": "ربات‌هات رو با هوش مصنوعی کامل‌تر کن", "names": ["توسعه", "هم‌فکر هوشمند"],
-     "steps": [(5, 15, 50), (15, 30, 100)]},
+     "steps": [(5, 15), (15, 30)]},
     {"id": "streak",   "icon": "flame",  "title": "استمرار",         "metric": "streak",   "text": "{n} روز متوالی دریافت پاداش روزانه ", "rich": True,
      "desc": "هر روز جایزه‌ی روزانه رو بگیر", "names": ["کسب اولین پاداش روزانه", "هفته‌ی طلایی", "باشگاه سی‌روزه"],
-     "steps": [(3, 5, 20), (7, 15, 50), (30, 60, 150)]},
+     "steps": [(3, 5), (7, 15), (30, 60)]},
 ]
 
 
 def task_steps(t):
     out = []
     for st in t["steps"]:
-        g, tk, x = st[:3]
-        tk, x = tk * TOKEN_SCALE, x * XP_SCALE
-        if len(st) > 3:
-            metric, key, label, hint = st[3], st[4], st[5], st[6]
+        g, tk = st[:2]
+        tk = tk * TOKEN_SCALE
+        if len(st) > 2:
+            metric, key, label, hint = st[2], st[3], st[4], st[5]
         else:
             metric, key = t["metric"], f"{t['id']}:{g}"
             hint = t["text"].format(n=f"{g:,}")
             label = t["names"][len(out)] if t.get("names") else hint
-        out.append({"goal": g, "tokens": tk, "xp": x, "metric": metric, "key": key, "label": label, "hint": hint})
+        out.append({"goal": g, "tokens": tk, "metric": metric, "key": key, "label": label, "hint": hint})
     return out
 
 
-def lvl_of(xp):
-    n = 1
-    for i, L in enumerate(LEVELS, 1):
-        if xp >= L["xp"]:
-            n = i
-    return n
-
-
-def perks_at(level):
-    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0, "free_enhance": False}
-    for L in LEVELS[:level]:
-        for k, v in L["perks"].items():
-            p[k] = (p[k] or v) if isinstance(v, bool) else p[k] + v
-    p["disc"] = min(p["disc"], MAX_DISCOUNT)
+def plan_of(uid):
+    """پلن فعال کاربر (اگه تاریخش گذشته باشه «رایگان»؛ بدون اینکه چیزی رو پاک کنیم)"""
+    if uid is None:
+        return "free"
+    d = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
+    p = str(d.get("plan") or "free")
+    if p not in PLANS:
+        return "free"
+    exp = d.get("plan_exp")
+    if p != "free" and (not exp or naive(exp) < naive()):
+        return "free"
     return p
 
 
+def activate_plan(uid, plan, days=0, bonus=0, key=None):
+    """فعال‌سازی/تمدید اشتراک + هدیه‌ی توکنی (با key تکراری نمی‌شه). خروجی: (پلن، تاریخ پایان)"""
+    if plan not in PLANS or plan == "free":
+        db.users.update_one({"_id": uid}, {"$set": {"plan": "free"}, "$unset": {"plan_exp": ""}})
+        return "free", None
+    days = max(1, int(days or PLANS[plan]["days"] or SUB_DAYS))
+    cur = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
+    base = naive()
+    if cur.get("plan") == plan and cur.get("plan_exp") and naive(cur["plan_exp"]) > base:
+        base = naive(cur["plan_exp"])          # تمدید هم‌پلن: به باقی‌مونده اضافه می‌شه
+    exp = base + timedelta(days=days)
+    db.users.update_one({"_id": uid}, {"$set": {"plan": plan, "plan_exp": exp}})
+    if bonus:
+        credit(uid, int(bonus), "sub", key=key)
+    return plan, exp
+
+
 def perks_of(uid):
-    if uid is None:
-        return perks_at(1)
-    d = db.users.find_one({"_id": uid}, {"xp": 1}) or {}
-    return perks_at(lvl_of(int(d.get("xp", 0))))
+    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0,
+         "free_enhance": False, "emoji": False, "color": False, "userbot": False}
+    for k, v in PLANS.get(plan_of(uid), PLANS["free"])["perks"].items():
+        p[k] = (p[k] or v) if isinstance(v, bool) else p[k] + v
+    p["disc"] = min(p["disc"], MAX_DISCOUNT)
+    return p
 
 
 def perk_texts(p):
@@ -599,6 +643,12 @@ def perk_texts(p):
         out.append(f"+{p['ver']} نسخه‌ی قابل بازگشت برای هر ربات")
     if p.get("bc"):
         out.append(f"سقف پیام همگانی +{p['bc']} نفر")
+    if p.get("emoji"):
+        out.append("ایموجی پرمیوم در متن ربات‌ها")
+    if p.get("color"):
+        out.append("دکمه‌های رنگی")
+    if p.get("userbot"):
+        out.append("دسترسی به یوزربات")
     if p.get("free_enhance"):
         out.append("«کامل‌ترش کن» رایگان")
     return out
@@ -609,7 +659,7 @@ def max_bots(uid):
 
 
 def cut(uid, n):
-    """نرخ مصرف توکن بعد از تخفیف سطح (هزینه‌ی ۱ توکنی دست نمی‌خوره)"""
+    """نرخ مصرف توکن بعد از تخفیف اشتراک (هزینه‌ی ۱ توکنی دست نمی‌خوره)"""
     pct = perks_of(uid)["disc"] if uid is not None else 0
     return n if pct <= 0 or n <= 1 else max(1, int(n * (100 - pct) / 100 + 0.5))
 
@@ -618,47 +668,25 @@ AI_MSG_COST = TOKEN_SCALE      # حالت fixed: هزینه‌ی هر «بسته
 
 
 def ai_per(uid):
-    """حالت fixed: هر چند پیام هوشمند = یک بسته‌ی AI_MSG_COST توکنی (با تخفیف سطح بیشتر می‌شه)"""
+    """حالت fixed: هر چند پیام هوشمند = یک بسته‌ی AI_MSG_COST توکنی (با تخفیف اشتراک بیشتر می‌شه)"""
     return max(1, round(AI_MSGS_PER_TOKEN * 100 / (100 - perks_of(uid)["disc"])))
 
 
-def add_xp(uid, n):
-    """XP اضافه می‌کنه و پاداش توکنِ هر سطحِ تازه رو (فقط یک بار) می‌ده؛ خروجی: (سطح قبلی، سطح جدید)"""
-    n = int(n)
-    if n <= 0:
-        return None
-    d = db.users.find_one_and_update({"_id": uid}, {"$inc": {"xp": n}}, return_document=ReturnDocument.BEFORE)
-    if not d:
-        return None
-    old = lvl_of(int(d.get("xp", 0)))
-    new = lvl_of(int(d.get("xp", 0)) + n)
-    for lv in range(old + 1, new + 1):
-        if LEVELS[lv - 1]["tokens"]:
-            credit(uid, LEVELS[lv - 1]["tokens"], "levelup", key=f"lv:{uid}:{lv}")
-    return old, new
+def plan_info(uid):
+    """وضعیت اشتراک کاربر برای مینی‌اپ: پلن فعلی، روزهای باقی‌مونده و مزایا"""
+    d = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
+    pid = plan_of(uid)
+    exp = aware(d.get("plan_exp")) if pid != "free" and d.get("plan_exp") else None
+    left = max(0, (exp - now()).days) if exp else 0
+    return {"id": pid, "title": PLANS[pid]["title"], "exp": exp.isoformat() if exp else None, "left": left,
+            "emoji": bool(PLANS[pid]["perks"].get("emoji")), "color": bool(PLANS[pid]["perks"].get("color")),
+            "userbot": bool(PLANS[pid]["perks"].get("userbot")),
+            "perks": perk_texts(PLANS[pid]["perks"])}
 
 
-def up_dict(up):
-    if not up or up[1] <= up[0]:
-        return None
-    return {"from": up[0], "to": up[1], "title": LEVELS[up[1] - 1]["title"],
-            "tokens": sum(LEVELS[i - 1]["tokens"] for i in range(up[0] + 1, up[1] + 1)),
-            "perks": [t for i in range(up[0] + 1, up[1] + 1) for t in perk_texts(LEVELS[i - 1]["perks"])]}
-
-
-def lv_info(uid):
-    d = db.users.find_one({"_id": uid}, {"xp": 1}) or {}
-    xp = int(d.get("xp", 0))
-    n = lvl_of(xp)
-    nxt = LEVELS[n] if n < len(LEVELS) else None
-    return {"xp": xp, "level": n, "title": LEVELS[n - 1]["title"], "from": LEVELS[n - 1]["xp"],
-            "to": nxt["xp"] if nxt else None, "next_title": nxt["title"] if nxt else None,
-            "next_perks": perk_texts(nxt["perks"]) if nxt else [], "next_tokens": nxt["tokens"] if nxt else 0}
-
-
-def levels_public():
-    return [{"n": i, "xp": L["xp"], "title": L["title"], "tokens": L["tokens"], "perks": perk_texts(L["perks"])}
-            for i, L in enumerate(LEVELS, 1)]
+def plans_public():
+    return [{"id": pid, "title": p["title"], "stars": p["stars"], "days": p["days"], "tokens": p["tokens"],
+             "perks": perk_texts(p["perks"])} for pid, p in PLANS.items()]
 
 
 def task_metrics(uid, d):
@@ -693,9 +721,9 @@ def tasks_state(uid):
         v = m[cur["metric"]]
         items.append({"id": t["id"], "icon": t["icon"], "title": t["title"], "text": t["text"].format(n=cur["goal"]),
                       "rich": bool(t.get("rich")), "desc": t.get("desc", ""),
-                      "steps": [{"label": s["label"], "hint": s["hint"], "goal": s["goal"], "value": s["value"], "tokens": s["tokens"], "xp": s["xp"],
+                      "steps": [{"label": s["label"], "hint": s["hint"], "goal": s["goal"], "value": s["value"], "tokens": s["tokens"],
                                  "done": s["done"], "ready": s["ready"]} for s in steps],
-                      "value": v, "goal": cur["goal"], "tokens": cur["tokens"], "xp": cur["xp"],
+                      "value": v, "goal": cur["goal"], "tokens": cur["tokens"],
                       "stage": sum(1 for s in steps if s["done"]), "total": len(steps),
                       "done": nxt is None, "ready": nxt is not None and v >= cur["goal"]})
     return items

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
    app.js — پوسته‌ی مینی‌اپ: وضعیت، ارتباط با سرور، آیکن‌ها، رندر صفحه‌ها (ساخت، ربات‌ها، رسانه،
-   حساب)، اکشن‌های صفحه، سطح و ماموریت، ابزارهای ربات، پنل مدیریت و یوزربات.
+   حساب)، اکشن‌های صفحه، اشتراک و ماموریت، ابزارهای ربات، پنل مدیریت و یوزربات.
    ترتیب بارگذاری (index.html): app.js ← studio.js ← load()
    این فایل اول اجرا می‌شود؛ هر چیزی که فوراً (هنگام بارگذاری) به studio.js نیاز دارد نباید اینجا باشد.
    ═══════════════════════════════════════════════════════════════ */
@@ -22,7 +22,7 @@ let S = {
   view: "create", btab: "ai", atab: "wallet", sbot: null,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
-  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], lv: null
+  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null
 };
 let D = null;   // پیش‌نویس فرمِ باز
 
@@ -129,7 +129,7 @@ const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="a
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
   referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", card:"خرید کارت‌به‌کارت", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", levelup:"پاداش ارتقای سطح"};
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", sub:"اشتراک", levelup:"پاداش"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -151,9 +151,9 @@ function mediaPicker(key, cur){
 /* ═════════ بارگذاری و رندر ═════════ */
 function takeMe(d){
   for(const b of d.bots || []) for(const n of Object.values(b.config?.nodes || {})) if(n.kb === "reply"){ (n.buttons || []).forEach(r => r.forEach(x => { x.kb = "reply"; })); delete n.kb; }
-  Object.assign(S, { card: d.card || { on: false, prices: {} }, bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], lv: d.lv || null, me: d.me || null });
+  Object.assign(S, { card: d.card || { on: false, prices: {} }, bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], plan: d.plan || null, me: d.me || null });
 }
-const tgHtml = t => esc(t).replace(/&lt;(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)&gt;/gi, "<$1$2>").replace(/&lt;a href=&quot;(https?:\/\/[^&"<>]*)&quot;&gt;/gi, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/gi, "</a>").replace(/&lt;\/?tg-spoiler&gt;/gi, "");
+const tgHtml = t => esc(t).replace(/&lt;tg-emoji emoji-id=&quot;\d+&quot;&gt;(.*?)&lt;\/tg-emoji&gt;/gi, "$1").replace(/&lt;(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)&gt;/gi, "<$1$2>").replace(/&lt;a href=&quot;(https?:\/\/[^&"<>]*)&quot;&gt;/gi, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/gi, "</a>").replace(/&lt;\/?tg-spoiler&gt;/gi, "");
 function showFj(f){
   $("#dock").hidden = true;
   $("#app").innerHTML = `<div class="empty fjg"><div class="ib big">${IC.users}</div><h2>عضویت اجباری</h2><div class="fjt">${tgHtml(f.text)}</div>
@@ -590,12 +590,12 @@ function renderAccount(){
   const tu = tg?.initDataUnsafe?.user || {}, me = S.me || {};
   const u = {first_name: tu.first_name || me.name || "", last_name: tu.first_name ? tu.last_name : "", username: tu.username || me.username || "", photo_url: tu.photo_url};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const tabs = [["wallet", "توکن"], ["invite", "لول آپ" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
+  const tabs = [["wallet", "توکن"], ["plan", "اشتراک"], ["quests", "ماموریت‌ها" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
-  const body = ({wallet: tabWallet, invite: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
+  const body = ({wallet: tabWallet, plan: tabPlan, quests: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
     <div class="pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
-      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span>${S.lv ? ` · <span class="lvp" data-a="lvinfo">سطح ${N(S.lv.level)} · ${esc(S.lv.title)}</span>` : ""}</div></div></div>
+      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span>${S.plan && S.plan.id !== "free" ? ` · <span class="lvp" data-a="planinfo">اشتراک ${esc(S.plan.title)}</span>` : ""}</div></div></div>
     ${tabsHTML(tabs, S.atab, "atab")}
     ${body}`;
   if(S.atab === "history") loadLedger();
@@ -616,17 +616,18 @@ const A = {
   atab: el => { S.atab = el.dataset.k; renderAccount(); },
   daily: el => busy(el, async () => {
     const d = await api("/api/daily", "POST");
-    Object.assign(S, {wallet: d.wallet, lv: d.lv, cfg: d.cfg, tasks: d.tasks});
+    Object.assign(S, {wallet: d.wallet, cfg: d.cfg, tasks: d.tasks});
     if(S.sheet?.kind === "buy") closeSheet();
-    render(); bumpTokens(); toast(`${d.reward} توکن و ${d.xp} XP جایزه گرفتی`); haptic("ok"); if(d.up) levelUp(d.up);
+    render(); bumpTokens(); toast(`${d.reward} توکن جایزه گرفتی`); haptic("ok");
   }),
   claim: el => busy(el, async () => {
     const d = await api(`/api/tasks/${el.dataset.id}/claim`, "POST");
-    Object.assign(S, {tasks: d.tasks, lv: d.lv, wallet: d.wallet, cfg: d.cfg});
+    Object.assign(S, {tasks: d.tasks, wallet: d.wallet, cfg: d.cfg});
     render(); bumpTokens(); haptic("ok");
-    if(d.up) levelUp(d.up); else toast(`${d.gain.tokens ? `${d.gain.tokens} توکن و ` : ""}${d.gain.xp} XP دریافت شد`);
+    toast(`${d.gain.tokens} توکن پاداش گرفتی`);
   }),
-  lvinfo: () => lvSheet(),
+  planinfo: () => { S.atab = "plan"; renderAccount(); scrollTo(0, 0); },
+  sub: el => subPlan(el.dataset.id, el),
   undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); S.ideas = []; render(); toast("برگشت داده شد"); }),
   act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن را وارد کن");
     busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/activate`, "POST", {token: t}); setBot(d.bot); render(); toast("ربات فعال شد"); haptic("ok"); }); },
@@ -671,11 +672,10 @@ document.addEventListener("focusin", e => {
 });
 document.addEventListener("focusout", () => setTimeout(() => { if(!document.activeElement?.matches?.("input,textarea,select")) $("#dock").classList.remove("hide"); }, 150));
 
-/* ═════════════════ سطح و ماموریت‌ها ═════════════════ */
-const lvPct = l => l && l.to ? Math.max(0, Math.min(100, Math.round((l.xp - l.from) / (l.to - l.from) * 100))) : 100;
+/* ═════════════════ اشتراک و ماموریت‌ها ═════════════════ */
 IC.check = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 2.6);
 S._bw = {};
-/* نوارها و حلقه‌ی پیشرفت: از مقدار قبلی تا مقدار تازه با انیمیشن پر می‌شن (مرحله یا سطح عوض شد، از صفر) */
+/* نوارهای پیشرفت مرحله‌ها: از مقدار قبلی تا مقدار تازه با انیمیشن پر می‌شن */
 function animBars(){
   const rm = reduced(), D = 900;
   document.querySelectorAll("[data-p]").forEach(el => {
@@ -693,23 +693,13 @@ function animBars(){
     requestAnimationFrame(step);
   });
 }
-const ADV = "قابلیت‌های پیشرفته +";
-const perksFor = (n, arr) => n >= 4 ? [ADV, ...arr] : arr;
-function lvCard(){
-  const l = S.lv; if(!l) return "";
-  const chips = l.to ? [...perksFor(l.level + 1, l.next_perks), ...(l.next_tokens ? [`+${l.next_tokens} توکن هدیه`] : [])] : [];
-  return `<div class="hero"><div class="rg"><svg viewBox="0 0 52 52"><circle class="tr" cx="26" cy="26" r="22"/><circle class="pg" cx="26" cy="26" r="22" data-k="lv" data-s="${l.level}" data-p="${lvPct(l)}"/></svg><b>${N(l.level)}</b></div>
-    <div class="hi"><small>سطح شما</small><h2>${esc(l.title)}</h2><span class="muted">${N(fa(l.xp))} XP${l.to ? ` · ${N(fa(l.to - l.xp))} XP تا «${esc(l.next_title)}»` : " · بالاترین سطح"}</span></div>
-    <button class="b o sm" data-a="lvinfo">مزایا</button>
-    ${chips.length ? `<div class="hn"><span>جایزه‌ی سطح بعد</span>${chips.map((p, i) => `<i class="${i === chips.length - 1 && l.next_tokens ? "t" : ""}">${digitsHTML(p)}</i>`).join("")}</div>` : ""}</div>`;
-}
 function richCard(t){
   const cur = t.steps.findIndex(s => !s.done), s = t.steps[cur];
   const rail = t.steps.map((x, i) => `<li class="${x.done ? "d" : x.ready ? "r" : i === cur ? "c" : ""}"><i>${x.done ? IC.check : N(i + 1)}</i><span>${N("+" + x.tokens)}</span></li>`).join("");
   const pct = s ? Math.round(Math.min(s.value, s.goal) / s.goal * 100) : 100;
   const body = !s ? "" : `<div class="mc"><div class="mn"><b>مرحله‌ی ${N(cur + 1)}: ${esc(s.label)}</b><span>${digitsHTML(s.hint)}</span></div>
     <div class="pbar"><i data-k="${t.id}" data-s="${cur}" data-p="${pct}"></i></div>
-    <div class="qr"><span class="qg"><span class="n" data-cv="${s.value}" data-k="${t.id}">${fa(s.value)}</span> از ${N(fa(s.goal))}</span><span class="qrw"><span class="xbd t">${N("+" + s.tokens)} توکن</span><span class="xbd">${N("+" + s.xp)} XP</span></span>
+    <div class="qr"><span class="qg"><span class="n" data-cv="${s.value}" data-k="${t.id}">${fa(s.value)}</span> از ${N(fa(s.goal))}</span><span class="qrw"><span class="xbd t">${N("+" + s.tokens)} توکن</span></span>
     ${s.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div></div>`;
   return `<div class="mp"><div class="mph"><span class="ib">${IC[t.icon] || IC.spark}</span><div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها را گرفتی" : esc(t.desc)}</span></div>
     <span class="mpc"><span class="n">${t.stage}/${t.total}</span></span></div><ol class="rail">${rail}</ol>${body}</div>`;
@@ -720,7 +710,7 @@ function taskCard(t){
   const dots = Array.from({length: t.total}, (_, i) => `<i class="${i < t.stage ? "on" : ""}"></i>`).join("");
   const body = t.done ? "" : `<div class="pbar"><i data-k="${t.id}" data-s="${t.stage}" data-p="${pct}"></i></div>
     <div class="qr"><span class="qg"><span class="n" data-cv="${v}" data-k="${t.id}">${fa(v)}</span> از ${N(fa(t.goal))}</span>
-      <span class="qrw">${t.tokens ? `<span class="xbd t">${N("+" + t.tokens)} توکن</span>` : ""}<span class="xbd">${N("+" + t.xp)} XP</span></span>
+      <span class="qrw">${t.tokens ? `<span class="xbd t">${N("+" + t.tokens)} توکن</span>` : ""}</span>
       ${t.ready ? `<button class="b amber sm" data-a="claim" data-id="${esc(t.id)}">دریافت</button>` : ""}</div>`;
   return `<div class="q${t.ready ? " ready" : ""}${t.done ? " fin" : ""}"><div class="qt"><span class="ib">${IC[t.icon] || IC.spark}</span>
     <div class="gt"><b>${esc(t.title)}</b><span>${t.done ? "همه‌ی مرحله‌ها کامل شد" : digitsHTML(t.text)}</span></div>${t.total > 1 ? `<div class="qdots">${dots}</div>` : ""}</div>${body}</div>`;
@@ -728,26 +718,23 @@ function taskCard(t){
 const readyTasks = () => (S.tasks || []).filter(t => t.ready).length;
 function questsHTML(){
   const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
-  return `${lvCard()}<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div>`;
+  return `<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div><p class="muted mt">هر مرحله فقط پاداش توکنی می‌دهد.</p>`;
 }
-function lvSheet(){
-  const l = S.lv; if(!l) return;
-  const rows = (S.cfg.levels || []).map(x => {
-    const cls = x.n < l.level ? "d" : x.n === l.level ? "c" : "k";
-    const chips = [...(x.tokens ? [`<i class="t">${N("+" + x.tokens)} توکن هدیه</i>`] : []), ...perksFor(x.n, x.perks).map(p => `<i>${digitsHTML(p)}</i>`)].join("");
-    return `<li class="${cls}"><span class="nd">${x.n < l.level ? IC.check : N(x.n)}</span><div class="bd"><b>${esc(x.title)}</b><small>${N(fa(x.xp))} XP${x.n === l.level ? " · سطح فعلی" : ""}</small>
-      ${chips ? `<div class="chs">${chips}</div>` : ""}</div></li>`;
+/* ── تب اشتراک: پرمیوم / پرو ── */
+function tabPlan(){
+  const cur = (S.plan && S.plan.id) || "free";
+  const cards = (S.cfg.plans || []).map(p => {
+    const isCur = p.id === cur, paid = p.id !== "free";
+    const chips = [...(p.tokens ? [`<i class="t">${N("+" + p.tokens)} توکن هدیه‌ی فعال‌سازی</i>`] : []), ...(p.perks || []).map(x => `<i>${digitsHTML(x)}</i>`)].join("");
+    return `<div class="plan${isCur ? " cur" : ""}"><div class="ph2"><b>${esc(p.title)}</b>${isCur ? '<span class="tag st">فعال</span>' : ""}</div>
+      ${paid ? `<div class="ppr">${N(p.stars)} ستاره <small>· ${N(p.days)} روز</small></div>` : `<div class="ppr">رایگان <small>· همیشه</small></div>`}
+      ${chips ? `<div class="chs">${chips}</div>` : ""}
+      ${S.plan && isCur && S.plan.exp ? `<p class="muted mt">${N(S.plan.left)} روز باقی مانده</p>` : ""}
+      ${paid && !isCur ? `<button class="b sm mt" data-a="sub" data-id="${esc(p.id)}">فعال‌سازی با استارز</button>` : ""}</div>`;
   }).join("");
-  S.sheet = {kind: "info"};
-  showSheet(head("سطح‌ها و پاداش‌ها") + `<p class="muted" style="margin:6px 0 14px">با انجام ماموریت‌ها و جایزه‌ی روزانه XP می‌گیری. هدیه‌ی هر سطح به‌محض رسیدن به حسابت اضافه می‌شود و مزایای سطح‌های قبلی هم می‌مونن.</p><ul class="lt">${rows}</ul><div class="fgap"></div>`);
-}
-function levelUp(up){
-  if(!up) return;
-  celebrate(); haptic("ok"); S.sheet = {kind: "info"};
-  showSheet(head("ارتقای سطح") + `<div class="lvup"><div class="lvb big">${N(up.to)}</div><h2>${esc(up.title)}</h2>
-    ${up.tokens ? `<p class="muted">${N("+" + up.tokens)} توکن هدیه به حسابت اضافه شد</p>` : ""}
-    ${perksFor(up.to, up.perks).length ? `<ul>${perksFor(up.to, up.perks).map(p => `<li>${digitsHTML(p)}</li>`).join("")}</ul>` : ""}
-    <button class="b" data-x="close">عالیه</button></div>`);
+  return `<div class="sec"><h2>اشتراک</h2><span class="muted">ایموجی پرمیوم، دکمه‌ی رنگی و امکانات بیشتر</span></div>
+    <div class="plans">${cards}</div>
+    <p class="muted mt">پرداخت با استارز تلگرام انجام می‌شود و اشتراک بلافاصله فعال می‌شود. با پایان دوره به پلن رایگان برمی‌گردی؛ ربات‌ها و تنظیماتت سر جایشان می‌مانند.</p>`;
 }
 
 /* ═════════════════ ابزارهای ربات ═════════════════ */
@@ -829,6 +816,7 @@ Object.assign(A, {
     busy(el, async () => { const d = await api("/api/coupon", "POST", {code: v}); S.wallet = d.wallet; render(); bumpTokens(); toast(`${d.got} توکن اضافه شد`); haptic("ok"); }); },
   copyid: el => navigator.clipboard?.writeText(el.dataset.id).then(() => toast("شناسه کپی شد"), () => toast(el.dataset.id)),
   agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید کاربر: ${d.bal}`); }),
+  aplan: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/plan", "POST", {uid: v("#ap-uid"), plan: $("#ap-plan").value, days: v("#ap-days")}); toast(`اشتراک کاربر: ${d.plan}`); }),
   acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
     toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
   astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
@@ -881,6 +869,9 @@ function adminCard(){
     ` + `<div class="panel"><h2>توکن کاربر</h2><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
       <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
       <button class="b o" data-a="agrant">اعمال</button></div>
+    <div class="panel"><h2>اشتراک کاربر</h2><p class="muted">فعال‌سازی دستی اشتراک پرمیوم/پرو. «رایگان» یا صفر روز یعنی لغو.</p><div class="fgap"></div>
+      <div class="cmd"><input id="ap-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><select id="ap-plan" aria-label="پلن"><option value="premium">پرمیوم</option><option value="pro">پرو</option><option value="free">رایگان (لغو)</option></select><input id="ap-days" placeholder="روز (مثلاً 30)" inputmode="numeric" aria-label="مدت به روز"></div>
+      <button class="b o" data-a="aplan">اعمال اشتراک</button></div>
     <div class="panel"><h2>کد هدیه</h2><div class="fgap"></div>
       <div class="cmd"><input id="ac-code" placeholder="کد (خالی = خودکار)" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
       <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
@@ -935,6 +926,8 @@ Object.assign(A, {
   cdrefresh: el => busy(el, cdReload),
   fmtb: el => { const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
     if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد قالب را انتخاب کن"); fmtInsert(t, +el.dataset.i); },
+  emojitag: el => { const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
+    if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد ✨ را انتخاب کن"); emojiInsert(t); },
   fjopen: el => openLink(el.dataset.u),
   fjchk: el => busy(el, async () => { const d = await api("/api/fj");
     if(d.required){ toast("هنوز عضو نشدی"); return showFj(d); }
@@ -1090,6 +1083,13 @@ function renderUserbot(){
     app.innerHTML = `<div class="empty"><div class="ib big">${IC.person}</div><h2>یوزربات فعلاً در دسترس نیست</h2><p class="muted">این بخش روی سرور فعال نشده. بعداً دوباره سر بزن.</p></div>`;
     return;
   }
+  if(S.ub.locked && !S.ub.items.length){
+    app.innerHTML = `<div class="ph"><h1>یوزربات</h1></div>
+      <div class="empty"><div class="ib big">${IC.person}</div><h2>مخصوص اشتراک پرو</h2>
+      <p class="muted">اتصال اکانت شخصی تلگرام و پاسخ خودکار، فقط با اشتراک پرو فعال می‌شود.</p>
+      <button class="b sm" data-a="goplan">دیدن اشتراک‌ها</button></div>`;
+    return;
+  }
   const it = ubItem();
   if(S.ubSel && !it) S.ubSel = null;
   app.innerHTML = S.ubSel ? ubDetailHTML(it) : ubListHTML();
@@ -1180,6 +1180,7 @@ const ubOpen = id => { const it = S.ub.items.find(x => x.id === id); if(!it) ret
 
 Object.assign(A, {
   ubreload: () => { S.ubErr = ""; S.ub = null; renderUserbot(); },
+  goplan: () => { S.view = "account"; S.atab = "plan"; closeSheet(); render(); scrollTo(0, 0); },
   ubopen: el => ubOpen(el.dataset.id),
   ubback: () => { ubRead(); S.ubSel = null; S.ubCfg = null; renderUserbot(); scrollTo(0, 0); ubLoad(); },
   ubtab: el => { ubRead(); S.ubTab = el.dataset.k; renderUserbot(); },

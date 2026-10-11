@@ -605,7 +605,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .xbd{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;line-height:1;padding:5px 8px;border-radius:99px;color:var(--ac);background:var(--acs);flex:none}
 .xbd svg{width:11px;height:11px}
 .xbd.t{color:var(--tok);background:var(--toks)}
-/* ── سطح و ماموریت‌ها ── */
+/* ── اشتراک و ماموریت‌ها ── */
 .lvc{margin-bottom:12px}
 .lvh{display:flex;align-items:center;gap:12px}
 .lvb{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:21px;font-weight:800;color:var(--acx);background:var(--ac)}
@@ -649,9 +649,26 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .lvup{text-align:center;padding:4px 0 8px}
 .lvup ul{text-align:start;margin:12px 0 16px}
 
+/* ── اشتراک پرمیوم / پرو ── */
+.plans{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
+.plan{padding:14px;border-radius:16px;background:var(--sf);border:1px solid var(--line)}
+.plan.cur{border-color:var(--ac);background:linear-gradient(160deg,var(--acs),transparent 60%),var(--sf)}
+.plan .ph2{display:flex;align-items:center;gap:8px}
+.plan .ph2 b{flex:1;font-size:15px}
+.plan .ppr{margin:4px 0 8px;font-size:13px;color:var(--tok)}
+.plan .ppr small{color:var(--mut)}
+.plan .chs{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.plan .chs i{font-style:normal;font-size:11px;padding:4px 9px;border-radius:99px;background:var(--line2);color:var(--mut)}
+.plan .chs i.t{background:var(--toks);color:var(--tok)}
+.plan .b{width:auto}
+/* ── انتخاب رنگ دکمه ── */
+.cdots{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 4px}
+.cdots button{width:42px;height:42px;font-size:22px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line)}
+.cdots button.on{box-shadow:inset 0 0 0 2px var(--ac)}
 
 
-/* ── سطح و ماموریت‌ها: ظریف ── */
+
+/* ── اشتراک و ماموریت‌ها: ظریف ── */
 .hero{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:16px;margin-bottom:6px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(160deg,var(--acs),transparent 65%),var(--sf)}
 .rg{position:relative;width:66px;height:66px}
 .rg svg{width:66px;height:66px;transform:rotate(-90deg)}

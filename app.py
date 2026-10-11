@@ -65,17 +65,17 @@ from bson import Binary, ObjectId
 from bson.errors import InvalidId
 
 from core import (
-    add_xp, ADMIN_IDS, admin_only, age_sec, AI_MSG_COST, AI_MSGS_PER_TOKEN, ai_per, app, authed, aware,
+    activate_plan, ADMIN_IDS, admin_only, age_sec, AI_MSG_COST, AI_MSGS_PER_TOKEN, ai_per, app, authed, aware,
     balance, BILLING, BROADCAST_MAX, BROADCAST_PER_TOKEN, charge_up_to, CHUNK, claim_daily, credit,
-    cut, DAILY_BONUS, DAILY_XP, db, dec, _DIG, EDIT_COST, ENHANCE_COST, ensure_user, est_tokens,
-    fj_chat, GEN_COST, get_bot, get_media, hold, JOB_TIMEOUT, levels_public, log, lv_info, MAX_BOTS,
+    cut, DAILY_BONUS, db, dec, _DIG, EDIT_COST, ENHANCE_COST, ensure_user, est_tokens,
+    fj_chat, GEN_COST, get_bot, get_media, hold, JOB_TIMEOUT, log, MAX_BOTS,
     max_bots, MAX_MEDIA, MAX_NODES, MAX_PROMPT, MAX_VERSIONS, media_bytes, media_delete, media_kind,
     media_list, MEDIA_MAX_MB, MEDIA_QUOTA_MB, media_sig, MONGO_URI, mother_link, MOTHER_TOKEN, naive,
-    now, ONLINE_SECS, PACKS, perks_of, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
+    now, ONLINE_SECS, PACKS, perks_of, plan_info, plans_public, PLANS, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
     REF_MAX_PER_USER, REF_MILESTONES, REF_ON, refund, SAFE_INLINE, SCHED_ON, send_rich,
     settle_referral, setup_mother, spend, task_metrics, task_steps, TASKS, tasks_state,
     TEMPLATE_FACTOR, TEMPLATE_MAX_COST, TEMPLATE_MIN_COST, TEMPLATE_UNIT_COST, tg, TOKEN_MIN_COST,
-    TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, up_dict, wallet_info,
+    TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, wallet_info,
 )
 from ai import enhance_prompt, EXT_API, lint, reserve_cost, sanitize, TEMPLATES, typical_cost
 from engine import PROMO_CONF, PROMO_DEF_LOCK, PROMO_DEF_TEXT, sched_loop, sync_commands
@@ -127,9 +127,10 @@ def client_cfg(uid=None):
             "max_bots": MAX_BOTS + pk["bots"], "max_nodes": MAX_NODES, "max_prompt": MAX_PROMPT, "daily": DAILY_BONUS + pk["daily"],
             "ref_inviter": REF_INVITER, "ref_invitee": REF_INVITEE, "ref_max": REF_MAX_PER_USER, "ref_on": REF_ON,
             "milestones": REF_MILESTONES, "media_max_mb": MEDIA_MAX_MB, "media_quota_mb": MEDIA_QUOTA_MB + pk["mb"],
-            "max_media": MAX_MEDIA + pk["files"], "disc": pk["disc"], "levels": levels_public(),
+            "max_media": MAX_MEDIA + pk["files"], "disc": pk["disc"], "plans": plans_public(),
+            "emoji": 1 if pk["emoji"] else 0, "color": 1 if pk["color"] else 0, "userbot": 1 if pk["userbot"] else 0,
             "games": 1, "db": 1, "ext_api": 1 if EXT_API else 0,
-            "max_ub": MAX_USERBOTS, "ub_ok": 1 if ub_ready() else 0}
+            "max_ub": MAX_USERBOTS if pk["userbot"] else 0, "ub_ok": 1 if ub_ready() else 0}
 
 
 @app.errorhandler(413)
@@ -172,7 +173,7 @@ def api_me(uid):
           "username": (d.get("tg_user") or "") if web else (u.get("username") or ""), "web": web}
     bots = [public(b) for b in db.bots.find({"owner": uid}).sort("updated", -1)]
     items = media_list(uid)
-    return jsonify(me=me, bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, card=card_public(), media=items, lv=lv_info(uid), tasks=tasks_state(uid),
+    return jsonify(me=me, bots=bots, wallet=wallet_info(uid), cfg=client_cfg(uid), packs=PACKS, card=card_public(), media=items, plan=plan_info(uid), tasks=tasks_state(uid),
                    used=sum(i["size"] for i in items), admin=uid in ADMIN_IDS,
                    ref={"link": mother_link(uid), "count": int(d.get("refs", 0)), "earned": int(d.get("ref_earned", 0))},
                    joined=aware(d.get("created") or now()).isoformat(),
@@ -192,7 +193,7 @@ def api_daily(uid):
     r = claim_daily(uid)
     if not r:
         return jsonify(error="جایزه‌ی امروز رو قبلاً گرفتی، فردا برگرد"), 400
-    return jsonify(reward=r[0], streak=r[1], xp=DAILY_XP, up=up_dict(r[2]), wallet=wallet_info(uid), lv=lv_info(uid), cfg=client_cfg(uid), tasks=tasks_state(uid))
+    return jsonify(reward=r[0], streak=r[1], wallet=wallet_info(uid), cfg=client_cfg(uid), tasks=tasks_state(uid))
 
 
 @app.get("/api/ledger")
@@ -230,6 +231,24 @@ def api_buy(uid):
     return jsonify(url=r["result"])
 
 
+# ───────────────────────── اشتراک پرمیوم / پرو ─────────────────────────
+@app.post("/api/subscribe")
+@authed
+def api_subscribe(uid):
+    pid = str((request.get_json(silent=True) or {}).get("plan", ""))
+    p = PLANS.get(pid)
+    if not p or pid == "free":
+        return jsonify(error="پلن نامعتبر"), 400
+    ensure_user(uid)
+    r = tg(MOTHER_TOKEN, "createInvoiceLink", title=f"اشتراک {p['title']} ربات‌ساز",
+           description=f"اشتراک {p['title']} به مدت {p['days']} روز + {p['tokens']} توکن هدیه", payload=f"sub:{pid}:{uid}",
+           currency="XTR", prices=[{"label": f"اشتراک {p['title']}", "amount": int(p["stars"])}])
+    if not r.get("ok"):
+        log.warning("sub invoice failed: %s", r)
+        return jsonify(error="ساخت فاکتور ناموفق بود، کمی بعد دوباره امتحان کن"), 502
+    return jsonify(url=r["result"])
+
+
 # ───────────────────────── ماموریت‌ها ─────────────────────────
 @app.post("/api/tasks/<tid>/claim")
 @authed
@@ -244,15 +263,14 @@ def api_task_claim(uid, tid):
     st = next((x for x in task_steps(t) if x["key"] not in done), None)
     if not st:
         return jsonify(error="همه‌ی مرحله‌های این ماموریت کامل شده"), 400
-    tk, x, sid = st["tokens"], st["xp"], st["key"]
+    tk, sid = st["tokens"], st["key"]
     if task_metrics(uid, d)[st["metric"]] < st["goal"]:
         return jsonify(error="هنوز به هدف این مرحله نرسیدی"), 400
     if db.users.update_one({"_id": uid, "tasks_done": {"$ne": sid}}, {"$push": {"tasks_done": sid}}).modified_count != 1:
         return jsonify(error="این پاداش قبلاً دریافت شده"), 400
     if tk:
         credit(uid, tk, "task", key=f"task:{uid}:{sid}")
-    up = add_xp(uid, x)
-    return jsonify(gain={"tokens": tk, "xp": x}, up=up_dict(up), tasks=tasks_state(uid), lv=lv_info(uid),
+    return jsonify(gain={"tokens": tk}, tasks=tasks_state(uid),
                    wallet=wallet_info(uid), cfg=client_cfg(uid))
 
 
@@ -270,7 +288,7 @@ def api_generate(uid):
         if not bot:
             return jsonify(error="ربات پیدا نشد"), 404
     elif db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با بالا رفتن سطح، سقفت بیشتر می‌شه."), 400
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با اشتراک پرمیوم یا پرو، سقفت بیشتر می‌شه."), 400
     if not rate_ok(f"gen:{uid}", 10, 60):
         return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
     for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}}):
@@ -340,7 +358,7 @@ def api_template_create(uid, tid):
         return jsonify(error="قالب پیدا نشد"), 404
     ensure_user(uid)
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با بالا رفتن سطح، سقفت بیشتر می‌شه."), 400
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با اشتراک پرمیوم یا پرو، سقفت بیشتر می‌شه."), 400
     cost = template_cost(t, uid)
     cfg = sanitize(t["config"])
     if cost and not spend(uid, cost, "template"):
@@ -640,7 +658,7 @@ def api_admin_users(uid):
     cut = naive() - timedelta(seconds=ONLINE_SECS)
     total = db.users.count_documents({})
     online = db.users.count_documents({"seen": {"$gte": cut}})
-    users = list(db.users.find({}, {"seen": 1, "tg_user": 1, "tg_name": 1, "created": 1, "tokens": 1, "mb_blocked": 1}).sort("seen", -1).limit(300))
+    users = list(db.users.find({}, {"seen": 1, "tg_user": 1, "tg_name": 1, "created": 1, "tokens": 1, "mb_blocked": 1, "plan": 1}).sort("seen", -1).limit(300))
     by = {}
     for bt in db.bots.find({"owner": {"$in": [x["_id"] for x in users]}}, {"owner": 1, "username": 1, "name": 1, "active": 1}):
         by.setdefault(bt["owner"], []).append({"id": str(bt["_id"]), "name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active"))})
@@ -649,7 +667,7 @@ def api_admin_users(uid):
         seen = naive(x["seen"]) if x.get("seen") else None
         out.append({"id": x["_id"], "un": x.get("tg_user", ""), "name": x.get("tg_name", ""), "tokens": int(x.get("tokens", 0)),
                     "online": bool(seen and seen >= cut), "seen": seen.isoformat() + "Z" if seen else "", "bots": by.get(x["_id"], []),
-                    "blocked": bool(x.get("mb_blocked"))})
+                    "blocked": bool(x.get("mb_blocked")), "plan": x.get("plan", "free")})
     out.sort(key=lambda r: (not r["online"], r["seen"] == "", ""))
     return jsonify(items=out, total=total, online=online, blocked=db.users.count_documents({"mb_blocked": True}), scan=scan_state(scan_key()))
 
@@ -669,6 +687,32 @@ def api_admin_grant(uid):
     elif amount < 0:
         charge_up_to(target, -amount, "admin")
     return jsonify(bal=balance(target))
+
+
+@app.post("/api/admin/plan")
+@admin_only
+def api_admin_plan(uid):
+    b = request.get_json(silent=True) or {}
+    try:
+        target = int(b.get("uid"))
+    except (TypeError, ValueError):
+        return jsonify(error="آیدی نامعتبره"), 400
+    if not db.users.find_one({"_id": target}):
+        return jsonify(error="کاربر پیدا نشد"), 404
+    pid = str(b.get("plan", "free"))
+    if pid not in PLANS:
+        return jsonify(error="پلن نامعتبره"), 400
+    try:
+        days = max(0, int(b.get("days") or 0))
+    except (TypeError, ValueError):
+        days = 0
+    if pid == "free" or days <= 0:
+        activate_plan(target, "free")
+    else:
+        activate_plan(target, pid, days)
+    d = db.users.find_one({"_id": target}, {"plan": 1, "plan_exp": 1}) or {}
+    exp = aware(d.get("plan_exp")).isoformat() if d.get("plan_exp") else None
+    return jsonify(plan=d.get("plan", "free"), exp=exp)
 
 
 @app.post("/api/admin/coupon")

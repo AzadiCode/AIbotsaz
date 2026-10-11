@@ -283,6 +283,9 @@ function stPath(a, b){
 
 /* ── رندر بخش‌ها و سیم‌ها ── */
 const ST_KIND = {goto: ["رفتن به بخش", IC.go], pay: ["پرداخت", IC.coin], url: ["باز کردن لینک", IC.open], channel: ["کانال یا گروه", IC.open], alert: ["پیام پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["لینک دعوت", IC.users]};
+const BTN_COLORS = {blue: "🔵", green: "🟢", red: "🔴", yellow: "🟡", purple: "🟣", orange: "🟠", black: "⚫"};
+const BTN_COLOR_FA = {blue: "آبی", green: "سبز", red: "قرمز", yellow: "زرد", purple: "بنفش", orange: "نارنجی", black: "مشکی"};
+const stripEmojiTags = t => String(t ?? "").replace(/<tg-emoji\s+emoji-id="\d+"\s*>(.*?)<\/tg-emoji\s*>/gi, "$1");
 const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", audio: "موسیقی", voice: "ویس", document: "فایل"};
 
 /* پیش‌نمایش رسانه‌ی بخش: عکس و گیف خودشان، بقیه آیکن + نام فایل */
@@ -302,7 +305,7 @@ function stBtnCell(id, r, c, b, cfg){
   const broken = wired && !cfg.nodes[tgt];
   const tip = k === "goto" ? "رفتن به: " + titleOf(cfg, tgt) : k === "pay" ? `پرداخت ${b.pay.stars} ستاره` : lab;
   const anchor = wired ? `<span class="pa" data-pa="b|${id}|${r}|${c}" data-n="${esc(id)}" data-r="${r}" data-c="${c}" data-pc="${k === "pay" ? "var(--tok)" : "var(--ac)"}"></span>` : "";
-  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${anchor}</div>`;
+  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${b.color && BTN_COLORS[b.color] ? BTN_COLORS[b.color] + " " : ""}${esc(b.text)}</span></button>${anchor}</div>`;
 }
 function stCardH(n){
   const gr = [false, true].map(x => (n.buttons || []).filter(row => row.some(b => (b.kb === "reply") === x)).length), rows = gr[0] + gr[1], caps = (gr[0] ? 1 : 0) + (gr[1] ? 1 : 0), lg = (n.route?.length || 0) + (n.next ? 1 : 0);
@@ -324,7 +327,7 @@ function stCardHTML(id, dead){
   if(dead) tags.push('<span class="tag warn" title="هیچ دکمه یا مسیری به این بخش نمی‌رسد">بدون ورودی</span>');
   if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn" title="بعد از این بخش، کاربر راهی برای ادامه ندارد">بدون ادامه</span>');
   const txt = (n.text || "").trim();
-  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
+  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(stripEmojiTags(txt).slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
   const grp = isRk => {
     const keys = btns.map((row, r) => { const cells = row.map((b, c) => (b.kb === "reply") === isRk ? stBtnCell(id, r, c, b, cfg) : "").join(""); return cells ? `<div class="stk-row">${cells}</div>` : ""; }).join("");
     return keys ? `<div class="stk${isRk ? " rk" : ""}"><div class="stk-cap">${isRk ? "کیبورد پایین چت" : "دکمه‌های شیشه‌ای زیر پیام"}</div>${keys}</div>` : "";
@@ -932,7 +935,18 @@ function kbPicker(cur){
 }
 let FMT_LAST = null;
 document.addEventListener("focusin", e => { if(e.target.matches?.("[data-fmt]")) FMT_LAST = e.target; });
-const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}</div>`;
+const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}<button type="button" data-a="emojitag" data-t="${tid}" title="ایموجی پرمیوم (اشتراک پرمیوم و پرو)" aria-label="ایموجی پرمیوم">✨</button></div>`;
+function emojiInsert(t){
+  if(!S.cfg.emoji){ toast("ایموجی پرمیوم مخصوص اشتراک پرمیوم و پرو است"); return; }
+  const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
+  let sel = t.value.slice(a, b) || "😀";
+  const open = '<tg-emoji emoji-id="', id0 = "1234567890", close = '">' + sel + "</tg-emoji>";
+  t.value = t.value.slice(0, a) + open + id0 + close + t.value.slice(b);
+  const s0 = a + open.length, s1 = s0 + id0.length;
+  t.focus(); t.setSelectionRange(s0, s1);
+  t.dispatchEvent(new Event("input", {bubbles: true}));
+  toast("آیدی عددی ایموجی را جایگزین کن");
+}
 function fmtInsert(t, i){
   const tg_ = FMT_TAGS[i], o = tg_[2], c = tg_[3], a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
   t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true}));
@@ -975,7 +989,7 @@ function nodeSheet(){
     <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${kbSummary(cfg.nodes[S.sheet.id])}</span></span>${goIc}</button></div>
     <details class="adv"${advOpen ? " open" : ""}><summary>منطق پیشرفته: متغیر و شرط</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقداری ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
-      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
+      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، اشتراک ویژه، ساعت کاری)", "route", cfg, 5)}
       ${ruleSection("متن جایگزین شرطی", "اگر شرط درست بود، به‌جای متن اصلی نشان داده می‌شود", "alt", cfg, 4)}
       <div class="sub"><span>جدول برترین‌ها</span></div><p class="muted" style="margin:-3px 0 8px">زیر متن این بخش رتبه‌بندی کاربرها بر اساس یک متغیر عددی (یا refs برای دعوت‌ها) نشان داده می‌شود. خالی یعنی غیرفعال.</p>
       <div class="cmd"><input class="ltr" id="f-bvar" list="vdl" value="${esc(d.bvar)}" placeholder="متغیر عددی، مثلاً coins" maxlength="20" autocomplete="off"><input id="f-btop" type="number" min="3" max="20" value="${esc(d.btop)}" placeholder="چند نفر؟"></div>
@@ -1079,10 +1093,10 @@ function addNode(at){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind: "btn", n: nid, r, c};
-  if(c === null) D = {text: "دکمه‌ی جدید", kb: "inline", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
+  if(c === null) D = {text: "دکمه‌ی جدید", color: "", kb: "inline", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
-    D = {text: b.text, kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
+    D = {text: b.text, color: b.color || "", kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
          val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || b.share || "",
          when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
          jch: (b.join?.channels || []).map(c => "@" + c).join(" "), jtx: b.join?.text || "",
@@ -1091,6 +1105,12 @@ function openBtn(nid, r, c){
   renderSheet();
 }
 const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"]];
+function colorPicker(){
+  if(!S.cfg.color) return `<p class="muted">رنگ دکمه مخصوص اشتراک پرمیوم و پرو است. <button class="b t sm" data-a="goplan" style="display:inline;min-height:0;padding:0 4px">دیدن اشتراک‌ها</button></p>`;
+  const opts = [`<button type="button" class="${!D.color ? "on" : ""}" data-sh="pickcolor" data-v="" title="بی‌رنگ">⭕</button>`,
+    ...Object.entries(BTN_COLORS).map(([k, e]) => `<button type="button" class="${D.color === k ? "on" : ""}" data-sh="pickcolor" data-v="${k}" title="${BTN_COLOR_FA[k]}">${e}</button>`)].join("");
+  return `<div class="cdots">${opts}</div><p class="muted mt">نقطه‌ی رنگی اولِ متن دکمه در ربات نمایش داده می‌شود.</p>`;
+}
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
@@ -1111,6 +1131,7 @@ function btnSheet(){
   const nn = cfg.nodes[S.sheet.n], kbOk = !(nn.ask || nn.fields || nn.ai);
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
     <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
+    <span class="lbl">رنگ دکمه (اشتراک پرمیوم و پرو)</span>${colorPicker()}
     <span class="lbl">با لمس دکمه چه شود؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v, l]) => `<option value="${v}"${v === d.kind ? " selected" : ""}>${l}</option>`).join("")}</select>
     ${val}
@@ -1123,8 +1144,7 @@ function btnSheet(){
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف دکمه</button>`}</div>`;
 }
 function readBtn(){
-  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
-  if($("#b-goto")) D.goto = $("#b-goto").value;
+  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;  if($("#b-goto")) D.goto = $("#b-goto").value;
   if($("#b-val")) D.val = $("#b-val").value;
   if($("#b-stars")){ D.stars = $("#b-stars").value; D.ptitle = $("#b-ptitle").value; D.pdesc = $("#b-pdesc").value; D.ptext = $("#b-ptext").value; D.pgoto = $("#b-pgoto").value; }
   readRl("when"); readRl("do"); readJoin();
@@ -1138,6 +1158,7 @@ function saveBtn(){
   const err = ruleErr(); if(err) return toast(err);
   const bj = (d.kind === "goto" || d.kind === "alert" || d.kind === "pay") ? chOut(d.jch, d.jtx) : null; if(typeof bj === "string") return toast(bj);
   const btn = {text: d.text.trim()};
+  if(d.color && BTN_COLORS[d.color]) btn.color = d.color;
   if(d.kind === "goto") btn.goto = d.goto;
   else if(d.kind === "alert") btn.alert = d.val.trim();
   else if(d.kind === "copy") btn.copy = d.val.trim();
@@ -1403,6 +1424,16 @@ async function buyPack(id, btn){
     }); else window.open(d.url, "_blank");
   });
 }
+async function subPlan(id, btn){
+  busy(btn, async () => {
+    const d = await api("/api/subscribe", "POST", { plan: id });
+    const done = async () => { try{ takeMe(await api("/api/me")); }catch(_){} render(); toast("اشتراک فعال شد"); haptic("ok"); };
+    if(tg?.openInvoice) tg.openInvoice(d.url, st => {
+      if(st === "paid") done();
+      else if(st === "failed") toast("پرداخت ناموفق بود");
+    }); else { window.open(d.url, "_blank"); toast("بعد از پرداخت، صفحه را تازه کن"); }
+  });
+}
 
 /* ── هماهنگی شیت‌ها ── */
 const SHEETS = {
@@ -1448,6 +1479,7 @@ function shAction(a, ds){
     else if(k !== "goto" && prev !== k) D.val = "";
   }
   else if(a === "kbt") D.kb = ds.v;
+  else if(a === "pickcolor") D.color = ds.v;
   else if(a === "addfld") D.fields.push({q: "", v: "", t: "text"});
   else if(a === "delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push({q: "", v: "", t: "text"});
   else if(a === "addcmd") D.cmds.push(["help", S.cur.config.start]);
@@ -1560,6 +1592,7 @@ function ubruleDel(){
 
 /* ── شیت اتصال اکانت: شماره ← کد ← (رمز دومرحله‌ای) ← تمام ── */
 function openUbConn(){
+  if(S.ub?.locked) return toast("یوزربات مخصوص اشتراک پرو است");
   if(S.ub && S.ub.items.length >= S.ub.max && !S.ub.items.some(x => x.status === "revoked")) return toast(`حداکثر ${S.ub.max} یوزربات می‌توانی داشته باشی`);
   S.sheet = {kind: "ubconn"}; D = {step: "phone", phone: "", code: "", pw: "", aid: "", ah: "", item: null}; renderSheet();
 }

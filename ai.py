@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 import requests
 
 from core import (
-    AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS, AI_MODEL, BILLING, calc_cost, cut, db, _DIG,
+    AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS, AI_MODEL, BILLING, BTN_COLORS, calc_cost, cut, db, _DIG,
     EDIT_COST, est_tokens, GEN_COST, _int, log, MAX_GLOBALS, MAX_NODES, MAX_PROMPT, MAX_STAFF,
     MAX_STARS, PAYMENTS,
 )
@@ -41,7 +41,7 @@ _SP_BASE = """You design Telegram bots as a JSON config that a fixed, safe engin
 
 LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking", "ideas" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural, simple Persian (فارسی) and NEVER English, even though this prompt, the JSON keys, node_ids and variable names are English.
 
-STYLE RULE: texts are simple, clear and meaningful. Short sentences. Emojis are rare: none in button labels, at most one per message and only when it adds meaning. Never decorate with emoji rows.
+STYLE RULE: texts are simple, clear and meaningful. Short sentences. Emojis are rare: none in button labels, at most one per message and only when it adds meaning. Never decorate with emoji rows. The only exceptions are PREMIUM STYLES below, and only when the user explicitly asks for them.
 
 Output ONLY one valid JSON object, no markdown fences, no comments. Top-level shape:
 {
@@ -283,7 +283,12 @@ Design rules:
 - Never invent real-world facts (prices, phone numbers, addresses, links). Use obvious placeholders such as [قیمت] or [شماره تماس] and mention it in "thinking".
 - Write all user-facing text in the OUTPUT LANGUAGE.
 - When an existing config is given, apply the user's change precisely and return the FULL updated config. Keep every untouched node, text, media, button, variable and rule exactly as it was (the user may have edited them by hand).
-- Node texts, form questions, "done" texts and reminder texts support Telegram HTML: <b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strike</s>, <code>copyable code</code>, <blockquote>highlighted quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler> and links <a href="https://...">text</a>. Use it so the bot looks professional: a bold first line as the heading, a blockquote for key info or benefits, <code> for codes and numbers the user may copy, a few well-chosen emoji. Close every tag. Never use Markdown (** or #). Write a literal < > & as &lt; &gt; &amp;. Escape the double quotes of attributes inside the JSON. Button labels, alert/copy/share texts and AI prompts stay plain text (no tags)."""
+- Node texts, form questions, "done" texts and reminder texts support Telegram HTML: <b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strike</s>, <code>copyable code</code>, <blockquote>highlighted quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler> and links <a href="https://...">text</a>. Use it so the bot looks professional: a bold first line as the heading, a blockquote for key info or benefits, <code> for codes and numbers the user may copy, a few well-chosen emoji. Close every tag. Never use Markdown (** or #). Write a literal < > & as &lt; &gt; &amp;. Escape the double quotes of attributes inside the JSON. Button labels, alert/copy/share texts and AI prompts stay plain text (no tags).
+
+PREMIUM STYLES (use ONLY when the user explicitly asks for premium/custom emoji or colored buttons — they need a paid subscription of the bot owner; otherwise never use them):
+- Custom (premium) emoji inside node texts, form questions, "done" texts and reminder texts: <tg-emoji emoji-id="5368324170671202286">👍</tg-emoji> — the emoji-id is a long numeric id of a Telegram custom emoji and the inner character is shown as a fallback where custom emoji are not supported. Use the exact numeric id the user gave; if they gave none, use an obvious placeholder id and say in "thinking" that they must replace it with a real id (they can copy a numeric id from any custom-emoji pack). At most 2-3 per message. Never in button labels, alert/copy/share texts or AI prompts.
+- Colored buttons: any button may have "color": one of blue green red yellow purple orange black. The engine shows a colored dot before the label. Use it only for 1-3 important buttons (e.g. the main call-to-action), never for every button.
+- If the user asks for these but their subscription does not include them, still build it (the engine shows the plain fallback) and say in "thinking" that premium emoji and colored buttons need the Premium/Pro subscription, which they can activate in the mini-app account tab."""
 SYSTEM_PROMPT = (_SP_BASE.replace("@@PAY@@", ("\n" + """
 PAYMENTS (Telegram Stars)
 - A button can take payment in Telegram Stars (digital goods, VIP access, paid content, tips, donations, credits inside the bot): {"text": "خرید اشتراک", "pay": {"stars": 50, "title": "اشتراک ویژه", "desc": "دسترسی یک‌ماهه", "text": "پرداخت انجام شد، ممنون!", "goto": "vip_home"}, "do": [{"op": "set", "var": "vip", "value": "1"}]}
@@ -625,6 +630,7 @@ def clean_pay(pay, label, valid, bad):
     tx = str(pay.get("text") or "").strip()[:300]
     if tx:
         p["text"] = tx
+        check_emoji_tags(tx, f"پیام بعد از پرداخت «{label}»", bad)
     g = str(pay.get("goto") or "")
     if g:
         if g in valid:
@@ -632,6 +638,15 @@ def clean_pay(pay, label, valid, bad):
         else:
             bad(f"بخش بعد از پرداختِ «{label}» وجود نداره")
     return {"text": label, "pay": p}
+
+
+def check_emoji_tags(s, where, bad):
+    """تگ ایموجی پرمیوم باید کامل و سالم باشه: <tg-emoji emoji-id="123...">😀</tg-emoji>؛ خراب = هشدار/خطا"""
+    if not s or ("<tg-emoji" not in s and "</tg-emoji" not in s and "<emoji" not in s):
+        return
+    tmp = re.sub(r'<tg-emoji\s+emoji-id="\d+"\s*>.*?</tg-emoji\s*>', "", s, flags=re.S)
+    if "<tg-emoji" in tmp or "</tg-emoji" in tmp or "<emoji" in tmp:
+        bad(f"ایموجی پرمیوم در {where} خرابه؛ قالب درست: <tg-emoji emoji-id=\"123...\">😀</tg-emoji> (آیدی عددی + تگ بسته)")
 
 
 def clean_join(j, bad, where=""):  # متن پیام عضویت: HTML تلگرام مجازه
@@ -819,10 +834,16 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                         bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنه (دکمه‌ی «{label}»)")
                 if b.get("kb") == "reply" or n.get("kb") == "reply":      # n.kb = کانفیگ‌های قدیمی (نوع برای کل بخش)
                     it["kb"] = "reply"                                    # کیبورد پایین چت؛ بدونش = دکمه‌ی شیشه‌ای
+                col = str(b.get("color") or "").strip().lower()
+                if col in BTN_COLORS:
+                    it["color"] = col                                     # دکمه‌ی رنگی (اشتراک پرمیوم/پرو؛ بدون اشتراک ساده می‌آد)
+                elif col:
+                    bad(f"رنگ دکمه‌ی «{label}» معتبر نیست (آبی/سبز/قرمز/زرد/بنفش/نارنجی/مشکی)")
                 r.append(it)
             if r:
                 rows.append(r)
         node = {"text": text, "buttons": rows, "ask": bool(n.get("ask"))}
+        check_emoji_tags(text, f"متن بخش «{nid}»", bad)
         title = str(n.get("title") or "").strip()[:30]
         if title:
             node["title"] = title
@@ -859,6 +880,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 t = "text"
             if t == "number" and v:
                 nums.add(v)
+            check_emoji_tags(q, "سؤال فرم", bad)
             qs.append(q); svs.append(v); tys.append(t)
         if qs:
             node["fields"], node["ask"] = qs, False
@@ -947,6 +969,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
         done = str(n.get("done") or "").strip()[:500]
         if done:
             node["done"] = done
+            check_emoji_tags(done, f"پیام پایان بخش «{nid}»", bad)
         dm = str(n.get("done_media") or "").strip()
         if dm in media and (node.get("fields") or node["ask"]):
             node["done_media"] = dm
@@ -978,6 +1001,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 continue
             w, t = clean_cond(rule.get("when"), used, nums, bad), str(rule.get("text") or "").strip()[:3500]
             if w and t:
+                check_emoji_tags(t, f"متن جایگزین بخش «{nid}»", bad)
                 alt.append({"when": w, "text": t})
             else:
                 bad(f"یکی از متن‌های جایگزینِ بخش «{nid}» کامل نیست")
@@ -1022,8 +1046,10 @@ def sanitize(cfg, strict=False, media=None, warns=None):
         rt = str(cfg.get("ref_text") or "").strip()[:500]
         if rt:
             out["ref_text"] = rt
+            check_emoji_tags(rt, "پیام دعوت", bad)
     elif str(cfg.get("ref_text") or "").strip():
         out["ref_text"] = str(cfg["ref_text"]).strip()[:500]
+        check_emoji_tags(out["ref_text"], "پیام دعوت", bad)
 
     # متغیرهای اعلام‌شده (+ هر متغیری که جایی استفاده شده ولی اعلام نشده، خودکار اضافه می‌شه)
     declared = {}
