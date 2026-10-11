@@ -30,7 +30,7 @@ core.py — هسته‌ی مشترک (پایین‌ترین لایه)
   mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now, ONLINE_SECS, PACKS, parse_err, PAYMENTS,
   perks_of, perk_texts, PLANS, plain_html, plan_info, plan_of, plans_public, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
   REF_MAX_PER_USER, REF_MILESTONES, REF_ON, refund, request_user, SAFE_INLINE, SCHED_ON, send_rich,
-  settle_referral, setup_mother, spend, style_label, style_text, SUB_DAYS, SUB_PREMIUM_STARS, SUB_PREMIUM_TOKENS,
+  settle_referral, setup_mother, spend, style_label, style_plain, style_text, SUB_DAYS, SUB_PREMIUM_STARS, SUB_PREMIUM_TOKENS,
   SUB_PRO_STARS, SUB_PRO_TOKENS, task_metrics, task_steps, TASKS, tasks_state, tehran_day,
   TEMPLATE_FACTOR, TEMPLATE_MAX_COST, TEMPLATE_MIN_COST, TEMPLATE_UNIT_COST, tg, tg_html, tg_media,
   thash, TOKEN_MIN_COST, TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, wallet_info
@@ -543,12 +543,25 @@ def style_text(text, perks):
 
 
 def style_label(label, color, perks):
-    """متن روی دکمه موقع ارسال: با اشتراک رنگی، نقطه‌ی رنگی اولش می‌آد؛ بدون اشتراک، ساده"""
+    """متن روی دکمه موقع ارسال: تگ tg-emoji فقط به شکلک ساده‌ی داخلش تبدیل می‌شه (دکمه تلگرام ایموجی سفارشی نشون نمی‌ده)؛
+    با اشتراک رنگی، نقطه‌ی رنگی اولش می‌آد؛ بدون اشتراک، ساده"""
     label = str(label or "")
+    if "<tg-emoji" in label or "</tg-emoji" in label:
+        label = style_plain(label, perks)
     dot = BTN_COLORS.get(str(color or "").strip().lower())
     if dot and (perks or {}).get("color"):
         label = f"{dot} {label}".strip()[:64]
     return label
+
+
+def style_plain(text, perks):
+    """متن ساده (دکمه، پاپ‌آپ، کپی، اشتراک‌گذاری): بدون قالب HTML.
+    با اشتراک ایموجی، فقط شکلک ساده‌ی داخل تگ می‌مونه؛ بدون اشتراک کل تگ حذف می‌شه"""
+    if not text:
+        return ""
+    if (perks or {}).get("emoji"):
+        return EMOJI_RE.sub(lambda m: m.group(2), text)
+    return EMOJI_RE.sub("", text)
 
 
 # ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن) بعد از دریافت جایزه‌ی قبلی باز می‌شه و فقط پاداش توکنی می‌ده
@@ -644,13 +657,15 @@ def perk_texts(p):
     if p.get("bc"):
         out.append(f"سقف پیام همگانی +{p['bc']} نفر")
     if p.get("emoji"):
-        out.append("ایموجی پرمیوم در متن ربات‌ها")
+        out.append("ایموجی پرمیوم در متن و دکمه‌های ربات‌ها")
     if p.get("color"):
         out.append("دکمه‌های رنگی")
     if p.get("userbot"):
         out.append("دسترسی به یوزربات")
     if p.get("free_enhance"):
         out.append("«کامل‌ترش کن» رایگان")
+    if p.get("userbot"):
+        out.append("+ قابلیت‌های حرفه‌ای در حال توسعه")
     return out
 
 

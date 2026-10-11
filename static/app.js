@@ -627,6 +627,7 @@ const A = {
     toast(`${d.gain.tokens} توکن پاداش گرفتی`);
   }),
   planinfo: () => { S.atab = "plan"; renderAccount(); scrollTo(0, 0); },
+  plantog: el => { S.planOpen = S.planOpen || {}; S.planOpen[el.dataset.id] = !S.planOpen[el.dataset.id]; renderAccount(); },
   sub: el => subPlan(el.dataset.id, el),
   undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); S.ideas = []; render(); toast("برگشت داده شد"); }),
   act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن را وارد کن");
@@ -720,28 +721,28 @@ function questsHTML(){
   const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
   return `<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div><p class="muted mt">هر مرحله فقط پاداش توکنی می‌دهد.</p>`;
 }
-/* ── تب اشتراک: FREE / PREMIUM / PRO ── */
+/* ── تب اشتراک: FREE / PREMIUM / PRO (کشویی) ── */
 function tabPlan(){
   const cur = (S.plan && S.plan.id) || "free";
+  S.planOpen = S.planOpen || {};
   const cards = (S.cfg.plans || []).map(p => {
     const isCur = p.id === cur, paid = p.id !== "free";
     const cp = S.card?.on ? S.card.prices?.[p.id] : 0;
-    const inner = isCur
-      ? `<div class="curline">✨ قابلیت‌های بیشتر فعال است</div>`
-      : `<div class="chs">${(p.perks || []).map(x => `<i><b>✓</b> ${digitsHTML(x)}</i>`).join("")}</div>`;
-    return `<div class="plan ${esc(p.id)}${isCur ? " cur" : ""}">${p.id === "pro" && !isCur ? '<span class="pbadge">پیشنهاد ویژه</span>' : ""}
-      <div class="ph2"><b class="pname" dir="ltr">${esc(p.title)}</b>${isCur ? '<span class="tag st">فعال</span>' : ""}</div>
-      ${paid ? `<div class="ppr">${N(p.stars)} <small>⭐</small> <small>· ${N(p.days)} روز</small></div>
-        ${p.tokens ? `<div class="pgift">${N("+" + p.tokens)} توکن هدیه‌ی فعال‌سازی</div>` : ""}`
-        : `<div class="ppr free">رایگان <small>· همیشه</small></div>`}
-      ${inner}
-      ${S.plan && isCur && S.plan.exp ? `<p class="muted mt">${N(S.plan.left)} روز باقی مانده</p>` : ""}
-      ${paid && !isCur ? `<div class="pbtns"><button class="b sm" data-a="sub" data-id="${esc(p.id)}">فعال‌سازی با استارز</button>${cp ? `<button class="b o sm" data-a="subcard" data-id="${esc(p.id)}">کارت‌به‌کارت</button>` : ""}</div>` : ""}</div>`;
+    const open = !!S.planOpen[p.id];
+    const head = `<div class="phead"><div class="pt"><b class="pname" dir="ltr">${esc(p.title)}</b>
+        <span class="ppr">${paid ? `${N(p.stars)} استارز · ${N(p.days)} روز` : "رایگان · همیشه"}</span></div>
+      ${isCur ? '<span class="tag st">فعال</span>' : ""}
+      ${paid && !isCur ? `<button class="iconb sm ptog${open ? " open" : ""}" data-a="plantog" data-id="${esc(p.id)}" aria-label="نمایش قابلیت‌ها">${IC.chev}</button>` : ""}</div>`;
+    if(isCur) return `<div class="plan ${esc(p.id)} cur">${head}
+      ${S.plan.exp ? `<p class="muted mt">${N(S.plan.left)} روز باقی مانده</p>` : ""}</div>`;
+    const body = `<div class="pbody"${open ? "" : ' style="display:none"'}>
+        ${p.tokens ? `<div class="pgift">${N("+" + p.tokens)} توکن هدیه‌ی فعال‌سازی</div>` : ""}
+        <ul class="plist">${(p.perks || []).map(x => `<li><span class="pi">${IC.check}</span><span>${digitsHTML(x)}</span></li>`).join("")}</ul>
+        <div class="pbtns"><button class="b sm" data-a="sub" data-id="${esc(p.id)}">فعال‌سازی با استارز</button>${cp ? `<button class="b o sm" data-a="subcard" data-id="${esc(p.id)}">کارت‌به‌کارت</button>` : ""}</div></div>`;
+    return `<div class="plan ${esc(p.id)}">${head}${body}</div>`;
   }).join("");
-  return `<div class="sec"><h2>اشتراک</h2><span class="muted">ایموجی پرمیوم، دکمه‌ی رنگی و امکانات بیشتر</span></div>
+  return `<div class="sec"><h2>اشتراک</h2></div>
     <div class="plans">${cards}</div>
-    <div class="teaser"><div class="tt">＋ قابلیت‌های حرفه‌ای در حال توسعه</div>
-      <p class="muted">این قابلیت‌ها به‌زودی می‌آیند و برای دارندگان اشتراک PRO رایگان فعال می‌شوند.</p></div>
     <p class="muted mt">پرداخت با استارز تلگرام بلافاصله فعال می‌شود؛ کارت‌به‌کارت بعد از تأیید رسید. با پایان دوره به پلن FREE برمی‌گردی؛ ربات‌ها و تنظیماتت سر جایشان می‌مانند.</p>`;
 }
 

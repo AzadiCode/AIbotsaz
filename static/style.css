@@ -649,32 +649,30 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .lvup{text-align:center;padding:4px 0 8px}
 .lvup ul{text-align:start;margin:12px 0 16px}
 
-/* ── اشتراک PREMIUM / PRO ── */
-.plans{display:flex;flex-direction:column;gap:12px;margin:0 0 12px}
-.plan{position:relative;padding:16px;border-radius:18px;background:var(--sf);border:1px solid var(--line);overflow:hidden}
-.plan.premium{border:1px solid color-mix(in srgb,#8b7cf6 55%,var(--line));background:linear-gradient(165deg,color-mix(in srgb,#8b7cf6 14%,transparent),transparent 55%),var(--sf)}
-.plan.pro{border:1px solid color-mix(in srgb,var(--tok) 60%,var(--line));background:linear-gradient(165deg,color-mix(in srgb,var(--tok) 13%,transparent),transparent 55%),var(--sf);box-shadow:0 0 24px -8px color-mix(in srgb,var(--tok) 45%,transparent)}
+/* ── اشتراک PREMIUM / PRO (کشویی و ظریف) ── */
+.plans{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
+.plan{padding:12px 14px;border-radius:16px;background:var(--sf);border:1px solid var(--line)}
+.plan.premium{border-color:color-mix(in srgb,#8b7cf6 45%,var(--line));background:linear-gradient(165deg,color-mix(in srgb,#8b7cf6 10%,transparent),transparent 55%),var(--sf)}
+.plan.pro{border-color:color-mix(in srgb,var(--tok) 50%,var(--line));background:linear-gradient(165deg,color-mix(in srgb,var(--tok) 9%,transparent),transparent 55%),var(--sf)}
 .plan.cur{box-shadow:inset 0 0 0 1.5px var(--ac)}
-.plan .pbadge{position:absolute;top:12px;inset-inline-end:12px;font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;color:#261700;background:linear-gradient(135deg,#ffd978,#f0a92e)}
-.plan .ph2{display:flex;align-items:center;gap:8px}
-.plan .pname{flex:1;font-family:"Oxanium",monospace;font-weight:800;font-size:21px;letter-spacing:.14em}
+.plan .phead{display:flex;align-items:center;gap:10px}
+.plan .pt{flex:1;min-width:0}
+.plan .pname{display:block;font-family:"Oxanium",monospace;font-weight:800;font-size:18px;letter-spacing:.14em;line-height:1.4}
 .plan.premium .pname{color:#a99bff}
 .plan.pro .pname{color:var(--tok)}
 :root[data-theme=light] .plan.premium .pname{color:#5b4fd6}
-.plan .ppr{margin:2px 0 4px;font-size:16px;font-weight:800}
-.plan .ppr .n{font-size:24px}
-.plan .ppr small{font-size:12px;font-weight:400;color:var(--mut)}
-.plan .ppr.free{color:var(--mut);font-weight:500}
-.plan .pgift{display:inline-block;font-size:12px;padding:4px 12px;border-radius:99px;color:var(--tok);background:var(--toks);margin-bottom:6px}
-.plan .chs{display:flex;flex-direction:column;gap:6px;margin:8px 0 4px}
-.plan .chs i{font-style:normal;font-size:13px;line-height:1.8;color:var(--ink)}
-.plan .chs i b{color:var(--ok);margin-inline-end:2px}
-.plan .curline{margin:10px 0 2px;font-size:13.5px;font-weight:700;color:var(--ac)}
+.plan .ppr{font-size:12px;color:var(--mut)}
+.plan .phead .tag{flex:none}
+.ptog svg{transition:transform .25s}
+.ptog.open svg{transform:rotate(180deg)}
+.plan .pbody{margin-top:4px}
+.plan .pgift{display:inline-block;font-size:11.5px;padding:4px 12px;border-radius:99px;color:var(--tok);background:var(--toks);margin:6px 0 2px}
+.plist{margin:8px 0 2px;padding:0;list-style:none}
+.plist li{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.9;color:var(--ink)}
+.plist .pi{flex:none;width:16px;height:16px;margin-top:6px;color:var(--ok)}
+.plist .pi svg{width:16px;height:16px;display:block}
 .plan .pbtns{display:flex;gap:8px;margin-top:12px}
 .plan .pbtns .b{flex:1;margin:0}
-.teaser{margin:4px 0 6px;padding:14px 16px;border-radius:16px;border:1.5px dashed color-mix(in srgb,var(--tok) 65%,var(--line));background:color-mix(in srgb,var(--tok) 7%,var(--sf));text-align:center}
-.teaser .tt{font-size:15px;font-weight:800;color:var(--tok)}
-.teaser p{margin-top:4px;font-size:12px}
 /* ── انتخاب رنگ دکمه ── */
 .cdots{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 4px}
 .cdots button{width:42px;height:42px;font-size:22px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line)}

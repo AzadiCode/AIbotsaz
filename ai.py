@@ -286,7 +286,7 @@ Design rules:
 - Node texts, form questions, "done" texts and reminder texts support Telegram HTML: <b>bold</b>, <i>italic</i>, <u>underline</u>, <s>strike</s>, <code>copyable code</code>, <blockquote>highlighted quote</blockquote>, <tg-spoiler>spoiler</tg-spoiler> and links <a href="https://...">text</a>. Use it so the bot looks professional: a bold first line as the heading, a blockquote for key info or benefits, <code> for codes and numbers the user may copy, a few well-chosen emoji. Close every tag. Never use Markdown (** or #). Write a literal < > & as &lt; &gt; &amp;. Escape the double quotes of attributes inside the JSON. Button labels, alert/copy/share texts and AI prompts stay plain text (no tags).
 
 PREMIUM STYLES (use ONLY when the user explicitly asks for premium/custom emoji or colored buttons — they need a paid subscription of the bot owner; otherwise never use them):
-- Custom (premium) emoji inside node texts, form questions, "done" texts and reminder texts: <tg-emoji emoji-id="5368324170671202286">👍</tg-emoji> — the emoji-id is a long numeric id of a Telegram custom emoji and the inner character is shown as a fallback where custom emoji are not supported. Use the exact numeric id the user gave; if they gave none, use an obvious placeholder id and say in "thinking" that they must replace it with a real id (they can copy a numeric id from any custom-emoji pack). At most 2-3 per message. Never in button labels, alert/copy/share texts or AI prompts.
+- Custom (premium) emoji inside node texts, form questions, "done" texts and reminder texts: <tg-emoji emoji-id="5368324170671202286">👍</tg-emoji> — the emoji-id is a long numeric id of a Telegram custom emoji and the inner character is shown as a fallback where custom emoji are not supported. Use the exact numeric id the user gave; if they gave none, use an obvious placeholder id and say in "thinking" that they must replace it with a real id (they can copy a numeric id from any custom-emoji pack). At most 2-3 per message. In a button label you may use a single one (buttons always show its fallback character). Never in alert/copy/share texts or AI prompts (plain text only).
 - Colored buttons: any button may have "color": one of blue green red yellow purple orange black. The engine shows a colored dot before the label. Use it only for 1-3 important buttons (e.g. the main call-to-action), never for every button.
 - If the user asks for these but their subscription does not include them, still build it (the engine shows the plain fallback) and say in "thinking" that premium emoji and colored buttons need the Premium/Pro subscription, which they can activate in the mini-app account tab."""
 SYSTEM_PROMPT = (_SP_BASE.replace("@@PAY@@", ("\n" + """
@@ -789,6 +789,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 label = str(b.get("text", "")).strip()[:40]
                 if not label:
                     bad(f"بخش «{nid}» یه دکمه‌ی بدون متن داره"); continue
+                check_emoji_tags(label, f"دکمه‌ی «{label}»", bad)
                 it = None
                 g = str(b.get("goto") or "")
                 if isinstance(b.get("pay"), dict):

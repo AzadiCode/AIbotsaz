@@ -40,7 +40,7 @@ from bson.errors import InvalidId
 from core import (
     AI_CHAT_MODEL, AI_NODE_MAX_TOKENS, ai_tick, app, balance, BASE_URL, BILLING, BOARD_SCAN, calc_cost,
     charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND,
-    MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, style_label, style_text, tehran_day, tg, tg_html, tg_media,
+    MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, style_label, style_plain, style_text, tehran_day, tg, tg_html, tg_media,
     TOKEN_SCALE,
 )
 from ai import (
@@ -483,7 +483,7 @@ def run_actions(acts, env):
 def share_url(text, env):
     """باز کردن پنجره‌ی اشتراک‌گذاری تلگرام با لینک دعوت شخصی کاربر"""
     link = env.get("ref_link") or ""
-    return "https://t.me/share/url?url=" + quote(link, safe="") + "&text=" + quote(style_text(fill(text, env)[:200], env.perks), safe="")
+    return "https://t.me/share/url?url=" + quote(link, safe="") + "&text=" + quote(style_plain(fill(text, env)[:200], env.perks), safe="")
 
 
 def visible(b, env):
@@ -507,7 +507,7 @@ def keyboard(node, node_id, env):
             elif "alert" in b:
                 r.append({"text": label, "callback_data": f"a:{node_id}:{ri}:{ci}"})
             elif "copy" in b:
-                r.append({"text": label, "copy_text": {"text": style_text(fill(b["copy"], env), env.perks)[:256]}})
+                r.append({"text": label, "copy_text": {"text": style_plain(fill(b["copy"], env), env.perks)[:256]}})
             elif "share" in b:
                 r.append({"text": label, "url": share_url(b["share"], env)})
             elif "pay" in b and PAYMENTS:
@@ -633,9 +633,9 @@ def reply_press(env, rk, text):
             if "goto" in b:
                 send_node(env, b["goto"])
             elif "alert" in b:
-                tg(env.token, "sendMessage", chat_id=env.chat_id, text=style_text(fill(b["alert"], env), env.perks))
+                tg(env.token, "sendMessage", chat_id=env.chat_id, text=style_plain(fill(b["alert"], env), env.perks))
             elif "copy" in b:
-                c = style_text(fill(b["copy"], env), env.perks)[:256]
+                c = style_plain(fill(b["copy"], env), env.perks)[:256]
                 tg(env.token, "sendMessage", chat_id=env.chat_id, text=c,
                    reply_markup={"inline_keyboard": [[{"text": "کپی", "copy_text": {"text": c}}]]})
             elif "pay" in b:
@@ -1907,7 +1907,7 @@ def sub_hook(bot_id):
                 run_actions(b.get("do"), env)
                 if kind == "a":
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
-                       text=style_text(fill(b.get("alert", ""), env), env.perks)[:200], show_alert=True)
+                       text=style_plain(fill(b.get("alert", ""), env), env.perks)[:200], show_alert=True)
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_node(env, b["goto"], edit=m)
