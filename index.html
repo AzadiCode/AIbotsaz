@@ -873,6 +873,14 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .km-ops{display:flex;gap:1px;flex:none}
 .km-ops .iconb{width:28px;height:28px;font-size:14px;line-height:1}
 .km-empty{padding:18px 8px;text-align:center;color:var(--mut);font-size:12.5px}
+/* ── یوزربات ── */
+.ubh{display:flex;align-items:center;gap:10px;margin:8px 0 2px}
+.ubh .gt{flex:1;min-width:0;line-height:1.55}
+.ubh .gt b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ubst{display:inline-flex;align-items:center;gap:7px;flex:none;font-size:11.5px;line-height:1;padding:7px 11px;border-radius:99px;color:var(--mut);box-shadow:inset 0 0 0 1px var(--line)}
+.ubst.on{color:var(--ok);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ok) 45%,transparent)}
+.ubst.bad{color:var(--bad);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 45%,transparent)}
+.ubst .dot{width:7px;height:7px}
 </style>
 </head>
 <body>
@@ -1014,6 +1022,7 @@ const IC = {
   bolt: svg('<path d="M13 2.5L5.5 13H11l-1.2 8.5L18.5 11H13z"/>'),
   fit: svg('<path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/>'),
   minus: svg('<path d="M5 12h14"/>', 2),
+  person: svg('<circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20c.7-3.7 3.6-5.6 7.2-5.6s6.5 1.9 7.2 5.6"/>'),
 };
 const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g>', 1.7);
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
@@ -1063,7 +1072,7 @@ async function load(){
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
 
-const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["media", "photo", "رسانه"], ["account", "wallet", "حساب"]];
+const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["media", "photo", "رسانه"], ["userbot", "person", "یوزربات"], ["account", "wallet", "حساب"]];
 $("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}" aria-label="${t}" title="${t}">${IC[ic]}</button>`).join("");
 function setDock(on){ $("#dock").classList.toggle("open", on); $("#dscrim").classList.toggle("on", on); }
 document.addEventListener("click", e => {
@@ -1115,6 +1124,7 @@ function stGo(where){
   closeSheet();
   if(S.view === "bot" && where !== "studio"){ S.cur = null; S.ideas = []; }
   S.view = where; render(); scrollTo({top: 0, behavior: "smooth"}); haptic();
+  if(where === "userbot") ubLoad();
   if(["create", "bots", "account"].includes(where)) sync().then(ok => {
     if(!ok || S.view !== where) return;
     renderTop();
@@ -2271,7 +2281,7 @@ function renderAccount(){
   animBars();
 }
 
-const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount, studio: renderStudio };
+const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount, studio: renderStudio, userbot: renderUserbot };
 
 /* ═════════════════ اکشن‌های صفحه ═════════════════ */
 const setBot = bot => { S.cur = bot; S.bots = S.bots.map(b => b.id === bot.id ? bot : b); };
@@ -2350,7 +2360,7 @@ async function commit(fn, msg = "ذخیره شد"){
   if(S.view === "studio") refreshStudio(); else renderBot();
   toast(msg); haptic("ok");
 }
-function closeSheet(){ clearInterval(window.__ut); clearInterval(window.__at); clearTimeout(window.__ut); clearTimeout(window.__at); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; stSheetDirty.touched = false; }
+function closeSheet(){ if(S.sheet?.kind === "ubconn" && D && (D.step === "code" || D.step === "password")) api("/api/userbots/login/cancel", "POST").catch(() => {}); clearInterval(window.__ut); clearInterval(window.__at); clearTimeout(window.__ut); clearTimeout(window.__at); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; stSheetDirty.touched = false; }
 function showSheet(html){
   const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
   sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp" role="dialog" aria-modal="true">${html}</div>`;
@@ -2981,6 +2991,7 @@ function shAction(a, ds){
   const prev = D?.kind;
   readSheet();
   if(a.startsWith("km")) return kmAct(a, ds);
+  if(a.startsWith("ub")) return ubAct(a, ds);
   if(a === "stkm"){ const n = ds.n; return stGuardClose(() => { closeSheet(); openKm(n); }); }
   if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این بخش شروع می‌شود")); }
   if(a === "save") return SHEETS[S.sheet.kind].save();
@@ -3481,6 +3492,228 @@ Object.assign(A, {
   },
   stkm: el => openKm(el.dataset.n),
 });
+/* ═════════════════ یوزربات (اتصال اکانت شخصی تلگرام) ═════════════════ */
+Object.assign(S, { ub: null, ubErr: "", ubSel: null, ubTab: "feat", ubCfg: null });
+const UB_ST = { running: ["روشن", "on"], stopped: ["خاموش", ""], revoked: ["نیاز به اتصال دوباره", "bad"] };
+const UB_WHO = [["all", "همه‌ی پیام‌های خصوصی"], ["contacts", "فقط مخاطب‌های من"], ["others", "فقط افراد خارج از مخاطبین"]];
+const UB_MODE = [["has", "شامل این کلمه باشد"], ["start", "با این کلمه شروع شود"], ["exact", "دقیقاً همین باشد"]];
+const UB_GAPS = [1, 3, 6, 12, 24, 48];
+const ubItem = () => S.ub?.items.find(x => x.id === S.ubSel);
+const ubPut = it => { const l = S.ub.items; const i = l.findIndex(x => x.id === it.id); if(i < 0) l.push(it); else l[i] = it; };
+const ubTime = t => { try{ return new Date(t).toLocaleTimeString("fa-IR-u-nu-latn", {hour: "2-digit", minute: "2-digit"}); }catch(_){ return ""; } };
+
+async function ubLoad(){
+  try{ S.ub = await api("/api/userbots"); S.ubErr = ""; }
+  catch(e){ S.ubErr = e.message || "خطا در ارتباط با سرور"; }
+  if(S.view === "userbot" && !S.sheet && !document.activeElement?.matches?.("input,textarea,select")){
+    const it = ubItem(); if(S.ubSel && !it) S.ubSel = null;
+    renderUserbot();
+  }
+}
+
+function renderUserbot(){
+  const app = $("#app");
+  if(S.ubErr && !S.ub){
+    app.innerHTML = `<div class="empty"><div class="ib big">${IC.person}</div><h2>بارگذاری نشد</h2><p class="muted">${esc(S.ubErr)}</p><button class="b sm" data-a="ubreload">تلاش دوباره</button></div>`;
+    return;
+  }
+  if(!S.ub){ app.innerHTML = `<div class="ph"><h1>یوزربات</h1></div><div class="group"><div class="gi static"><span class="muted">در حال بارگذاری…</span></div></div>`; ubLoad(); return; }
+  if(!S.ub.ok){
+    app.innerHTML = `<div class="empty"><div class="ib big">${IC.person}</div><h2>یوزربات فعلاً در دسترس نیست</h2><p class="muted">این بخش روی سرور فعال نشده. بعداً دوباره سر بزن.</p></div>`;
+    return;
+  }
+  const it = ubItem();
+  if(S.ubSel && !it) S.ubSel = null;
+  app.innerHTML = S.ubSel ? ubDetailHTML(it) : ubListHTML();
+}
+
+function ubListHTML(){
+  const u = S.ub, full = u.items.length >= u.max;
+  const rows = u.items.map(x => { const [t] = UB_ST[x.status] || UB_ST.stopped;
+    return `<div class="gi ubrow" role="button" tabindex="0" data-a="ubopen" data-id="${esc(x.id)}"><span class="dot ${x.status === "running" ? "on" : ""}"></span>
+      <span class="gt"><b>${esc(x.name || "اکانت تلگرام")}</b><span>${x.username ? `<bdi dir="ltr">@${esc(x.username)}</bdi> · ` : ""}${t}</span></span>${goIc}</div>`; }).join("");
+  return `<div class="ph"><h1>یوزربات</h1><span class="cnt">${N(u.items.length)}<span>از</span>${N(u.max)}</span></div>
+    ${u.items.length ? `<div class="group sep">${rows}</div>${full ? "" : `<button class="b o sep-btn" data-a="ubnew">${IC.plus}اتصال اکانت دیگر</button>`}`
+      : `<div class="empty"><div class="ib big">${IC.person}</div><h2>هنوز اکانتی وصل نکردی</h2><p class="muted">اکانت شخصی تلگرامت رو وصل کن تا وقتی نیستی، پیام‌های خصوصی‌ات رو خودکار جواب بدهد.</p><button class="b sm" data-a="ubnew">اتصال اکانت</button></div>`}
+    <div class="panel mt"><h2>یوزربات چه کارهایی می‌کند؟</h2>
+      <p class="muted">پاسخ خودکار با کلمه‌ی کلیدی، پیام غیبت وقتی آنلاین نیستی، پاسخ هوشمند با هوش مصنوعی و دستورهای شخصی مثل <span class="ltr">.time</span> و <span class="ltr">.ping</span>. فقط در چت‌های خصوصی کار می‌کند.</p></div>
+    <div class="panel mt2"><h2>امنیت و قوانین</h2>
+      <p class="muted">ورود فقط با کدی است که خود تلگرام به اکانتت می‌فرستد. رمز دومرحله‌ای ذخیره نمی‌شود و نشست (سشن) اکانت رمزنگاری می‌شود. هر وقت خواستی از همین‌جا قطع کن؛ نشست از خود تلگرام هم بسته می‌شود. این سرویس ارسال همگانی ندارد و پاسخ‌ها سقف ساعتی دارند تا اکانتت محدود نشود.</p></div>`;
+}
+
+function ubDetailHTML(x){
+  const [st, sc] = UB_ST[x.status] || UB_ST.stopped, run = x.status === "running";
+  const tabs = tabsHTML([["feat", "قابلیت‌ها"], ["rules", "قانون‌ها" + (S.ubCfg?.rules?.length ? ` (${S.ubCfg.rules.length})` : "")], ["log", "گزارش"]], S.ubTab, "ubtab");
+  const body = ({feat: ubFeatHTML, rules: ubRulesHTML, log: ubLogHTML})[S.ubTab](x);
+  return `<div class="ubh"><button class="iconb" data-a="ubback" aria-label="بازگشت">${IC.back}</button>
+      <div class="gt"><b>${esc(x.name || "اکانت تلگرام")}</b><span class="muted">${x.username ? `<bdi dir="ltr">@${esc(x.username)}</bdi> · ` : ""}<span class="n">${esc(x.phone)}</span></span></div>
+      <span class="ubst ${sc}"><i class="dot ${sc === "on" ? "on" : ""}"></i>${st}</span></div>
+    <button class="b ${run ? "o" : ""} mt2" data-a="ubpower">${run ? "خاموش کردن یوزربات" : x.status === "revoked" ? "اتصال دوباره‌ی اکانت" : "روشن کردن یوزربات"}</button>
+    ${tabs}${body}`;
+}
+
+function ubFeatHTML(x){
+  const c = S.ubCfg, gaps = UB_GAPS.includes(c.away.gap_h) ? UB_GAPS : [...UB_GAPS, c.away.gap_h].sort((a, b) => a - b);
+  const cost = billingFixed() ? `هر ${N(S.cfg.ai_per)} پاسخ هوشمند ${N(S.cfg.ai_cost)} توکن از موجودی‌ات کم می‌شود.` : "هزینه‌ی هر پاسخ هوشمند، بر اساس مصرف واقعی مدل از توکن‌هایت کم می‌شود.";
+  return `<div class="panel"><h2>پاسخ به چه کسانی؟</h2>
+      <select id="ub-who">${UB_WHO.map(([k, t]) => `<option value="${k}"${c.who === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+      <p class="muted mt2">ترتیب بررسی: قانون‌های کلمه‌ی کلیدی ← پاسخ هوشمند ← پیام غیبت. هر پیام حداکثر یک پاسخ می‌گیرد.</p></div>
+    <div class="panel mt2"><h2>پیام غیبت</h2><p class="muted">وقتی کسی برایت می‌نویسد، این پیام را می‌فرستد؛ هر چت فقط یک‌بار در بازه‌ی انتخابی.</p>
+      <label class="chk"><input type="checkbox" id="ub-away-on"${c.away.on ? " checked" : ""}> پیام غیبت فعال باشد</label>
+      <span class="lbl">متن پیام</span><textarea class="fa" id="ub-away-text" maxlength="1000">${esc(c.away.text)}</textarea>
+      <span class="lbl">حداقل فاصله‌ی دو پیام غیبت به یک نفر</span>
+      <select id="ub-away-gap">${gaps.map(h => `<option value="${h}"${c.away.gap_h === h ? " selected" : ""}>${h} ساعت</option>`).join("")}</select>
+      <p class="muted mt2">در متن‌ها می‌توانی از <span class="ltr">{name}</span> (نام فرستنده)، <span class="ltr">{time}</span> و <span class="ltr">{date}</span> استفاده کنی.</p></div>
+    <div class="panel mt2"><h2>پاسخ هوشمند</h2><p class="muted">اگر قانونی جور نشد، هوش مصنوعی به جای تو کوتاه و مودبانه جواب می‌دهد. ${cost}</p>
+      <label class="chk"><input type="checkbox" id="ub-ai-on"${c.ai.on ? " checked" : ""}> پاسخ هوشمند فعال باشد</label>
+      <span class="lbl">دستور برای دستیار (نقش، لحن، اطلاعات مجاز)</span>
+      <textarea class="fa" id="ub-ai-prompt" maxlength="1500" placeholder="مثلاً: دستیار فروشگاه لوازم دیجیتال هستی. ساعت کاری ۹ تا ۱۸ است. قیمت و تخفیف نده، بگو خودم جواب می‌دهم.">${esc(c.ai.prompt)}</textarea>
+      <span class="lbl">سقف پاسخ هوشمند به هر نفر در روز</span><input id="ub-ai-daily" type="number" min="1" max="100" inputmode="numeric" value="${c.ai.daily}">
+      <label class="chk"><input type="checkbox" id="ub-ai-disc"${c.ai.disclose ? " checked" : ""}> ابتدای پاسخ‌ها 🤖 بگذار تا مشخص باشد خودکار است</label></div>
+    <div class="panel mt2"><h2>دستورهای شخصی</h2><p class="muted">در هر چتی پیام خودت را با نقطه شروع کن تا همان پیام ویرایش شود: <span class="ltr">.ping</span> سرعت، <span class="ltr">.time</span> ساعت و تاریخ شمسی، <span class="ltr">.id</span> شناسه‌ی چت، <span class="ltr">.help</span> راهنما.</p>
+      <label class="chk"><input type="checkbox" id="ub-cmds"${c.cmds.on ? " checked" : ""}> دستورهای شخصی فعال باشند</label></div>
+    <div class="bar"><button class="b" data-a="ubsave">ذخیره‌ی تنظیمات</button></div>`;
+}
+
+function ubRulesHTML(){
+  const rules = S.ubCfg.rules, full = rules.length >= 30;
+  const list = rules.map((r, i) => `<div class="gi" role="button" tabindex="0" data-a="ubredit" data-i="${i}"><span class="dot ${r.on === false ? "" : "on"}"></span>
+      <span class="gt"><b>${r.kw.map(esc).join("، ")}</b><span>${esc(r.text.replace(/\s+/g, " "))}</span></span>${goIc}</div>`).join("");
+  return `<p class="muted" style="margin:0 2px 12px">وقتی پیام کسی شامل کلمه‌های کلیدی بود، متن تو را به‌عنوان پاسخ می‌فرستد. برای هر قانون یک مکث ۲۰ ثانیه‌ای هست تا پشت‌سرهم تکرار نشود.</p>
+    ${rules.length ? `<div class="group sep">${list}</div>` : `<div class="empty" style="padding:22px 16px"><p class="muted">هنوز قانونی نداری. مثلاً «قیمت» ← لیست قیمت‌ها.</p></div>`}
+    <button class="b o sep-btn mt2" data-a="ubradd"${full ? " disabled" : ""}>${IC.plus}قانون جدید</button>`;
+}
+
+function ubLogHTML(x){
+  const log = x.log || [];
+  return `<div class="stats" style="grid-template-columns:1fr 1fr 1fr"><div class="stat"><div class="k">پیام‌های دریافتی</div>${N(x.stats.in)}</div><div class="stat"><div class="k">پاسخ‌ها</div>${N(x.stats.out)}</div><div class="stat"><div class="k">پاسخ هوشمند</div>${N(x.stats.ai)}</div></div>
+    <div class="sec"><h2>آخرین فعالیت‌ها</h2><button class="b o sm" data-a="ubrefresh">${IC.refresh}تازه‌سازی</button></div>
+    <div class="group">${log.length ? log.map(l => `<div class="led"><div>${esc(l.k)}${l.w ? ` ← ${esc(l.w)}` : ""}</div><small class="muted n">${ubTime(l.t)}</small></div>`).join("") : `<div class="gi static"><span class="muted">هنوز فعالیتی ثبت نشده. متن پیام‌ها هیچ‌جا ذخیره نمی‌شود.</span></div>`}</div>
+    <div class="sec"><h2>قطع اتصال</h2></div>
+    <p class="muted" style="margin:0 2px 10px">یوزربات حذف می‌شود و نشست این اکانت از خود تلگرام هم بسته می‌شود. هر زمان خواستی از تنظیمات تلگرام ← دستگاه‌ها هم می‌توانی نشست «Azadi Userbot» را ببندی.</p>
+    <button class="b r" data-a="ubdel">${IC.trash}قطع اتصال و حذف یوزربات</button>`;
+}
+
+/* فرم قابلیت‌ها را توی پیش‌نویس می‌خونه تا با عوض کردن تب چیزی گم نشه */
+function ubRead(){
+  if(!S.ubCfg || !$("#ub-who")) return;
+  const c = S.ubCfg, v = id => $(id)?.value ?? "", k = id => !!$(id)?.checked;
+  c.who = v("#ub-who"); c.away.on = k("#ub-away-on"); c.away.text = v("#ub-away-text"); c.away.gap_h = +v("#ub-away-gap") || 6;
+  c.ai.on = k("#ub-ai-on"); c.ai.prompt = v("#ub-ai-prompt"); c.ai.daily = Math.max(1, Math.min(100, +v("#ub-ai-daily") || 20)); c.ai.disclose = k("#ub-ai-disc"); c.cmds.on = k("#ub-cmds");
+}
+async function ubCommit(fn, msg = "ذخیره شد"){
+  ubRead();
+  const cfg = cp(S.ubCfg); fn?.(cfg);
+  const d = await api(`/api/userbots/${S.ubSel}/config`, "PUT", {config: cfg});
+  ubPut(d.item); S.ubCfg = cp(d.item.config); toast(msg); haptic("ok");
+}
+const ubOpen = id => { const it = S.ub.items.find(x => x.id === id); if(!it) return; S.ubSel = id; S.ubTab = "feat"; S.ubCfg = cp(it.config); renderUserbot(); scrollTo(0, 0);
+  api(`/api/userbots/${id}`).then(d => { ubPut(d.item); if(S.view === "userbot" && S.ubSel === id && S.ubTab === "log") renderUserbot(); }).catch(() => {}); };
+
+Object.assign(A, {
+  ubreload: () => { S.ubErr = ""; S.ub = null; renderUserbot(); },
+  ubopen: el => ubOpen(el.dataset.id),
+  ubback: () => { ubRead(); S.ubSel = null; S.ubCfg = null; renderUserbot(); scrollTo(0, 0); ubLoad(); },
+  ubtab: el => { ubRead(); S.ubTab = el.dataset.k; renderUserbot(); },
+  ubsave: el => busy(el, async () => { await ubCommit(null); renderUserbot(); }),
+  ubnew: () => openUbConn(),
+  ubradd: () => { ubRead(); S.sheet = {kind: "ubrule"}; D = {i: null, kw: "", mode: "has", text: "", on: true}; renderSheet(); },
+  ubredit: el => { ubRead(); const i = +el.dataset.i, r = S.ubCfg.rules[i]; if(!r) return; S.sheet = {kind: "ubrule"}; D = {i, kw: r.kw.join("، "), mode: r.mode, text: r.text, on: r.on !== false}; renderSheet(); },
+  ubrefresh: el => busy(el, async () => { const d = await api(`/api/userbots/${S.ubSel}`); ubPut(d.item); renderUserbot(); }),
+  ubpower: el => {
+    const x = ubItem(); if(!x) return;
+    if(x.status === "revoked") return openUbConn();
+    busy(el, async () => {
+      const d = await api(`/api/userbots/${x.id}/${x.status === "running" ? "stop" : "start"}`, "POST");
+      ubPut(d.item); renderUserbot(); toast(d.item.status === "running" ? "یوزربات روشن شد" : "یوزربات خاموش شد"); haptic("ok");
+    });
+  },
+  ubdel: () => confirmQ("یوزربات حذف شود و نشست این اکانت از تلگرام بسته شود؟", ok => { if(!ok) return;
+    busy(null, async () => { await api(`/api/userbots/${S.ubSel}`, "DELETE"); S.ub.items = S.ub.items.filter(x => x.id !== S.ubSel); S.ubSel = null; S.ubCfg = null; renderUserbot(); scrollTo(0, 0); toast("اتصال قطع شد"); }); }),
+});
+document.addEventListener("keydown", e => {
+  if(e.key === "Enter" || e.key === " "){ const r = e.target.closest?.(".ubrow"); if(r){ e.preventDefault(); A.ubopen(r); } }
+  if(e.key === "Enter" && e.target.id?.startsWith("uc-")){ e.preventDefault(); document.querySelector('[data-sh="ubsend"],[data-sh="ubverify"],[data-sh="ubpwgo"]')?.click(); }
+});
+
+/* ── شیت قانون ── */
+function ubruleSheet(){
+  const isNew = D.i === null;
+  return head(isNew ? "قانون جدید" : "ویرایش قانون") + `
+    <span class="lbl">کلمه‌های کلیدی (با کاما جدا کن)</span><input id="ur-kw" maxlength="300" placeholder="قیمت، تعرفه، چنده" value="${esc(D.kw)}">
+    <span class="lbl">شرط تطبیق</span><select id="ur-mode">${UB_MODE.map(([k, t]) => `<option value="${k}"${D.mode === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+    <span class="lbl">متن پاسخ</span><textarea class="fa" id="ur-text" maxlength="1000" placeholder="متنی که فرستاده می‌شود">${esc(D.text)}</textarea>
+    <p class="muted mt2">می‌توانی از <span class="ltr">{name}</span> و <span class="ltr">{time}</span> و <span class="ltr">{date}</span> استفاده کنی.</p>
+    <label class="chk"><input type="checkbox" id="ur-on"${D.on ? " checked" : ""}> قانون فعال باشد</label>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف</button>`}</div>`;
+}
+const ubruleRead = () => { D.kw = $("#ur-kw")?.value ?? D.kw; D.mode = $("#ur-mode")?.value ?? D.mode; D.text = $("#ur-text")?.value ?? D.text; D.on = $("#ur-on") ? $("#ur-on").checked : D.on; };
+function ubruleSave(){
+  const kw = D.kw.split(/[,،\n]/).map(s => s.trim()).filter(Boolean).slice(0, 8), text = D.text.trim();
+  if(!kw.length) return toast("حداقل یک کلمه‌ی کلیدی بنویس");
+  if(!text) return toast("متن پاسخ را بنویس");
+  const rule = {kw, mode: D.mode, text, on: D.on}, i = D.i;
+  busy($('[data-sh="save"]'), async () => { await ubCommit(cfg => { if(i === null) cfg.rules.push(rule); else cfg.rules[i] = rule; }, "قانون ذخیره شد"); closeSheet(); renderUserbot(); });
+}
+function ubruleDel(){
+  const i = D.i;
+  confirmQ("این قانون حذف شود؟", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.rules.splice(i, 1); }, "قانون حذف شد"); closeSheet(); renderUserbot(); }));
+}
+
+/* ── شیت اتصال اکانت: شماره ← کد ← (رمز دومرحله‌ای) ← تمام ── */
+function openUbConn(){
+  if(S.ub && S.ub.items.length >= S.ub.max && !S.ub.items.some(x => x.status === "revoked")) return toast(`حداکثر ${S.ub.max} یوزربات می‌توانی داشته باشی`);
+  S.sheet = {kind: "ubconn"}; D = {step: "phone", phone: "", code: "", pw: "", aid: "", ah: "", item: null}; renderSheet();
+}
+function ubconnSheet(){
+  const own = !!S.ub?.own_api;
+  if(D.step === "phone") return head("اتصال اکانت تلگرام") + `
+    <p class="muted">شماره‌ی اکانتی که می‌خواهی یوزربات رویش کار کند را با کد کشور بنویس. تلگرام یک کد ورود داخل خود اپ برایت می‌فرستد.</p>
+    <span class="lbl">شماره‌ی تلفن</span><input id="uc-phone" dir="ltr" inputmode="tel" autocomplete="off" placeholder="+989121234567" value="${esc(D.phone)}">
+    ${own ? `<span class="lbl">API ID</span><input id="uc-aid" dir="ltr" inputmode="numeric" autocomplete="off" value="${esc(D.aid)}">
+      <span class="lbl">API Hash</span><input id="uc-ah" dir="ltr" autocomplete="off" value="${esc(D.ah)}">
+      <p class="muted mt2">این دو مورد را از <span class="ltr">my.telegram.org</span> ← API development tools بگیر.</p>` : ""}
+    <p class="muted mt2">اگر تلگرام نشان می‌دهد «ورود جدید» با نام <span class="ltr">Azadi Userbot</span>، همان خودِ توست. هر زمان بخواهی می‌توانی آن را ببندی.</p>
+    <div class="bar" style="flex-direction:column"><button class="b" data-sh="ubsend">ارسال کد</button>${S.ub?.pending ? `<button class="b o" data-sh="ubresume">کد فرستاده شده را دارم</button>` : ""}</div>`;
+  if(D.step === "code") return head("کد تلگرام") + `
+    <p class="muted">کدی که تلگرام فرستاد (پیام رسمی «Telegram» توی اپ) را وارد کن. اگر مینی‌اپ بسته شد، دوباره باز کن؛ ورود تا ۱۰ دقیقه معتبر است. <b>این کد را برای هیچ‌کس نفرست.</b></p>
+    <span class="lbl">کد ورود</span><input id="uc-code" dir="ltr" inputmode="numeric" maxlength="8" autocomplete="one-time-code" value="${esc(D.code)}">
+    <div class="bar" style="flex-direction:column"><button class="b" data-sh="ubverify">تأیید</button><button class="b o" data-sh="ubstepback">شماره‌ی دیگر / ارسال دوباره</button></div>`;
+  if(D.step === "password") return head("رمز دومرحله‌ای") + `
+    <p class="muted">این اکانت رمز دومرحله‌ای دارد. رمز ذخیره نمی‌شود و فقط برای همین ورود استفاده می‌شود.</p>
+    <span class="lbl">رمز</span><input id="uc-pw" type="password" autocomplete="off" value="">
+    <div class="bar"><button class="b" data-sh="ubpwgo">ورود</button></div>`;
+  const x = D.item;
+  return head("اکانت وصل شد") + `<div class="empty" style="padding:18px 8px"><div class="ib big">${IC.check}</div><h2>${esc(x?.name || "اکانت تلگرام")}</h2>
+    <p class="muted">یوزربات روشن است. حالا قابلیت‌هایش را تنظیم کن.</p><button class="b sm" data-sh="ubfinish">تنظیم یوزربات</button></div>`;
+}
+const ubconnRead = () => { if(D.step === "phone"){ D.phone = $("#uc-phone")?.value ?? D.phone; D.aid = $("#uc-aid")?.value ?? D.aid; D.ah = $("#uc-ah")?.value ?? D.ah; }
+  if(D.step === "code") D.code = $("#uc-code")?.value ?? D.code; if(D.step === "password") D.pw = $("#uc-pw")?.value ?? D.pw; };
+function ubDone(d){
+  ubPut(d.item); S.ub.pending = false; D.step = "done"; D.item = d.item; renderSheet(); haptic("ok");
+  if(d.warn) toast(d.warn);
+}
+function ubAct(a, ds){
+  const fail = e => { if(e.data?.reset){ D.step = "phone"; renderSheet(); } toast(e.message); };
+  const run = fn => busy($(`[data-sh="${a}"]`), async () => { try{ await fn(); }catch(e){ fail(e); } });
+  if(a === "ubsend"){
+    if(!D.phone.trim()) return toast("شماره‌ی تلفن را بنویس");
+    return run(async () => { await api("/api/userbots/login/start", "POST", {phone: D.phone, api_id: D.aid, api_hash: D.ah}); S.ub.pending = true; D.step = "code"; D.code = ""; renderSheet(); });
+  }
+  if(a === "ubresume"){ D.step = "code"; return renderSheet(); }
+  if(a === "ubverify"){
+    if(!D.code.trim()) return toast("کد را وارد کن");
+    return run(async () => { const d = await api("/api/userbots/login/code", "POST", {code: D.code}); if(d.step === "password"){ D.step = "password"; renderSheet(); } else ubDone(d); });
+  }
+  if(a === "ubpwgo"){
+    if(!D.pw) return toast("رمز را وارد کن");
+    return run(async () => { const d = await api("/api/userbots/login/password", "POST", {password: D.pw}); ubDone(d); });
+  }
+  if(a === "ubstepback"){ api("/api/userbots/login/cancel", "POST").catch(() => {}); S.ub.pending = false; D.step = "phone"; return renderSheet(); }
+  if(a === "ubfinish"){ const id = D.item?.id; closeSheet(); S.view = "userbot"; if(id) ubOpen(id); else renderUserbot(); return; }
+}
+SHEETS.ubrule = {html: ubruleSheet, read: ubruleRead, save: ubruleSave, del: ubruleDel};
+SHEETS.ubconn = {html: ubconnSheet, read: ubconnRead};
 </script>
 </body>
 </html>

@@ -11,6 +11,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
   بررسی مسیرها، خروجی JSON، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
   پاسخ فرم‌ها، ماموریت‌ها و سطح (XP، پاداش و مزایا)، کیف توکن (روزانه، دعوت، کوپن، خرید با ستاره)،
   پنل ادمین (کاربران آنلاین، شارژ، کوپن، اعلان همگانی، آمار سیستم)
+  یوزربات: اتصال اکانت شخصی تلگرام با شماره (Telethon)، پاسخ خودکار، پیام غیبت، پاسخ هوشمند و دستورهای شخصی
 موتور ثابت و امن (send_node / run_actions)
   متغیر، شرط، اکشن، فرم‌های اعتبارسنجی‌شده، گفتگوی هوشمند با حافظه، دعوت و پاداش، عضویت اجباری،
   رسانه‌ی کتابخونه یا لینکی، کیبورد زیر چت، دکمه‌ی کپی و اشتراک — هیچ کد تولیدشده‌ای اجرا نمی‌شه
@@ -22,6 +23,10 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ تک‌فایلی (index.html)
   • جدول برترین‌ها (board) بر اساس هر متغیر عددی یا تعداد دعوت‌ها
   • یادآور و پیام زمان‌بندی‌شده (اکشن remind، تا ۳۰ روز) با پردازشگر پس‌زمینه — انقضای اشتراک، پیگیری سفارش، یادآوری نوبت
   • پرداخت با ستاره‌ی تلگرام داخل رباتا (دکمه‌ی pay): فاکتور XTR، اعتبارسنجی pre_checkout، ثبت یک‌باره، اکشن بعد از پرداخت موفق
+  • بازی تعاملی: اکشن dice (تاس انیمیشنی تلگرام 🎲🎯🏀⚽🎳🎰 با نتیجه‌ی واقعی توی متغیر) و pick (قرعه‌ی تصادفی از گزینه‌ها)
+  • پایگاه داده‌ی دائمی هر ربات (جدول‌های رکوردی): اکشن‌های db_add / db_get / db_set / db_inc / db_del
+    (سفارش‌ها، لیگ‌ها، آرشیو، دیوار پیام) + فیلد list برای نمایش رکوردها زیر هر بخش
+  • اکشن fetch: وصل شدن رباتا به APIهای عمومی https (سکه، آب‌وهوا، قیمت؛ روزی EXT_API_DAILY بار هر ربات؛ EXT_API=0 خاموش)
   • هوش ساخت: پرامپت چندمرحله‌ای (تحلیل نقش‌ها ← نگاشت به قابلیت‌ها ← بازبینی) + بازخورد خودکار چیزهایی که اعتبارسنج حذف کرده
 Environment اختیاری تازه: PAYMENTS (۰ = خاموش کردن دکمه‌ی پرداخت) SCHED (۰ = خاموش کردن یادآورها)
 
@@ -29,8 +34,9 @@ Environment: MOTHER_TOKEN BASE_URL AI_BASE_URL AI_API_KEY AI_MODEL (الزامی
 MOTHER_USERNAME AI_CHAT_MODEL BILLING(usage|fixed) START_TOKENS DAILY_BONUS REF_* PACKS MAX_BOTS ... (پایین‌تر)
 """
 import html as _html
-import os, re, json, time, hmac, hashlib, base64, secrets, logging, math, random, threading, functools
-from urllib.parse import parse_qsl, quote, unquote
+import os, re, json, time, hmac, hashlib, base64, secrets, logging, math, random, threading, functools, asyncio
+from collections import deque
+from urllib.parse import parse_qsl, quote, unquote, urlparse
 from datetime import datetime, timezone, timedelta
 
 import requests
@@ -156,6 +162,8 @@ def _index(col, key, **kw):
 
 
 _index(db.bots, "owner")
+_index(db.userbots, "owner")
+_index(db.ubaway, "t", expireAfterSeconds=73 * 3600)
 _index(db.bots, "token_hash", unique=True, sparse=True)
 _index(db.subs, "bot")
 _index(db.submissions, "bot_id")
@@ -177,6 +185,8 @@ _index(db.payments, "bot")
 _index(db.blocked, "bot")
 _index(db.groups, "bot")
 _index(db.modp, "t", expireAfterSeconds=3600)
+_index(db.recs, [("bot", 1), ("t", 1), ("u", 1), ("n", -1)])
+_index(db.recs, [("bot", 1), ("t", 1), ("n", -1)])
 try:
     db.bots.update_many({"xp_on": {"$exists": True}}, {"$unset": {k: "" for k in (
         "xp_on", "xp_desc", "xp_v", "xp_l", "xp_s", "xp_since", "xp_hasav", "xp_avts", "xp_av", "xp_avct", "xp_hidden", "xp_rep")}})
@@ -879,6 +889,7 @@ GROUP & CHANNEL MANAGEMENT (use it whenever the user wants to manage, moderate o
      "ai": {"prompt": "instructions for the AI assistant", "daily": 15, "memory": 3},             (optional, see AI CHAT)
      "ticket": true,  "tag": "فروش",                                                 (optional, on ask/fields nodes only, see SUPPORT DESK)
      "board": {"var": "coins", "top": 10, "label": "برترین‌ها"},                       (optional, see LEADERBOARD)
+     "list": {"table": "orders", "scope": "my", "limit": 5, "line": "#{n} · {item}"},  (optional, records list, see DATABASE)
      "join": {"channels": ["channel_username"], "text": "message asking to join"},  (optional, forced membership ONLY for this section)
      "do": [ ...actions... ],                                                        (optional, see LOGIC)
      "route": [ {"when": <cond>, "goto": "<node_id>"} ],                             (optional, see LOGIC)
@@ -931,6 +942,38 @@ ACTIONS ("action" object, max 6 per list)
 - {"op": "random", "var": "dice", "value": "1-6"}           random whole number in a range
 - {"op": "notify", "value": "text"}                         sends a message to the bot owner (may use {placeholders}; the user's name and id are appended; the owner can reply to it)
 - {"op": "remind", "minutes": 60, "value": "text", "goto": "<node_id>", "key": "cart"}   schedule a message for later, see REMINDERS
+- {"op": "dice", "var": "roll", "emoji": "🎲"}              animated Telegram dice; the REAL result lands in the variable after the animation. emoji one of 🎲 🎯 🏀 ⚽ 🎳 (1-6) or 🎰 (1-64). see GAMES
+- {"op": "pick", "var": "prize", "value": "gold|silver|bronze"}   draws one option at random into the variable. see GAMES
+- {"op": "db_add", "table": "orders", "data": {...}, "scope": "my"}   append a permanent record, see DATABASE
+- {"op": "db_get", "table": "orders", "when": {...}, "var": "o"}     load matching record(s) into variables, see DATABASE
+- {"op": "db_set", "table": "orders", "when": {...}, "data": {...}}  update matching record(s), see DATABASE
+- {"op": "db_inc", "table": "orders", "var": "plays", "value": "1"}  increment a numeric field of the latest record, see DATABASE
+- {"op": "db_del", "table": "orders", "when": {...}}        delete matching record(s), see DATABASE
+- {"op": "fetch", "var": "rate", "url": "https://...", "pick": "usd.price"}   GET a public https API and store part of the JSON in a variable, see EXTERNAL API@@APION@@
+
+GAMES (interactive games — the engine has real building blocks for them)
+- {"op": "dice"} sends an ANIMATED Telegram dice/casino animation, waits for it to finish, and stores the genuine Telegram result in "var" (user cannot cheat it). Use for board-game moves, lucky draws, betting with coins, "roll to win" shops.
+- {"op": "pick"} picks one of the |-separated options at random (loot boxes, fortune telling, random name/reward/task/prize).
+- Combine with variables, "add" for scores/coins/health, "route"/"alt" for rules ("roll >= 5 wins"), pay buttons for entry fees, globals for shared jackpots, "board" for rankings, db tables for game history/leagues. A typical turn: one node whose button "do" has dice/add actions, then "goto" a result node whose "route" compares the roll and branches to win/lose nodes.
+- Example lucky-draw button: {"text": "بچرخون", "goto": "result", "do": [{"op":"add","var":"coins","value":"-5"},{"op":"dice","var":"roll","emoji":"🎰"},{"op":"add","var":"spins","value":"1"}]}
+- Example result node: {"title": "نتیجه", "text": "عددت: {roll}", "route": [{"when": {"var":"roll","op":">=","value":"40"}, "goto": "jackpot"}, {"when": {"var":"coins","op":"<","value":"5"}, "goto": "broke"}]}
+- Quiz/trivia is built with buttons + "add" score + route (no dice needed). For real-time two-player games or timed competitions say honestly in "thinking" that Telegram bots cannot do them and build the closest single-player version.
+
+DATABASE (a real permanent data store per bot — for lists, records, archives that must survive and grow)
+- Actions "db_add"/"db_get"/"db_set"/"db_inc"/"db_del" work on named tables ("table": lowercase id). "data" = {"field": "value"} with value supporting {placeholders} (e.g. store form answers). Field names: english lowercase like variable names.
+- "scope": "my" (default) = each user only sees/edits their OWN records (order history, my scores). "scope": "all" = one shared collection for everyone (public wall, shared archive, league history); use deliberately.
+- {"op": "db_add", "table": "notes", "data": {"text": "{text}", "cat": "public"}, "scope": "all"} — appends record #N (numbered automatically).
+- {"op": "db_get", "table": "orders", "when": {"var": "status", "op": "==", "value": "paid"}, "var": "o"} — loads the LATEST matching record; every field f of the table becomes variable "o_f" ({"var": "o"} → {o_text}, {o_cat}; empty prefix → the field name itself). "when" is a simple condition on record fields, optional.
+- {"op": "db_set", "table": "orders", "when": {"var": "status", "op": "==", "value": "new"}, "data": {"status": "shipped"}} — updates ALL matching records. WITHOUT "when" and with scope "my" it updates the user's own records only.
+- {"op": "db_inc", "table": "scores", "var": "wins", "value": "1", "upsert": true} — adds a number to field "var" of the user's latest record; "upsert": true creates the record on first use.
+- {"op": "db_del", "table": "carts", "when": {...}} — deletes matching records.
+- To SHOW records to users add to a node: "list": {"table": "notes", "scope": "all", "limit": 5, "line": "#{n} · {text}", "empty": "هنوز چیزی ثبت نشده.", "order": "new"}. It appends the rendered lines under the node text. In "line": {n} = record number, {u} = creator's telegram id, {field} = any field. limit 1-10, order "new" (newest first, default) or "old".
+- Typical uses: order history (form saves → db_add → "my orders" list node), suggestion wall / guestbook (ask node → db_add scope all → list node), game history & leagues (db_add per match → db_inc wins → board), library/catalog of user-submitted content, appointment log. Max 6 tables, 12 fields per record. Do NOT use db tables for simple counters — a variable or global is lighter.
+
+EXTERNAL API (connect the bot to outside services; costs a moment, use deliberately)@@APION@@
+- {"op": "fetch", "var": "price", "url": "https://api.example.com/rate.json", "pick": "data.usd"} — the engine GETs the URL (must be a public https link, no auth headers) and stores JSON path "pick" into the variable ("a.b.0.c" walks objects/arrays; non-string leaves are stringified). Then use {price} in texts, alt, route.
+- Use for exchange rates, coin prices, weather, quotes, sports results, hijri/shamsi date APIs — anything with a public JSON endpoint. Never invent URLs: use the well-known public endpoint the user gave; if they gave none, use https://api.example.com/... as an obvious placeholder and say so in "thinking".
+- Each bot is limited per day; on failure the variable keeps its old value. Put fetch in node "do" of the page that shows the value, then show {price} in the text or an "alt".@@APIOFF@@
 
 WHERE LOGIC GOES
 - node "do": [actions] runs every time a user enters the node, before anything is shown.
@@ -981,24 +1024,26 @@ MULTI-LANGUAGE BOTS (only when the user wants the bot in several languages)
 - {lang} is only Telegram's language code; an explicit picker is better.
 
 PATTERNS (pick what fits, combine freely)
-- Shop/catalog: home, categories, product pages with media, order form with ticket (owner replies to the customer inside the ticket), contact. Store/service business: services, prices (placeholders if unknown), booking form with ticket, location, support.
+- Shop/catalog: home, categories, product pages with media, order form with ticket (owner replies to the customer inside the ticket), order history with db_add + a "list" node, contact. Store/service business: services, prices (placeholders if unknown), booking form with ticket, location, support.
 - Support/helpdesk: FAQ sections, contact node with "ticket": true (departments via tags), optional AI assistant for free questions, closing message in desk.closed.
 - Content/channel promoter: welcome with media, forced join, latest content links, share button.
-- Quiz/game/loyalty/contest: variables + route + alt, scores, levels, daily-style rewards via {date}, a "board" for the ranking, globals for community goals.
-- Community/viral: invites with {refs}, {ref_link}, on_ref rewards, a "board" on "refs" for top inviters.
+- Games: dice/pick actions for luck, variables + route/alt for rules and scores, coins economy with "add" and pay buttons for entry fees, globals for a shared jackpot, db tables for match history/leagues, a "board" for rankings.
+- Quiz/trivia/loyalty/contest: variables + route + alt, scores, levels, daily-style rewards via {date}, a "board" for the ranking, globals for community goals.
+- Community/viral: invites with {refs}, {ref_link}, on_ref rewards, a "board" on "refs" for top inviters; suggestion wall or guestbook with db_add scope "all" + a "list" node.
 - AI products: assistant, tutor, translator, writer, consultant, character chat: AI section(s) with a strong prompt plus a small menu around it.
 - Sales funnel: lead form with ticket, remind-based follow-up, offers; owner replies personally.
 - Polls, votes, raffles, limited-stock drops: globals + per-user guard variable.
+- Live data (rates, weather, coin prices, quotes): fetch action in node "do" + the variable shown in text/alt.
 
 ENGINE LIMITS (be honest about them in "thinking" and build the closest working approximation)
-- CANNOT do: card or bank-gateway payments @@PAYLIM@@, calling external APIs or websites, real database tables or per-item records (only per-user variables, globals and the leaderboard), reading the CONTENT of files or photos users send (they can be forwarded to the owner), managing groups/channels, inline mode, calls.
-- CAN approximate: orders and bookings (form + ticket), stock and quotas (globals), polls and votes (globals), rankings (board), delayed messages and expiry (remind), human support (ticket), subscriptions and paid access (pay + vip flag + remind).
-- Example approximation: an order form with ticket (the owner sees the order and replies to the customer with the payment instructions) instead of an online checkout.
+- CANNOT do: card or bank-gateway payments @@PAYLIM@@, reading the CONTENT of files or photos users send (they can be forwarded to the owner), managing groups/channels beyond the mod toolkit, inline mode, calls, real-time two-player games.
+- CAN do: permanent record storage (db tables + list), public JSON APIs (fetch), luck games (dice/pick), shared counters (globals), rankings (board), delayed messages and expiry (remind), human support (ticket), subscriptions and paid access (pay + vip flag + remind)@@DBMAP@@.
+- Example approximation: an order form with ticket (the owner sees the order and replies to the customer with the payment instructions) instead of an online checkout; a dice+coins single-player game instead of a real-time multiplayer game.
 
 REASONING PROTOCOL (think through this silently before you write the JSON)
 1. Actors: end user, owner, optional staff. What does each of them need from this bot?
 2. List every requirement the user stated, then add what a professional would add without being asked: a way back, a way to reach a human, an owner notification, confirmation messages, clear errors.
-3. Map each requirement to the engine feature that implements it: ticket for human answers, forms+types for data, vars/route/alt/when for logic, globals for shared counters, board for rankings, remind for follow-ups, ai for free-form questions@@PAYMAP@@.
+3. Map each requirement to the engine feature that implements it: ticket for human answers, forms+types for data, vars/route/alt/when for logic, db tables for records/history, dice/pick for games, fetch for live data, globals for shared counters, board for rankings, remind for follow-ups, ai for free-form questions@@PAYMAP@@.
 4. If something is impossible, pick the closest honest approximation and say so in "thinking".
 5. Verify before answering: every goto/next/route/remind/pay target exists; every {placeholder} is declared; every ask/form/ticket node has a cancel or home button; texts are in the output language; no invented facts; the JSON is valid and complete.
 
@@ -1022,7 +1067,16 @@ PAYMENTS (Telegram Stars)
 - Do not use pay buttons for physical goods; for those use an order form with ticket.
 """) if PAYMENTS else "")
                  .replace("@@PAYLIM@@", "(only Telegram Stars)" if PAYMENTS else "of any kind")
-                 .replace("@@PAYMAP@@", ", pay for Telegram Stars payments" if PAYMENTS else ""))
+                 .replace("@@PAYMAP@@", ", pay for Telegram Stars payments" if PAYMENTS else "")
+                 .replace("@@DBMAP@@", ""))
+EXT_API = os.environ.get("EXT_API", "1").strip() != "0"     # اکشن fetch (اتصال به API بیرونی)؛ ۰ = خاموش
+EXT_API_DAILY = _int("EXT_API_DAILY", 200)                  # سقف روزانه‌ی fetch هر ربات
+if EXT_API:
+    SYSTEM_PROMPT = SYSTEM_PROMPT.replace("@@APION@@", "").replace("@@APIOFF@@", "")
+else:
+    # سرویس خاموشه: خطِ اکشن fetch و کل بخش EXTERNAL API از دستورالعمل حذف می‌شه
+    SYSTEM_PROMPT = re.sub(r"\nEXTERNAL API \(.*?@@APIOFF@@", "",
+                           "\n".join(l for l in SYSTEM_PROMPT.splitlines() if "see EXTERNAL API" not in l), flags=re.S)
 
 
 ID_RE = re.compile(r"^[a-z0-9_]{1,30}$")
@@ -1039,9 +1093,20 @@ BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "l
             "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday", "ticket_no")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
-ACT_OPS = ("set", "add", "clear", "random", "notify", "remind")
+ACT_OPS = ("set", "add", "clear", "random", "notify", "remind",
+           "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch")
 F_TYPES = ("text", "number", "phone", "email")
 _DIG = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+# ───── جدول داده‌ی رکوردی (پایگاه داده‌ی دائمی هر ربات) و ابزارهای بازی ─────
+TAB_RE = re.compile(r"^[a-z][a-z0-9_]{0,15}$")
+DICE_EMOJIS = {"🎲": 6, "🎯": 6, "🏀": 5, "⚽": 5, "🎳": 6, "🎰": 64}   # سقف عدد هر تاس تلگرام
+REC_BUILTINS = ("n", "u")      # فیلدهای آماده‌ی رکورد: شماره‌ی ردیف و آیدی صاحبش
+MAX_TABLES = 6                 # حداکثر جدول داده‌ی هر ربات
+MAX_REC_FIELDS = 12            # حداکثر فیلد هر رکورد
+MAX_REC_VAL = 200              # سقف طول هر مقدار
+MAX_RECORDS_USER = 100         # حداکثر رکورد هر کاربر در هر جدول
+MAX_RECORDS_SHARED = 500       # حداکثر رکورد مشترک هر جدول
+_PRIV_HOST = re.compile(r"^(localhost|.*\.local|.*\.internal|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|::1)")
 
 
 def norm_url(v):
@@ -1101,7 +1166,148 @@ def clean_cond(c, used, nums, bad, depth=0):
     return out
 
 
-def clean_actions(lst, used, nums, bad, valid=None):
+def _reg_tab(tables, tab, fields):
+    """ثبت جدول و فیلدهایش (برای سقف تعداد جدول‌ها و متغیرهای db_get)"""
+    fs = tables["tabs"].setdefault(tab, set())
+    fs.update(f for f in fields if VAR_RE.match(f) and f not in BUILTINS)
+
+
+def clean_rec_cond(c, bad):
+    """شرط ساده روی فیلدهای رکورد (when برای db_* و list)؛ نامعتبر = None"""
+    if c is None:
+        return None
+    if not isinstance(c, dict) or c.get("all") or c.get("any") or c.get("not"):
+        bad("شرطِ جدول داده باید یه شرط ساده باشه (فیلد، عملگر، مقدار)")
+        return None
+    f = str(c.get("var") or "").strip().lower()
+    op = str(c.get("op") or "==").strip()
+    op = OP_ALIASES.get(op, op)
+    if not (VAR_RE.match(f) or f in REC_BUILTINS):
+        bad(f"نام فیلد «{f}» در شرط جدول داده معتبر نیست")
+        return None
+    if op not in OPS:
+        bad(f"عملگر شرط «{op}» معتبر نیست")
+        return None
+    out = {"var": f, "op": op}
+    if op not in ("empty", "filled"):
+        out["value"] = str(c.get("value", ""))[:100]
+    return out
+
+
+def _clean_new_action(op, a, used, nums, bad, tables):
+    """اکشن‌های بازی و پایگاه داده‌ی رکوردی (dice / pick / fetch / db_*)؛ نامعتبر = None"""
+    def var_of():
+        name = str(a.get("var") or "").strip().lower()
+        if not VAR_RE.match(name) or name in BUILTINS:
+            bad(f"نام متغیر «{name}» برای اکشن معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
+            return None
+        return name
+    if op == "dice":
+        name = var_of()
+        if not name:
+            return None
+        em = str(a.get("emoji") or "🎲").strip()
+        if em not in DICE_EMOJIS:
+            bad("ایموجی تاس باید یکی از 🎲 🎯 🏀 ⚽ 🎳 🎰 باشه")
+            return None
+        used.add(name)
+        nums.add(name)
+        return {"op": "dice", "var": name, "emoji": em}
+    if op == "pick":
+        name = var_of()
+        if not name:
+            return None
+        v = str(a.get("value") or "").strip()[:300]
+        if len([x for x in v.split("|") if x.strip()]) < 2:
+            bad("گزینه‌های انتخاب تصادفی رو با | از هم جدا کن (حداقل دو گزینه)")
+            return None
+        used.add(name)
+        return {"op": "pick", "var": name, "value": v}
+    if op == "fetch":
+        if not EXT_API:
+            bad("اتصال به API بیرونی در این سرویس فعال نیست")
+            return None
+        name = var_of()
+        if not name:
+            return None
+        u = str(a.get("url") or "").strip()[:500]
+        host = ""
+        try:
+            host = (urlparse(u).hostname or "").lower()
+        except Exception:
+            host = ""
+        if not u.startswith("https://") or not host or ":" in host or _PRIV_HOST.match(host):
+            bad("آدرس fetch باید یه لینک https عمومی باشه (نه آدرس داخلی)")
+            return None
+        used.add(name)
+        it = {"op": "fetch", "var": name, "url": u}
+        pk = re.sub(r"[^A-Za-z0-9_.\-]", "", str(a.get("pick") or ""))[:80]
+        if pk:
+            it["pick"] = pk
+        return it
+    # ── اکشن‌های جدول داده ──
+    tab = str(a.get("table") or "").strip().lower()
+    if not TAB_RE.match(tab):
+        bad(f"نام جدول «{tab}» معتبر نیست (حروف انگلیسی کوچک، عدد و _)")
+        return None
+    if tab not in tables["tabs"] and len(tables["tabs"]) >= MAX_TABLES:
+        bad(f"حداکثر {MAX_TABLES} جدول داده می‌تونی داشته باشی")
+        return None
+    scope = "all" if a.get("scope") in ("all", "shared", True) else "my"
+    when = clean_rec_cond(a.get("when"), bad)
+    it = {"op": op, "table": tab}
+    if scope == "all":
+        it["scope"] = "all"
+    if when:
+        it["when"] = when
+    if op == "db_get":
+        pfx = str(a.get("var") or "").strip().lower()
+        if pfx and (not VAR_RE.match(pfx) or pfx in BUILTINS):
+            bad(f"پیشوند متغیر «{pfx}» برای خواندن جدول معتبر نیست")
+            return None
+        if pfx:
+            it["var"] = pfx
+        tables["gets"].append((pfx, tab))
+        _reg_tab(tables, tab, [])
+        return it
+    if op == "db_del":
+        _reg_tab(tables, tab, [])
+        return it
+    if op == "db_inc":
+        k = str(a.get("var") or a.get("field") or "").strip().lower()
+        if not VAR_RE.match(k) or k in BUILTINS:
+            bad(f"نام فیلد عددی «{k}» معتبر نیست")
+            return None
+        v = (str(a.get("value", a.get("by", "1"))).strip()[:100]) or "1"
+        if v != "1" and to_num(v) is None and not PH_RE.search(v):
+            bad(f"مقدار افزایش فیلد «{k}» باید عدد باشه")
+            return None
+        it["var"], it["value"] = k, v
+        if a.get("upsert"):
+            it["upsert"] = True
+        _reg_tab(tables, tab, [k])
+        return it
+    # db_add / db_set
+    data = {}
+    raw = a.get("data") if isinstance(a.get("data"), dict) else {}
+    for k, v in list(raw.items())[:MAX_REC_FIELDS]:
+        k = str(k).strip().lower()
+        if not VAR_RE.match(k) or k in BUILTINS:
+            bad(f"نام فیلد «{k}» در جدول «{tab}» معتبر نیست")
+            continue
+        data[k] = str(v if v is not None else "").strip()[:MAX_REC_VAL]
+    if not data:
+        bad(f"اکشن {op} باید حداقل یک فیلد داشته باشه: «data»: {{\"نام‌فیلد\": \"مقدار\"}}")
+        return None
+    it["data"] = data
+    if op == "db_set" and a.get("upsert"):
+        it["upsert"] = True
+    _reg_tab(tables, tab, data.keys())
+    return it
+
+
+def clean_actions(lst, used, nums, bad, valid=None, tables=None):
+    tables = tables if tables is not None else {"tabs": {}, "gets": []}
     out = []
     for a in (lst if isinstance(lst, list) else [])[:6]:
         if not isinstance(a, dict):
@@ -1109,6 +1315,11 @@ def clean_actions(lst, used, nums, bad, valid=None):
         op = str(a.get("op") or "").strip().lower()
         if op not in ACT_OPS:
             bad(f"نوع اکشن «{op}» معتبر نیست")
+            continue
+        if op in ("dice", "pick", "fetch", "db_add", "db_get", "db_set", "db_inc", "db_del"):
+            it = _clean_new_action(op, a, used, nums, bad, tables)
+            if it:
+                out.append(it)
             continue
         if op == "notify":
             v = str(a.get("value") or "").strip()[:500]
@@ -1312,6 +1523,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
             bad(f"نام یا تعداد متغیر مشترک «{k}» معتبر نیست (حروف انگلیسی کوچک، عدد و _، حداکثر {MAX_GLOBALS} تا)")
 
     used, nums = set(), set()      # متغیرهایی که جایی استفاده شدن / مقدار عددی دارن
+    tables = {"tabs": {}, "gets": []}      # جدول‌های داده (db_*) و جای خواندن‌هاشون
     valid = {}
     for nid, n in nodes_in.items():
         nid = str(nid)
@@ -1373,7 +1585,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                         bad(f"عضویت اجباری فقط روی دکمه‌های «رفتن به بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنه (دکمه‌ی «{label}»)")
                 if b.get("do"):
                     if "goto" in it or "alert" in it or "pay" in it:
-                        acts = clean_actions(b["do"], used, nums, bad, valid)
+                        acts = clean_actions(b["do"], used, nums, bad, valid, tables)
                         if acts:
                             it["do"] = acts
                     else:
@@ -1471,6 +1683,35 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                     nums.add(bv)
             else:
                 bad(f"متغیر جدول برترین‌ها در بخش «{nid}» باید یه متغیر شخصیِ عددی (یا refs) باشه")
+        # فهرست رکوردهای جدول داده، زیر متن بخش (آرشیو سفارش‌ها، دیوار پیشنهادها، آخرین بازی‌ها)
+        ls = n.get("list")
+        if isinstance(ls, dict):
+            tab = str(ls.get("table") or "").strip().lower()
+            if not TAB_RE.match(tab):
+                bad(f"نام جدول فهرست در بخش «{nid}» معتبر نیست (حروف انگلیسی کوچک، عدد و _)")
+            else:
+                _reg_tab(tables, tab, [])
+                o = {"table": tab}
+                if ls.get("scope") in ("all", "shared", True):
+                    o["scope"] = "all"
+                try:
+                    o["limit"] = max(1, min(10, int(ls.get("limit", 5))))
+                except (TypeError, ValueError):
+                    o["limit"] = 5
+                line = str(ls.get("line") or "").strip()[:200]
+                if line:
+                    o["line"] = line
+                emp = str(ls.get("empty") or "").strip()[:200]
+                if emp:
+                    o["empty"] = emp
+                if str(ls.get("order") or "").strip().lower() == "old":
+                    o["order"] = "old"
+                w = clean_rec_cond(ls.get("when"), bad)
+                if w:
+                    o["when"] = w
+                node["list"] = o
+        elif ls:
+            bad(f"فهرست داده‌ی بخش «{nid}» معتبر نیست")
         if (node.get("fields") or node["ask"] or node.get("ai")) and any(b.get("kb") == "reply" for row in rows for b in row):
             for row in rows:                # کیبورد پایین چت فقط برای بخش‌های بدون ask/form/ai
                 for b in row:
@@ -1490,7 +1731,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 bad(f"بخش بعدیِ «{nid}» وجود نداره")
 
         # منطق: اکشن‌ها، هدایت شرطی، متن جایگزین
-        acts = clean_actions(n.get("do"), used, nums, bad, valid)
+        acts = clean_actions(n.get("do"), used, nums, bad, valid, tables)
         if acts:
             node["do"] = acts
         route = []
@@ -1520,6 +1761,15 @@ def sanitize(cfg, strict=False, media=None, warns=None):
             node["join"] = nj
         nodes[nid] = node
 
+    # متغیرهایی که اکشن db_get پر می‌کنه: برای هر فیلد شناخته‌شده‌ی جدول یک متغیر (پیشوند_فیلد)
+    for pfx, tab in tables["gets"]:
+        for f in tables["tabs"].get(tab, ()):
+            v = f"{pfx}_{f}" if pfx else f
+            if VAR_RE.match(v) and v not in BUILTINS:
+                used.add(v)
+    if len(tables["tabs"]) > MAX_TABLES:
+        bad(f"حداکثر {MAX_TABLES} جدول داده می‌تونی داشته باشی")
+
     start = str(cfg.get("start") or "")
     if start not in nodes:
         bad("بخش شروع معتبر نیست")
@@ -1539,7 +1789,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
            "fallback": fallback, "commands": cmds, "nodes": nodes}
 
     # پاداش دعوت: اکشن‌هایی که برای دعوت‌کننده اجرا می‌شن
-    on_ref = clean_actions(cfg.get("on_ref"), used, nums, bad)
+    on_ref = clean_actions(cfg.get("on_ref"), used, nums, bad, None, tables)
     if on_ref:
         out["on_ref"] = on_ref
         rt = str(cfg.get("ref_text") or "").strip()[:500]
@@ -1601,6 +1851,10 @@ def sanitize(cfg, strict=False, media=None, warns=None):
     md = clean_mod(cfg.get("mod"), bad)
     if md:
         out["mod"] = md
+    # فیلدهای شناخته‌شده‌ی هر جدول داده؛ موتور موقع خواندن (db_get) و پاک‌کردن متغیرها ازش استفاده می‌کنه
+    dbf = {t: sorted(fs) for t, fs in tables["tabs"].items() if fs}
+    if dbf:
+        out["dbfields"] = dbf
     return out
 
 # ───── تشخیص زبان (برای اینکه «thinking» و متن‌ها هیچ‌وقت انگلیسی نشن) ─────
@@ -2609,7 +2863,9 @@ def client_cfg(uid=None):
             "max_bots": MAX_BOTS + pk["bots"], "max_nodes": MAX_NODES, "max_prompt": MAX_PROMPT, "daily": DAILY_BONUS + pk["daily"],
             "ref_inviter": REF_INVITER, "ref_invitee": REF_INVITEE, "ref_max": REF_MAX_PER_USER, "ref_on": REF_ON,
             "milestones": REF_MILESTONES, "media_max_mb": MEDIA_MAX_MB, "media_quota_mb": MEDIA_QUOTA_MB + pk["mb"],
-            "max_media": MAX_MEDIA + pk["files"], "disc": pk["disc"], "levels": levels_public()}
+            "max_media": MAX_MEDIA + pk["files"], "disc": pk["disc"], "levels": levels_public(),
+            "games": 1, "db": 1, "ext_api": 1 if EXT_API else 0,
+            "max_ub": MAX_USERBOTS, "ub_ok": 1 if ub_ready() else 0}
 
 
 @app.errorhandler(413)
@@ -3785,6 +4041,188 @@ def who(env):
     return f"{u.get('first_name', '')} (@{u.get('username', '-')}) — {env.uid}"
 
 
+# ───────────────────────── بازی: تاس و قرعه ─────────────────────────
+def act_dice(env, a):
+    """تاس انیمیشنی تلگرام؛ نتیجه بعد از ~۴ ثانیه توی متغیر می‌شینه"""
+    em = a["emoji"]
+    r = tg(env.token, "sendDice", chat_id=env.chat_id, emoji=em)
+    val = 0
+    if r.get("ok"):
+        val = int(((r.get("result") or {}).get("dice") or {}).get("value") or 0)
+        time.sleep(4 if em == "🎰" else 3.5)      # انیمیشن تمام بشه
+    else:
+        val = random.randint(1, DICE_EMOJIS[em])   # خطای شبکه: تاس داخلی
+    env.set(a["var"], str(val))
+
+
+def act_pick(env, a):
+    """انتخاب تصادفی یکی از گزینه‌های «|» جدا"""
+    opts = [x.strip() for x in fill(a.get("value", ""), env).split("|") if x.strip()]
+    env.set(a["var"], random.choice(opts) if opts else "")
+
+
+# ───────────────────────── اتصال به API بیرونی ─────────────────────────
+def act_fetch(env, a):
+    """یه درخواست GET به یه API عمومی می‌زنه و خروجی (فیلد «pick») رو توی متغیر می‌ریزه؛ روزی EXT_API_DAILY بار برای هر ربات"""
+    if not EXT_API:
+        return
+    key = f"fetch:{env.bot_id}:{tehran_day()}"
+    try:
+        if db.extuse.find_one_and_update({"_id": key}, {"$inc": {"n": 1}}, upsert=True).get("n", 1) > EXT_API_DAILY:
+            return
+    except Exception:
+        pass
+    url = fill(a["url"], env)
+    try:
+        host = (urlparse(url).hostname or "").lower()
+        if not url.startswith("https://") or not host or _PRIV_HOST.match(host):
+            return
+        r = requests.get(url, timeout=6, headers={"User-Agent": "TelegramBot"})
+        if r.status_code != 200:
+            return
+        try:
+            data = r.json()
+        except ValueError:
+            data = r.text[:200]
+        val = data
+        for k in (a.get("pick") or "").split("."):
+            if isinstance(val, dict):
+                val = val.get(k)
+            elif isinstance(val, list) and k.lstrip("-").isdigit() and val:
+                i = int(k)
+                val = val[i] if -len(val) <= i < len(val) else None
+            else:
+                val = None
+            if val is None:
+                break
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            val = fmt_num(val)
+        env.set(a["var"], str(val if val is not None else "")[:200])
+    except Exception:
+        log.warning("fetch %s failed", url[:80])
+
+
+# ───────────────────────── جدول داده‌ی رکوردی (پایگاه داده‌ی هر ربات) ─────────────────────────
+def _rec_query(env, a):
+    """فیلتر مونگو برای رکوردهای یک جدول (scope: my یا all) + شرط اختیاری"""
+    q = {"bot": env.bot_id, "t": a["table"]}
+    if a.get("scope") != "all":
+        q["u"] = env.uid
+    w = a.get("when")
+    if w:
+        f, op, v = w["var"], w["op"], fill(w.get("value", ""), env)
+        path = f"d.{f}" if f not in REC_BUILTINS else ("u" if f == "u" else "n")
+        if f in ("n", "u"):
+            v = to_num(v) if to_num(v) is not None else v
+        if op == "empty":
+            q[path] = {"$in": ["", None]}
+        elif op == "filled":
+            q[path] = {"$nin": ["", None]}
+        elif op == "contains":
+            q[path] = {"$regex": re.escape(v), "$options": "i"}
+        else:
+            x = to_num(v)
+            base = x if x is not None else v
+            if op == "==":
+                q[path] = base
+            elif op == "!=":
+                q[path] = {"$ne": base}
+            elif x is not None:
+                q[path] = {">": {"$gt": x}, ">=": {"$gte": x}, "<": {"$lt": x}, "<=": {"$lte": x}}[op]
+            else:
+                q[path] = {">": {"$gt": v}, ">=": {"$gte": v}, "<": {"$lt": v}, "<=": {"$lte": v}}[op]
+    return q
+
+
+def act_db(env, a):
+    """اکشن‌های جدول داده: db_add (رکورد جدید)، db_get (خواندن)، db_set (ویرایش)، db_inc (عدد)، db_del (حذف)"""
+    op = a["op"]
+    if op == "db_add":
+        data = {k: fill(v, env)[:MAX_REC_VAL] for k, v in a["data"].items()}
+        shared = a.get("scope") == "all"
+        cap = MAX_RECORDS_SHARED if shared else MAX_RECORDS_USER
+        q = {"bot": env.bot_id, "t": a["table"]}
+        if not shared:
+            q["u"] = env.uid
+        try:
+            if db.recs.count_documents(q) >= cap:
+                return
+            mx = db.recs.find_one(q, sort=[("n", -1)], projection={"n": 1})
+            n = int((mx or {}).get("n", 0)) + 1
+            db.recs.insert_one({"bot": env.bot_id, "t": a["table"], "u": env.uid,
+                                "n": n, "d": data, "ct": now()})
+        except Exception:
+            log.exception("db_add failed")
+        return
+    if op == "db_get":
+        try:
+            r = db.recs.find_one(_rec_query(env, a), sort=[("n", -1)], projection={"d": 1})
+        except Exception:
+            log.exception("db_get failed")
+            return
+        pfx = a.get("var", "")
+        d = (r or {}).get("d") or {}
+        for f in (env.cfg.get("dbfields") or {}).get(a["table"], []):
+            env.set(f"{pfx}_{f}" if pfx else f, str(d.get(f, "")))
+        return
+    if op == "db_set":
+        data = {f"d.{k}": fill(v, env)[:MAX_REC_VAL] for k, v in a["data"].items()}
+        if not a.get("when") and a.get("scope") != "all":
+            data["u"] = env.uid          # بدون شرط: فقط رکورد خود کاربر ویرایش بشه
+        try:
+            db.recs.update_many(_rec_query(env, a), {"$set": data})
+        except Exception:
+            log.exception("db_set failed")
+        return
+    if op == "db_inc":
+        k, step = a["var"], to_num(fill(a.get("value", "1"), env)) or 1
+        q = _rec_query(env, a)
+        try:
+            r = db.recs.find_one_and_update(q, {"$inc": {f"d.{k}": step}},
+                                            sort=[("n", -1)], projection={"d": 1},
+                                            return_document=ReturnDocument.AFTER)
+            if not r and a.get("upsert"):
+                base = {"bot": env.bot_id, "t": a["table"], "u": env.uid, "ct": now()}
+                mx = db.recs.find_one({"bot": env.bot_id, "t": a["table"]}, sort=[("n", -1)], projection={"n": 1})
+                base["n"] = int((mx or {}).get("n", 0)) + 1
+                base["d"] = {k: step}
+                db.recs.insert_one(base)
+        except Exception:
+            log.exception("db_inc failed")
+        return
+    if op == "db_del":
+        try:
+            db.recs.delete_many(_rec_query(env, a))
+        except Exception:
+            log.exception("db_del failed")
+
+
+def rec_line(env, d, line):
+    """یه رکورد رو با الگوی فیلدها ({n}, {u} و فیلدهای جدول) به یه خط متن تبدیل می‌کنه"""
+    vals = dict(d.get("d") or {})
+    vals["n"] = d.get("n", "")
+    vals["u"] = d.get("u", "")
+    out = str(line)
+    for k, v in vals.items():
+        out = out.replace("{" + k + "}", str(v))
+    return out
+
+
+def list_text(env, ls):
+    """فهرست رکوردهای یک جدول رو زیر متن بخش می‌چینه"""
+    line = ls.get("line") or "#{n}"
+    try:
+        cur = db.recs.find(_rec_query(env, ls), projection={"n": 1, "u": 1, "d": 1})
+        cur = cur.sort("n", 1 if ls.get("order") == "old" else -1).limit(int(ls.get("limit", 5)))
+        rows = [rec_line(env, r, line) for r in cur]
+    except Exception:
+        log.exception("list_text failed")
+        rows = []
+    if not rows:
+        return ls.get("empty") or "هنوز چیزی ثبت نشده."
+    return "\n".join(rows)
+
+
 def run_actions(acts, env):
     for a in acts or []:
         op, name = a.get("op"), a.get("var", "")
@@ -3806,6 +4244,14 @@ def run_actions(acts, env):
             to_owner(env, text=f"{env.cfg.get('name', '')}\n{val}\n\n{who(env)}")
         elif op == "remind":
             schedule_remind(env, a)
+        elif op == "dice":
+            act_dice(env, a)
+        elif op == "pick":
+            act_pick(env, a)
+        elif op.startswith("db_"):
+            act_db(env, a)
+        elif op == "fetch":
+            act_fetch(env, a)
 
 
 def share_url(text, env):
@@ -3915,6 +4361,8 @@ def send_node(env, node_id, edit=None, depth=0):
     text = fill(text, env, True)[:4000]
     if node.get("board"):
         text = (text[:3000] + "\n\n" + _html.escape(board_text(env, node["board"]), quote=False))[:4000]
+    if node.get("list"):
+        text = (text[:3000] + "\n\n" + _html.escape(list_text(env, node["list"]), quote=False))[:4000]
     kb = keyboard(node, node_id, env)                      # دکمه‌های شیشه‌ای
     rk = reply_markup(node, env)                           # کیبورد پایین چت (None = ندارد)
     if not rk:
@@ -6343,6 +6791,639 @@ def api_admin_card_decide(uid, oid):
     return jsonify(ok=True)
 
 
+# ───────────────────────── یوزربات (اتصال اکانت شخصی تلگرام) ─────────────────────────
+# کاربر با شماره‌ی خودش وارد می‌شه (کد تلگرام + رمز دومرحله‌ای)، سشن رمزنگاری‌شده ذخیره می‌شه و یک «دستیار» روی همون اکانت
+# کار می‌کنه: پاسخ خودکار با کلمه‌ی کلیدی، پیام غیبت، پاسخ هوشمند (کسر از توکن) و دستورهای شخصی (.ping .time ...).
+# هیچ کدی اجرا نمی‌شه؛ همه‌چی کانفیگ JSON اعتبارسنجی‌شده‌ست. ارسال همگانی/جوین/اد کردن عمداً وجود نداره.
+# نیازمندی: pip install telethon  |  Environment: TG_API_ID TG_API_HASH (از my.telegram.org) MAX_USERBOTS USERBOTS(۰=خاموش)
+try:
+    from telethon import TelegramClient, events, errors as tl_err
+    from telethon.sessions import StringSession
+    UB_LIB = True
+except Exception:   # telethon نصب نیست؛ بقیه‌ی برنامه عادی کار می‌کنه
+    UB_LIB = False
+
+UB_ON        = os.environ.get("USERBOTS", "1").strip() != "0"
+TG_API_ID    = _int("TG_API_ID", 0)
+TG_API_HASH  = os.environ.get("TG_API_HASH", "").strip()
+MAX_USERBOTS = _int("MAX_USERBOTS", 2)           # سقف یوزربات هر کاربر
+UB_HOURLY    = _int("UB_HOURLY_REPLIES", 120)     # سقف پاسخ خودکار در ساعت برای هر یوزربات (جلوگیری از اسپم و ریپورت)
+UB_MAX_RULES = 30
+UB_DEV = dict(device_model="Azadi Userbot", system_version="Linux", app_version="1.0", lang_code="fa", system_lang_code="fa")
+
+_ub_lp, _ub_lp_lock = None, threading.Lock()
+_ub_pend = {}      # uid -> ورود نیمه‌کاره (کلاینت، شماره، هش کد)
+_ub_live = {}      # ubid -> وضعیت زنده‌ی یوزربات روشن (کلاینت، کانفیگ، حافظه‌ی کوتاه)
+_UB_ERR = {}
+if UB_LIB:
+    _UB_ERR = {
+        tl_err.PhoneNumberInvalidError: "شماره‌ی تلفن درست نیست. با کد کشور بنویس، مثل 989121234567+",
+        tl_err.PhoneNumberBannedError: "این شماره توسط تلگرام مسدود شده",
+        tl_err.PhoneNumberFloodError: "برای این شماره درخواست زیادی ثبت شده، چند ساعت بعد دوباره امتحان کن",
+        tl_err.PhoneCodeInvalidError: "کد اشتباهه. دوباره از پیام تلگرام کپی کن",
+        tl_err.PhoneCodeExpiredError: "کد منقضی شده. دوباره شماره رو بفرست تا کد جدید بیاد",
+        tl_err.PhoneCodeEmptyError: "کد را وارد کن",
+        tl_err.PasswordHashInvalidError: "رمز دومرحله‌ای اشتباهه",
+        tl_err.ApiIdInvalidError: "API ID / API Hash معتبر نیست",
+    }
+
+
+def ub_loop():
+    """یک لوپ asyncio جدا توی یک ترد (برنامه‌ی اصلی Flask همگامه)"""
+    global _ub_lp
+    with _ub_lp_lock:
+        if _ub_lp is None:
+            lp = asyncio.new_event_loop()
+            threading.Thread(target=lp.run_forever, daemon=True, name="userbots").start()
+            _ub_lp = lp
+        return _ub_lp
+
+
+def ub_run(coro, timeout=60):
+    f = asyncio.run_coroutine_threadsafe(coro, ub_loop())
+    try:
+        return f.result(timeout)
+    except BaseException:
+        f.cancel()          # اگه تلگرام جواب نداد، کار نیمه‌کاره توی لوپ جا نمی‌مونه
+        raise
+
+
+def ub_err(e):
+    if isinstance(e, tl_err.FloodWaitError):
+        s = int(getattr(e, "seconds", 60))
+        return f"تلگرام موقتاً محدود کرده؛ {s // 60 + 1} دقیقه‌ی دیگه امتحان کن"
+    for k, v in _UB_ERR.items():
+        if isinstance(e, k):
+            return v
+    if isinstance(e, (asyncio.TimeoutError, TimeoutError, ConnectionError, OSError)):
+        return "ارتباط با تلگرام برقرار نشد، دوباره امتحان کن"
+    log.warning("userbot error: %r", e)
+    return "خطا در ارتباط با تلگرام، دوباره امتحان کن"
+
+
+def ub_creds(doc=None):
+    if doc and doc.get("api_id") and doc.get("api_hash_enc"):
+        return int(doc["api_id"]), dec(doc["api_hash_enc"])
+    return TG_API_ID, TG_API_HASH
+
+
+def ub_default_cfg():
+    return {"who": "all", "away": {"on": False, "text": "سلام {name} 👋 الان در دسترس نیستم، به‌محض اینکه آنلاین شدم جواب می‌دم.", "gap_h": 6},
+            "rules": [], "ai": {"on": False, "prompt": "", "daily": 20, "disclose": True}, "cmds": {"on": True}}
+
+
+def ub_clean_cfg(c):
+    d, c = ub_default_cfg(), (c if isinstance(c, dict) else {})
+    out = {"who": c.get("who") if c.get("who") in ("all", "contacts", "others") else "all"}
+    a = c.get("away") if isinstance(c.get("away"), dict) else {}
+    out["away"] = {"on": bool(a.get("on")), "text": str(a.get("text") or d["away"]["text"])[:1000].strip() or d["away"]["text"],
+                   "gap_h": max(1, min(72, int(a.get("gap_h") or 6)))}
+    rules = []
+    for r in (c.get("rules") if isinstance(c.get("rules"), list) else [])[:UB_MAX_RULES]:
+        if not isinstance(r, dict):
+            continue
+        kw = r.get("kw")
+        kw = [str(k).strip()[:60] for k in (kw if isinstance(kw, list) else re.split(r"[,،\n]", str(kw or ""))) if str(k).strip()][:8]
+        text = str(r.get("text") or "").strip()[:1000]
+        if kw and text:
+            rules.append({"kw": kw, "mode": r.get("mode") if r.get("mode") in ("has", "exact", "start") else "has", "text": text, "on": r.get("on") is not False})
+    out["rules"] = rules
+    ai = c.get("ai") if isinstance(c.get("ai"), dict) else {}
+    out["ai"] = {"on": bool(ai.get("on")), "prompt": str(ai.get("prompt") or "").strip()[:1500],
+                 "daily": max(1, min(100, int(ai.get("daily") or 20))), "disclose": ai.get("disclose") is not False}
+    out["cmds"] = {"on": (c.get("cmds") or {}).get("on") is not False if isinstance(c.get("cmds"), dict) else True}
+    return out
+
+
+def ub_mask(phone):
+    p = re.sub(r"\D", "", phone or "")
+    return f"+{p[:2]}•••••{p[-3:]}" if len(p) > 6 else "•••"
+
+
+def ub_public(d):
+    ubid = str(d["_id"])
+    live = ubid in _ub_live
+    st = "running" if live else ("revoked" if d.get("revoked") else "stopped")
+    return {"id": ubid, "name": d.get("tg_name", ""), "username": d.get("tg_user", ""), "phone": d.get("phone", ""), "status": st,
+            "active": bool(d.get("active")), "config": d.get("config") or ub_default_cfg(),
+            "stats": {"in": int(d.get("n_in", 0)), "out": int(d.get("n_out", 0)), "ai": int(d.get("n_ai", 0))},
+            "log": list(reversed(d.get("log") or []))[:20], "created": aware(d["created"]).isoformat() if d.get("created") else ""}
+
+
+def get_ub(ubid, owner):
+    try:
+        return db.userbots.find_one({"_id": ObjectId(ubid), "owner": owner})
+    except (InvalidId, TypeError):
+        return None
+
+
+def ub_log(ubid, kind, who="", inc="n_out"):
+    try:
+        db.userbots.update_one({"_id": ObjectId(ubid)}, {"$push": {"log": {"$each": [{"t": now().isoformat(), "k": kind, "w": str(who)[:40]}], "$slice": -30}},
+                                                           "$inc": {inc: 1}, "$set": {"last": naive()}})
+    except Exception:
+        pass
+
+
+def ub_fill(text, name=""):
+    t = now() + timedelta(hours=3, minutes=30)
+    jy, jm, jd = to_jalali(t.year, t.month, t.day)
+    return (text.replace("{name}", name or "دوست من").replace("{time}", t.strftime("%H:%M")).replace("{date}", f"{jy}/{jm:02d}/{jd:02d}"))[:3800]
+
+
+def ub_match(rule, text):
+    t = text.lower()
+    for k in rule["kw"]:
+        k = k.lower()
+        if (rule["mode"] == "exact" and t == k) or (rule["mode"] == "start" and t.startswith(k)) or (rule["mode"] == "has" and k in t):
+            return True
+    return False
+
+
+def ub_ai_sync(owner, ubid, ai, name, hist):
+    """پاسخ هوشمند (توی ترد جدا): هزینه از توکن صاحب اکانت، سقف روزانه برای هر چت. خروجی: متن یا None"""
+    if not ai_precheck(owner):
+        if db.aiuse.find_one_and_update({"_id": f"ub:{ubid}:warn:{tehran_day()}"}, {"$inc": {"n": 1}}, upsert=True,
+                                         return_document=ReturnDocument.AFTER)["n"] == 1:
+            tg(MOTHER_TOKEN, "sendMessage", chat_id=owner, text="توکن‌هات تموم شده و پاسخ هوشمند یوزربات فعلاً کار نمی‌کنه.",
+               reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": BASE_URL}}]]})
+        return None
+    sysm = ("You answer private Telegram messages on behalf of the account owner while they are away. Reply briefly (1-3 sentences), natural, polite, "
+            "in the sender's language (default Persian). Never invent facts, prices, promises or appointments; if unsure say the owner will answer later. "
+            "Never ask for or repeat passwords, login codes or card numbers. If the sender sincerely asks whether you are a human or an AI, say honestly that you are the owner's automatic assistant.\n"
+            f"Owner instructions: {ai.get('prompt') or 'Be a friendly assistant.'}\nSender first name: {name or '-'}")
+    reply, (pt, ct) = llm_post([{"role": "system", "content": sysm}, *hist], AI_NODE_MAX_TOKENS, temperature=0.6, timeout=60, model=AI_CHAT_MODEL)
+    ai_postcharge(owner, ubid, pt, ct)
+    reply = scrub_foreign(reply) if has_foreign(reply) and not has_foreign(hist[-1]["content"]) else reply
+    reply = reply.strip()[:1500]
+    return ("🤖 " + reply) if (reply and ai.get("disclose", True)) else (reply or None)
+
+
+async def _ub_db(fn, *a):
+    return await asyncio.get_running_loop().run_in_executor(None, fn, *a)
+
+
+async def _ub_handle_in(ubid, st, ev):
+    try:
+        cfg, c = st["cfg"], st["c"]
+        if not ev.is_private or ev.out or ev.message.action:
+            return
+        s = await ev.get_sender()
+        if not s or getattr(s, "bot", False) or s.id in (st["me"].id, 777000):
+            return
+        who = cfg.get("who", "all")
+        isc = bool(getattr(s, "contact", False))
+        if (who == "contacts" and not isc) or (who == "others" and isc):
+            return
+        text = (ev.message.raw_text or "").strip()
+        name = (getattr(s, "first_name", "") or "").strip()
+        await _ub_db(lambda: db.userbots.update_one({"_id": ObjectId(ubid)}, {"$inc": {"n_in": 1}}))
+        t0 = time.time()
+        sent = st["sent"]
+        while sent and t0 - sent[0] > 3600:
+            sent.popleft()
+        if len(sent) >= UB_HOURLY:
+            return
+        chat, kind, out = ev.chat_id, "", ""
+        ic = await ev.get_input_chat()
+        for i, r in enumerate(cfg.get("rules", [])):
+            if r.get("on", True) and text and ub_match(r, text):
+                if t0 - st["cool"].get((chat, i), 0) < 20:
+                    return
+                st["cool"][(chat, i)] = t0
+                kind, out = f"قانون {i + 1}", ub_fill(r["text"], name)
+                break
+        if not out and cfg["ai"]["on"] and text:
+            h = st["hist"].setdefault(chat, [])
+            h.append({"role": "user", "content": text[:800]})
+            del h[:-6]
+            day = tehran_day()
+            n = await _ub_db(lambda: db.aiuse.find_one_and_update({"_id": f"ub:{ubid}:{chat}:{day}"}, {"$inc": {"n": 1}}, upsert=True,
+                                                                  return_document=ReturnDocument.AFTER)["n"])
+            if n <= cfg["ai"]["daily"]:
+                async with c.action(ic, "typing"):
+                    try:
+                        out = await _ub_db(ub_ai_sync, st["owner"], ubid, cfg["ai"], name, list(h))
+                    except Exception:
+                        log.exception("userbot ai failed")
+                        out = ""
+                if out:
+                    h.append({"role": "assistant", "content": out[:800]})
+                    del h[:-6]
+                    kind = "پاسخ هوشمند"
+        if not out and cfg["away"]["on"]:
+            k, gap = f"{ubid}:{chat}", cfg["away"]["gap_h"] * 3600
+
+            def _gate():
+                d = db.ubaway.find_one({"_id": k})
+                if d and age_sec(d["t"]) < gap:
+                    return False
+                db.ubaway.update_one({"_id": k}, {"$set": {"t": naive()}}, upsert=True)
+                return True
+            if await _ub_db(_gate):
+                kind, out = "پیام غیبت", ub_fill(cfg["away"]["text"], name)
+        if not out:
+            return
+        await asyncio.sleep(random.uniform(1.2, 3.2))     # شبیه آدم؛ و فاصله از محدودیت تلگرام
+        await ev.respond(out)
+        sent.append(time.time())
+        await _ub_db(ub_log, ubid, kind, name, "n_ai" if kind == "پاسخ هوشمند" else "n_out")
+    except Exception as e:
+        log.warning("userbot in-handler: %r", e)
+
+
+async def _ub_handle_out(ubid, st, ev):
+    """دستورهای شخصی: صاحب اکانت پیام خودش رو با نقطه شروع می‌کنه؛ پیام ویرایش می‌شه و نتیجه همون‌جا میاد"""
+    try:
+        if not st["cfg"]["cmds"]["on"]:
+            return
+        t = (ev.message.raw_text or "").strip()
+        if not t.startswith("."):
+            return
+        cmd = t.split()[0].lower()
+        n = now() + timedelta(hours=3, minutes=30)
+        jy, jm, jd = to_jalali(n.year, n.month, n.day)
+        if cmd == ".ping":
+            t0 = time.time()
+            await ev.edit("🏓 pong")
+            await ev.edit(f"🏓 pong · {int((time.time() - t0) * 1000)}ms")
+        elif cmd == ".time":
+            await ev.edit(f"🕒 {n.strftime('%H:%M:%S')}\n📅 {jy}/{jm:02d}/{jd:02d}")
+        elif cmd == ".id":
+            r = await ev.get_reply_message()
+            await ev.edit(f"🆔 چت: `{ev.chat_id}`" + (f"\n👤 کاربر پیام ریپلای‌شده: `{r.sender_id}`" if r and r.sender_id else ""))
+        elif cmd == ".help":
+            await ev.edit("📋 دستورها:\n`.ping` سرعت\n`.time` ساعت و تاریخ\n`.id` شناسه‌ی چت (روی پیام ریپلای کن تا شناسه‌ی کاربر هم بیاد)")
+        else:
+            return
+        ub_log(ubid, f"دستور {cmd}", "", "n_out")
+    except Exception as e:
+        log.warning("userbot out-handler: %r", e)
+
+
+async def _ub_a_stop(ubid):
+    st = _ub_live.pop(ubid, None)
+    if st:
+        try:
+            await st["c"].disconnect()
+        except Exception:
+            pass
+
+
+async def _ub_a_start(d):
+    ubid = str(d["_id"])
+    await _ub_a_stop(ubid)
+    api = ub_creds(d)
+    c = TelegramClient(StringSession(dec(d["session_enc"])), api[0], api[1], **UB_DEV)
+    await c.connect()
+    if not await c.is_user_authorized():
+        await c.disconnect()
+        raise PermissionError("revoked")
+    st = {"c": c, "owner": d["owner"], "cfg": ub_clean_cfg(d.get("config")), "cool": {}, "sent": deque(), "hist": {}, "me": await c.get_me()}
+
+    async def _in(ev): await _ub_handle_in(ubid, st, ev)
+    async def _out(ev): await _ub_handle_out(ubid, st, ev)
+    c.add_event_handler(_in, events.NewMessage(incoming=True))
+    c.add_event_handler(_out, events.NewMessage(outgoing=True))
+    _ub_live[ubid] = st
+
+
+def ub_revoked(d):
+    """سشن از تلگرام بسته شده (کاربر Terminate کرده یا اکانت حذف شده): خاموش و خبر به صاحب"""
+    ubid = str(d["_id"])
+    try:
+        ub_run(_ub_a_stop(ubid), 20)
+    except Exception:
+        pass
+    db.userbots.update_one({"_id": d["_id"]}, {"$set": {"active": False, "revoked": True}})
+    tg(MOTHER_TOKEN, "sendMessage", chat_id=d["owner"], text=f"دسترسی یوزربات «{d.get('tg_name', '')}» از تلگرام قطع شده (سشن بسته شد). از تب یوزربات دوباره وصلش کن.")
+
+
+def ub_start(d):
+    """روشن کردن؛ خروجی: (True، None) یا (False، پیام)"""
+    try:
+        ub_run(_ub_a_start(d), 45)
+        db.userbots.update_one({"_id": d["_id"]}, {"$set": {"active": True, "revoked": False}})
+        return True, None
+    except PermissionError:
+        ub_revoked(d)
+        return False, "دسترسی این اکانت از تلگرام قطع شده؛ دوباره وصلش کن"
+    except Exception as e:
+        if UB_LIB and isinstance(e, (tl_err.AuthKeyUnregisteredError, tl_err.UserDeactivatedError, tl_err.UserDeactivatedBanError,
+                                     tl_err.SessionRevokedError, tl_err.SessionExpiredError)):
+            ub_revoked(d)
+            return False, "دسترسی این اکانت از تلگرام قطع شده؛ دوباره وصلش کن"
+        return False, ub_err(e)
+
+
+def ub_stop(d, keep_active=False):
+    try:
+        ub_run(_ub_a_stop(str(d["_id"])), 20)
+    except Exception:
+        pass
+    if not keep_active:
+        db.userbots.update_one({"_id": d["_id"]}, {"$set": {"active": False}})
+
+
+async def _ub_a_drop(uid):
+    p = _ub_pend.pop(uid, None)
+    if p:
+        try:
+            await p["c"].disconnect()
+        except Exception:
+            pass
+
+
+async def _ub_a_send_code(uid, phone, api):
+    await _ub_a_drop(uid)
+    c = TelegramClient(StringSession(), api[0], api[1], connection_retries=1, timeout=15, **UB_DEV)
+    ok = False
+    try:
+        await asyncio.wait_for(c.connect(), 20)
+        r = await asyncio.wait_for(c.send_code_request(phone), 20)
+        _ub_pend[uid] = {"c": c, "phone": phone, "hash": r.phone_code_hash, "api": api, "own": api != (TG_API_ID, TG_API_HASH), "t": time.time()}
+        ok = True
+    finally:
+        if not ok:
+            await c.disconnect()
+
+
+async def _ub_a_finish(uid):
+    p = _ub_pend.pop(uid)
+    c = p["c"]
+    try:
+        me = await c.get_me()
+        sess = c.session.save()
+    finally:
+        await c.disconnect()
+    return me, sess, p
+
+
+async def _ub_a_code(uid, code):
+    p = _ub_pend[uid]
+    try:
+        await p["c"].sign_in(p["phone"], code, phone_code_hash=p["hash"])
+    except tl_err.SessionPasswordNeededError:
+        return None
+    return await _ub_a_finish(uid)
+
+
+async def _ub_a_pw(uid, pw):
+    await _ub_pend[uid]["c"].sign_in(password=pw)
+    return await _ub_a_finish(uid)
+
+
+def ub_ready():
+    return UB_ON and UB_LIB
+
+
+def ub_pending(uid):
+    p = _ub_pend.get(uid)
+    if p and time.time() - p["t"] > 600:
+        try:
+            ub_run(_ub_a_drop(uid), 15)
+        except Exception:
+            pass
+        return None
+    return p
+
+
+def ub_attach(uid, res):
+    """بعد از ورود موفق: ساخت (یا به‌روزرسانی) یوزربات و روشن کردن"""
+    me, sess, p = res
+    fields = {"owner": uid, "tg_id": me.id, "tg_name": " ".join(x for x in (me.first_name, me.last_name) if x)[:60], "tg_user": me.username or "",
+              "phone": ub_mask(p["phone"]), "session_enc": enc(sess), "revoked": False, "updated": naive()}
+    if p["own"]:
+        fields.update(api_id=int(p["api"][0]), api_hash_enc=enc(p["api"][1]))
+    old = db.userbots.find_one({"owner": uid, "tg_id": me.id})
+    if old:
+        db.userbots.update_one({"_id": old["_id"]}, {"$set": fields})
+        d = db.userbots.find_one({"_id": old["_id"]})
+    else:
+        fields.update(config=ub_default_cfg(), active=True, created=naive(), n_in=0, n_out=0, n_ai=0, log=[])
+        d = db.userbots.find_one({"_id": db.userbots.insert_one(fields).inserted_id})
+    ok, err = ub_start(d)
+    return db.userbots.find_one({"_id": d["_id"]}), err
+
+
+def ub_loop_health():
+    """هر ۵ دقیقه: سشن‌های بسته‌شده رو خاموش می‌کنه و ورودهای نیمه‌کاره‌ی قدیمی رو پاک می‌کنه"""
+    while True:
+        time.sleep(300)
+        try:
+            for uid in [u for u, p in list(_ub_pend.items()) if time.time() - p["t"] > 600]:
+                ub_run(_ub_a_drop(uid), 15)
+            for ubid, st in list(_ub_live.items()):
+                try:
+                    ok = ub_run(st["c"].is_user_authorized(), 30)
+                except Exception as e:
+                    ok = not isinstance(e, (tl_err.AuthKeyUnregisteredError, tl_err.UserDeactivatedError, tl_err.UserDeactivatedBanError,
+                                            tl_err.SessionRevokedError, tl_err.SessionExpiredError))
+                if not ok:
+                    d = db.userbots.find_one({"_id": ObjectId(ubid)})
+                    if d:
+                        ub_revoked(d)
+        except Exception:
+            log.exception("userbot health")
+
+
+def ub_boot():
+    """بعد از ری‌استارت سرور همه‌ی یوزربات‌های روشن دوباره وصل می‌شن (فقط روی یک نمونه‌ی سرور اجرا کن)"""
+    time.sleep(6)
+    for d in list(db.userbots.find({"active": True})):
+        try:
+            ub_start(d)
+        except Exception:
+            log.exception("userbot boot")
+        time.sleep(0.6)
+    ub_loop_health()
+
+
+def ub_guard(uid):
+    if not ub_ready():
+        return jsonify(error="بخش یوزربات روی این سرور فعال نیست"), 503
+    if not rate_ok(f"ub:{uid}", 40, 600):
+        return jsonify(error="تعداد درخواست زیاد بود، چند دقیقه بعد امتحان کن"), 429
+    return None
+
+
+@app.get("/api/userbots")
+@authed
+def api_ub_list(uid):
+    items = [ub_public(d) for d in db.userbots.find({"owner": uid}).sort("created", 1)]
+    return jsonify(items=items, max=MAX_USERBOTS, ok=ub_ready(), own_api=not (TG_API_ID and TG_API_HASH), pending=bool(ub_pending(uid)),
+                   cost=AI_MSG_COST, per=ai_per(uid))
+
+
+@app.post("/api/userbots/login/start")
+@authed
+def api_ub_login_start(uid):
+    bad = ub_guard(uid)
+    if bad:
+        return bad
+    if not rate_ok(f"ubl:{uid}", 5, 3600):
+        return jsonify(error="درخواست کد زیاد بود، یک ساعت بعد دوباره امتحان کن"), 429
+    j = request.get_json(silent=True) or {}
+    phone = re.sub(r"[\s\-()]", "", str(j.get("phone", "")).translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")))
+    if phone.startswith("00"):
+        phone = "+" + phone[2:]
+    if phone.startswith("09") and len(phone) == 11:
+        phone = "+98" + phone[1:]
+    if not phone.startswith("+"):
+        phone = "+" + phone
+    if not re.fullmatch(r"\+\d{8,15}", phone):
+        return jsonify(error="شماره‌ی تلفن درست نیست. با کد کشور بنویس، مثل 989121234567+"), 400
+    api = (TG_API_ID, TG_API_HASH)
+    if not (TG_API_ID and TG_API_HASH):
+        try:
+            api = (int(j.get("api_id")), str(j.get("api_hash", "")).strip())
+        except (TypeError, ValueError):
+            api = (0, "")
+        if api[0] <= 0 or not re.fullmatch(r"[0-9a-f]{32}", api[1]):
+            return jsonify(error="API ID و API Hash را از my.telegram.org بگیر و وارد کن"), 400
+    if db.userbots.count_documents({"owner": uid}) >= MAX_USERBOTS and not db.userbots.find_one({"owner": uid, "phone": ub_mask(phone)}):
+        return jsonify(error=f"حداکثر {MAX_USERBOTS} یوزربات می‌تونی داشته باشی"), 403
+    try:
+        ub_run(_ub_a_send_code(uid, phone, api), 40)
+    except Exception as e:
+        return jsonify(error=ub_err(e)), 400
+    return jsonify(ok=True, step="code")
+
+
+@app.post("/api/userbots/login/code")
+@authed
+def api_ub_login_code(uid):
+    bad = ub_guard(uid)
+    if bad:
+        return bad
+    if not ub_pending(uid):
+        return jsonify(error="زمان ورود تموم شده، از اول شروع کن", reset=True), 410
+    code = re.sub(r"\D", "", str((request.get_json(silent=True) or {}).get("code", "")).translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")))
+    if not 4 <= len(code) <= 8:
+        return jsonify(error="کد را درست وارد کن"), 400
+    try:
+        res = ub_run(_ub_a_code(uid, code), 40)
+    except Exception as e:
+        if UB_LIB and isinstance(e, (tl_err.PhoneCodeExpiredError,)):
+            ub_run(_ub_a_drop(uid), 15)
+        return jsonify(error=ub_err(e)), 400
+    if res is None:
+        return jsonify(ok=True, step="password")
+    d, err = ub_attach(uid, res)
+    return jsonify(ok=True, step="done", item=ub_public(d), warn=err)
+
+
+@app.post("/api/userbots/login/password")
+@authed
+def api_ub_login_pw(uid):
+    bad = ub_guard(uid)
+    if bad:
+        return bad
+    if not ub_pending(uid):
+        return jsonify(error="زمان ورود تموم شده، از اول شروع کن", reset=True), 410
+    pw = str((request.get_json(silent=True) or {}).get("password", ""))
+    if not pw or len(pw) > 256:
+        return jsonify(error="رمز را وارد کن"), 400
+    try:
+        res = ub_run(_ub_a_pw(uid, pw), 40)
+    except Exception as e:
+        return jsonify(error=ub_err(e)), 400
+    d, err = ub_attach(uid, res)
+    return jsonify(ok=True, step="done", item=ub_public(d), warn=err)
+
+
+@app.post("/api/userbots/login/cancel")
+@authed
+def api_ub_login_cancel(uid):
+    if UB_LIB:
+        try:
+            ub_run(_ub_a_drop(uid), 15)
+        except Exception:
+            pass
+    return jsonify(ok=True)
+
+
+@app.get("/api/userbots/<ubid>")
+@authed
+def api_ub_get(uid, ubid):
+    d = get_ub(ubid, uid)
+    return jsonify(item=ub_public(d)) if d else (jsonify(error="یوزربات پیدا نشد"), 404)
+
+
+@app.put("/api/userbots/<ubid>/config")
+@authed
+def api_ub_config(uid, ubid):
+    d = get_ub(ubid, uid)
+    if not d:
+        return jsonify(error="یوزربات پیدا نشد"), 404
+    cfg = ub_clean_cfg((request.get_json(silent=True) or {}).get("config"))
+    db.userbots.update_one({"_id": d["_id"]}, {"$set": {"config": cfg, "updated": naive()}})
+    st = _ub_live.get(ubid)
+    if st:
+        st["cfg"] = cfg
+    return jsonify(item=ub_public(db.userbots.find_one({"_id": d["_id"]})))
+
+
+@app.post("/api/userbots/<ubid>/start")
+@authed
+def api_ub_start(uid, ubid):
+    bad = ub_guard(uid)
+    if bad:
+        return bad
+    d = get_ub(ubid, uid)
+    if not d:
+        return jsonify(error="یوزربات پیدا نشد"), 404
+    ok, err = ub_start(d)
+    if not ok:
+        return jsonify(error=err), 400
+    return jsonify(item=ub_public(db.userbots.find_one({"_id": d["_id"]})))
+
+
+@app.post("/api/userbots/<ubid>/stop")
+@authed
+def api_ub_stop(uid, ubid):
+    d = get_ub(ubid, uid)
+    if not d:
+        return jsonify(error="یوزربات پیدا نشد"), 404
+    ub_stop(d)
+    return jsonify(item=ub_public(db.userbots.find_one({"_id": d["_id"]})))
+
+
+@app.delete("/api/userbots/<ubid>")
+@authed
+def api_ub_delete(uid, ubid):
+    d = get_ub(ubid, uid)
+    if not d:
+        return jsonify(error="یوزربات پیدا نشد"), 404
+
+    async def _bye():                         # سشن رو از خود تلگرام هم می‌بندیم (Log out) تا هیچ دسترسی‌ای نمونه
+        st = _ub_live.pop(ubid, None)
+        c = st["c"] if st else None
+        try:
+            if c is None and UB_LIB:
+                api = ub_creds(d)
+                c = TelegramClient(StringSession(dec(d["session_enc"])), api[0], api[1], **UB_DEV)
+                await c.connect()
+            if c is not None:
+                await c.log_out()
+        except Exception:
+            pass
+        try:
+            if c is not None:
+                await c.disconnect()
+        except Exception:
+            pass
+    if UB_LIB:
+        try:
+            ub_run(_bye(), 30)
+        except Exception:
+            pass
+    db.userbots.delete_one({"_id": d["_id"]})
+    db.ubaway.delete_many({"_id": {"$regex": f"^{ubid}:"}})
+    db.aiuse.delete_many({"_id": {"$regex": f"^ub:{ubid}:"}})
+    return jsonify(ok=True)
+
+
 @app.post("/mother")
 def mother_hook():
     if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != MOTHER_SECRET:
@@ -6402,6 +7483,8 @@ recover_jobs()
 setup_mother()
 if SCHED_ON:
     threading.Thread(target=sched_loop, daemon=True, name="sched").start()
+if ub_ready():
+    threading.Thread(target=ub_boot, daemon=True, name="ub-boot").start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
