@@ -590,7 +590,7 @@ function renderAccount(){
   const tu = tg?.initDataUnsafe?.user || {}, me = S.me || {};
   const u = {first_name: tu.first_name || me.name || "", last_name: tu.first_name ? tu.last_name : "", username: tu.username || me.username || "", photo_url: tu.photo_url};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const tabs = [["wallet", "توکن"], ["plan", "اشتراک"], ["quests", "ماموریت‌ها" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
+  const tabs = [["wallet", "توکن"], ["plan", "ارتقا"], ["quests", "پاداش" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
   const body = ({wallet: tabWallet, plan: tabPlan, quests: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
