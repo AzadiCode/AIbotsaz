@@ -118,9 +118,9 @@ try:
 except ValueError:
     PACKS = []
 if not PACKS:   # بسته‌های خرید با Telegram Stars
-    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 50},
-             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 150},
-             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 380}]
+    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 30},
+             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 80},
+             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 220}]
 
 # رسانه
 MEDIA_MAX_MB   = _int("MEDIA_MAX_MB", 15)       # سقف حجم هر فایل
@@ -130,8 +130,8 @@ MAX_MEDIA      = _int("MAX_MEDIA", 60)          # سقف تعداد فایل ه�
 # اشتراک (جایگزین سیستم سطح): سه پلن ساده — رایگان، پرمیوم، پرو.
 # قیمت‌ها به ستاره‌ی تلگرام و مدت به روز است؛ با Environment قابل تنظیم‌اند.
 SUB_DAYS           = _int("SUB_DAYS", 30)          # مدت هر دوره‌ی اشتراک پولی (روز)
-SUB_PREMIUM_STARS  = _int("SUB_PREMIUM_STARS", 150)
-SUB_PRO_STARS      = _int("SUB_PRO_STARS", 350)
+SUB_PREMIUM_STARS  = _int("SUB_PREMIUM_STARS", 90)
+SUB_PRO_STARS      = _int("SUB_PRO_STARS", 190)
 SUB_PREMIUM_TOKENS = _int("SUB_PREMIUM_TOKENS", 200 * TOKEN_SCALE)   # هدیه‌ی توکنیِ فعال‌سازی پرمیوم
 SUB_PRO_TOKENS     = _int("SUB_PRO_TOKENS", 600 * TOKEN_SCALE)       # هدیه‌ی توکنیِ فعال‌سازی پرو
 
