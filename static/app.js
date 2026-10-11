@@ -720,21 +720,29 @@ function questsHTML(){
   const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
   return `<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div><p class="muted mt">هر مرحله فقط پاداش توکنی می‌دهد.</p>`;
 }
-/* ── تب اشتراک: پرمیوم / پرو ── */
+/* ── تب اشتراک: FREE / PREMIUM / PRO ── */
 function tabPlan(){
   const cur = (S.plan && S.plan.id) || "free";
   const cards = (S.cfg.plans || []).map(p => {
     const isCur = p.id === cur, paid = p.id !== "free";
-    const chips = [...(p.tokens ? [`<i class="t">${N("+" + p.tokens)} توکن هدیه‌ی فعال‌سازی</i>`] : []), ...(p.perks || []).map(x => `<i>${digitsHTML(x)}</i>`)].join("");
-    return `<div class="plan${isCur ? " cur" : ""}"><div class="ph2"><b>${esc(p.title)}</b>${isCur ? '<span class="tag st">فعال</span>' : ""}</div>
-      ${paid ? `<div class="ppr">${N(p.stars)} ستاره <small>· ${N(p.days)} روز</small></div>` : `<div class="ppr">رایگان <small>· همیشه</small></div>`}
-      ${chips ? `<div class="chs">${chips}</div>` : ""}
+    const cp = S.card?.on ? S.card.prices?.[p.id] : 0;
+    const inner = isCur
+      ? `<div class="curline">✨ قابلیت‌های بیشتر فعال است</div>`
+      : `<div class="chs">${(p.perks || []).map(x => `<i><b>✓</b> ${digitsHTML(x)}</i>`).join("")}</div>`;
+    return `<div class="plan ${esc(p.id)}${isCur ? " cur" : ""}">${p.id === "pro" && !isCur ? '<span class="pbadge">پیشنهاد ویژه</span>' : ""}
+      <div class="ph2"><b class="pname" dir="ltr">${esc(p.title)}</b>${isCur ? '<span class="tag st">فعال</span>' : ""}</div>
+      ${paid ? `<div class="ppr">${N(p.stars)} <small>⭐</small> <small>· ${N(p.days)} روز</small></div>
+        ${p.tokens ? `<div class="pgift">${N("+" + p.tokens)} توکن هدیه‌ی فعال‌سازی</div>` : ""}`
+        : `<div class="ppr free">رایگان <small>· همیشه</small></div>`}
+      ${inner}
       ${S.plan && isCur && S.plan.exp ? `<p class="muted mt">${N(S.plan.left)} روز باقی مانده</p>` : ""}
-      ${paid && !isCur ? `<button class="b sm mt" data-a="sub" data-id="${esc(p.id)}">فعال‌سازی با استارز</button>` : ""}</div>`;
+      ${paid && !isCur ? `<div class="pbtns"><button class="b sm" data-a="sub" data-id="${esc(p.id)}">فعال‌سازی با استارز</button>${cp ? `<button class="b o sm" data-a="subcard" data-id="${esc(p.id)}">کارت‌به‌کارت</button>` : ""}</div>` : ""}</div>`;
   }).join("");
   return `<div class="sec"><h2>اشتراک</h2><span class="muted">ایموجی پرمیوم، دکمه‌ی رنگی و امکانات بیشتر</span></div>
     <div class="plans">${cards}</div>
-    <p class="muted mt">پرداخت با استارز تلگرام انجام می‌شود و اشتراک بلافاصله فعال می‌شود. با پایان دوره به پلن رایگان برمی‌گردی؛ ربات‌ها و تنظیماتت سر جایشان می‌مانند.</p>`;
+    <div class="teaser"><div class="tt">＋ قابلیت‌های حرفه‌ای در حال توسعه</div>
+      <p class="muted">این قابلیت‌ها به‌زودی می‌آیند و برای دارندگان اشتراک PRO رایگان فعال می‌شوند.</p></div>
+    <p class="muted mt">پرداخت با استارز تلگرام بلافاصله فعال می‌شود؛ کارت‌به‌کارت بعد از تأیید رسید. با پایان دوره به پلن FREE برمی‌گردی؛ ربات‌ها و تنظیماتت سر جایشان می‌مانند.</p>`;
 }
 
 /* ═════════════════ ابزارهای ربات ═════════════════ */
@@ -845,10 +853,13 @@ function adminCard(){
       <span class="lbl">بانک (اختیاری)</span><input class="fa" id="cd-bank" value="${esc(cd.bank)}" maxlength="40" aria-label="بانک">
       <span class="lbl">قیمت هر بسته (تومان؛ خالی = بدون کارت‌به‌کارت)</span>
       ${S.packs.map(p => `<div class="cdp"><span>${N(p.tokens)} توکن</span><input class="ltr" id="cd-p-${esc(p.id)}" inputmode="numeric" value="${esc((cd.prices || {})[p.id] || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت بسته ${esc(p.tokens)} توکن"></div>`).join("")}
+      <span class="lbl">قیمت اشتراک‌ها (تومان؛ خالی = بدون کارت‌به‌کارت)</span>
+      <div class="cdp"><span dir="ltr">PREMIUM</span><input class="ltr" id="cd-pp-premium" inputmode="numeric" value="${esc((cd.prices || {}).premium || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت اشتراک PREMIUM"></div>
+      <div class="cdp"><span dir="ltr">PRO</span><input class="ltr" id="cd-pp-pro" inputmode="numeric" value="${esc((cd.prices || {}).pro || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت اشتراک PRO"></div>
       <span class="lbl">متن راهنما زیر مشخصات کارت (قالب HTML)</span><textarea class="fa" id="cd-tx" data-fmt maxlength="1200" style="min-height:90px" aria-label="متن راهنما">${esc(cd.text)}</textarea>${fmtTools("cd-tx")}
       <button class="b o" data-a="cdsave">ذخیره</button>
       <h3 class="mt" style="font-size:14px">آخرین سفارش‌ها</h3>
-      ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${N(o.tokens)} توکن · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
+      ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${o.plan ? `اشتراک ${esc(o.plan.toUpperCase())}` : `${N(o.tokens)} توکن`} · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
       <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div>
     ` + `<div class="panel"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
@@ -915,9 +926,11 @@ const cdDecide = (el, ok) => confirmQ(ok ? "این پرداخت تأیید و ت
   await api("/api/admin/card-orders/" + el.dataset.id, "POST", {ok}); toast(ok ? "تأیید شد" : "رد شد"); await cdReload(); }));
 Object.assign(A, {
   cardbuy: el => busy(el, async () => { const o = await api("/api/card/order", "POST", {pack: el.dataset.id}); S.sheet = {kind: "card", o}; D = null; renderSheet(); }),
+  subcard: el => busy(el, async () => { const o = await api("/api/card/sub-order", "POST", {plan: el.dataset.id}); S.sheet = {kind: "card", o}; D = null; renderSheet(); }),
   cardrcpt: () => { const l = S.sheet?.o?.link; if(l) openLink(l); else toast("لینک ربات آماده نیست؛ رسید را مستقیم در ربات بفرست"); },
   cardcopy: el => navigator.clipboard?.writeText(el.dataset.v).then(() => toast("کپی شد"), () => toast(el.dataset.v)),
   cdsave: el => busy(el, async () => { const v = id => $(id).value.trim(), prices = {}; S.packs.forEach(p => { prices[p.id] = v("#cd-p-" + p.id); });
+    prices.premium = v("#cd-pp-premium"); prices.pro = v("#cd-pp-pro");
     await api("/api/admin/card", "POST", {on: $("#cd-on").checked, number: v("#cd-num"), holder: v("#cd-holder"), bank: v("#cd-bank"), text: v("#cd-tx"), prices});
     try{ S.card = (await api("/api/me")).card; }catch(_){}
     toast("ذخیره شد"); await cdReload(); }),

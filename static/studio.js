@@ -1401,7 +1401,7 @@ function cardSheet(){
   </div>
   <div class="fjt cdnote">${tgHtml(o.text)}</div>
   <button class="b" data-a="cardrcpt">ارسال رسید</button>
-  <p class="muted mt">سفارش ${N("#" + o.order)} · ${N(o.tokens)} توکن</p><div class="fgap"></div>`;
+  <p class="muted mt">سفارش ${N("#" + o.order)} · ${o.ptitle ? `اشتراک ${esc(o.ptitle)}` : `${N(o.tokens)} توکن`}</p><div class="fgap"></div>`;
 }
 function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
 async function refreshWallet(waitInc){

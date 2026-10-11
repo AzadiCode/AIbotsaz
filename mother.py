@@ -43,7 +43,7 @@ from core import (
     MAX_PROMPT, MAX_VERSIONS, media_list, mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now,
     ONLINE_SECS, PACKS, parse_err, perks_of, plain_html, PLANS, plan_info, rate_ok, redeem, REF_INVITEE, REF_INVITER,
     REF_ON, request_user, send_rich, settle_referral, SUB_DAYS, tehran_day, tg, tg_html, thash, touch_user,
-    wallet_info,
+    wallet_info, activate_plan,
 )
 from ai import (
     ask_llm, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
@@ -1078,9 +1078,12 @@ def card_price(conf, pid):
 
 
 def card_public():
-    """چیزی که به مینی‌اپ می‌ره: فقط روشن/خاموش و قیمت بسته‌ها (مشخصات کارت بعد از ثبت سفارش نشون داده می‌شه)"""
+    """چیزی که به مینی‌اپ می‌ره: فقط روشن/خاموش و قیمت بسته‌ها و اشتراک‌ها (مشخصات کارت بعد از ثبت سفارش نشون داده می‌شه)"""
     c = card_conf()
     pr = {p["id"]: card_price(c, p["id"]) for p in PACKS if c and card_price(c, p["id"]) > 0}
+    for pid in ("premium", "pro"):
+        if c and card_price(c, pid) > 0:
+            pr[pid] = card_price(c, pid)
     return {"on": bool(pr), "prices": pr}
 
 
@@ -1125,6 +1128,33 @@ def api_card_order(uid):
                    holder=conf.get("holder") or "", bank=conf.get("bank") or "", text=conf.get("text") or CARD_DEFAULT_TEXT, link=link)
 
 
+@app.post("/api/card/sub-order")
+@authed
+def api_card_sub_order(uid):
+    """سفارش کارت‌به‌کارت برای اشتراک پرمیوم/پرو (قیمت تومانی از پنل ادمین)"""
+    conf = card_conf()
+    pid = str((request.get_json(silent=True) or {}).get("plan", ""))
+    p = PLANS.get(pid)
+    toman = card_price(conf, pid) if (conf and p and pid != "free") else 0
+    if not toman:
+        return jsonify(error="پرداخت کارت‌به‌کارت برای این اشتراک فعال نیست"), 400
+    since = time.time() - 86400
+    o = db.card_orders.find_one({"uid": uid, "plan": pid, "status": "wait", "toman": toman, "t": {"$gt": since}})
+    if not o:
+        if not rate_ok(f"cardo:{uid}", 6, 3600):
+            return jsonify(error="تعداد تلاش زیاد بود، کمی صبر کن."), 429
+        if db.card_orders.count_documents({"uid": uid, "status": {"$in": ["wait", "sent"]}, "t": {"$gt": since}}) >= 3:
+            return jsonify(error="چند سفارش باز داری؛ اول رسید اون‌ها رو بفرست یا صبر کن بررسی بشن."), 429
+        no = db.counters.find_one_and_update({"_id": "card"}, {"$inc": {"n": 1}}, upsert=True,
+                                             return_document=ReturnDocument.AFTER)["n"] + 1000
+        o = {"_id": no, "uid": uid, "plan": pid, "days": int(p["days"] or SUB_DAYS), "tokens": int(p["tokens"]),
+             "toman": toman, "status": "wait", "t": time.time()}
+        db.card_orders.insert_one(o)
+    link = f"https://t.me/{core.MOTHER_USERNAME}?start=rcpt_{o['_id']}" if core.MOTHER_USERNAME else ""
+    return jsonify(order=o["_id"], plan=pid, ptitle=p["title"], tokens=o["tokens"], toman=o["toman"], number=card_fmt(conf["number"]), raw=conf["number"],
+                   holder=conf.get("holder") or "", bank=conf.get("bank") or "", text=conf.get("text") or CARD_DEFAULT_TEXT, link=link)
+
+
 def card_ask_receipt(uid, no):
     o = db.card_orders.find_one({"_id": no, "uid": uid})
     if not o or o["status"] != "wait" or o["t"] < time.time() - 86400:
@@ -1161,7 +1191,8 @@ def card_receipt(msg):
     db.settings.delete_one({"_id": f"rcpt:{uid}"})
     f = msg["from"]
     who = _html.escape(f"{f.get('first_name') or ''} {('@' + f['username']) if f.get('username') else ''}".strip() or "بدون نام")
-    cap = f"💳 رسید کارت‌به‌کارت #{o['_id']}\nکاربر: {who} ({uid})\nبسته: {o['tokens']} توکن\nمبلغ: {o['toman']:,} تومان"
+    what = f"اشتراک: {PLANS[o['plan']]['title']}" if o.get("plan") in PLANS else f"بسته: {o['tokens']} توکن"
+    cap = f"💳 رسید کارت‌به‌کارت #{o['_id']}\nکاربر: {who} ({uid})\n{what}\nمبلغ: {o['toman']:,} تومان"
     kb = {"inline_keyboard": [[{"text": "✅ تأیید و شارژ", "callback_data": f"cd:ok:{o['_id']}"},
                                {"text": "❌ رد", "callback_data": f"cd:no:{o['_id']}"}]]}
     sent = []
@@ -1184,8 +1215,12 @@ def card_decide(no, ok, by):
     if not o:
         return None
     if ok:
-        credit(o["uid"], o["tokens"], "card", key=f"card:{no}")
-        card_say(o["uid"], f"✅ پرداخت سفارش <b>#{no}</b> تأیید شد و <b>{o['tokens']}</b> توکن به حسابت اضافه شد.")
+        if o.get("plan") in PLANS and o["plan"] != "free":
+            activate_plan(o["uid"], o["plan"], int(o.get("days") or SUB_DAYS), int(o.get("tokens") or 0), key=f"cardsub:{no}")
+            card_say(o["uid"], f"✅ پرداخت سفارش <b>#{no}</b> تأیید شد و اشتراک <b>{PLANS[o['plan']]['title']}</b> برای {int(o.get('days') or SUB_DAYS)} روز فعال شد.")
+        else:
+            credit(o["uid"], o["tokens"], "card", key=f"card:{no}")
+            card_say(o["uid"], f"✅ پرداخت سفارش <b>#{no}</b> تأیید شد و <b>{o['tokens']}</b> توکن به حسابت اضافه شد.")
     else:
         card_say(o["uid"], f"❌ رسید سفارش <b>#{no}</b> تأیید نشد. اگه واریز انجام شده، یک سفارش تازه ثبت کن و رسید واضح بفرست.")
     for a, mid in o.get("adm") or []:
@@ -1219,7 +1254,7 @@ def api_admin_card_get(uid):
     return jsonify(on=bool(d.get("on")), number=d.get("number", ""), holder=d.get("holder", ""), bank=d.get("bank", ""),
                    text=d.get("text") or CARD_DEFAULT_TEXT, prices=d.get("prices") or {},
                    orders=[{"id": r["_id"], "uid": r["uid"], "name": names.get(r["uid"], "").strip(), "tokens": r["tokens"],
-                            "toman": r["toman"], "status": r["status"], "t": r["t"]} for r in rows])
+                            "toman": r["toman"], "status": r["status"], "t": r["t"], "plan": r.get("plan") or ""} for r in rows])
 
 
 @app.post("/api/admin/card")
@@ -1230,15 +1265,15 @@ def api_admin_card_set(uid):
     if number and not (len(number) == 16 and luhn_ok(number)):
         return jsonify(error="شماره کارت درست نیست (۱۶ رقم)"), 400
     prices = {}
-    for p in PACKS:
+    for pid in [p["id"] for p in PACKS] + ["premium", "pro"]:
         try:
-            v = int(re.sub(r"\D", "", str((b.get("prices") or {}).get(p["id"]) or "0").translate(_DIG)) or 0)
+            v = int(re.sub(r"\D", "", str((b.get("prices") or {}).get(pid) or "0").translate(_DIG)) or 0)
         except ValueError:
             v = 0
         if not 0 <= v <= 1_000_000_000:
-            return jsonify(error="قیمت بسته معتبر نیست"), 400
+            return jsonify(error="قیمت معتبر نیست"), 400
         if v:
-            prices[p["id"]] = v
+            prices[pid] = v
     on = bool(b.get("on"))
     if on and not number:
         return jsonify(error="برای روشن کردن، شماره کارت را بنویس"), 400

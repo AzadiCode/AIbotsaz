@@ -516,12 +516,12 @@ def redeem(uid, code):
 #   emoji = ایموجی پرمیوم (tg-emoji) در متن ربات‌ها   color = دکمه‌های رنگی   userbot = دسترسی به بخش یوزربات
 T = TOKEN_SCALE
 PLANS = {
-    "free":    {"title": "رایگان",  "stars": 0, "days": 0, "tokens": 0,
+    "free":    {"title": "FREE",  "stars": 0, "days": 0, "tokens": 0,
                 "perks": {}},
-    "premium": {"title": "پرمیوم",  "stars": SUB_PREMIUM_STARS, "days": SUB_DAYS, "tokens": SUB_PREMIUM_TOKENS,
+    "premium": {"title": "PREMIUM",  "stars": SUB_PREMIUM_STARS, "days": SUB_DAYS, "tokens": SUB_PREMIUM_TOKENS,
                 "perks": {"bots": 2, "disc": 10, "daily": 2 * T, "mb": 60, "files": 30, "ver": 2, "bc": 2000,
                           "emoji": True, "color": True}},
-    "pro":     {"title": "پرو",     "stars": SUB_PRO_STARS, "days": SUB_DAYS, "tokens": SUB_PRO_TOKENS,
+    "pro":     {"title": "PRO",     "stars": SUB_PRO_STARS, "days": SUB_DAYS, "tokens": SUB_PRO_TOKENS,
                 "perks": {"bots": 5, "disc": 20, "daily": 5 * T, "mb": 200, "files": 100, "ver": 6, "bc": 10000,
                           "free_enhance": True, "emoji": True, "color": True, "userbot": True}},
 }
