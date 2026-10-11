@@ -1117,8 +1117,12 @@ def api_card_order(uid):
     if not o:
         if not rate_ok(f"cardo:{uid}", 6, 3600):
             return jsonify(error="تعداد تلاش زیاد بود، کمی صبر کن."), 429
-        if db.card_orders.count_documents({"uid": uid, "status": {"$in": ["wait", "sent"]}, "t": {"$gt": since}}) >= 3:
-            return jsonify(error="چند سفارش باز داری؛ اول رسید اون‌ها رو بفرست یا صبر کن بررسی بشن."), 429
+        # فقط سفارش‌های همین بسته رو بشمار، و sentهای قدیمی (بیش از ۲۴ ساعت) نادیده بگیر
+        pending = db.card_orders.count_documents({"uid": uid, "pack": pid, "status": {"$in": ["wait", "sent"]}, "t": {"$gt": since}})
+        if pending >= 2:
+            return jsonify(error="سفارش فعال برای این بسته داری؛ اول رسید رو بفرست یا صبر کن."), 429
+        # sentهای قدیمی رو به wait برگردون تا شمارش نره
+        db.card_orders.update_many({"uid": uid, "pack": pid, "status": "sent", "t": {"$lt": since}}, {"$set": {"status": "wait"}})
         no = db.counters.find_one_and_update({"_id": "card"}, {"$inc": {"n": 1}}, upsert=True,
                                              return_document=ReturnDocument.AFTER)["n"] + 1000
         o = {"_id": no, "uid": uid, "pack": pid, "tokens": int(p["tokens"]), "toman": toman, "status": "wait", "t": time.time()}
@@ -1143,8 +1147,10 @@ def api_card_sub_order(uid):
     if not o:
         if not rate_ok(f"cardo:{uid}", 6, 3600):
             return jsonify(error="تعداد تلاش زیاد بود، کمی صبر کن."), 429
-        if db.card_orders.count_documents({"uid": uid, "status": {"$in": ["wait", "sent"]}, "t": {"$gt": since}}) >= 3:
-            return jsonify(error="چند سفارش باز داری؛ اول رسید اون‌ها رو بفرست یا صبر کن بررسی بشن."), 429
+        pending = db.card_orders.count_documents({"uid": uid, "plan": pid, "status": {"$in": ["wait", "sent"]}, "t": {"$gt": since}})
+        if pending >= 2:
+            return jsonify(error="سفارش فعال برای این اشتراک داری؛ اول رسید رو بفرست یا صبر کن."), 429
+        db.card_orders.update_many({"uid": uid, "plan": pid, "status": "sent", "t": {"$lt": since}}, {"$set": {"status": "wait"}})
         no = db.counters.find_one_and_update({"_id": "card"}, {"$inc": {"n": 1}}, upsert=True,
                                              return_document=ReturnDocument.AFTER)["n"] + 1000
         o = {"_id": no, "uid": uid, "plan": pid, "days": int(p["days"] or SUB_DAYS), "tokens": int(p["tokens"]),
@@ -1177,9 +1183,10 @@ def card_receipt(msg):
     ptr = db.settings.find_one({"_id": f"rcpt:{uid}"})
     o = None
     if ptr and time.time() - ptr.get("t", 0) < 86400:
-        o = db.card_orders.find_one({"_id": ptr["no"], "uid": uid, "status": "wait", "t": {"$gt": since}})
+        o = db.card_orders.find_one({"_id": ptr["no"], "uid": uid, "status": "wait"})
     if not o:
-        opens = list(db.card_orders.find({"uid": uid, "status": "wait", "t": {"$gt": since}}).limit(2))
+        # فقط wait بگیره، sent قدیمی نادیده
+        opens = list(db.card_orders.find({"uid": uid, "status": "wait"}).limit(2))
         if len(opens) > 1:
             card_say(uid, "چند سفارش باز داری؛ از مینی‌اپ دکمه‌ی «ارسال رسید» همون سفارش رو بزن.")
             return True
