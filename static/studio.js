@@ -1393,15 +1393,20 @@ function buySheet(){
     <div class="fgap"></div>`;
 }
 function cardSheet(){
-  const o = S.sheet.o, row = (l, v, raw) => `<div class="cdrow"><div><span class="muted">${l}</span><div class="cdv">${v}</div></div>${raw ? `<button class="b o sm" data-a="cardcopy" data-v="${esc(raw)}">کپی</button>` : ""}</div>`;
-  return head("پرداخت کارت‌به‌کارت") + `<div class="cardbox">
-    ${row("مبلغ قابل پرداخت", N(Number(o.toman).toLocaleString("en")) + " تومان", String(o.toman))}
-    ${row("شماره کارت", esc(o.number), o.raw)}
-    ${o.holder ? row("به نام", esc(o.holder)) : ""}${o.bank ? row("بانک", esc(o.bank)) : ""}
-  </div>
-  <div class="fjt cdnote">${tgHtml(o.text)}</div>
-  <button class="b" data-a="cardrcpt">ارسال رسید</button>
-  <p class="muted mt">سفارش ${N("#" + o.order)} · ${o.ptitle ? `اشتراک ${esc(o.ptitle)}` : `${N(o.tokens)} توکن`}</p><div class="fgap"></div>`;
+  const o = S.sheet.o || {}, row = (l, v, raw) => {
+    if(v == null || v === "") return "";
+    return `<div class="cdrow"><div><span class="muted">${l}</span><div class="cdv">${v}</div></div>${raw ? `<button class="b o sm" data-a="cardcopy" data-v="${esc(raw)}">کپی</button>` : ""}</div>`;
+  };
+  const num = row("مبلغ قابل پرداخت", (o.toman ? N(Number(o.toman).toLocaleString("en")) + " تومان" : ""), o.toman);
+  const crd = row("شماره کارت", o.number || "", o.raw);
+  const hld = row("به نام", o.holder || "");
+  const bnk = row("بانک", o.bank || "");
+  const note = o.text ? `<div class="fjt cdnote">${tgHtml(o.text)}</div>` : "";
+  const title = o.ptitle ? `اشتراک ${esc(o.ptitle)}` : `${N(o.tokens || 0)} توکن`;
+  return head("پرداخت کارت‌به‌کارت") + `<div class="cardbox">${num}${crd}${hld}${bnk}</div>
+    ${note}
+    <button class="b" data-a="cardrcpt">ارسال رسید</button>
+    <p class="muted mt">سفارش ${N("#" + (o.order || ""))} · ${title}</p><div class="fgap"></div>`;
 }
 function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
 async function refreshWallet(waitInc){
