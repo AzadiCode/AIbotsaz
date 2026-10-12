@@ -1061,7 +1061,9 @@ def mod_command(bot, bot_id, token, cfg, mod, msg, cmd, args, admin):
 
 
 def mod_group(bot, bot_id, token, cfg, msg):
-    mod, chat, user = cfg["mod"], msg["chat"]["id"], msg.get("from") or {}
+    mod, chat, user = cfg.get("mod"), msg["chat"]["id"], msg.get("from") or {}
+    if not mod:
+        return False
     uid = user.get("id", 0)
     if (bot_id, chat) not in MOD_SEEN:
         if len(MOD_SEEN) > 20000:
@@ -1076,7 +1078,7 @@ def mod_group(bot, bot_id, token, cfg, msg):
             if u.get("is_bot") or mod_is_admin(token, bot, chat, u["id"]):
                 continue
             mod_join(bot, bot_id, token, mod, msg, u)
-        return
+        return True
     if msg.get("left_chat_member"):
         if "leave" in clean:
             tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
@@ -1084,12 +1086,12 @@ def mod_group(bot, bot_id, token, cfg, msg):
         if mod.get("goodbye") and not u.get("is_bot"):
             mod_say(token, bot_id, chat, mod["goodbye"].replace("{name}", mod_name(u)).replace("{group}", plain_html(msg["chat"].get("title") or "")), 30)
         db.modp.delete_one({"_id": f"{bot_id}:{chat}:{u['id']}"})
-        return
+        return True
     if msg.get("pinned_message") and "pin" in clean or (("new_chat_title" in msg or "new_chat_photo" in msg or "delete_chat_photo" in msg) and "title" in clean):
         tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
-        return
+        return True
     if not uid or msg.get("is_automatic_forward"):
-        return
+        return False
     text = (msg.get("text") or "").strip()
     admin = mod_is_admin(token, bot, chat, uid, msg)
     if text.startswith("/"):
@@ -1098,12 +1100,12 @@ def mod_group(bot, bot_id, token, cfg, msg):
         cmd, _, at = head.partition("@")
         if not at or at.lower() == str(bot.get("username") or "").lower():
             mod_command(bot, bot_id, token, cfg, mod, msg, cmd.lower(), parts[1:], admin)
-            return
+            return True
     if admin:
-        return
+        return True
     if db.modp.find_one({"_id": f"{bot_id}:{chat}:{uid}"}):          # هنوز کپچا رو حل نکرده
         tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
-        return
+        return True
     low = (text or msg.get("caption") or "").lower()
     kinds = mod_kinds(msg) & set(mod.get("lock") or [])
     if kinds:
@@ -1135,7 +1137,7 @@ def mod_group(bot, bot_id, token, cfg, msg):
                 run_actions(actions, env)
             if reply_text:
                 tg_html(token, "sendMessage", chat_id=chat, text=fill(reply_text, env, True)[:4000])
-            return
+            return True
     fl = mod.get("flood")
     if fl:
         k, t = (bot_id, chat, uid), time.time()
@@ -1148,6 +1150,8 @@ def mod_group(bot, bot_id, token, cfg, msg):
             mod_restrict(token, chat, uid, mod["warns"]["mins"])
             tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
             mod_say(token, bot_id, chat, f"{mod_name(user)} به‌خاطر ارسال پشت‌سرهم {mod['warns']['mins']} دقیقه ساکت شد.")
+            return True
+    return False
 
 
 def mod_join(bot, bot_id, token, mod, msg, u):
@@ -1567,7 +1571,9 @@ def bot_paid(env, msg):
 
 def allowed_updates(cfg):
     u = ["message", "callback_query", "pre_checkout_query"]
-    return u + ["channel_post", "my_chat_member"] if cfg.get("mod") else u
+    has_mod = bool(cfg.get("mod"))
+    has_triggers = bool(cfg.get("triggers"))
+    return u + (["channel_post", "my_chat_member"] if has_mod or has_triggers else [])
 
 
 def ensure_webhook(bot, cfg):
@@ -1873,8 +1879,7 @@ def sub_hook(bot_id):
                                 run_actions(tr["actions"], env)
                             if tr.get("reply"):
                                 tg_html(token, "sendMessage", chat_id=msg["chat"]["id"], text=fill(tr["reply"], env, True)[:4000])
-                            handled = True
-                            break
+                            return "ok"
             # اگر mod_group یا ترگر مصرف نکرد، شاید فلوی بخش‌ها داشته باشیم (فال‌بک به پیوی هندل می‌شود)
             if not handled:
                 # برای پشتیبانی از دکمه‌های inline و کال‌بک در گروه، fal-back به private handler
