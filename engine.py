@@ -52,6 +52,9 @@ from ai import (
 
 
 # ───────────────────────── موتور اجرای کانفیگ: محیط، شرط، اکشن، بازی و API بیرونی ─────────────────────────
+
+# ترگرهای کلمه‌کلیدی (گروه/پیوی): کلمه -> لیست اکشن/پاسخ
+TRIGGER_RE = re.compile(r"^trigger:(\w+)$")
 _WEEK = {5: "شنبه", 6: "یکشنبه", 0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه"}
 FORM_HINT = {"number": "فقط عدد بفرست.", "phone": "یه شماره‌ی تماس معتبر بفرست، مثل 09123456789.",
              "email": "یه ایمیل معتبر بفرست."}
@@ -1107,6 +1110,32 @@ def mod_group(bot, bot_id, token, cfg, msg):
         return mod_violation(token, bot_id, mod, msg, "ارسال " + "/".join(MOD_LOCKS[k] for k in sorted(kinds)))
     if any(w in low for w in mod.get("words") or []):
         return mod_violation(token, bot_id, mod, msg, "استفاده از کلمه‌ی ممنوع")
+    # ── ترگرهای کلمه‌کلیدی (گروه/پیوی) ──
+    triggers = cfg.get("triggers") or {}
+    for key, tr in triggers.items():
+        if not isinstance(tr, dict):
+            continue
+        pattern = tr.get("pattern", "")
+        case_sensitive = tr.get("case_sensitive", False)
+        whole_word = tr.get("whole_word", True)
+        actions = tr.get("actions", [])
+        reply_text = tr.get("reply", "")
+        match = False
+        hay = text if case_sensitive else low
+        if whole_word:
+            if case_sensitive:
+                match = re.search(r"\b" + re.escape(pattern) + r"\b", text)
+            else:
+                match = re.search(r"\b" + re.escape(pattern) + r"\b", low)
+        else:
+            match = pattern in hay
+        if match:
+            env = Env(bot, token, chat, user, text=text)
+            if actions:
+                run_actions(actions, env)
+            if reply_text:
+                tg_html(token, "sendMessage", chat_id=chat, text=fill(reply_text, env, True)[:4000])
+            return
     fl = mod.get("flood")
     if fl:
         k, t = (bot_id, chat, uid), time.time()
@@ -1809,9 +1838,47 @@ def sub_hook(bot_id):
             mod_my_member(bot, bot_id, token, upd["my_chat_member"])
             return "ok"
         cq, msg = upd.get("callback_query"), upd.get("message")
-        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: فقط وقتی مدیریت روشنه
+        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: ترگرها و فلوی بخش‌ها
             if cfg.get("mod"):
-                mod_group(bot, bot_id, token, cfg, msg)
+                handled = mod_group(bot, bot_id, token, cfg, msg)
+            else:
+                handled = False
+            if not handled and cfg.get("triggers"):
+                # اگر mod_group مصرف نکرد و ترگر داریم، اینجا چک می‌کنیم
+                text = (msg.get("text") or "").strip()
+                if text:
+                    low = text.lower()
+                    triggers = cfg.get("triggers") or {}
+                    for key, tr in triggers.items():
+                        if not isinstance(tr, dict):
+                            continue
+                        pattern = tr.get("pattern", "")
+                        case_sensitive = tr.get("case_sensitive", False)
+                        whole_word = tr.get("whole_word", True)
+                        actions = tr.get("actions", [])
+                        reply_text = tr.get("reply", "")
+                        match = False
+                        hay = text if case_sensitive else low
+                        if whole_word:
+                            if case_sensitive:
+                                match = re.search(r"\b" + re.escape(pattern) + r"\b", text)
+                            else:
+                                match = re.search(r"\b" + re.escape(pattern) + r"\b", low)
+                        else:
+                            match = pattern in hay
+                        if match:
+                            user = msg.get("from", {})
+                            env = Env(bot, token, msg["chat"]["id"], user, text=text)
+                            if tr.get("actions"):
+                                run_actions(tr["actions"], env)
+                            if tr.get("reply"):
+                                tg_html(token, "sendMessage", chat_id=msg["chat"]["id"], text=fill(tr["reply"], env, True)[:4000])
+                            handled = True
+                            break
+            # اگر mod_group یا ترگر مصرف نکرد، شاید فلوی بخش‌ها داشته باشیم (فال‌بک به پیوی هندل می‌شود)
+            if not handled:
+                # برای پشتیبانی از دکمه‌های inline و کال‌بک در گروه، fal-back به private handler
+                pass
             return "ok"
         actor = (cq or msg or {}).get("from") or {}
         chat0 = (msg or {}).get("chat") or ((cq or {}).get("message") or {}).get("chat") or {}

@@ -327,6 +327,7 @@ OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "
 ACT_OPS = ("set", "add", "clear", "random", "notify", "remind",
            "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch")
 F_TYPES = ("text", "number", "phone", "email")
+TRIGGER_RE = re.compile(r"^trigger:(\w+)$")
 
 
 # ───────────────────────── جدول داده‌ی رکوردی، اعتبارسنج و بازرس کانفیگ ─────────────────────────
@@ -1105,6 +1106,28 @@ def sanitize(cfg, strict=False, media=None, warns=None):
     md = clean_mod(cfg.get("mod"), bad)
     if md:
         out["mod"] = md
+    # ترگرهای کلمه‌کلیدی (گروه/پیوی): pattern، actions، reply، case_sensitive، whole_word
+    tr_in = cfg.get("triggers")
+    if isinstance(tr_in, dict):
+        tr_out = {}
+        for key, tr in tr_in.items():
+            if not isinstance(tr, dict):
+                continue
+            pattern = str(tr.get("pattern", "")).strip()
+            if not pattern or len(pattern) > 200:
+                bad(f"الگوی ترگر «{key}» خالی یا خیلی طولانیه")
+                continue
+            case_sensitive = bool(tr.get("case_sensitive"))
+            whole_word = tr.get("whole_word", True)
+            actions = clean_actions(tr.get("actions"), set(), set(), bad, {}, {"tabs": {}})
+            reply = str(tr.get("reply", "")).strip()[:3500]
+            if not actions and not reply:
+                bad(f"ترگر «{key}» هیچ اقدامی یا متنی برای پاسخ نداره")
+                continue
+            tr_out[key] = {"pattern": pattern, "case_sensitive": case_sensitive,
+                           "whole_word": whole_word, "actions": actions or [], "reply": reply}
+        if tr_out:
+            out["triggers"] = tr_out
     # فیلدهای شناخته‌شده‌ی هر جدول داده؛ موتور موقع خواندن (db_get) و پاک‌کردن متغیرها ازش استفاده می‌کنه
     dbf = {t: sorted(fs) for t, fs in tables["tabs"].items() if fs}
     if dbf:
