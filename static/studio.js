@@ -1242,8 +1242,32 @@ function modSheet(){
       <div class="cmd"><input class="fa" id="m-bt" maxlength="30" value="${esc(bt.text || "")}" placeholder="متن دکمه"><input class="ltr" id="m-bu" value="${esc(bt.url || "")}" placeholder="https://t.me/..." autocomplete="off"></div>
       <span class="lbl">واکنش خودکار (یک ایموجی؛ اختیاری)</span><input class="ltr" id="m-re" maxlength="8" value="${esc(ch.react || "")}" placeholder="👍">
     </div></details>
+    <details class="adv"><summary>ترگرهای کلمه‌کلیدی (گروه/پیوی)</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">هنگامی که کاربری پیامی شامل الگو می‌فرستد، اکشن‌ها اجرا و/یا پاسخ متنی داده می‌شود. در گروه و پیوی هر دو کار می‌کند. الگو می‌تواند کلمه، عبارت یا عبارت منظم ساده باشد.</p>
+      <div id="m-triggers">${(m.triggers || []).map((t, i) => triggerRow(i, t)).join("")}</div>
+      <button class="b o sm" data-sh="addtrigger">${IC.plus}افزودن ترگر</button>
+    </details>
     <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
 }
+function triggerRow(i, t){
+  const actionsHtml = (t.actions || []).map((a, ai) => {
+    const op = a.op || "";
+    const varName = a.var || "";
+    const value = a.value || "";
+    return `<div class="cmd"><select class="tr-op" data-sh="tr-op-${i}-${ai}" value="${op}">${["set","add","clear","notify","remind","dice","pick","db_add","db_get","db_set","db_inc","db_del","fetch"].map(o => `<option value="${o}"${o===op?" selected":""}>${o}</option>`).join("")}</select><input class="fa tr-var" data-sh="tr-var-${i}-${ai}" value="${esc(varName)}" placeholder="متغیر (مثل coins)"><input class="fa tr-val" data-sh="tr-val-${i}-${ai}" value="${esc(value)}" placeholder="مقدار"></div>`;
+  }).join("");
+  return `<details class="trigger-item" open><summary>ترگر #${i+1}</summary><div class="box">
+    <div class="cmd"><input class="fa tr-pattern" data-sh="tr-pattern-${i}" value="${esc(t.pattern)}" placeholder="الگو (مثلاً: سلام)" maxlength="200"></div>
+    <label class="chk" style="display:inline-flex;margin:4px 0"><input type="checkbox" class="tr-case" data-sh="tr-case-${i}"${t.case_sensitive ? " checked":""}> حساس به حروف بزرگ/کوچک</label>
+    <label class="chk" style="display:inline-flex;margin:4px 0"><input type="checkbox" class="tr-whole" data-sh="tr-whole-${i}"${t.whole_word !== false ? " checked":""}> کلمه‌ی کامل (word boundary)</label>
+    <span class="lbl">اکشن‌ها</span>
+    <div class="tr-actions">${actionsHtml || `<div class="cmd"><select class="tr-op" data-sh="tr-op-${i}-0">${["set","add","clear","notify","remind","dice","pick","db_add","db_get","db_set","db_inc","db_del","fetch"].map(o => `<option value="${o}">${o}</option>`).join("")}</select><input class="fa tr-var" data-sh="tr-var-${i}-0" placeholder="متغیر"><input class="fa tr-val" data-sh="tr-val-${i}-0" placeholder="مقدار"></div>`}</div>
+    <button class="b o sm" data-sh="tr-addact" data-i="${i}">${IC.plus}اکشن</button>
+    <span class="lbl">پاسخ متنی (اختیاری، قالب HTML)</span><textarea class="fa tr-reply" data-sh="tr-reply-${i}" maxlength="3500" style="min-height:60px">${esc(t.reply || "")}</textarea>${fmtTools("tr-reply-" + i)}
+    <button class="b r sm" data-sh="tr-del" data-i="${i}">${IC.trash}حذف ترگر</button>
+  </div></details>`;
+}
+
 function readMod(){
   if(!$("#m-on")) return;
   const g = id => $("#" + id)?.value ?? "", n = id => parseInt(String(g(id)).replace(/[۰-۹]/g, c => "۰۱۲۳۴۵۶۷۸۹".indexOf(c)), 10);
@@ -1256,6 +1280,28 @@ function readMod(){
     action: g("m-ac"), warns: {max: n("m-wm") || 3, then: g("m-wt"), mins: n("m-wmin") || 60},
     clean: [...document.querySelectorAll(".m-cl:checked")].map(x => x.value), report: $("#m-rp").checked,
     channel: {id: g("m-ci").trim(), button: {text: g("m-bt").trim(), url: g("m-bu").trim()}, react: g("m-re").trim()}};
+  // ترگرها
+  const triggers = [];
+  document.querySelectorAll(".trigger-item").forEach((item, i) => {
+    const pattern = item.querySelector(".tr-pattern")?.value?.trim() || "";
+    if(!pattern) return;
+    const actions = [];
+    item.querySelectorAll(".tr-actions > .cmd").forEach(cmd => {
+      const op = cmd.querySelector(".tr-op")?.value || "";
+      const varName = cmd.querySelector(".tr-var")?.value?.trim() || "";
+      const value = cmd.querySelector(".tr-val")?.value || "";
+      if(op) actions.push({op, var: varName, value});
+    });
+    const reply = item.querySelector(".tr-reply")?.value?.trim() || "";
+    triggers.push({
+      pattern: pattern,
+      case_sensitive: !!item.querySelector(".tr-case")?.checked,
+      whole_word: !!item.querySelector(".tr-whole")?.checked,
+      actions: actions.length ? actions : undefined,
+      reply: reply || undefined
+    });
+  });
+  if(triggers.length) D.m.triggers = Object.fromEntries(triggers.map((t, i) => [`trigger_${i}`, t]));
 }
 function saveMod(){
   const d = D;
@@ -1461,6 +1507,27 @@ function shAction(a, ds){
   readSheet();
   if(a.startsWith("km")) return kmAct(a, ds);
   if(a.startsWith("ub")) return ubAct(a, ds);
+  if(a.startsWith("tr-")){
+    const idx = +ds.i;
+    const triggers = Object.values(D.m.triggers || {});
+    const t = triggers[idx];
+    if(!t) return;
+    if(a === "tr-case") t.case_sensitive = ds.v === "true" || ds.v === true;
+    else if(a === "tr-whole") t.whole_word = ds.v === "true" || ds.v === true;
+    else if(a === "tr-pattern") t.pattern = ds.v || "";
+    else if(a === "tr-reply") t.reply = ds.v || "";
+    else if(a.startsWith("tr-op-") || a.startsWith("tr-var-") || a.startsWith("tr-val-")){
+      const parts = a.split("-");
+      const ai = +parts[2];
+      if(t.actions[ai]){
+        if(a.startsWith("tr-op")) t.actions[ai].op = ds.v;
+        else if(a.startsWith("tr-var")) t.actions[ai].var = ds.v;
+        else if(a.startsWith("tr-val")) t.actions[ai].value = ds.v;
+      }
+    }
+    renderSheet();
+    return;
+  }
   if(a === "stkm"){ const n = ds.n; return stGuardClose(() => { closeSheet(); openKm(n); }); }
   if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این بخش شروع می‌شود")); }
   if(a === "save") return SHEETS[S.sheet.kind].save();
@@ -1495,6 +1562,9 @@ function shAction(a, ds){
   else if(a === "delglob") D.globs.splice(+ds.i, 1);
   else if(a === "addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
   else if(a === "delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
+  else if(a === "addtrigger"){ D.m.triggers = D.m.triggers || {}; D.m.triggers[`trigger_${Object.keys(D.m.triggers).length}`] = {pattern: "", actions: [], case_sensitive: false, whole_word: true}; }
+  else if(a === "tr-del"){ delete D.m.triggers[Object.keys(D.m.triggers)[+ds.i]]; }
+  else if(a === "tr-addact"){ const triggers = Object.values(D.m.triggers); if(triggers[+ds.i]){ triggers[+ds.i].actions = triggers[+ds.i].actions || []; triggers[+ds.i].actions.push({op: "set", var: "", value: ""}); } }
   renderSheet();
 }
 
