@@ -74,7 +74,7 @@ START_TEXT = (
 
 def start_keyboard():
     return {"inline_keyboard": [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
-                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}, "style": "primary"}]]}
+                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}}]]}
 
 
 def start_media():
@@ -92,11 +92,11 @@ def send_start(uid):
         method, field = {"photo": ("sendPhoto", "photo"), "animation": ("sendAnimation", "animation"),
                          "video": ("sendVideo", "video")}.get(m.get("kind"), ("sendPhoto", "photo"))
         extra = {"supports_streaming": True} if method == "sendVideo" else {}
-        r = tg(MOTHER_TOKEN, method, chat_id=uid, caption=START_TEXT, reply_markup=start_keyboard(), **{field: m["fid"]}, **extra)
+        r = tg_html(MOTHER_TOKEN, method, chat_id=uid, caption=START_TEXT, reply_markup=start_keyboard(), **{field: m["fid"]}, **extra)
         if r.get("ok"):
             return r
         log.warning("start media failed: %s", r.get("description"))
-    return tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=START_TEXT, reply_markup=start_keyboard())
+    return tg_html(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=START_TEXT, reply_markup=start_keyboard(), disable_web_page_preview=True)
 
 
 def fit_photo(file_id, uid):
