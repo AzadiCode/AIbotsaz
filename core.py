@@ -8,7 +8,7 @@ core.py — هسته‌ی مشترک (پایین‌ترین لایه)
   • ابزارهای پایه
   • احراز هویت مینی‌اپ
   • کیف توکن
-  • اشتراک (پرمیوم و پرو)، ایموجی پرمیوم، ماموریت‌ها و دعوت
+  • اشتراک (Premium و Pro)، ایموجی پرمیوم، ماموریت‌ها و دعوت
   • کتابخونه‌ی رسانه
   • عضویت اجباری ربات‌ساز: خواندن تنظیمات و بررسی عضویت
 
@@ -502,7 +502,7 @@ def redeem(uid, code):
     return int(c["tokens"]), ""
 
 
-# ───────────────────────── اشتراک (پرمیوم و پرو)، ماموریت‌ها و دعوت ─────────────────────────
+# ───────────────────────── اشتراک (Premium و Pro)، ماموریت‌ها و دعوت ─────────────────────────
 # هر پلن یک ماه (PLAN_DAYS روز) اعتبار داره و با ستاره‌ی تلگرام خریده می‌شه. «tokens» هدیه‌ی توکن هر بار خرید یا تمدیده.
 # مزایای هر پلن (مقدارها برای خودِ همون پلنِ فعال‌ان، نه روی هم جمع‌شونده):
 #   bots = + سقف ساخت ربات      disc = ٪ کاهش نرخ مصرف توکن   daily = + جایزه‌ی روزانه
@@ -512,10 +512,10 @@ def redeem(uid, code):
 PLAN_DAYS = max(1, _int("PLAN_DAYS", 30))
 T = TOKEN_SCALE
 PLANS = [
-    {"id": "free", "title": "رایگان", "stars": 0, "tokens": 0, "perks": {}},
-    {"id": "premium", "title": "پرمیوم", "stars": _int("PREMIUM_STARS", 150), "tokens": 300 * T,
+    {"id": "free", "title": "Free", "stars": 0, "tokens": 0, "perks": {}},
+    {"id": "premium", "title": "Premium", "stars": _int("PREMIUM_STARS", 150), "tokens": 300 * T,
      "perks": {"bots": 3, "disc": 10, "daily": 2 * T, "mb": 60, "files": 40, "ver": 4, "bc": 5000, "ub": 1, "emoji": 30, "btn": True}},
-    {"id": "pro", "title": "پرو", "stars": _int("PRO_STARS", 400), "tokens": 1000 * T,
+    {"id": "pro", "title": "Pro", "stars": _int("PRO_STARS", 400), "tokens": 1000 * T,
      "perks": {"bots": 8, "disc": 20, "daily": 5 * T, "mb": 200, "files": 120, "ver": 8, "bc": 20000, "ub": 2, "emoji": 200, "btn": True, "free_enhance": True}},
 ]
 PLAN_BY_ID = {p["id"]: p for p in PLANS}

@@ -76,6 +76,9 @@ GROUP & CHANNEL MANAGEMENT (use it whenever the user wants to manage, moderate o
 - Admin commands inside groups (work for group admins and the bot owner): /ban /unban /kick /mute [minutes] /unmute /warn /unwarn /warns (reply to the user's message), /del, /pin /unpin (reply), /lock <type> /unlock <type> /locks. Everyone: /rules, /report.
 - A strong default for an anti-spam manager: captcha on, lock ["link","forward","via_bot"], flood {"n":6,"secs":8}, action "warn", warns {"max":3,"then":"mute","mins":60}, clean ["join","leave"], plus a clear welcome and rules written in the output language. Adapt every value to what the user asked; do not enable what they did not ask for unless it is part of a sensible default for their goal.
 - In "thinking" ALWAYS tell the owner: add the bot to the group/channel and make it ADMIN (delete messages, restrict users, pin messages; for channels: post/edit messages), because without admin rights Telegram hides messages from the bot and blocks moderation. Mention that the owner is notified in the bot chat when the bot is added.
+- GROUP TRIGGERS (games, points, keyword replies INSIDE a group; use it whenever the user wants the bot to react to words or commands that members write in a group/supergroup, e.g. "when someone sends the word random give them random points", a lucky-draw game, a points/score game, keyword auto-replies, a /top ranking). It works with or without "mod". Config "group": {"triggers": [ {"on": "contains"|"exact"|"starts"|"command", "words": ["رندوم"] (max 10; for "command" write the command without the slash), "reply": "HTML text sent in the group as a reply, supports {name} {points} and any declared variable", "do": [actions], "when": cond (optional), "cooldown": 60 (seconds per member between uses, optional), "to": "replied" (optional: actions and {name} apply to the member whose message was replied to; the sender must reply to someone), "board": {"var": "points", "top": 10, "label": "جدول برترین‌ها"} (optional ranking appended to the reply), "ttl": 30 (delete the bot reply after N seconds, optional), "delete": true (delete the member's trigger message, optional)} ] } (max 20 triggers; only the FIRST matching trigger runs for each message).
+  Variables are the normal per-member variables (declare them in "vars"; the same points are shared with the private chat). Random points: {"op": "add", "var": "points", "value": "1-10"} adds a random whole number in that range; "random" + "set" also work. Example: {"on": "exact", "words": ["رندوم"], "do": [{"op":"add","var":"points","value":"1-10"}], "reply": "{name} امتیاز گرفتی! مجموع: {points}", "cooldown": 3600}.
+  In "thinking" ALWAYS tell the owner: add the bot to the group and make it ADMIN, otherwise Telegram hides normal messages from the bot (it only sees /commands); alternatively turn off "Group Privacy" for the bot in BotFather. Add a small private-chat start node that explains the game.
 - For channels only the button, the reaction and /post publishing exist (Telegram offers no other control over channel posts). Never promise features outside this list, like auto-banning by AI judgement, member exports, or editing old posts.
 
 "config" schema:
@@ -261,7 +264,7 @@ PATTERNS (pick what fits, combine freely)
 - Live data (rates, weather, coin prices, quotes): fetch action in node "do" + the variable shown in text/alt.
 
 ENGINE LIMITS (be honest about them in "thinking" and build the closest working approximation)
-- CANNOT do: card or bank-gateway payments @@PAYLIM@@, reading the CONTENT of files or photos users send (they can be forwarded to the owner), managing groups/channels beyond the mod toolkit, inline mode, calls, real-time two-player games.
+- CANNOT do: card or bank-gateway payments @@PAYLIM@@, reading the CONTENT of files or photos users send (they can be forwarded to the owner), managing groups/channels beyond the mod toolkit and group triggers, inline mode, calls, real-time two-player games.
 - CAN do: permanent record storage (db tables + list), public JSON APIs (fetch), luck games (dice/pick), shared counters (globals), rankings (board), delayed messages and expiry (remind), human support (ticket), subscriptions and paid access (pay + vip flag + remind)@@DBMAP@@.
 - Example approximation: an order form with ticket (the owner sees the order and replies to the customer with the payment instructions) instead of an online checkout; a dice+coins single-player game instead of a real-time multiplayer game.
 
@@ -589,7 +592,10 @@ def clean_actions(lst, used, nums, bad, valid=None, tables=None):
         if op != "clear":
             v = str(a.get("value", "")).strip()[:100]
             if op == "add":
-                if v == "":
+                rg = re.fullmatch(r"(\d{1,9})\s*-\s*(\d{1,9})", v.translate(_DIG))
+                if rg and int(rg.group(1)) <= int(rg.group(2)):
+                    v = f"{int(rg.group(1))}-{int(rg.group(2))}"          # امتیاز تصادفی در بازه
+                elif v == "":
                     v = "1"
                 elif to_num(v) is None and not PH_RE.search(v):
                     bad(f"مقدار اکشن جمع برای «{name}» باید عدد باشه")
@@ -724,6 +730,70 @@ def clean_mod(m, bad):
 
 
 BTN_STYLES = ("primary", "success", "danger")   # آبی، سبز، قرمز
+GRP_ON = ("contains", "exact", "starts", "command")
+MAX_TRIGGERS = 20
+
+
+def clean_group(g, used, nums, bad, valid, tables, gl):
+    """ماشه‌های گروه (cfg["group"]): وقتی عضوی توی گروه کلمه یا دستور خاصی فرستاد ← پاسخ + اکشن (امتیاز، رندوم، جدول برترین‌ها)"""
+    if not isinstance(g, dict):
+        return None
+    out = []
+    for t in (g.get("triggers") if isinstance(g.get("triggers"), list) else [])[:MAX_TRIGGERS]:
+        if not isinstance(t, dict):
+            continue
+        k = str(t.get("on") or "contains").strip().lower()
+        k = k if k in GRP_ON else "contains"
+        raw = t.get("words") if isinstance(t.get("words"), list) else re.split(r"[,،\n]+", str(t.get("words") or ""))
+        ws = []
+        for w in raw[:10]:
+            w = str(w).strip()[:40]
+            if k == "command":
+                w = re.sub(r"[^\w]", "", w.lstrip("/").lower())
+            if w and w not in ws:
+                ws.append(w)
+        if not ws:
+            bad("یکی از ماشه‌های گروه کلمه یا دستور نداره")
+            continue
+        o = {"on": k, "words": ws}
+        reply = str(t.get("reply") or "").strip()[:1500]
+        if reply:
+            o["reply"] = reply
+        acts = clean_actions(t.get("do"), used, nums, bad, valid, tables) if t.get("do") else []
+        if acts:
+            o["do"] = acts
+        bd = t.get("board")
+        if isinstance(bd, dict):
+            bv = str(bd.get("var") or "").strip().lower()
+            if bv == "refs" or (VAR_RE.match(bv) and bv not in BUILTINS and bv not in gl):
+                o["board"] = {"var": bv, "top": _mnum(bd.get("top"), 3, 20, 10)}
+                lab = str(bd.get("label") or "").strip()[:30]
+                if lab:
+                    o["board"]["label"] = lab
+                if bv != "refs":
+                    used.add(bv)
+                    nums.add(bv)
+            else:
+                bad("متغیر جدول برترین‌های یک ماشه‌ی گروه باید یه متغیر شخصیِ عددی باشه")
+        if not (o.get("reply") or o.get("do") or o.get("board")):
+            bad("یکی از ماشه‌های گروه نه پاسخ داره نه اکشن")
+            continue
+        if t.get("when"):
+            w = clean_cond(t["when"], used, nums, bad)
+            if w:
+                o["when"] = w
+        cd = _mnum(t.get("cooldown"), 0, 86400, 0)
+        if cd:
+            o["cooldown"] = cd
+        ttl = _mnum(t.get("ttl"), 0, 3600, 0)
+        if ttl:
+            o["ttl"] = ttl
+        if str(t.get("to") or "") == "replied":
+            o["to"] = "replied"
+        if t.get("delete"):
+            o["delete"] = True
+        out.append(o)
+    return {"triggers": out} if out else None
 
 
 def sanitize(cfg, strict=False, media=None, warns=None):
@@ -1033,6 +1103,14 @@ def sanitize(cfg, strict=False, media=None, warns=None):
             out["ref_text"] = rt
     elif str(cfg.get("ref_text") or "").strip():
         out["ref_text"] = str(cfg["ref_text"]).strip()[:500]
+
+    gp = clean_group(cfg.get("group"), used, nums, bad, valid, tables, gl)
+    if gp:
+        out["group"] = gp
+        for tr in gp["triggers"]:              # متغیرهای داخل پاسخ ماشه‌ها هم باید اعلام بشن
+            for m in PH_RE.finditer(tr.get("reply") or ""):
+                if VAR_RE.match(m.group(1)) and m.group(1) not in BUILTINS and m.group(1) not in gl:
+                    used.add(m.group(1))
 
     # متغیرهای اعلام‌شده (+ هر متغیری که جایی استفاده شده ولی اعلام نشده، خودکار اضافه می‌شه)
     declared = {}

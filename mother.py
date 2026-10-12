@@ -43,7 +43,7 @@ from core import (
     MAX_PROMPT, MAX_VERSIONS, media_list, mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now,
     ONLINE_SECS, PACKS, parse_err, perks_of, plain_html, rate_ok, redeem, REF_INVITEE, REF_INVITER,
     REF_ON, request_user, send_rich, settle_referral, tehran_day, tg, tg_html, thash, touch_user,
-    wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID,
+    wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID, PLAN_RANK, plan_of, PLANS,
 )
 from ai import (
     ask_llm, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
@@ -258,7 +258,7 @@ def mother_emoji(msg):
     say = lambda t, kb=None: tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=t, **({"reply_markup": kb} if kb else {}))
     cap = perks_of(uid)["emoji"]
     if not cap:
-        say("ذخیره‌ی ایموجی پرمیوم برای اشتراک پرمیوم و پرو فعاله. از تب «اشتراک» توی مینی‌اپ می‌تونی فعالش کنی.",
+        say("ذخیره‌ی ایموجی پرمیوم برای اشتراک Premium و Pro فعاله. از تب «ارتقا» توی مینی‌اپ می‌تونی فعالش کنی.",
             {"inline_keyboard": [[{"text": "اشتراک", "web_app": {"url": BASE_URL}}]]})
         return True
     added, full = emoji_add(uid, items)
@@ -315,7 +315,7 @@ def mother_command(msg):
     if cmd == "/plan":
         pi = plan_info(uid)
         return say(f"اشتراک فعلی: {pi['title']}" + (f" ({pi['days_left']} روز مانده)" if pi["id"] != "free" else "")
-                   + "\nبرای خرید یا تمدید پرمیوم و پرو وارد مینی‌اپ شو و تب «اشتراک» رو باز کن.")
+                   + "\nبرای خرید یا تمدید Premium و Pro وارد مینی‌اپ شو و تب «ارتقا» رو باز کن.")
     if cmd == "/daily":
         r = claim_daily(uid)
         return say(f"{r[0]} توکن جایزه گرفتی. {r[1]} روز پشت‌سرهم. موجودی: {balance(uid)} توکن." if r else "جایزه‌ی امروز رو قبلاً گرفتی، فردا برگرد.")
@@ -471,7 +471,7 @@ def mk_begin(uid, chat):
         return mk_resume(uid, chat)
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
         return mk_say(chat, f"{MK_TITLE}\n\nسقف ربات‌های شما {max_bots(uid)} عدد است و امکان ساخت ربات جدید وجود ندارد. "
-                            "با خرید اشتراک پرمیوم یا پرو، این سقف بیشتر می‌شود. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
+                            "با خرید اشتراک Premium یا Pro، این سقف بیشتر می‌شود. برای مدیریت یا حذف ربات‌ها وارد مینی‌اپ شوید.",
                       mk_kb([mk_app("ورود به مینی‌اپ")]))
     have, need = wallet_info(uid)["tokens"], typical_cost()
     if have < need:
@@ -1130,6 +1130,7 @@ def card_public():
     """چیزی که به مینی‌اپ می‌ره: فقط روشن/خاموش و قیمت بسته‌ها (مشخصات کارت بعد از ثبت سفارش نشون داده می‌شه)"""
     c = card_conf()
     pr = {p["id"]: card_price(c, p["id"]) for p in PACKS if c and card_price(c, p["id"]) > 0}
+    pr.update({"plan_" + p["id"]: card_price(c, "plan_" + p["id"]) for p in PLANS if p["id"] != "free" and c and card_price(c, "plan_" + p["id"]) > 0})
     return {"on": bool(pr), "prices": pr}
 
 
@@ -1153,11 +1154,21 @@ def card_say(uid, text, **kw):
 @authed
 def api_card_order(uid):
     conf = card_conf()
-    pid = str((request.get_json(silent=True) or {}).get("pack", ""))
-    p = next((x for x in PACKS if x.get("id") == pid), None)
+    body = request.get_json(silent=True) or {}
+    plan_id = str(body.get("plan") or "")
+    if plan_id:                                   # خرید اشتراک با کارت‌به‌کارت
+        pl = PLAN_BY_ID.get(plan_id)
+        if not pl or plan_id == "free":
+            return jsonify(error="پلن نامعتبر"), 400
+        if PLAN_RANK[plan_id] < PLAN_RANK[plan_of(db.users.find_one({"_id": uid}))]:
+            return jsonify(error="اشتراک بالاتری هنوز فعاله؛ بعد از پایانش می‌تونی این پلن رو بگیری"), 400
+        pid, p = "plan_" + plan_id, {"tokens": pl["tokens"]}
+    else:
+        pid = str(body.get("pack", ""))
+        p = next((x for x in PACKS if x.get("id") == pid), None)
     toman = card_price(conf, pid) if (conf and p) else 0
     if not toman:
-        return jsonify(error="پرداخت کارت‌به‌کارت برای این بسته فعال نیست"), 400
+        return jsonify(error="پرداخت کارت‌به‌کارت برای این مورد فعال نیست"), 400
     since = time.time() - 86400
     o = db.card_orders.find_one({"uid": uid, "pack": pid, "status": "wait", "toman": toman, "t": {"$gt": since}})
     if not o:
@@ -1168,9 +1179,11 @@ def api_card_order(uid):
         no = db.counters.find_one_and_update({"_id": "card"}, {"$inc": {"n": 1}}, upsert=True,
                                              return_document=ReturnDocument.AFTER)["n"] + 1000
         o = {"_id": no, "uid": uid, "pack": pid, "tokens": int(p["tokens"]), "toman": toman, "status": "wait", "t": time.time()}
+        if plan_id:
+            o["plan"] = plan_id
         db.card_orders.insert_one(o)
     link = f"https://t.me/{core.MOTHER_USERNAME}?start=rcpt_{o['_id']}" if core.MOTHER_USERNAME else ""
-    return jsonify(order=o["_id"], tokens=o["tokens"], toman=o["toman"], number=card_fmt(conf["number"]), raw=conf["number"],
+    return jsonify(order=o["_id"], tokens=o["tokens"], toman=o["toman"], plan=PLAN_BY_ID[o["plan"]]["title"] if o.get("plan") else "", number=card_fmt(conf["number"]), raw=conf["number"],
                    holder=conf.get("holder") or "", bank=conf.get("bank") or "", text=conf.get("text") or CARD_DEFAULT_TEXT, link=link)
 
 
@@ -1210,7 +1223,7 @@ def card_receipt(msg):
     db.settings.delete_one({"_id": f"rcpt:{uid}"})
     f = msg["from"]
     who = _html.escape(f"{f.get('first_name') or ''} {('@' + f['username']) if f.get('username') else ''}".strip() or "بدون نام")
-    cap = f"💳 رسید کارت‌به‌کارت #{o['_id']}\nکاربر: {who} ({uid})\nبسته: {o['tokens']} توکن\nمبلغ: {o['toman']:,} تومان"
+    cap = f"💳 رسید کارت‌به‌کارت #{o['_id']}\nکاربر: {who} ({uid})\nمورد: {('اشتراک ' + PLAN_BY_ID[o['plan']]['title']) if o.get('plan') else str(o['tokens']) + ' توکن'}\nمبلغ: {o['toman']:,} تومان"
     kb = {"inline_keyboard": [[{"text": "✅ تأیید و شارژ", "callback_data": f"cd:ok:{o['_id']}"},
                                {"text": "❌ رد", "callback_data": f"cd:no:{o['_id']}"}]]}
     sent = []
@@ -1232,7 +1245,11 @@ def card_decide(no, ok, by):
                                            return_document=ReturnDocument.AFTER)
     if not o:
         return None
-    if ok:
+    if ok and o.get("plan") in PLAN_BY_ID:
+        activate_plan(o["uid"], o["plan"])
+        credit(o["uid"], o["tokens"], "card", key=f"card:{no}")
+        card_say(o["uid"], f"✅ پرداخت سفارش <b>#{no}</b> تأیید شد؛ اشتراک <b>{PLAN_BY_ID[o['plan']]['title']}</b> فعال شد و <b>{o['tokens']}</b> توکن هدیه به حسابت اضافه شد.")
+    elif ok:
         credit(o["uid"], o["tokens"], "card", key=f"card:{no}")
         card_say(o["uid"], f"✅ پرداخت سفارش <b>#{no}</b> تأیید شد و <b>{o['tokens']}</b> توکن به حسابت اضافه شد.")
     else:
@@ -1268,7 +1285,8 @@ def api_admin_card_get(uid):
     return jsonify(on=bool(d.get("on")), number=d.get("number", ""), holder=d.get("holder", ""), bank=d.get("bank", ""),
                    text=d.get("text") or CARD_DEFAULT_TEXT, prices=d.get("prices") or {},
                    orders=[{"id": r["_id"], "uid": r["uid"], "name": names.get(r["uid"], "").strip(), "tokens": r["tokens"],
-                            "toman": r["toman"], "status": r["status"], "t": r["t"]} for r in rows])
+                            "toman": r["toman"], "status": r["status"], "t": r["t"],
+                            "plan": PLAN_BY_ID[r["plan"]]["title"] if r.get("plan") in PLAN_BY_ID else ""} for r in rows])
 
 
 @app.post("/api/admin/card")
@@ -1279,7 +1297,7 @@ def api_admin_card_set(uid):
     if number and not (len(number) == 16 and luhn_ok(number)):
         return jsonify(error="شماره کارت درست نیست (۱۶ رقم)"), 400
     prices = {}
-    for p in PACKS:
+    for p in list(PACKS) + [{"id": "plan_" + x["id"]} for x in PLANS if x["id"] != "free"]:
         try:
             v = int(re.sub(r"\D", "", str((b.get("prices") or {}).get(p["id"]) or "0").translate(_DIG)) or 0)
         except ValueError:
@@ -1784,7 +1802,7 @@ def api_ub_login_start(uid):
     if bad:
         return bad
     if not ub_limit(uid):
-        return jsonify(error="یوزربات با اشتراک پرمیوم یا پرو فعال می‌شه", need_plan=True), 403
+        return jsonify(error="یوزربات با اشتراک Premium یا Pro فعال می‌شه", need_plan=True), 403
     if not rate_ok(f"ubl:{uid}", 5, 3600):
         return jsonify(error="درخواست کد زیاد بود، یک ساعت بعد دوباره امتحان کن"), 429
     j = request.get_json(silent=True) or {}
@@ -1898,7 +1916,7 @@ def api_ub_start(uid, ubid):
     if not d:
         return jsonify(error="یوزربات پیدا نشد"), 404
     if not ub_limit(uid):
-        return jsonify(error="اشتراکت تموم شده؛ برای روشن کردن یوزربات پرمیوم یا پرو رو تمدید کن", need_plan=True), 403
+        return jsonify(error="اشتراکت تموم شده؛ برای روشن کردن یوزربات Premium یا Pro رو تمدید کن", need_plan=True), 403
     ok, err = ub_start(d)
     if not ok:
         return jsonify(error=err), 400

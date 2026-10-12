@@ -465,10 +465,12 @@ def run_actions(acts, env):
         if op == "set":
             env.set(name, val)
         elif op == "add":
+            rg = re.fullmatch(r"(\d+)-(\d+)", val.translate(_DIG).strip())
+            amt = random.randint(int(rg.group(1)), int(rg.group(2))) if rg and int(rg.group(1)) <= int(rg.group(2)) else (to_num(val) or 0)
             if env.is_global(name):
-                env.gadd(name, to_num(val) or 0)
+                env.gadd(name, amt)
             else:
-                env.set(name, fmt_num((to_num(env.get(name)) or 0) + (to_num(val) or 0)))
+                env.set(name, fmt_num((to_num(env.get(name)) or 0) + amt))
         elif op == "clear":
             env.reset(name)
         elif op == "random":
@@ -1113,13 +1115,15 @@ def mod_group(bot, bot_id, token, cfg, msg):
         return
     if db.modp.find_one({"_id": f"{bot_id}:{chat}:{uid}"}):          # هنوز کپچا رو حل نکرده
         tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
-        return
+        return True
     low = (text or msg.get("caption") or "").lower()
     kinds = mod_kinds(msg) & set(mod.get("lock") or [])
     if kinds:
-        return mod_violation(token, bot_id, mod, msg, "ارسال " + "/".join(MOD_LOCKS[k] for k in sorted(kinds)))
+        mod_violation(token, bot_id, mod, msg, "ارسال " + "/".join(MOD_LOCKS[k] for k in sorted(kinds)))
+        return True
     if any(w in low for w in mod.get("words") or []):
-        return mod_violation(token, bot_id, mod, msg, "استفاده از کلمه‌ی ممنوع")
+        mod_violation(token, bot_id, mod, msg, "استفاده از کلمه‌ی ممنوع")
+        return True
     fl = mod.get("flood")
     if fl:
         k, t = (bot_id, chat, uid), time.time()
@@ -1132,6 +1136,76 @@ def mod_group(bot, bot_id, token, cfg, msg):
             mod_restrict(token, chat, uid, mod["warns"]["mins"])
             tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
             mod_say(token, bot_id, chat, f"{mod_name(user)} به‌خاطر ارسال پشت‌سرهم {mod['warns']['mins']} دقیقه ساکت شد.")
+            return True
+
+
+_FA_NORM = str.maketrans({"ي": "ی", "ك": "ک", "ۀ": "ه", "أ": "ا", "إ": "ا", "ـ": "", "ة": "ه"})
+GRP_CD = {}
+
+
+def norm_fa(s):
+    """یکسان‌سازی حروف عربی/فارسی، ارقام و حروف بزرگ و کوچک برای تطبیق کلمه‌ها"""
+    return str(s or "").translate(_FA_NORM).translate(_DIG).casefold().strip()
+
+
+def group_triggers(bot, bot_id, token, cfg, msg):
+    """ماشه‌های گروه: اولین ماشه‌ای که با پیام می‌خونه اجرا می‌شه. اکشن‌ها روی متغیرهای همون عضو (یا عضوِ ریپلای‌شده) اجرا می‌شن"""
+    trig = (cfg.get("group") or {}).get("triggers") or []
+    user = msg.get("from") or {}
+    text = (msg.get("text") or msg.get("caption") or "").strip()
+    if not trig or not text or not user.get("id") or user.get("is_bot") or msg.get("is_automatic_forward"):
+        return
+    chat = msg["chat"]["id"]
+    low, cmd = norm_fa(text), ""
+    if text.startswith("/"):
+        parts = text[1:].split()
+        c, _, at = (parts[0] if parts else "").partition("@")
+        if at and at.lower() != str(bot.get("username") or "").lower():
+            return
+        cmd = norm_fa(c)
+    for i, t in enumerate(trig):
+        words = [norm_fa(w) for w in t.get("words") or []]
+        k = t.get("on", "contains")
+        if k == "command":
+            ok = bool(cmd) and cmd in [w.lstrip("/") for w in words]
+        elif k == "exact":
+            ok = low in words
+        elif k == "starts":
+            ok = any(w and low.startswith(w) for w in words)
+        else:
+            ok = any(w and w in low for w in words)
+        if not ok:
+            continue
+        tgt = user
+        if t.get("to") == "replied":
+            rp = (msg.get("reply_to_message") or {}).get("from") or {}
+            if not rp.get("id") or rp.get("is_bot") or rp["id"] == user["id"]:
+                return mod_say(token, bot_id, chat, "برای این کار روی پیام یک عضو دیگه ریپلای کن.", 10)
+            tgt = rp
+        env = Env(bot, token, chat, tgt, text=text)
+        if t.get("when") and not check(t["when"], env):
+            continue
+        cd, ck = int(t.get("cooldown") or 0), (bot_id, chat, user["id"], i)
+        if cd:
+            tm = time.time()
+            if tm - GRP_CD.get(ck, 0) < cd:
+                return
+            if len(GRP_CD) > 20000:
+                GRP_CD.clear()
+            GRP_CD[ck] = tm
+        run_actions(t.get("do"), env)
+        reply = fill(t.get("reply") or "", env, True)[:4000]
+        if t.get("board"):
+            reply = (reply + "\n\n" + _html.escape(board_text(env, t["board"]), quote=False))[:4000]
+        env.save()
+        if reply.strip():
+            r = tg_html(token, "sendMessage", chat_id=chat, text=reply, reply_to_message_id=msg["message_id"],
+                        allow_sending_without_reply=True, disable_web_page_preview=True)
+            if r.get("ok") and t.get("ttl"):
+                mod_later(bot_id, int(t["ttl"]), kind="del", chat=chat, mid=r["result"]["message_id"])
+        if t.get("delete"):
+            tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
+        return
 
 
 def mod_join(bot, bot_id, token, mod, msg, u):
@@ -1822,9 +1896,10 @@ def sub_hook(bot_id):
             mod_my_member(bot, bot_id, token, upd["my_chat_member"])
             return "ok"
         cq, msg = upd.get("callback_query"), upd.get("message")
-        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: فقط وقتی مدیریت روشنه
-            if cfg.get("mod"):
-                mod_group(bot, bot_id, token, cfg, msg)
+        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: مدیریت (mod) و ماشه‌های گروه (کلمه/دستور ← پاسخ و امتیاز)
+            stop = mod_group(bot, bot_id, token, cfg, msg) if cfg.get("mod") else False
+            if not stop and (cfg.get("group") or {}).get("triggers"):
+                group_triggers(bot, bot_id, token, cfg, msg)
             return "ok"
         actor = (cq or msg or {}).get("from") or {}
         chat0 = (msg or {}).get("chat") or ((cq or {}).get("message") or {}).get("chat") or {}

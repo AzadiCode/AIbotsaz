@@ -1129,7 +1129,7 @@ function btnSheet(){
 const BTN_STYLES = [["", "پیش‌فرض"], ["primary", "آبی"], ["success", "سبز"], ["danger", "قرمز"]];
 function btnLook(d){
   const okS = S.cfg.btn_fx, okE = S.cfg.emoji_max, list = S.emojis || [];
-  const lock = ok => ok ? "" : `<i class="pro">پرمیوم / پرو</i>`;
+  const lock = ok => ok ? "" : `<i class="pro">Premium / Pro</i>`;
   const sw = BTN_STYLES.map(([v, l]) => `<button type="button" class="sw ${v || "def"}${d.style === v ? " on" : ""}" data-sh="bstyle" data-v="${v}">${l}</button>`).join("");
   const cur = list.find(e => e.id === d.icon);
   const picks = [`<button type="button" class="${d.icon ? "" : "on"}" data-sh="bicon" data-v="">بدون</button>`,
@@ -1259,6 +1259,71 @@ function readMod(){
 function saveMod(){
   const d = D;
   busy($('[data-sh="save"]'), () => commit(cfg => { if(d.on) cfg.mod = d.m; else delete cfg.mod; }, d.on ? "مدیریت گروه و کانال ذخیره شد" : "مدیریت خاموش شد"));
+}
+/* ── ماشه‌های گروه: کلمه یا دستور داخل گروه ← پاسخ و اکشن (امتیاز، رندوم، جدول برترین‌ها) ── */
+const GRP_KINDS = [["contains", "شامل این کلمه باشد"], ["exact", "دقیقاً همین کلمه"], ["starts", "با این کلمه شروع شود"], ["command", "دستور (مثل /roll)"]];
+const GRP_OPS = [["", "فقط پاسخ بده"], ["add", "اضافه کن به (عدد یا بازه مثل 1-10)"], ["set", "بگذار روی"]];
+function grpDraft(t){
+  const a = (t.do || [])[0], simple = !a || a.op === "add" || a.op === "set";
+  return {raw: cp(t), on: t.on || "contains", words: (t.words || []).join("، "), reply: t.reply || "", op: simple ? (a?.op || "") : "_",
+    var: simple ? (a?.var || "") : "", val: simple ? (a?.value ?? "") : "", cd: t.cooldown || 0, to: t.to === "replied", del: !!t.delete, bvar: t.board?.var || ""};
+}
+const GRP_BLANK = () => ({raw: {}, on: "exact", words: "", reply: "", op: "add", var: "points", val: "1-10", cd: 0, to: false, del: false, bvar: ""});
+function openGrp(){
+  S.sheet = {kind: "grp"};
+  D = {t: (S.cur.config.group?.triggers || []).map(grpDraft)};
+  renderSheet();
+}
+function grpSheet(){
+  const sel = (v, o) => o.map(([k, t]) => `<option value="${k}"${v === k ? " selected" : ""}>${t}</option>`).join("");
+  const rows = D.t.map((t, i) => `<div class="rl gtr" data-i="${i}">
+      <div class="cmd" style="justify-content:space-between"><b>ماشه‌ی ${N(i + 1)}</b><button class="iconb sm" data-sh="delgt" data-i="${i}" aria-label="حذف">${IC.x}</button></div>
+      <span class="lbl">وقتی عضوی در گروه…</span><select class="g-on">${sel(t.on, GRP_KINDS)}</select>
+      <input class="fa g-words" value="${esc(t.words)}" placeholder="کلمه‌ها با ویرگول جدا شوند؛ مثلاً رندوم، شانس" maxlength="300">
+      <span class="lbl">پاسخ ربات در گروه (می‌توانی از {name} و {points} استفاده کنی)</span>
+      <textarea class="fa g-reply" data-fmt maxlength="1500" style="min-height:64px">${esc(t.reply)}</textarea>${fmtTools("@last")}
+      <span class="lbl">اکشن روی متغیرِ عضو</span>
+      ${t.op === "_" ? `<p class="muted">این ماشه اکشن پیشرفته دارد (با هوش مصنوعی ساخته شده) و بدون تغییر می‌ماند.</p><input type="hidden" class="g-op" value="_">`
+        : `<div class="cmd"><select class="g-op">${sel(t.op, GRP_OPS)}</select><input class="g-var" list="vdl" value="${esc(t.var)}" placeholder="متغیر (مثلاً points)" maxlength="20" autocomplete="off"></div>
+           <input class="fa g-val" value="${esc(t.val)}" placeholder="مقدار؛ برای امتیاز تصادفی مثل 1-10" maxlength="100">`}
+      <span class="lbl">جدول برترین‌ها زیر پاسخ (نام متغیر عددی؛ اختیاری)</span><input class="g-bvar" list="vdl" value="${esc(t.bvar)}" placeholder="points" maxlength="20" autocomplete="off">
+      <div class="cmd"><input class="ltr g-cd" inputmode="numeric" value="${esc(t.cd)}" aria-label="فاصله‌ی مجاز (ثانیه)" placeholder="۰"><span class="muted">ثانیه فاصله بین دو بار استفاده‌ی هر عضو (۰ = بدون محدودیت)</span></div>
+      <label class="chk"><input type="checkbox" class="g-to"${t.to ? " checked" : ""}> روی عضوی که به پیامش ریپلای شده اعمال شود</label>
+      <label class="chk"><input type="checkbox" class="g-del"${t.del ? " checked" : ""}> پیام خودِ عضو پاک شود</label></div>`).join("");
+  return head("ماشه‌های گروه") + `
+    <p class="muted">وقتی عضوی در گروه کلمه یا دستور خاصی بفرستد، ربات جواب می‌دهد و امتیاز می‌دهد. برای بازی‌ها و پاسخ خودکار گروه. ربات را به گروه اضافه و <b>ادمین</b> کن (یا در BotFather گزینه‌ی Group Privacy را خاموش کن)، وگرنه تلگرام پیام‌های عادی را به ربات نشان نمی‌دهد. برای هر پیام فقط اولین ماشه‌ی مطابق اجرا می‌شود.</p>
+    <div class="rowh"><span class="lbl">ماشه‌ها</span>${D.t.length < 20 ? `<button class="b o sm" data-sh="addgt">${IC.plus}ماشه</button>` : ""}</div>
+    <div id="g-list">${rows || '<p class="muted">هنوز ماشه‌ای نداری.</p>'}</div>${dlist()}
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
+}
+function readGrp(){
+  if(!$("#g-list")) return;
+  D.t = [...document.querySelectorAll("#g-list .gtr")].map((r, i) => {
+    const q = s => r.querySelector(s), o = {...(D.t[i] || GRP_BLANK())};
+    o.on = q(".g-on").value; o.words = q(".g-words").value; o.reply = q(".g-reply").value; o.op = q(".g-op").value;
+    o.var = q(".g-var") ? cleanVar(q(".g-var").value) : o.var; o.val = q(".g-val") ? q(".g-val").value : o.val;
+    o.bvar = cleanVar(q(".g-bvar").value); o.cd = parseInt(q(".g-cd").value) || 0; o.to = q(".g-to").checked; o.del = q(".g-del").checked;
+    return o;
+  });
+}
+function saveGrp(){
+  const list = [];
+  for(const t of D.t){
+    const words = t.words.split(/[,،\n]+/).map(x => x.trim()).filter(Boolean);
+    if(!words.length) return toast("برای هر ماشه حداقل یک کلمه یا دستور بنویس");
+    if((t.op === "add" || t.op === "set") && !t.var) return toast("اسم متغیرِ اکشن را بنویس");
+    if(!t.reply.trim() && !t.op && !t.bvar) return toast("هر ماشه باید پاسخ یا اکشن داشته باشد");
+    const o = {...t.raw, on: t.on, words};
+    if(t.reply.trim()) o.reply = t.reply.trim(); else delete o.reply;
+    if(t.op === "add" || t.op === "set") o.do = [{op: t.op, var: t.var, value: String(t.val ?? "").trim() || (t.op === "add" ? "1" : "")}, ...(t.raw.do || []).slice(1)];
+    else if(t.op === "") delete o.do;
+    if(t.bvar) o.board = {...(t.raw.board || {}), var: t.bvar, top: t.raw.board?.top || 10}; else delete o.board;
+    if(t.cd > 0) o.cooldown = t.cd; else delete o.cooldown;
+    if(t.to) o.to = "replied"; else delete o.to;
+    if(t.del) o.delete = true; else delete o.delete;
+    list.push(o);
+  }
+  busy($('[data-sh="save"]'), () => commit(cfg => { if(list.length) cfg.group = {triggers: list}; else delete cfg.group; }, "ماشه‌های گروه ذخیره شد"));
 }
 function openBot(){
   const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
@@ -1400,7 +1465,7 @@ function cardSheet(){
   </div>
   <div class="fjt cdnote">${tgHtml(o.text)}</div>
   <button class="b" data-a="cardrcpt">ارسال رسید</button>
-  <p class="muted mt">سفارش ${N("#" + o.order)} · ${N(o.tokens)} توکن</p><div class="fgap"></div>`;
+  <p class="muted mt">سفارش ${N("#" + o.order)} · ${o.plan ? "اشتراک " + esc(o.plan) : N(o.tokens) + " توکن"}</p><div class="fgap"></div>`;
 }
 function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
 async function refreshWallet(waitInc){
@@ -1446,6 +1511,7 @@ const SHEETS = {
   buy:   {html: buySheet},
   card:  {html: cardSheet},
   km:    {html: kmSheet},
+  grp:   {html: grpSheet,   read: readGrp,   save: saveGrp},
 };
 function renderSheet(){ showSheet(SHEETS[S.sheet.kind].html()); }
 function readSheet(){ SHEETS[S.sheet?.kind]?.read?.(); }
@@ -1479,6 +1545,8 @@ function shAction(a, ds){
     else if(k !== "goto" && prev !== k) D.val = "";
   }
   else if(a === "kbt") D.kb = ds.v;
+  else if(a === "addgt") D.t.push(GRP_BLANK());
+  else if(a === "delgt") D.t.splice(+ds.i, 1);
   else if(a === "bstyle"){ if(!S.cfg.btn_fx) return emjNeedPlan(); D.style = ds.v; }
   else if(a === "bicon"){ if(!S.cfg.emoji_max) return emjNeedPlan(); D.icon = ds.v; }
   else if(a === "bplan") return emjNeedPlan();
@@ -1564,7 +1632,7 @@ async function emjEnsure(){
   return S.emojis || [];
 }
 function emjNeedPlan(){
-  confirmQ("ایموجی پرمیوم و دکمه‌ی رنگی با اشتراک پرمیوم یا پرو فعال می‌شوند. صفحه‌ی اشتراک باز شود؟", ok => { if(ok) stGuardClose(() => { closeSheet(); A.goplan(); }); });
+  confirmQ("ایموجی پرمیوم و دکمه‌ی رنگی با اشتراک Premium یا Pro فعال می‌شوند. صفحه‌ی اشتراک باز شود؟", ok => { if(ok) stGuardClose(() => { closeSheet(); A.goplan(); }); });
 }
 Object.assign(A, {
   emjbar: async el => {

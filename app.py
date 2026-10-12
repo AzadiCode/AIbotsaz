@@ -30,7 +30,7 @@ Stack: Flask + MongoDB(pymongo) + مینی‌اپ (index.html + static/)
 مینی‌اپ
   ساخت و ارتقای ربات با هوش مصنوعی (کانفیگ JSON)، قالب‌های آماده، ویرایش دستی کامل، تست زنده،
   بررسی مسیرها، خروجی JSON، کتابخونه‌ی رسانه، پیام همگانی، آمار و نمودار،
-  پاسخ فرم‌ها، ماموریت‌ها و اشتراک (پرمیوم و پرو)، کیف توکن (روزانه، دعوت، کوپن، خرید با ستاره)،
+  پاسخ فرم‌ها، ماموریت‌ها و اشتراک (Premium و Pro)، کیف توکن (روزانه، دعوت، کوپن، خرید با ستاره)،
   پنل ادمین (کاربران آنلاین، شارژ، کوپن، اعلان همگانی، آمار سیستم)
   یوزربات: اتصال اکانت شخصی تلگرام با شماره (Telethon)، پاسخ خودکار، پیام غیبت، پاسخ هوشمند و دستورهای شخصی
 موتور ثابت و امن (send_node / run_actions)
@@ -314,7 +314,7 @@ def api_generate(uid):
         if not bot:
             return jsonify(error="ربات پیدا نشد"), 404
     elif db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با خرید اشتراک پرمیوم یا پرو، سقفت بیشتر می‌شه."), 400
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با خرید اشتراک Premium یا Pro، سقفت بیشتر می‌شه."), 400
     if not rate_ok(f"gen:{uid}", 10, 60):
         return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
     for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}}):
@@ -384,7 +384,7 @@ def api_template_create(uid, tid):
         return jsonify(error="قالب پیدا نشد"), 404
     ensure_user(uid)
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با خرید اشتراک پرمیوم یا پرو، سقفت بیشتر می‌شه."), 400
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با خرید اشتراک Premium یا Pro، سقفت بیشتر می‌شه."), 400
     cost = template_cost(t, uid)
     cfg = sanitize(t["config"])
     if cost and not spend(uid, cost, "template"):
@@ -437,7 +437,7 @@ def api_save_config(uid, bot_id):
     ne, ns = fx_use(cfg)
     oe, os_ = fx_use(bot["config"])
     if (ne > oe and not pk["emoji"]) or (ns > os_ and not pk["btn"]):
-        return jsonify(error="ایموجی پرمیوم و دکمه‌ی رنگی با اشتراک پرمیوم یا پرو فعال می‌شن.", need_plan=True), 403
+        return jsonify(error="ایموجی پرمیوم و دکمه‌ی رنگی با اشتراک Premium یا Pro فعال می‌شن.", need_plan=True), 403
     if cfg != bot["config"]:
         lm = bot.get("last_manual")
         recent = lm and age_sec(lm) < 180
