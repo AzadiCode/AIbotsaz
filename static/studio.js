@@ -283,9 +283,6 @@ function stPath(a, b){
 
 /* ── رندر بخش‌ها و سیم‌ها ── */
 const ST_KIND = {goto: ["رفتن به بخش", IC.go], pay: ["پرداخت", IC.coin], url: ["باز کردن لینک", IC.open], channel: ["کانال یا گروه", IC.open], alert: ["پیام پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["لینک دعوت", IC.users]};
-const BTN_COLORS = {blue: "🔵", green: "🟢", red: "🔴", yellow: "🟡", purple: "🟣", orange: "🟠", black: "⚫"};
-const BTN_COLOR_FA = {blue: "آبی", green: "سبز", red: "قرمز", yellow: "زرد", purple: "بنفش", orange: "نارنجی", black: "مشکی"};
-const stripEmojiTags = t => String(t ?? "").replace(/<tg-emoji\s+emoji-id="\d+"\s*>(.*?)<\/tg-emoji\s*>/gi, "$1");
 const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", audio: "موسیقی", voice: "ویس", document: "فایل"};
 
 /* پیش‌نمایش رسانه‌ی بخش: عکس و گیف خودشان، بقیه آیکن + نام فایل */
@@ -305,7 +302,7 @@ function stBtnCell(id, r, c, b, cfg){
   const broken = wired && !cfg.nodes[tgt];
   const tip = k === "goto" ? "رفتن به: " + titleOf(cfg, tgt) : k === "pay" ? `پرداخت ${b.pay.stars} ستاره` : lab;
   const anchor = wired ? `<span class="pa" data-pa="b|${id}|${r}|${c}" data-n="${esc(id)}" data-r="${r}" data-c="${c}" data-pc="${k === "pay" ? "var(--tok)" : "var(--ac)"}"></span>` : "";
-  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${b.color && BTN_COLORS[b.color] ? BTN_COLORS[b.color] + " " : ""}${esc(b.text)}</span></button>${anchor}</div>`;
+  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${anchor}</div>`;
 }
 function stCardH(n){
   const gr = [false, true].map(x => (n.buttons || []).filter(row => row.some(b => (b.kb === "reply") === x)).length), rows = gr[0] + gr[1], caps = (gr[0] ? 1 : 0) + (gr[1] ? 1 : 0), lg = (n.route?.length || 0) + (n.next ? 1 : 0);
@@ -327,7 +324,7 @@ function stCardHTML(id, dead){
   if(dead) tags.push('<span class="tag warn" title="هیچ دکمه یا مسیری به این بخش نمی‌رسد">بدون ورودی</span>');
   if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn" title="بعد از این بخش، کاربر راهی برای ادامه ندارد">بدون ادامه</span>');
   const txt = (n.text || "").trim();
-  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(stripEmojiTags(txt).slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
+  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
   const grp = isRk => {
     const keys = btns.map((row, r) => { const cells = row.map((b, c) => (b.kb === "reply") === isRk ? stBtnCell(id, r, c, b, cfg) : "").join(""); return cells ? `<div class="stk-row">${cells}</div>` : ""; }).join("");
     return keys ? `<div class="stk${isRk ? " rk" : ""}"><div class="stk-cap">${isRk ? "کیبورد پایین چت" : "دکمه‌های شیشه‌ای زیر پیام"}</div>${keys}</div>` : "";
@@ -935,18 +932,7 @@ function kbPicker(cur){
 }
 let FMT_LAST = null;
 document.addEventListener("focusin", e => { if(e.target.matches?.("[data-fmt]")) FMT_LAST = e.target; });
-const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}<button type="button" data-a="emojitag" data-t="${tid}" title="ایموجی پرمیوم (اشتراک پرمیوم و پرو)" aria-label="ایموجی پرمیوم">✨</button></div>`;
-function emojiInsert(t){
-  if(!S.cfg.emoji){ toast("ایموجی پرمیوم مخصوص اشتراک پرمیوم و پرو است"); return; }
-  const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
-  let sel = t.value.slice(a, b) || "😀";
-  const open = '<tg-emoji emoji-id="', id0 = "1234567890", close = '">' + sel + "</tg-emoji>";
-  t.value = t.value.slice(0, a) + open + id0 + close + t.value.slice(b);
-  const s0 = a + open.length, s1 = s0 + id0.length;
-  t.focus(); t.setSelectionRange(s0, s1);
-  t.dispatchEvent(new Event("input", {bubbles: true}));
-  toast("آیدی عددی ایموجی را جایگزین کن");
-}
+const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}<button type="button" class="fx" data-a="emjbar" data-t="${tid}" aria-label="ایموجی پرمیوم" title="ایموجی پرمیوم">✨</button></div>`;
 function fmtInsert(t, i){
   const tg_ = FMT_TAGS[i], o = tg_[2], c = tg_[3], a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
   t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true}));
@@ -989,7 +975,7 @@ function nodeSheet(){
     <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${kbSummary(cfg.nodes[S.sheet.id])}</span></span>${goIc}</button></div>
     <details class="adv"${advOpen ? " open" : ""}><summary>منطق پیشرفته: متغیر و شرط</summary><div class="box">
       ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقداری ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
-      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، اشتراک ویژه، ساعت کاری)", "route", cfg, 5)}
+      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
       ${ruleSection("متن جایگزین شرطی", "اگر شرط درست بود، به‌جای متن اصلی نشان داده می‌شود", "alt", cfg, 4)}
       <div class="sub"><span>جدول برترین‌ها</span></div><p class="muted" style="margin:-3px 0 8px">زیر متن این بخش رتبه‌بندی کاربرها بر اساس یک متغیر عددی (یا refs برای دعوت‌ها) نشان داده می‌شود. خالی یعنی غیرفعال.</p>
       <div class="cmd"><input class="ltr" id="f-bvar" list="vdl" value="${esc(d.bvar)}" placeholder="متغیر عددی، مثلاً coins" maxlength="20" autocomplete="off"><input id="f-btop" type="number" min="3" max="20" value="${esc(d.btop)}" placeholder="چند نفر؟"></div>
@@ -1093,24 +1079,21 @@ function addNode(at){
 function openBtn(nid, r, c){
   const cfg = S.cur.config;
   S.sheet = {kind: "btn", n: nid, r, c};
-  if(c === null) D = {text: "دکمه‌ی جدید", color: "", kb: "inline", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: ""};
+  if(c === null) D = {text: "دکمه‌ی جدید", kb: "inline", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: "", style: "", icon: ""};
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
-    D = {text: b.text, color: b.color || "", kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
+    D = {text: b.text, kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
          val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || b.share || "",
          when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
          jch: (b.join?.channels || []).map(c => "@" + c).join(" "), jtx: b.join?.text || "",
-         stars: b.pay?.stars || 50, ptitle: b.pay?.title || "", pdesc: b.pay?.desc || "", ptext: b.pay?.text || "", pgoto: b.pay?.goto || ""};
+         stars: b.pay?.stars || 50, ptitle: b.pay?.title || "", pdesc: b.pay?.desc || "", ptext: b.pay?.text || "", pgoto: b.pay?.goto || "",
+         style: b.style || "", icon: b.icon || ""};
   }
+  const needLoad = S.cfg.emoji_max && S.emojis == null;
+  if(needLoad) emjEnsure().then(() => { if(S.sheet?.kind === "btn" && $("#b-icons")){ readSheet(); renderSheet(); } });
   renderSheet();
 }
 const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"]];
-function colorPicker(){
-  if(!S.cfg.color) return `<p class="muted">رنگ دکمه مخصوص اشتراک پرمیوم و پرو است. <button class="b t sm" data-a="goplan" style="display:inline;min-height:0;padding:0 4px">دیدن اشتراک‌ها</button></p>`;
-  const opts = [`<button type="button" class="${!D.color ? "on" : ""}" data-sh="pickcolor" data-v="" title="بی‌رنگ">⭕</button>`,
-    ...Object.entries(BTN_COLORS).map(([k, e]) => `<button type="button" class="${D.color === k ? "on" : ""}" data-sh="pickcolor" data-v="${k}" title="${BTN_COLOR_FA[k]}">${e}</button>`)].join("");
-  return `<div class="cdots">${opts}</div><p class="muted mt">نقطه‌ی رنگی اولِ متن دکمه در ربات نمایش داده می‌شود.</p>`;
-}
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
@@ -1131,11 +1114,11 @@ function btnSheet(){
   const nn = cfg.nodes[S.sheet.n], kbOk = !(nn.ask || nn.fields || nn.ai);
   return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
     <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
-    <span class="lbl">رنگ دکمه (اشتراک پرمیوم و پرو)</span>${colorPicker()}
     <span class="lbl">با لمس دکمه چه شود؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v, l]) => `<option value="${v}"${v === d.kind ? " selected" : ""}>${l}</option>`).join("")}</select>
     ${val}
     ${kbOk ? kbPicker(d.kb) : `<p class="muted mt">این بخش فرم، دریافت پیام یا هوش مصنوعی است؛ دکمه‌هایش فقط شیشه‌ای می‌شوند.</p>`}
+    ${btnLook(d)}
     <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اقدام‌ها (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
       ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشان دادن پیام اجرا می‌شوند", "do", cfg, 6)
@@ -1143,8 +1126,23 @@ function btnSheet(){
     </div></details>${canDo ? joinBox(d, "این دکمه") : ""}${dlist()}
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف دکمه</button>`}</div>`;
 }
+const BTN_STYLES = [["", "پیش‌فرض"], ["primary", "آبی"], ["success", "سبز"], ["danger", "قرمز"]];
+function btnLook(d){
+  const okS = S.cfg.btn_fx, okE = S.cfg.emoji_max, list = S.emojis || [];
+  const lock = ok => ok ? "" : `<i class="pro">پرمیوم / پرو</i>`;
+  const sw = BTN_STYLES.map(([v, l]) => `<button type="button" class="sw ${v || "def"}${d.style === v ? " on" : ""}" data-sh="bstyle" data-v="${v}">${l}</button>`).join("");
+  const cur = list.find(e => e.id === d.icon);
+  const picks = [`<button type="button" class="${d.icon ? "" : "on"}" data-sh="bicon" data-v="">بدون</button>`,
+    ...list.map(e => `<button type="button" class="${d.icon === e.id ? "on" : ""}" data-sh="bicon" data-v="${esc(e.id)}" aria-label="${esc(e.char)}">${emjImg(e)}</button>`)].join("");
+  return `<span class="lbl">رنگ دکمه ${lock(okS)}</span><div class="sws${okS ? "" : " lock"}">${sw}</div>
+    <span class="lbl">ایموجی پرمیوم کنار متن دکمه ${lock(okE)}</span>
+    ${okE ? `<div class="emjpick" id="b-icons">${list.length ? picks : '<span class="muted">کتابخونه‌ی ایموجی‌هات خالیه. ایموجی پرمیوم رو برای ربات مادر بفرست.</span>'}</div>${d.icon && !cur && list.length ? `<p class="muted">این ایموجی دیگه توی کتابخونه‌ات نیست ولی هنوز روی دکمه می‌مونه.</p>` : ""}`
+      : `<div class="sws lock"><button type="button" class="sw def" data-sh="bplan">دریافت اشتراک</button></div>`}
+    <p class="muted mt">رنگ دکمه‌ها همه‌جا کار می‌کند. ایموجی پرمیوم فقط وقتی نشان داده می‌شود که اکانتِ تلگرامیِ صاحب ربات (BotFather) پرمیوم تلگرام داشته باشد.</p>`;
+}
 function readBtn(){
-  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;  if($("#b-goto")) D.goto = $("#b-goto").value;
+  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
+  if($("#b-goto")) D.goto = $("#b-goto").value;
   if($("#b-val")) D.val = $("#b-val").value;
   if($("#b-stars")){ D.stars = $("#b-stars").value; D.ptitle = $("#b-ptitle").value; D.pdesc = $("#b-pdesc").value; D.ptext = $("#b-ptext").value; D.pgoto = $("#b-pgoto").value; }
   readRl("when"); readRl("do"); readJoin();
@@ -1158,7 +1156,6 @@ function saveBtn(){
   const err = ruleErr(); if(err) return toast(err);
   const bj = (d.kind === "goto" || d.kind === "alert" || d.kind === "pay") ? chOut(d.jch, d.jtx) : null; if(typeof bj === "string") return toast(bj);
   const btn = {text: d.text.trim()};
-  if(d.color && BTN_COLORS[d.color]) btn.color = d.color;
   if(d.kind === "goto") btn.goto = d.goto;
   else if(d.kind === "alert") btn.alert = d.val.trim();
   else if(d.kind === "copy") btn.copy = d.val.trim();
@@ -1171,6 +1168,8 @@ function saveBtn(){
   }
   else btn.url = d.val.trim();
   if(bj) btn.join = bj;
+  if(d.style) btn.style = d.style;
+  if(d.icon) btn.icon = d.icon;
   { const nn = S.cur.config.nodes[nid]; if(d.kb === "reply" && !(nn.ask || nn.fields || nn.ai)) btn.kb = "reply"; }
   if(d.when.length) btn.when = d.when[0].c;
   if(d.do.length && (d.kind === "goto" || d.kind === "alert" || d.kind === "pay")) btn.do = outActs(d.do);
@@ -1242,32 +1241,8 @@ function modSheet(){
       <div class="cmd"><input class="fa" id="m-bt" maxlength="30" value="${esc(bt.text || "")}" placeholder="متن دکمه"><input class="ltr" id="m-bu" value="${esc(bt.url || "")}" placeholder="https://t.me/..." autocomplete="off"></div>
       <span class="lbl">واکنش خودکار (یک ایموجی؛ اختیاری)</span><input class="ltr" id="m-re" maxlength="8" value="${esc(ch.react || "")}" placeholder="👍">
     </div></details>
-    <details class="adv"><summary>ترگرهای کلمه‌کلیدی (گروه/پیوی)</summary><div class="box">
-      <p class="muted" style="margin-bottom:8px">هنگامی که کاربری پیامی شامل الگو می‌فرستد، اکشن‌ها اجرا و/یا پاسخ متنی داده می‌شود. در گروه و پیوی هر دو کار می‌کند. الگو می‌تواند کلمه، عبارت یا عبارت منظم ساده باشد.</p>
-      <div id="m-triggers">${(m.triggers || []).map((t, i) => triggerRow(i, t)).join("")}</div>
-      <button class="b o sm" data-sh="addtrigger">${IC.plus}افزودن ترگر</button>
-    </details>
     <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
 }
-function triggerRow(i, t){
-  const actionsHtml = (t.actions || []).map((a, ai) => {
-    const op = a.op || "";
-    const varName = a.var || "";
-    const value = a.value || "";
-    return `<div class="cmd"><select class="tr-op" data-sh="tr-op-${i}-${ai}" value="${op}">${["set","add","clear","notify","remind","dice","pick","db_add","db_get","db_set","db_inc","db_del","fetch"].map(o => `<option value="${o}"${o===op?" selected":""}>${o}</option>`).join("")}</select><input class="fa tr-var" data-sh="tr-var-${i}-${ai}" value="${esc(varName)}" placeholder="متغیر (مثل coins)"><input class="fa tr-val" data-sh="tr-val-${i}-${ai}" value="${esc(value)}" placeholder="مقدار"></div>`;
-  }).join("");
-  return `<details class="trigger-item" open><summary>ترگر #${i+1}</summary><div class="box">
-    <div class="cmd"><input class="fa tr-pattern" data-sh="tr-pattern-${i}" value="${esc(t.pattern)}" placeholder="الگو (مثلاً: سلام)" maxlength="200"></div>
-    <label class="chk" style="display:inline-flex;margin:4px 0"><input type="checkbox" class="tr-case" data-sh="tr-case-${i}"${t.case_sensitive ? " checked":""}> حساس به حروف بزرگ/کوچک</label>
-    <label class="chk" style="display:inline-flex;margin:4px 0"><input type="checkbox" class="tr-whole" data-sh="tr-whole-${i}"${t.whole_word !== false ? " checked":""}> کلمه‌ی کامل (word boundary)</label>
-    <span class="lbl">اکشن‌ها</span>
-    <div class="tr-actions">${actionsHtml || `<div class="cmd"><select class="tr-op" data-sh="tr-op-${i}-0">${["set","add","clear","notify","remind","dice","pick","db_add","db_get","db_set","db_inc","db_del","fetch"].map(o => `<option value="${o}">${o}</option>`).join("")}</select><input class="fa tr-var" data-sh="tr-var-${i}-0" placeholder="متغیر"><input class="fa tr-val" data-sh="tr-val-${i}-0" placeholder="مقدار"></div>`}</div>
-    <button class="b o sm" data-sh="tr-addact" data-i="${i}">${IC.plus}اکشن</button>
-    <span class="lbl">پاسخ متنی (اختیاری، قالب HTML)</span><textarea class="fa tr-reply" data-sh="tr-reply-${i}" maxlength="3500" style="min-height:60px">${esc(t.reply || "")}</textarea>${fmtTools("tr-reply-" + i)}
-    <button class="b r sm" data-sh="tr-del" data-i="${i}">${IC.trash}حذف ترگر</button>
-  </div></details>`;
-}
-
 function readMod(){
   if(!$("#m-on")) return;
   const g = id => $("#" + id)?.value ?? "", n = id => parseInt(String(g(id)).replace(/[۰-۹]/g, c => "۰۱۲۳۴۵۶۷۸۹".indexOf(c)), 10);
@@ -1280,28 +1255,6 @@ function readMod(){
     action: g("m-ac"), warns: {max: n("m-wm") || 3, then: g("m-wt"), mins: n("m-wmin") || 60},
     clean: [...document.querySelectorAll(".m-cl:checked")].map(x => x.value), report: $("#m-rp").checked,
     channel: {id: g("m-ci").trim(), button: {text: g("m-bt").trim(), url: g("m-bu").trim()}, react: g("m-re").trim()}};
-  // ترگرها
-  const triggers = [];
-  document.querySelectorAll(".trigger-item").forEach((item, i) => {
-    const pattern = item.querySelector(".tr-pattern")?.value?.trim() || "";
-    if(!pattern) return;
-    const actions = [];
-    item.querySelectorAll(".tr-actions > .cmd").forEach(cmd => {
-      const op = cmd.querySelector(".tr-op")?.value || "";
-      const varName = cmd.querySelector(".tr-var")?.value?.trim() || "";
-      const value = cmd.querySelector(".tr-val")?.value || "";
-      if(op) actions.push({op, var: varName, value});
-    });
-    const reply = item.querySelector(".tr-reply")?.value?.trim() || "";
-    triggers.push({
-      pattern: pattern,
-      case_sensitive: !!item.querySelector(".tr-case")?.checked,
-      whole_word: !!item.querySelector(".tr-whole")?.checked,
-      actions: actions.length ? actions : undefined,
-      reply: reply || undefined
-    });
-  });
-  if(triggers.length) D.m.triggers = Object.fromEntries(triggers.map((t, i) => [`trigger_${i}`, t]));
 }
 function saveMod(){
   const d = D;
@@ -1439,20 +1392,15 @@ function buySheet(){
     <div class="fgap"></div>`;
 }
 function cardSheet(){
-  const o = S.sheet.o || {}, row = (l, v, raw) => {
-    if(v == null || v === "") return "";
-    return `<div class="cdrow"><div><span class="muted">${l}</span><div class="cdv">${v}</div></div>${raw ? `<button class="b o sm" data-a="cardcopy" data-v="${esc(raw)}">کپی</button>` : ""}</div>`;
-  };
-  const num = row("مبلغ قابل پرداخت", (o.toman ? N(Number(o.toman).toLocaleString("en")) + " تومان" : ""), o.toman);
-  const crd = row("شماره کارت", o.number || "", o.raw);
-  const hld = row("به نام", o.holder || "");
-  const bnk = row("بانک", o.bank || "");
-  const note = o.text ? `<div class="fjt cdnote">${tgHtml(o.text)}</div>` : "";
-  const title = o.ptitle ? `اشتراک ${esc(o.ptitle)}` : `${N(o.tokens || 0)} توکن`;
-  return head("پرداخت کارت‌به‌کارت") + `<div class="cardbox">${num}${crd}${hld}${bnk}</div>
-    ${note}
-    <button class="b" data-a="cardrcpt">ارسال رسید</button>
-    <p class="muted mt">سفارش ${N("#" + (o.order || ""))} · ${title}</p><div class="fgap"></div>`;
+  const o = S.sheet.o, row = (l, v, raw) => `<div class="cdrow"><div><span class="muted">${l}</span><div class="cdv">${v}</div></div>${raw ? `<button class="b o sm" data-a="cardcopy" data-v="${esc(raw)}">کپی</button>` : ""}</div>`;
+  return head("پرداخت کارت‌به‌کارت") + `<div class="cardbox">
+    ${row("مبلغ قابل پرداخت", N(Number(o.toman).toLocaleString("en")) + " تومان", String(o.toman))}
+    ${row("شماره کارت", esc(o.number), o.raw)}
+    ${o.holder ? row("به نام", esc(o.holder)) : ""}${o.bank ? row("بانک", esc(o.bank)) : ""}
+  </div>
+  <div class="fjt cdnote">${tgHtml(o.text)}</div>
+  <button class="b" data-a="cardrcpt">ارسال رسید</button>
+  <p class="muted mt">سفارش ${N("#" + o.order)} · ${N(o.tokens)} توکن</p><div class="fgap"></div>`;
 }
 function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
 async function refreshWallet(waitInc){
@@ -1475,14 +1423,15 @@ async function buyPack(id, btn){
     }); else window.open(d.url, "_blank");
   });
 }
-async function subPlan(id, btn){
+
+async function buyPlan(id, btn){
   busy(btn, async () => {
-    const d = await api("/api/subscribe", "POST", { plan: id });
-    const done = async () => { try{ takeMe(await api("/api/me")); }catch(_){} render(); toast("اشتراک فعال شد"); haptic("ok"); };
+    const d = await api("/api/plan/buy", "POST", { plan: id });
+    const done = async () => { toast("پرداخت انجام شد"); for(let i = 0; i < 6; i++){ await sleep(i ? 1500 : 800); if(await sync() && S.plan?.id === id) break; } render(); bumpTokens(); };
     if(tg?.openInvoice) tg.openInvoice(d.url, st => {
       if(st === "paid") done();
       else if(st === "failed") toast("پرداخت ناموفق بود");
-    }); else { window.open(d.url, "_blank"); toast("بعد از پرداخت، صفحه را تازه کن"); }
+    }); else window.open(d.url, "_blank");
   });
 }
 
@@ -1507,27 +1456,6 @@ function shAction(a, ds){
   readSheet();
   if(a.startsWith("km")) return kmAct(a, ds);
   if(a.startsWith("ub")) return ubAct(a, ds);
-  if(a.startsWith("tr-")){
-    const idx = +ds.i;
-    const triggers = Object.values(D.m.triggers || {});
-    const t = triggers[idx];
-    if(!t) return;
-    if(a === "tr-case") t.case_sensitive = ds.v === "true" || ds.v === true;
-    else if(a === "tr-whole") t.whole_word = ds.v === "true" || ds.v === true;
-    else if(a === "tr-pattern") t.pattern = ds.v || "";
-    else if(a === "tr-reply") t.reply = ds.v || "";
-    else if(a.startsWith("tr-op-") || a.startsWith("tr-var-") || a.startsWith("tr-val-")){
-      const parts = a.split("-");
-      const ai = +parts[2];
-      if(t.actions[ai]){
-        if(a.startsWith("tr-op")) t.actions[ai].op = ds.v;
-        else if(a.startsWith("tr-var")) t.actions[ai].var = ds.v;
-        else if(a.startsWith("tr-val")) t.actions[ai].value = ds.v;
-      }
-    }
-    renderSheet();
-    return;
-  }
   if(a === "stkm"){ const n = ds.n; return stGuardClose(() => { closeSheet(); openKm(n); }); }
   if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این بخش شروع می‌شود")); }
   if(a === "save") return SHEETS[S.sheet.kind].save();
@@ -1551,7 +1479,9 @@ function shAction(a, ds){
     else if(k !== "goto" && prev !== k) D.val = "";
   }
   else if(a === "kbt") D.kb = ds.v;
-  else if(a === "pickcolor") D.color = ds.v;
+  else if(a === "bstyle"){ if(!S.cfg.btn_fx) return emjNeedPlan(); D.style = ds.v; }
+  else if(a === "bicon"){ if(!S.cfg.emoji_max) return emjNeedPlan(); D.icon = ds.v; }
+  else if(a === "bplan") return emjNeedPlan();
   else if(a === "addfld") D.fields.push({q: "", v: "", t: "text"});
   else if(a === "delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push({q: "", v: "", t: "text"});
   else if(a === "addcmd") D.cmds.push(["help", S.cur.config.start]);
@@ -1562,9 +1492,6 @@ function shAction(a, ds){
   else if(a === "delglob") D.globs.splice(+ds.i, 1);
   else if(a === "addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
   else if(a === "delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
-  else if(a === "addtrigger"){ D.m.triggers = D.m.triggers || {}; D.m.triggers[`trigger_${Object.keys(D.m.triggers).length}`] = {pattern: "", actions: [], case_sensitive: false, whole_word: true}; }
-  else if(a === "tr-del"){ delete D.m.triggers[Object.keys(D.m.triggers)[+ds.i]]; }
-  else if(a === "tr-addact"){ const triggers = Object.values(D.m.triggers); if(triggers[+ds.i]){ triggers[+ds.i].actions = triggers[+ds.i].actions || []; triggers[+ds.i].actions.push({op: "set", var: "", value: ""}); } }
   renderSheet();
 }
 
@@ -1631,6 +1558,33 @@ function kmAct(a, ds){
   }
 }
 
+/* ── ایموجی پرمیوم و رنگ دکمه داخل ادیتور ── */
+async function emjEnsure(){
+  if(S.emojis == null){ try{ S.emojis = (await api("/api/emojis")).items; }catch(_){ S.emojis = []; } }
+  return S.emojis || [];
+}
+function emjNeedPlan(){
+  confirmQ("ایموجی پرمیوم و دکمه‌ی رنگی با اشتراک پرمیوم یا پرو فعال می‌شوند. صفحه‌ی اشتراک باز شود؟", ok => { if(ok) stGuardClose(() => { closeSheet(); A.goplan(); }); });
+}
+Object.assign(A, {
+  emjbar: async el => {
+    if(!S.cfg.emoji_max) return emjNeedPlan();
+    const bar = el.closest(".fmtbar"), nxt = bar.nextElementSibling;
+    if(nxt?.classList.contains("emjpick")){ nxt.remove(); return; }
+    document.querySelectorAll(".fmtbar + .emjpick").forEach(x => x.remove());
+    const list = await emjEnsure();
+    const html = list.length ? list.map(e => `<button type="button" data-a="emjins" data-t="${esc(el.dataset.t)}" data-id="${esc(e.id)}" data-ch="${esc(e.char)}" aria-label="${esc(e.char)}">${emjImg(e)}</button>`).join("")
+      : `<span class="muted">کتابخونه‌ی ایموجی‌هات خالیه. ایموجی پرمیوم رو برای ربات مادر بفرست.</span>`;
+    if(bar.isConnected) bar.insertAdjacentHTML("afterend", `<div class="emjpick">${html}</div>`);
+  },
+  emjins: el => {
+    const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
+    if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد ایموجی را انتخاب کن");
+    const tag = `<tg-emoji emoji-id="${el.dataset.id}">${el.dataset.ch}</tg-emoji>`, a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
+    t.value = t.value.slice(0, a) + tag + t.value.slice(b); t.focus(); t.setSelectionRange(a + tag.length, a + tag.length);
+    t.dispatchEvent(new Event("input", {bubbles: true}));
+  },
+});
 Object.assign(A, {
   stbtn: el => {
     if(!$("#stc")) return;
@@ -1667,7 +1621,6 @@ function ubruleDel(){
 
 /* ── شیت اتصال اکانت: شماره ← کد ← (رمز دومرحله‌ای) ← تمام ── */
 function openUbConn(){
-  if(S.ub?.locked) return toast("یوزربات مخصوص اشتراک پرو است");
   if(S.ub && S.ub.items.length >= S.ub.max && !S.ub.items.some(x => x.status === "revoked")) return toast(`حداکثر ${S.ub.max} یوزربات می‌توانی داشته باشی`);
   S.sheet = {kind: "ubconn"}; D = {step: "phone", phone: "", code: "", pw: "", aid: "", ah: "", item: null}; renderSheet();
 }

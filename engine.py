@@ -40,7 +40,7 @@ from bson.errors import InvalidId
 from core import (
     AI_CHAT_MODEL, AI_NODE_MAX_TOKENS, ai_tick, app, balance, BASE_URL, BILLING, BOARD_SCAN, calc_cost,
     charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND,
-    MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, style_label, style_plain, style_text, tehran_day, tg, tg_html, tg_media,
+    MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, strip_fx_text, tehran_day, tg, tg_html, tg_media,
     TOKEN_SCALE,
 )
 from ai import (
@@ -52,31 +52,6 @@ from ai import (
 
 
 # ───────────────────────── موتور اجرای کانفیگ: محیط، شرط، اکشن، بازی و API بیرونی ─────────────────────────
-
-# ترگرهای کلمه‌کلیدی (گروه/پیوی): کلمه -> لیست اکشن/پاسخ
-TRIGGER_RE = re.compile(r"^trigger:(\w+)$")
-
-def _word_match(pattern, text, whole_word, case_sensitive):
-    """مطابقت کلمه با پشتیبانی از فارسی/عربی و Unicode"""
-    if not pattern:
-        return False
-    if case_sensitive:
-        hay = text
-        pat = pattern
-    else:
-        hay = text.lower()
-        pat = pattern.lower()
-    
-    if whole_word:
-        # word boundary با پشتیبانی Unicode: قبل/بعد از pattern باید non-word یا شروع/پایان رشته باشه
-        # word character = حرف/عدد/آندرلاین در هر اسکریپتی
-        escaped = re.escape(pat)
-        # (?<!\w) = قبلش word char نیست، (?!\w) = بعدش word char نیست
-        regex = r"(?<!\w)" + escaped + r"(?!\w)"
-        return bool(re.search(regex, hay))
-    else:
-        return pat in hay
-
 _WEEK = {5: "شنبه", 6: "یکشنبه", 0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه"}
 FORM_HINT = {"number": "فقط عدد بفرست.", "phone": "یه شماره‌ی تماس معتبر بفرست، مثل 09123456789.",
              "email": "یه ایمیل معتبر بفرست."}
@@ -106,7 +81,6 @@ class Env:
     def __init__(self, bot, token, chat_id, user, text="", param=""):
         self.bot, self.token, self.chat_id = bot, token, chat_id
         self.cfg, self.bot_id, self.owner = bot["config"], str(bot["_id"]), bot["owner"]
-        self.perks = perks_of(self.owner)    # مزایای اشتراک صاحب ربات (ایموجی پرمیوم، دکمه‌ی رنگی و…)
         self.user = user or {}
         self.uid = self.user.get("id", chat_id)
         self.text, self.param = text or "", param or ""
@@ -118,9 +92,16 @@ class Env:
         self.refs = int(doc.get("refs", 0))
         self.ticket_no = str(doc.get("tk") or "")
         self._g = None                      # متغیرهای مشترکِ این ربات (تنبل بارگذاری می‌شه)
+        self._px = None                     # مزایای اشتراکِ صاحب ربات (تنبل بارگذاری می‌شه)
         self.is_new = False
         self.dirty = False
         self._now = now() + timedelta(hours=3, minutes=30)      # ساعت تهران
+
+    def perk(self, k):
+        """مزیت اشتراکِ صاحب ربات (btn = دکمه‌ی رنگی، emoji = ایموجی پرمیوم)؛ با تموم شدن اشتراک خودکار خاموش می‌شه"""
+        if self._px is None:
+            self._px = perks_of(self.owner)
+        return self._px.get(k)
 
     def builtin(self, k):
         u = self.user
@@ -259,7 +240,10 @@ def fill(t, env, esc=False):
                 return m.group(2)
             return _html.escape(str(v), quote=False) if esc else v
         return m.group(0)
-    return PH_RE.sub(rep, str(t))
+    out = PH_RE.sub(rep, str(t))
+    if esc and "<tg-emoji" in out and not env.perk("emoji"):
+        out = strip_fx_text(out)            # اشتراک پرمیوم/پرو نیست: ایموجی معمولیِ داخل تگ نشون داده می‌شه
+    return out
 
 
 def check(cond, env, depth=0):
@@ -508,11 +492,21 @@ def run_actions(acts, env):
 def share_url(text, env):
     """باز کردن پنجره‌ی اشتراک‌گذاری تلگرام با لینک دعوت شخصی کاربر"""
     link = env.get("ref_link") or ""
-    return "https://t.me/share/url?url=" + quote(link, safe="") + "&text=" + quote(style_plain(fill(text, env)[:200], env.perks), safe="")
+    return "https://t.me/share/url?url=" + quote(link, safe="") + "&text=" + quote(fill(text, env)[:200], safe="")
 
 
 def visible(b, env):
     return not b.get("when") or check(b["when"], env)
+
+
+def fx_btn(d, b, env):
+    """رنگ دکمه (style) و ایموجی پرمیوم کنار متنش (icon_custom_emoji_id)؛ فقط وقتی اشتراکِ صاحب ربات اجازه بده"""
+    if b.get("style") in ("primary", "success", "danger") and env.perk("btn"):
+        d["style"] = b["style"]
+    ic = str(b.get("icon") or "")
+    if ic.isdigit() and env.perk("emoji"):
+        d["icon_custom_emoji_id"] = ic
+    return d
 
 
 def keyboard(node, node_id, env):
@@ -523,7 +517,8 @@ def keyboard(node, node_id, env):
         for ci, b in enumerate(row):
             if not visible(b, env) or b.get("kb") == "reply":
                 continue
-            label = style_label(fill(b["text"], env)[:64], b.get("color"), env.perks) or "·"
+            n0 = len(r)
+            label = fill(b["text"], env)[:64] or "·"
             if "url" in b:
                 r.append({"text": label, "url": b["url"]})
             elif "goto" in b:
@@ -532,11 +527,13 @@ def keyboard(node, node_id, env):
             elif "alert" in b:
                 r.append({"text": label, "callback_data": f"a:{node_id}:{ri}:{ci}"})
             elif "copy" in b:
-                r.append({"text": label, "copy_text": {"text": style_plain(fill(b["copy"], env), env.perks)[:256]}})
+                r.append({"text": label, "copy_text": {"text": fill(b["copy"], env)[:256]}})
             elif "share" in b:
                 r.append({"text": label, "url": share_url(b["share"], env)})
             elif "pay" in b and PAYMENTS:
                 r.append({"text": label, "callback_data": f"y:{node_id}:{ri}:{ci}"})
+            if len(r) > n0:
+                fx_btn(r[-1], b, env)
         if r:
             kb.append(r)
     return kb
@@ -544,7 +541,7 @@ def keyboard(node, node_id, env):
 
 def reply_markup(node, env):
     """کیبورد زیر صفحه‌ی چت (Reply Keyboard)"""
-    rows = [[{"text": style_label(fill(b["text"], env)[:64], b.get("color"), env.perks) or "·"} for b in row
+    rows = [[fx_btn({"text": fill(b["text"], env)[:64] or "·"}, b, env) for b in row
              if b.get("kb") == "reply" and visible(b, env) and ("pay" not in b or PAYMENTS)] for row in node["buttons"]]
     rows = [r for r in rows if r]
     return {"keyboard": rows, "resize_keyboard": True, "is_persistent": True} if rows else None
@@ -565,7 +562,6 @@ def clear_reply_kb(env):
 def deliver(env, text, markup, mid=None, photo=None, edit=None, has_kb=True):
     """متن + (رسانه‌ی کتابخونه | عکس لینکی) + دکمه‌ها؛ تا جای ممکن پیام قبلی رو ویرایش می‌کنه"""
     token, chat_id = env.token, env.chat_id
-    text = style_text(text, env.perks)    # ایموجی پرمیوم فقط با اشتراک؛ بدون اشتراک همان شکلک ساده می‌آد
     inline = "inline_keyboard" in (markup or {})
     if edit and not (mid or photo) and inline and not any(k in edit for k in MEDIA_KEYS):
         r = tg_html(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text, reply_markup=markup)
@@ -633,7 +629,7 @@ def send_node(env, node_id, edit=None, depth=0):
         db.rk.replace_one({"_id": sid}, {"_id": sid, "node": node_id, "t": now()}, upsert=True)
     if node.get("fields"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
-        tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=style_text(fill(node["fields"][0], env, True), env.perks))
+        tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=fill(node["fields"][0], env, True))
     elif node.get("ask"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "ask": node_id, "t": now()}, upsert=True)
     elif node.get("ai"):
@@ -649,7 +645,7 @@ def reply_press(env, rk, text):
         return False
     for row in node["buttons"]:
         for b in row:
-            if b.get("kb") != "reply" or not visible(b, env) or text not in (style_label(fill(b["text"], env)[:64], b.get("color"), env.perks), b["text"]):
+            if b.get("kb") != "reply" or not visible(b, env) or text not in (fill(b["text"], env), b["text"]):
                 continue
             if button_gate(env, b, f"n:{rk.get('node')}"):
                 return True
@@ -658,9 +654,9 @@ def reply_press(env, rk, text):
             if "goto" in b:
                 send_node(env, b["goto"])
             elif "alert" in b:
-                tg(env.token, "sendMessage", chat_id=env.chat_id, text=style_plain(fill(b["alert"], env), env.perks))
+                tg(env.token, "sendMessage", chat_id=env.chat_id, text=fill(b["alert"], env))
             elif "copy" in b:
-                c = style_plain(fill(b["copy"], env), env.perks)[:256]
+                c = fill(b["copy"], env)[:256]
                 tg(env.token, "sendMessage", chat_id=env.chat_id, text=c,
                    reply_markup={"inline_keyboard": [[{"text": "کپی", "copy_text": {"text": c}}]]})
             elif "pay" in b:
@@ -668,7 +664,7 @@ def reply_press(env, rk, text):
             elif "url" in b or "share" in b:
                 url = b["url"] if "url" in b else share_url(b["share"], env)
                 tg(env.token, "sendMessage", chat_id=env.chat_id, text="لینک:",
-                   reply_markup={"inline_keyboard": [[{"text": style_label(fill(b["text"], env)[:64], b.get("color"), env.perks), "url": url}]]})
+                   reply_markup={"inline_keyboard": [[{"text": fill(b["text"], env)[:64], "url": url}]]})
             return True
     return False
 
@@ -692,7 +688,7 @@ def to_owner(env, text=None, copy_msg=None):
 
 
 def finish(env, node, default_done):
-    t = style_text(fill(node.get("done") or default_done, env, True), env.perks)
+    t = fill(node.get("done") or default_done, env, True)
     sent = False
     if node.get("done_media"):
         short = len(t) <= 1000
@@ -827,9 +823,7 @@ def run_sched_job(job):
     if job.get("kind"):
         return run_mod_job(job, token)
     if job.get("text"):
-        bot2 = db.bots.find_one({"_id": ObjectId(job["bot"])}, {"owner": 1})
-        pk = perks_of(bot2["owner"]) if bot2 else {}
-        if not tg_html(token, "sendMessage", chat_id=job["chat"], text=style_text(job["text"], pk)).get("ok"):
+        if not tg_html(token, "sendMessage", chat_id=job["chat"], text=job["text"]).get("ok"):
             return
     g = job.get("goto")
     if g and g in bot["config"]["nodes"]:
@@ -881,12 +875,6 @@ def mod_later(bot_id, secs, **kw):
 
 def mod_say(token, bot_id, chat, text, ttl=25, markup=None):
     """پیام موقتِ ربات توی گروه؛ بعد از ttl ثانیه پاک می‌شه"""
-    if "<tg-emoji" in (text or ""):
-        try:
-            b = db.bots.find_one({"_id": ObjectId(bot_id)}, {"owner": 1})
-            text = style_text(text, perks_of(b["owner"]) if b else {})
-        except Exception:
-            text = style_text(text, {})
     r = tg_html(token, "sendMessage", chat_id=chat, text=text[:3500], disable_web_page_preview=True, **({"reply_markup": markup} if markup else {}))
     if r.get("ok") and ttl:
         mod_later(bot_id, ttl, kind="del", chat=chat, mid=r["result"]["message_id"])
@@ -1083,9 +1071,7 @@ def mod_command(bot, bot_id, token, cfg, mod, msg, cmd, args, admin):
 
 
 def mod_group(bot, bot_id, token, cfg, msg):
-    mod, chat, user = cfg.get("mod"), msg["chat"]["id"], msg.get("from") or {}
-    if not mod:
-        return False
+    mod, chat, user = cfg["mod"], msg["chat"]["id"], msg.get("from") or {}
     uid = user.get("id", 0)
     if (bot_id, chat) not in MOD_SEEN:
         if len(MOD_SEEN) > 20000:
@@ -1100,7 +1086,7 @@ def mod_group(bot, bot_id, token, cfg, msg):
             if u.get("is_bot") or mod_is_admin(token, bot, chat, u["id"]):
                 continue
             mod_join(bot, bot_id, token, mod, msg, u)
-        return True
+        return
     if msg.get("left_chat_member"):
         if "leave" in clean:
             tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
@@ -1108,12 +1094,12 @@ def mod_group(bot, bot_id, token, cfg, msg):
         if mod.get("goodbye") and not u.get("is_bot"):
             mod_say(token, bot_id, chat, mod["goodbye"].replace("{name}", mod_name(u)).replace("{group}", plain_html(msg["chat"].get("title") or "")), 30)
         db.modp.delete_one({"_id": f"{bot_id}:{chat}:{u['id']}"})
-        return True
+        return
     if msg.get("pinned_message") and "pin" in clean or (("new_chat_title" in msg or "new_chat_photo" in msg or "delete_chat_photo" in msg) and "title" in clean):
         tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
-        return True
+        return
     if not uid or msg.get("is_automatic_forward"):
-        return False
+        return
     text = (msg.get("text") or "").strip()
     admin = mod_is_admin(token, bot, chat, uid, msg)
     if text.startswith("/"):
@@ -1122,29 +1108,18 @@ def mod_group(bot, bot_id, token, cfg, msg):
         cmd, _, at = head.partition("@")
         if not at or at.lower() == str(bot.get("username") or "").lower():
             mod_command(bot, bot_id, token, cfg, mod, msg, cmd.lower(), parts[1:], admin)
-            return True
+            return
     if admin:
-        return True
+        return
     if db.modp.find_one({"_id": f"{bot_id}:{chat}:{uid}"}):          # هنوز کپچا رو حل نکرده
         tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
-        return True
+        return
     low = (text or msg.get("caption") or "").lower()
     kinds = mod_kinds(msg) & set(mod.get("lock") or [])
     if kinds:
         return mod_violation(token, bot_id, mod, msg, "ارسال " + "/".join(MOD_LOCKS[k] for k in sorted(kinds)))
     if any(w in low for w in mod.get("words") or []):
         return mod_violation(token, bot_id, mod, msg, "استفاده از کلمه‌ی ممنوع")
-    # ── ترگرهای کلمه‌کلیدی (گروه/پیوی) ──
-    triggers = cfg.get("triggers") or {}
-    for key, tr in triggers.items():
-        if not isinstance(tr, dict):
-            continue
-        pattern = tr.get("pattern", "")
-        case_sensitive = tr.get("case_sensitive", False)
-        whole_word = tr.get("whole_word", True)
-        actions = tr.get("actions", [])
-        reply_text = tr.get("reply", "")
-        match = _word_match(pattern, text, whole_word, case_sensitive)
     fl = mod.get("flood")
     if fl:
         k, t = (bot_id, chat, uid), time.time()
@@ -1157,8 +1132,6 @@ def mod_group(bot, bot_id, token, cfg, msg):
             mod_restrict(token, chat, uid, mod["warns"]["mins"])
             tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
             mod_say(token, bot_id, chat, f"{mod_name(user)} به‌خاطر ارسال پشت‌سرهم {mod['warns']['mins']} دقیقه ساکت شد.")
-            return True
-    return False
 
 
 def mod_join(bot, bot_id, token, mod, msg, u):
@@ -1360,7 +1333,7 @@ def ticket_followup(env, tk, body="", copy_msg=None):
 def ticket_answer(bot, token, staff_chat, mid, tk, text=""):
     """پاسخ پشتیبان (هر نوع پیامی) رو برای کاربر کپی می‌کنه، با دکمه‌ی «پاسخ به پشتیبانی» زیرش"""
     bot_id, n = str(bot["_id"]), tk["n"]
-    label = style_label((bot["config"].get("desk") or {}).get("reply_btn") or "پاسخ به پشتیبانی", None, perks_of(bot["owner"]))
+    label = (bot["config"].get("desk") or {}).get("reply_btn") or "پاسخ به پشتیبانی"
     r = tg(token, "copyMessage", chat_id=tk["chat"], from_chat_id=staff_chat, message_id=mid,
            reply_markup={"inline_keyboard": [[{"text": label, "callback_data": f"u:t:{n}"}]]})
     if not r.get("ok"):
@@ -1417,7 +1390,7 @@ def staff_callback(bot, token, cq, data):
         tg(token, "sendMessage", chat_id=chat_id, text=tk_history(tk), reply_markup=tk_buttons(n, tk.get("status", "open"), blocked))
     elif act == "c":
         db.tickets.update_one({"_id": tk["_id"]}, {"$set": {"status": "closed", "closed": now()}})
-        txt = style_text((bot["config"].get("desk") or {}).get("closed") or "تیکت #{ticket_no} بسته شد. اگه سؤال دیگه‌ای داشتی، دوباره پیام بده.", perks_of(bot["owner"]))
+        txt = (bot["config"].get("desk") or {}).get("closed") or "تیکت #{ticket_no} بسته شد. اگه سؤال دیگه‌ای داشتی، دوباره پیام بده."
         tg(token, "sendMessage", chat_id=tk["chat"], text=txt.replace("{ticket_no}", str(n)))
         refresh("closed", blocked)
         ans("تیکت بسته شد")
@@ -1570,7 +1543,7 @@ def bot_paid(env, msg):
     except DuplicateKeyError:
         return
     run_actions(b.get("do"), env)
-    tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=style_text(fill(p.get("text") or "پرداختت انجام شد. ممنون!", env, True), env.perks)[:4000])
+    tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=fill(p.get("text") or "پرداختت انجام شد. ممنون!", env, True)[:4000])
     to_owner(env, text=f"پرداخت جدید — {p['title']}\n{p['stars']} ستاره\n{who(env)}\nکد پیگیری: {charge}")
     if p.get("goto") in env.cfg["nodes"]:
         send_node(env, p["goto"])
@@ -1578,9 +1551,7 @@ def bot_paid(env, msg):
 
 def allowed_updates(cfg):
     u = ["message", "callback_query", "pre_checkout_query"]
-    has_mod = bool(cfg.get("mod"))
-    has_triggers = bool(cfg.get("triggers"))
-    return u + (["channel_post", "my_chat_member"] if has_mod or has_triggers else [])
+    return u + ["channel_post", "my_chat_member"] if cfg.get("mod") else u
 
 
 def ensure_webhook(bot, cfg):
@@ -1691,7 +1662,7 @@ def child_referral(env):
     run_actions(cfg.get("on_ref"), renv)
     renv.save()
     if cfg.get("ref_text"):
-        tg_html(env.token, "sendMessage", chat_id=rid, text=style_text(fill(cfg["ref_text"], renv, True), renv.perks)[:4000])
+        tg_html(env.token, "sendMessage", chat_id=rid, text=fill(cfg["ref_text"], renv, True)[:4000])
 
 
 # ───────────────────────── تبلیغ ربات‌ساز روی ورودی‌های جدیدِ ربات‌های بزرگ ─────────────────────────
@@ -1851,37 +1822,9 @@ def sub_hook(bot_id):
             mod_my_member(bot, bot_id, token, upd["my_chat_member"])
             return "ok"
         cq, msg = upd.get("callback_query"), upd.get("message")
-        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: ترگرها و فلوی بخش‌ها
+        if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: فقط وقتی مدیریت روشنه
             if cfg.get("mod"):
-                handled = mod_group(bot, bot_id, token, cfg, msg)
-            else:
-                handled = False
-            if not handled and cfg.get("triggers"):
-                # اگر mod_group مصرف نکرد و ترگر داریم، اینجا چک می‌کنیم
-                text = (msg.get("text") or "").strip()
-                if text:
-                    low = text.lower()
-                    triggers = cfg.get("triggers") or {}
-                    for key, tr in triggers.items():
-                        if not isinstance(tr, dict):
-                            continue
-                        pattern = tr.get("pattern", "")
-                        case_sensitive = tr.get("case_sensitive", False)
-                        whole_word = tr.get("whole_word", True)
-                        actions = tr.get("actions", [])
-                        reply_text = tr.get("reply", "")
-                        if _word_match(pattern, text, whole_word, case_sensitive):
-                            user = msg.get("from", {})
-                            env = Env(bot, token, msg["chat"]["id"], user, text=text)
-                            if tr.get("actions"):
-                                run_actions(tr["actions"], env)
-                            if tr.get("reply"):
-                                tg_html(token, "sendMessage", chat_id=msg["chat"]["id"], text=fill(tr["reply"], env, True)[:4000])
-                            return "ok"
-            # اگر mod_group یا ترگر مصرف نکرد، شاید فلوی بخش‌ها داشته باشیم (فال‌بک به پیوی هندل می‌شود)
-            if not handled:
-                # برای پشتیبانی از دکمه‌های inline و کال‌بک در گروه، fal-back به private handler
-                pass
+                mod_group(bot, bot_id, token, cfg, msg)
             return "ok"
         actor = (cq or msg or {}).get("from") or {}
         chat0 = (msg or {}).get("chat") or ((cq or {}).get("message") or {}).get("chat") or {}
@@ -1977,7 +1920,7 @@ def sub_hook(bot_id):
                 run_actions(b.get("do"), env)
                 if kind == "a":
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"],
-                       text=style_plain(fill(b.get("alert", ""), env), env.perks)[:200], show_alert=True)
+                       text=fill(b.get("alert", ""), env)[:200], show_alert=True)
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_node(env, b["goto"], edit=m)
@@ -2068,7 +2011,7 @@ def sub_hook(bot_id):
             ans = (state.get("a") or []) + [val[:500]]
             if len(ans) < len(fields):
                 db.states.update_one({"_id": sid}, {"$set": {"a": ans}})
-                tg_html(token, "sendMessage", chat_id=chat_id, text=style_text(fill(fields[len(ans)], env, True), env.perks))
+                tg_html(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], env, True))
             else:
                 db.states.delete_one({"_id": sid})
                 body = "\n\n".join(f"{plain_html(q)}\n» {a}" for q, a in zip(fields, ans))

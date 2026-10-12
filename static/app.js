@@ -22,7 +22,7 @@ let S = {
   view: "create", btab: "ai", atab: "wallet", sbot: null,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
-  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null
+  ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null, emojis: undefined
 };
 let D = null;   // پیش‌نویس فرمِ باز
 
@@ -129,7 +129,7 @@ const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="a
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
   referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", card:"خرید کارت‌به‌کارت", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", sub:"اشتراک", levelup:"پاداش"};
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", levelup:"پاداش ارتقای سطح", plan:"هدیه‌ی اشتراک"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -153,7 +153,7 @@ function takeMe(d){
   for(const b of d.bots || []) for(const n of Object.values(b.config?.nodes || {})) if(n.kb === "reply"){ (n.buttons || []).forEach(r => r.forEach(x => { x.kb = "reply"; })); delete n.kb; }
   Object.assign(S, { card: d.card || { on: false, prices: {} }, bots: d.bots, wallet: d.wallet, cfg: d.cfg, packs: d.packs, media: d.media, used: d.used, ref: d.ref, joined: d.joined, templates: d.templates || [], admin: !!d.admin, tasks: d.tasks || [], plan: d.plan || null, me: d.me || null });
 }
-const tgHtml = t => esc(t).replace(/&lt;tg-emoji emoji-id=&quot;\d+&quot;&gt;(.*?)&lt;\/tg-emoji&gt;/gi, "$1").replace(/&lt;(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)&gt;/gi, "<$1$2>").replace(/&lt;a href=&quot;(https?:\/\/[^&"<>]*)&quot;&gt;/gi, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/gi, "</a>").replace(/&lt;\/?tg-spoiler&gt;/gi, "");
+const tgHtml = t => esc(t).replace(/&lt;(\/?)(b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote)&gt;/gi, "<$1$2>").replace(/&lt;a href=&quot;(https?:\/\/[^&"<>]*)&quot;&gt;/gi, '<a href="$1" target="_blank" rel="noopener">').replace(/&lt;\/a&gt;/gi, "</a>").replace(/&lt;tg-emoji emoji-id=&quot;(\d+)&quot;&gt;([\s\S]*?)&lt;\/tg-emoji&gt;/g, (m, id, ch) => emjTag(id, ch)).replace(/&lt;\/?tg-spoiler&gt;/gi, "");
 function showFj(f){
   $("#dock").hidden = true;
   $("#app").innerHTML = `<div class="empty fjg"><div class="ib big">${IC.users}</div><h2>عضویت اجباری</h2><div class="fjt">${tgHtml(f.text)}</div>
@@ -590,12 +590,12 @@ function renderAccount(){
   const tu = tg?.initDataUnsafe?.user || {}, me = S.me || {};
   const u = {first_name: tu.first_name || me.name || "", last_name: tu.first_name ? tu.last_name : "", username: tu.username || me.username || "", photo_url: tu.photo_url};
   const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || "کاربر";
-  const tabs = [["wallet", "توکن"], ["plan", "ارتقا"], ["quests", "پاداش" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
+  const tabs = [["wallet", "توکن"], ["plan", "اشتراک"], ["invite", "ماموریت‌ها" + (readyTasks() ? '<span class="qdot"></span>' : "")], ["history", "تاریخچه"]]; if(S.admin) tabs.push(["admin", "مدیریت"]);
   if(!tabs.some(t => t[0] === S.atab)) S.atab = "wallet";
-  const body = ({wallet: tabWallet, plan: tabPlan, quests: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
+  const body = ({wallet: tabWallet, plan: planTab, invite: () => questsHTML() + '<div class="inv-end">' + inviteCard() + "</div>", history: tabHistory, admin: adminCard})[S.atab]();
   $("#app").innerHTML = `
     <div class="pf"><div class="av">${esc(name.trim().charAt(0))}${u.photo_url ? `<img src="${esc(u.photo_url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</div>
-      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span>${S.plan && S.plan.id !== "free" ? ` · <span class="lvp" data-a="planinfo">اشتراک ${esc(S.plan.title)}</span>` : ""}</div></div></div>
+      <div><h1>${esc(name)}</h1><div class="muted">${u.username ? `<span class="ltr">@${esc(u.username)}</span> · ` : ""}<span class="ltr">ID ${esc(me.id || tu.id || "")}</span>${S.plan ? ` · <span class="pbadge ${esc(S.plan.id)}" data-a="goplan">${esc(S.plan.title)}</span>` : ""}</div></div></div>
     ${tabsHTML(tabs, S.atab, "atab")}
     ${body}`;
   if(S.atab === "history") loadLedger();
@@ -623,12 +623,17 @@ const A = {
   claim: el => busy(el, async () => {
     const d = await api(`/api/tasks/${el.dataset.id}/claim`, "POST");
     Object.assign(S, {tasks: d.tasks, wallet: d.wallet, cfg: d.cfg});
-    render(); bumpTokens(); haptic("ok");
-    toast(`${d.gain.tokens} توکن پاداش گرفتی`);
+    render(); bumpTokens(); haptic("ok"); toast(`${d.gain.tokens} توکن دریافت شد`);
   }),
-  planinfo: () => { S.atab = "plan"; renderAccount(); scrollTo(0, 0); },
-  plantog: el => { S.planOpen = S.planOpen || {}; S.planOpen[el.dataset.id] = !S.planOpen[el.dataset.id]; renderAccount(); },
-  sub: el => subPlan(el.dataset.id, el),
+  goplan: () => { S.atab = "plan"; goTo("account"); },
+  planbuy: el => buyPlan(el.dataset.id, el),
+  emjdel: el => busy(el, async () => { const d = await api("/api/emojis/" + el.dataset.id, "DELETE"); S.emojis = d.items; renderAccount(); }),
+  emjbot: () => { const m = /t\.me\/([^?\/]+)/.exec(S.ref?.link || ""); if(m) openLink("https://t.me/" + m[1]); else toast("ربات مادر رو توی تلگرام باز کن و ایموجی رو برایش بفرست"); },
+  adplan: el => busy(el, async () => {
+    const v = id => $(id).value.trim();
+    const d = await api("/api/admin/plan", "POST", {uid: v("#ap-uid"), plan: v("#ap-plan"), days: v("#ap-days")});
+    toast(d.plan.id === "free" ? "اشتراک لغو شد" : `اشتراک ${d.plan.title} فعال شد (${d.plan.days_left} روز)`);
+  }),
   undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); S.ideas = []; render(); toast("برگشت داده شد"); }),
   act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن را وارد کن");
     busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/activate`, "POST", {token: t}); setBot(d.bot); render(); toast("ربات فعال شد"); haptic("ok"); }); },
@@ -673,10 +678,10 @@ document.addEventListener("focusin", e => {
 });
 document.addEventListener("focusout", () => setTimeout(() => { if(!document.activeElement?.matches?.("input,textarea,select")) $("#dock").classList.remove("hide"); }, 150));
 
-/* ═════════════════ اشتراک و ماموریت‌ها ═════════════════ */
+/* ═════════════════ ماموریت‌ها ═════════════════ */
 IC.check = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 2.6);
 S._bw = {};
-/* نوارهای پیشرفت مرحله‌ها: از مقدار قبلی تا مقدار تازه با انیمیشن پر می‌شن */
+/* نوارها و حلقه‌ی پیشرفت: از مقدار قبلی تا مقدار تازه با انیمیشن پر می‌شن (مرحله یا سطح عوض شد، از صفر) */
 function animBars(){
   const rm = reduced(), D = 900;
   document.querySelectorAll("[data-p]").forEach(el => {
@@ -719,31 +724,43 @@ function taskCard(t){
 const readyTasks = () => (S.tasks || []).filter(t => t.ready).length;
 function questsHTML(){
   const r = readyTasks(), list = [...(S.tasks || [])].sort((a, b) => (b.ready - a.ready) || (a.done - b.done));
-  return `<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div><p class="muted mt">هر مرحله فقط پاداش توکنی می‌دهد.</p>`;
+  return `<div class="sec"><h2>ماموریت‌ها</h2>${r ? `<span class="muted">${N(r)} پاداش آماده</span>` : ""}</div><div class="qs">${list.map(taskCard).join("")}</div>`;
 }
-/* ── تب اشتراک: FREE / PREMIUM / PRO (کشویی) ── */
-function tabPlan(){
-  const cur = (S.plan && S.plan.id) || "free";
-  S.planOpen = S.planOpen || {};
-  const cards = (S.cfg.plans || []).map(p => {
-    const isCur = p.id === cur, paid = p.id !== "free";
-    const cp = S.card?.on ? S.card.prices?.[p.id] : 0;
-    const open = !!S.planOpen[p.id];
-    const head = `<div class="phead"><div class="pt"><b class="pname" dir="ltr">${esc(p.title)}</b>
-        <span class="ppr">${paid ? `${N(p.stars)} استارز · ${N(p.days)} روز` : "رایگان · همیشه"}</span></div>
-      ${isCur ? '<span class="tag st">فعال</span>' : ""}
-      ${paid && !isCur ? `<button class="iconb sm ptog${open ? " open" : ""}" data-a="plantog" data-id="${esc(p.id)}" aria-label="نمایش قابلیت‌ها">${IC.chev}</button>` : ""}</div>`;
-    if(isCur) return `<div class="plan ${esc(p.id)} cur">${head}
-      ${S.plan.exp ? `<p class="muted mt">${N(S.plan.left)} روز باقی مانده</p>` : ""}</div>`;
-    const body = `<div class="pbody"${open ? "" : ' style="display:none"'}>
-        ${p.tokens ? `<div class="pgift">${N("+" + p.tokens)} توکن هدیه‌ی فعال‌سازی</div>` : ""}
-        <ul class="plist">${(p.perks || []).map(x => `<li><span class="pi">${IC.check}</span><span>${digitsHTML(x)}</span></li>`).join("")}</ul>
-        <div class="pbtns"><button class="b sm" data-a="sub" data-id="${esc(p.id)}">فعال‌سازی با استارز</button>${cp ? `<button class="b o sm" data-a="subcard" data-id="${esc(p.id)}">کارت‌به‌کارت</button>` : ""}</div></div>`;
-    return `<div class="plan ${esc(p.id)}">${head}${body}</div>`;
+/* ═════════════════ اشتراک و ایموجی پرمیوم ═════════════════ */
+const PLAN_RANK_FA = ["free", "premium", "pro"];
+function planTab(){
+  const cur = S.plan || {id: "free", title: "رایگان", days_left: 0}, rk = id => PLAN_RANK_FA.indexOf(id);
+  const hd = cur.id === "free"
+    ? `<div class="planhd"><small>اشتراک شما</small><h2>رایگان</h2><span class="muted">با پرمیوم یا پرو، ایموجی پرمیوم، دکمه‌ی رنگی، یوزربات و سقف بیشتر می‌گیری.</span></div>`
+    : `<div class="planhd on ${esc(cur.id)}"><small>اشتراک شما</small><h2>${esc(cur.title)}</h2><span class="muted">${N(cur.days_left)} روز مانده</span></div>`;
+  const cards = (S.cfg.plans || []).filter(p => p.id !== "free").map(p => {
+    const mine = cur.id === p.id, lower = rk(p.id) < rk(cur.id);
+    const btn = lower ? `<button class="b o" disabled>اشتراک بالاتر فعاله</button>`
+      : `<button class="b${p.id === "pro" ? "" : " o"}" data-a="planbuy" data-id="${esc(p.id)}">${mine ? "تمدید" : cur.id !== "free" ? "ارتقا" : "خرید"} · ${N(p.stars)} ستاره</button>`;
+    return `<div class="plan ${esc(p.id)}${mine ? " mine" : ""}"><div class="plh"><b>${esc(p.title)}</b><span>${N(p.days)} روزه</span></div>
+      <div class="plp">${N(p.stars)}<small>ستاره</small></div>
+      <ul>${p.perks.map(x => `<li>${digitsHTML(x)}</li>`).join("")}<li class="t">${N("+" + p.tokens)} توکن هدیه</li></ul>${btn}</div>`;
   }).join("");
-  return `<div class="sec"><h2>اشتراک</h2></div>
-    <div class="plans">${cards}</div>
-    <p class="muted mt">پرداخت با استارز تلگرام بلافاصله فعال می‌شود؛ کارت‌به‌کارت بعد از تأیید رسید. با پایان دوره به پلن FREE برمی‌گردی؛ ربات‌ها و تنظیماتت سر جایشان می‌مانند.</p>`;
+  return `${hd}<div class="plans">${cards}</div>${emojiPanel()}`;
+}
+const emjImg = e => e.url ? `<img src="${esc(e.url)}" alt="${esc(e.char)}" loading="lazy" referrerpolicy="no-referrer">` : esc(e.char);
+function emjTag(id, ch){
+  const e = (S.emojis || []).find(x => x.id === id);
+  return e && e.url ? `<img class="te" src="${esc(e.url)}" alt="${ch}">` : ch;
+}
+async function emjLoad(){
+  try{ const d = await api("/api/emojis"); S.emojis = d.items; }catch(_){ S.emojis = []; }
+  if(S.view === "account" && S.atab === "plan") renderAccount();
+}
+function emojiPanel(){
+  const mx = S.cfg.emoji_max || 0;
+  if(S.emojis === undefined && mx){ S.emojis = null; emjLoad(); }
+  const list = S.emojis || [];
+  const items = list.map(e => `<div class="emj"><span class="ei">${emjImg(e)}</span><button class="x" data-a="emjdel" data-id="${esc(e.id)}" aria-label="حذف">×</button></div>`).join("");
+  return `<div class="sec"><h2>ایموجی‌های پرمیوم</h2>${mx ? `<span class="muted">${N(list.length)} از ${N(mx)}</span>` : ""}</div>
+    <div class="panel"><p class="muted">${mx ? "ایموجی پرمیوم رو برای ربات مادر بفرست تا به کتابخونه‌ت اضافه بشه. بعد توی ادیتور متن و دکمه‌ها با دکمه‌ی ✨ ازش استفاده کن." : "با اشتراک پرمیوم یا پرو می‌تونی ایموجی پرمیوم توی متن و دکمه‌ی ربات‌هات بذاری."}</p>
+      ${mx ? `<div class="emjs">${items || '<span class="muted">هنوز ایموجی‌ای اضافه نکردی.</span>'}</div><button class="b o sm" data-a="emjbot">ارسال ایموجی به ربات مادر</button>` : ""}
+      <p class="muted mt">نکته: ایموجی پرمیوم فقط وقتی نشون داده می‌شه که اکانت تلگرامی که ربات رو توی BotFather ساخته، پرمیوم تلگرام داشته باشه؛ وگرنه ایموجی معمولی دیده می‌شه. رنگ دکمه‌ها این شرط رو نداره.</p></div>`;
 }
 
 /* ═════════════════ ابزارهای ربات ═════════════════ */
@@ -825,7 +842,6 @@ Object.assign(A, {
     busy(el, async () => { const d = await api("/api/coupon", "POST", {code: v}); S.wallet = d.wallet; render(); bumpTokens(); toast(`${d.got} توکن اضافه شد`); haptic("ok"); }); },
   copyid: el => navigator.clipboard?.writeText(el.dataset.id).then(() => toast("شناسه کپی شد"), () => toast(el.dataset.id)),
   agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید کاربر: ${d.bal}`); }),
-  aplan: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/plan", "POST", {uid: v("#ap-uid"), plan: $("#ap-plan").value, days: v("#ap-days")}); toast(`اشتراک کاربر: ${d.plan}`); }),
   acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
     toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
   astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
@@ -847,20 +863,22 @@ function adminCard(){
   const pr = S.pr || PRD;
   if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; if(S.atab === "admin") render(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
   const cd = S.cd || {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []};
-  return `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
+  const planPanel = `<div class="panel"><h2>اشتراک دستی</h2><p class="muted">برای هدیه یا اصلاح اشتراک یک کاربر. «رایگان» اشتراک رو لغو می‌کند. تعداد روز خالی = یک دوره‌ی کامل.</p><div class="fgap"></div>
+      <span class="lbl">آیدی عددی کاربر</span><input class="ltr" id="ap-uid" inputmode="numeric" autocomplete="off" aria-label="آیدی کاربر">
+      <span class="lbl">پلن</span><select id="ap-plan" aria-label="پلن">${(S.cfg.plans || []).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select>
+      <span class="lbl">تعداد روز (اختیاری)</span><input class="ltr" id="ap-days" inputmode="numeric" autocomplete="off" aria-label="تعداد روز">
+      <button class="b o" data-a="adplan">اعمال</button></div>`;
+  return planPanel + `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="cd-on"${cd.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">شماره کارت (۱۶ رقم)</span><input class="ltr" id="cd-num" inputmode="numeric" value="${esc(cd.number)}" placeholder="6037 0000 0000 0000" autocomplete="off" aria-label="شماره کارت">
       <span class="lbl">به نام (اختیاری)</span><input class="fa" id="cd-holder" value="${esc(cd.holder)}" maxlength="60" aria-label="نام صاحب کارت">
       <span class="lbl">بانک (اختیاری)</span><input class="fa" id="cd-bank" value="${esc(cd.bank)}" maxlength="40" aria-label="بانک">
       <span class="lbl">قیمت هر بسته (تومان؛ خالی = بدون کارت‌به‌کارت)</span>
       ${S.packs.map(p => `<div class="cdp"><span>${N(p.tokens)} توکن</span><input class="ltr" id="cd-p-${esc(p.id)}" inputmode="numeric" value="${esc((cd.prices || {})[p.id] || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت بسته ${esc(p.tokens)} توکن"></div>`).join("")}
-      <span class="lbl">قیمت اشتراک‌ها (تومان؛ خالی = بدون کارت‌به‌کارت)</span>
-      <div class="cdp"><span dir="ltr">PREMIUM</span><input class="ltr" id="cd-pp-premium" inputmode="numeric" value="${esc((cd.prices || {}).premium || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت اشتراک PREMIUM"></div>
-      <div class="cdp"><span dir="ltr">PRO</span><input class="ltr" id="cd-pp-pro" inputmode="numeric" value="${esc((cd.prices || {}).pro || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت اشتراک PRO"></div>
       <span class="lbl">متن راهنما زیر مشخصات کارت (قالب HTML)</span><textarea class="fa" id="cd-tx" data-fmt maxlength="1200" style="min-height:90px" aria-label="متن راهنما">${esc(cd.text)}</textarea>${fmtTools("cd-tx")}
       <button class="b o" data-a="cdsave">ذخیره</button>
       <h3 class="mt" style="font-size:14px">آخرین سفارش‌ها</h3>
-      ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${o.plan ? `اشتراک ${esc(o.plan.toUpperCase())}` : `${N(o.tokens)} توکن`} · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
+      ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${N(o.tokens)} توکن · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
       <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div>
     ` + `<div class="panel"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
@@ -881,9 +899,6 @@ function adminCard(){
     ` + `<div class="panel"><h2>توکن کاربر</h2><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
       <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
       <button class="b o" data-a="agrant">اعمال</button></div>
-    <div class="panel"><h2>اشتراک کاربر</h2><p class="muted">فعال‌سازی دستی اشتراک پرمیوم/پرو. «رایگان» یا صفر روز یعنی لغو.</p><div class="fgap"></div>
-      <div class="cmd"><input id="ap-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><select id="ap-plan" aria-label="پلن"><option value="premium">پرمیوم</option><option value="pro">پرو</option><option value="free">رایگان (لغو)</option></select><input id="ap-days" placeholder="روز (مثلاً 30)" inputmode="numeric" aria-label="مدت به روز"></div>
-      <button class="b o" data-a="aplan">اعمال اشتراک</button></div>
     <div class="panel"><h2>کد هدیه</h2><div class="fgap"></div>
       <div class="cmd"><input id="ac-code" placeholder="کد (خالی = خودکار)" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
       <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
@@ -927,11 +942,9 @@ const cdDecide = (el, ok) => confirmQ(ok ? "این پرداخت تأیید و ت
   await api("/api/admin/card-orders/" + el.dataset.id, "POST", {ok}); toast(ok ? "تأیید شد" : "رد شد"); await cdReload(); }));
 Object.assign(A, {
   cardbuy: el => busy(el, async () => { const o = await api("/api/card/order", "POST", {pack: el.dataset.id}); S.sheet = {kind: "card", o}; D = null; renderSheet(); }),
-  subcard: el => busy(el, async () => { const o = await api("/api/card/sub-order", "POST", {plan: el.dataset.id}); S.sheet = {kind: "card", o}; D = null; renderSheet(); }),
   cardrcpt: () => { const l = S.sheet?.o?.link; if(l) openLink(l); else toast("لینک ربات آماده نیست؛ رسید را مستقیم در ربات بفرست"); },
   cardcopy: el => navigator.clipboard?.writeText(el.dataset.v).then(() => toast("کپی شد"), () => toast(el.dataset.v)),
   cdsave: el => busy(el, async () => { const v = id => $(id).value.trim(), prices = {}; S.packs.forEach(p => { prices[p.id] = v("#cd-p-" + p.id); });
-    prices.premium = v("#cd-pp-premium"); prices.pro = v("#cd-pp-pro");
     await api("/api/admin/card", "POST", {on: $("#cd-on").checked, number: v("#cd-num"), holder: v("#cd-holder"), bank: v("#cd-bank"), text: v("#cd-tx"), prices});
     try{ S.card = (await api("/api/me")).card; }catch(_){}
     toast("ذخیره شد"); await cdReload(); }),
@@ -940,8 +953,6 @@ Object.assign(A, {
   cdrefresh: el => busy(el, cdReload),
   fmtb: el => { const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
     if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد قالب را انتخاب کن"); fmtInsert(t, +el.dataset.i); },
-  emojitag: el => { const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
-    if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد ✨ را انتخاب کن"); emojiInsert(t); },
   fjopen: el => openLink(el.dataset.u),
   fjchk: el => busy(el, async () => { const d = await api("/api/fj");
     if(d.required){ toast("هنوز عضو نشدی"); return showFj(d); }
@@ -1097,13 +1108,6 @@ function renderUserbot(){
     app.innerHTML = `<div class="empty"><div class="ib big">${IC.person}</div><h2>یوزربات فعلاً در دسترس نیست</h2><p class="muted">این بخش روی سرور فعال نشده. بعداً دوباره سر بزن.</p></div>`;
     return;
   }
-  if(S.ub.locked && !S.ub.items.length){
-    app.innerHTML = `<div class="ph"><h1>یوزربات</h1></div>
-      <div class="empty"><div class="ib big">${IC.person}</div><h2>مخصوص اشتراک پرو</h2>
-      <p class="muted">اتصال اکانت شخصی تلگرام و پاسخ خودکار، فقط با اشتراک پرو فعال می‌شود.</p>
-      <button class="b sm" data-a="goplan">دیدن اشتراک‌ها</button></div>`;
-    return;
-  }
   const it = ubItem();
   if(S.ubSel && !it) S.ubSel = null;
   app.innerHTML = S.ubSel ? ubDetailHTML(it) : ubListHTML();
@@ -1111,6 +1115,7 @@ function renderUserbot(){
 
 function ubListHTML(){
   const u = S.ub, full = u.items.length >= u.max;
+  if(!u.max && !u.items.length) return `<div class="ph"><h1>یوزربات</h1></div><div class="empty"><div class="ib big">${IC.person}</div><h2>یوزربات با اشتراک فعال می‌شه</h2><p class="muted">اکانت شخصی تلگرامت رو وصل کن تا وقتی نیستی، پیام‌های خصوصی‌ات رو خودکار جواب بدهد. این بخش برای اشتراک پرمیوم و پرو است.</p><button class="b sm" data-a="goplan">مشاهده‌ی اشتراک‌ها</button></div>`;
   const rows = u.items.map(x => { const [t] = UB_ST[x.status] || UB_ST.stopped;
     return `<div class="gi ubrow" role="button" tabindex="0" data-a="ubopen" data-id="${esc(x.id)}"><span class="dot ${x.status === "running" ? "on" : ""}"></span>
       <span class="gt"><b>${esc(x.name || "اکانت تلگرام")}</b><span>${x.username ? `<bdi dir="ltr">@${esc(x.username)}</bdi> · ` : ""}${t}</span></span>${goIc}</div>`; }).join("");
@@ -1194,7 +1199,6 @@ const ubOpen = id => { const it = S.ub.items.find(x => x.id === id); if(!it) ret
 
 Object.assign(A, {
   ubreload: () => { S.ubErr = ""; S.ub = null; renderUserbot(); },
-  goplan: () => { S.view = "account"; S.atab = "plan"; closeSheet(); render(); scrollTo(0, 0); },
   ubopen: el => ubOpen(el.dataset.id),
   ubback: () => { ubRead(); S.ubSel = null; S.ubCfg = null; renderUserbot(); scrollTo(0, 0); ubLoad(); },
   ubtab: el => { ubRead(); S.ubTab = el.dataset.k; renderUserbot(); },

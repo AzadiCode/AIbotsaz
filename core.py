@@ -8,7 +8,7 @@ core.py — هسته‌ی مشترک (پایین‌ترین لایه)
   • ابزارهای پایه
   • احراز هویت مینی‌اپ
   • کیف توکن
-  • سطح، ماموریت‌ها و دعوت
+  • اشتراک (پرمیوم و پرو)، ایموجی پرمیوم، ماموریت‌ها و دعوت
   • کتابخونه‌ی رسانه
   • عضویت اجباری ربات‌ساز: خواندن تنظیمات و بررسی عضویت
 
@@ -20,18 +20,18 @@ core.py — هسته‌ی مشترک (پایین‌ترین لایه)
 اگه چیزی تازه برای بقیه لازمه، همین‌جا اضافه کن و در فایلِ مصرف‌کننده import کن:
   activate_plan, ADMIN_IDS, admin_only, age_sec, AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS,
   AI_MODEL, AI_MSG_COST, AI_MSGS_PER_TOKEN, AI_NODE_MAX_TOKENS, ai_per, ai_tick, app, authed, aware,
-  balance, BASE_URL, BILLING, BOARD_SCAN, BROADCAST_MAX, BROADCAST_PER_TOKEN, BTN_COLORS, calc_cost, charge_up_to,
+  balance, BASE_URL, BILLING, BOARD_SCAN, BROADCAST_MAX, BROADCAST_PER_TOKEN, calc_cost, charge_up_to,
   CHUNK, claim_daily, credit, cut, DAILY_BONUS, db, DEBUG, dec, _DIG, EDIT_COST, enc,
   ENHANCE_COST, ensure_user, est_tokens, FJ_CACHE, fj_chat, FJ_CONF, fj_conf, FJ_DEFAULT_TEXT,
   fj_missing, fj_public, GEN_COST, get_bot, get_media, hold, _int, is_block_err, JOB_TIMEOUT,
   link_referral, log, low_balance_notice, MAX_BOTS, max_bots, MAX_GLOBALS,
-  MAX_MEDIA, MAX_NODES, MAX_PENDING_REMIND, MAX_PROMPT, MAX_STAFF, MAX_STARS, MAX_VERSIONS, media_bytes,
+  MAX_MEDIA, MAX_NODES, emoji_add, emoji_image, emoji_info, emoji_list, emoji_sig, fx_in, PLAN_BY_ID, PLAN_DAYS, PLAN_RANK, plan_from_payload, plan_info, plan_of, PLANS,
+  plans_public, strip_fx, strip_fx_markup, strip_fx_text, MAX_NODES, MAX_PENDING_REMIND, MAX_PROMPT, MAX_STAFF, MAX_STARS, MAX_VERSIONS, media_bytes,
   media_delete, MEDIA_KEYS, media_kind, media_list, MEDIA_MAX_MB, MEDIA_QUOTA_MB, media_sig, MONGO_URI,
   mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now, ONLINE_SECS, PACKS, parse_err, PAYMENTS,
-  perks_of, perk_texts, PLANS, plain_html, plan_info, plan_of, plans_public, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
+  perks_at, perks_of, plain_html, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
   REF_MAX_PER_USER, REF_MILESTONES, REF_ON, refund, request_user, SAFE_INLINE, SCHED_ON, send_rich,
-  settle_referral, setup_mother, spend, style_label, style_plain, style_text, SUB_DAYS, SUB_PREMIUM_STARS, SUB_PREMIUM_TOKENS,
-  SUB_PRO_STARS, SUB_PRO_TOKENS, task_metrics, task_steps, TASKS, tasks_state, tehran_day,
+  settle_referral, setup_mother, spend, task_metrics, task_steps, TASKS, tasks_state, tehran_day,
   TEMPLATE_FACTOR, TEMPLATE_MAX_COST, TEMPLATE_MIN_COST, TEMPLATE_UNIT_COST, tg, tg_html, tg_media,
   thash, TOKEN_MIN_COST, TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, wallet_info
 """
@@ -118,24 +118,16 @@ try:
 except ValueError:
     PACKS = []
 if not PACKS:   # بسته‌های خرید با Telegram Stars
-    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 18},
-             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 45},
-             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 125}]
+    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 50},
+             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 150},
+             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 380}]
 
 # رسانه
 MEDIA_MAX_MB   = _int("MEDIA_MAX_MB", 15)       # سقف حجم هر فایل
 MEDIA_QUOTA_MB = _int("MEDIA_QUOTA_MB", 60)     # سقف کل فایل‌های هر کاربر
 MAX_MEDIA      = _int("MAX_MEDIA", 60)          # سقف تعداد فایل هر کاربر
 
-# اشتراک (جایگزین سیستم سطح): سه پلن ساده — رایگان، پرمیوم، پرو.
-# قیمت‌ها به ستاره‌ی تلگرام و مدت به روز است؛ با Environment قابل تنظیم‌اند.
-SUB_DAYS           = _int("SUB_DAYS", 30)          # مدت هر دوره‌ی اشتراک پولی (روز)
-SUB_PREMIUM_STARS  = _int("SUB_PREMIUM_STARS", 80)
-SUB_PRO_STARS      = _int("SUB_PRO_STARS", 150)
-SUB_PREMIUM_TOKENS = _int("SUB_PREMIUM_TOKENS", 200 * TOKEN_SCALE)   # هدیه‌ی توکنیِ فعال‌سازی پرمیوم
-SUB_PRO_TOKENS     = _int("SUB_PRO_TOKENS", 600 * TOKEN_SCALE)       # هدیه‌ی توکنیِ فعال‌سازی پرو
-
-# سطح و ماموریت‌ها (جدول پلن‌ها پایین‌تر، بخش «اشتراک، ماموریت‌ها و دعوت»)
+# اشتراک و ماموریت‌ها (جدول پلن‌ها و ماموریت‌ها پایین‌تر، بخش «اشتراک» و «ماموریت‌ها»)
 MAX_DISCOUNT = 20          # سقف کاهش نرخ مصرف توکن از راه اشتراک (درصد)
 
 MAX_PROMPT   = 4000
@@ -178,6 +170,8 @@ _index(db.bots, "token_hash", unique=True, sparse=True)
 _index(db.subs, "bot")
 _index(db.submissions, "bot_id")
 _index(db.media, "owner")
+_index(db.emojis, "owner")
+_index(db.emojis, "eid")
 _index(db.mchunks, "m")
 _index(db.ledger, "key", unique=True, sparse=True)
 _index(db.ledger, "uid")
@@ -473,7 +467,7 @@ def claim_daily(uid):
     d, _ = ensure_user(uid)
     today, yest = tehran_day(), tehran_day(1)
     streak = d.get("streak", 0) + 1 if d.get("last_claim") == yest else 1
-    reward = DAILY_BONUS + min(streak - 1, 4) * TOKEN_SCALE + perks_of(uid)["daily"]
+    reward = DAILY_BONUS + min(streak - 1, 4) * TOKEN_SCALE + perks_at(plan_of(d))["daily"]
     r = db.users.find_one_and_update(
         {"_id": uid, "last_claim": {"$ne": today}},
         {"$set": {"last_claim": today, "streak": streak}, "$inc": {"tokens": reward}, "$max": {"best_streak": streak}},
@@ -489,7 +483,7 @@ def wallet_info(uid):
     last = d.get("last_claim")
     streak = d.get("streak", 0) if last in (tehran_day(), tehran_day(1)) else 0
     return {"tokens": int(d.get("tokens", 0)), "streak": streak, "can_claim": last != tehran_day(),
-            "next_reward": DAILY_BONUS + min(streak, 4) * TOKEN_SCALE + perks_of(uid)["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
+            "next_reward": DAILY_BONUS + min(streak, 4) * TOKEN_SCALE + perks_at(plan_of(d))["daily"], "refs": int(d.get("refs", 0)), "spent": int(d.get("spent", 0))}
 
 
 def redeem(uid, code):
@@ -508,65 +502,29 @@ def redeem(uid, code):
     return int(c["tokens"]), ""
 
 
-# ───────────────────────── اشتراک، ماموریت‌ها و دعوت ─────────────────────────
-# سه پلن ساده (رایگان / پرمیوم / پرو). هر پلن: قیمت به ستاره، مدت به روز، هدیه‌ی توکنیِ فعال‌سازی و مزایای ماندگار تا پایان دوره.
+# ───────────────────────── اشتراک (پرمیوم و پرو)، ماموریت‌ها و دعوت ─────────────────────────
+# هر پلن یک ماه (PLAN_DAYS روز) اعتبار داره و با ستاره‌ی تلگرام خریده می‌شه. «tokens» هدیه‌ی توکن هر بار خرید یا تمدیده.
+# مزایای هر پلن (مقدارها برای خودِ همون پلنِ فعال‌ان، نه روی هم جمع‌شونده):
 #   bots = + سقف ساخت ربات      disc = ٪ کاهش نرخ مصرف توکن   daily = + جایزه‌ی روزانه
 #   mb / files = + فضا و تعداد رسانه   ver = + نسخه‌ی قابل بازگشت   bc = + سقف گیرنده‌ی پیام همگانی
+#   ub = تعداد یوزربات (۰ = بسته)   emoji = سقف کتابخونه‌ی ایموجی پرمیوم (۰ = بسته)   btn = دکمه‌ی رنگی
 #   free_enhance = «کامل‌ترش کن» رایگان
-#   emoji = ایموجی پرمیوم (tg-emoji) در متن ربات‌ها   color = دکمه‌های رنگی   userbot = دسترسی به بخش یوزربات
+PLAN_DAYS = max(1, _int("PLAN_DAYS", 30))
 T = TOKEN_SCALE
-PLANS = {
-    "free":    {"title": "FREE",  "stars": 0, "days": 0, "tokens": 0,
-                "perks": {}},
-    "premium": {"title": "PREMIUM",  "stars": SUB_PREMIUM_STARS, "days": SUB_DAYS, "tokens": SUB_PREMIUM_TOKENS,
-                "perks": {"bots": 2, "disc": 10, "daily": 2 * T, "mb": 60, "files": 30, "ver": 2, "bc": 2000,
-                          "emoji": True, "color": True}},
-    "pro":     {"title": "PRO",     "stars": SUB_PRO_STARS, "days": SUB_DAYS, "tokens": SUB_PRO_TOKENS,
-                "perks": {"bots": 5, "disc": 20, "daily": 5 * T, "mb": 200, "files": 100, "ver": 6, "bc": 10000,
-                          "free_enhance": True, "emoji": True, "color": True, "userbot": True}},
-}
-PLAN_ORDER = ["free", "premium", "pro"]
-
-# رنگ‌های مجاز دکمه (اشتراک پرمیوم و پرو): موقع ارسال، نقطه‌ی رنگی اولِ متن دکمه می‌آد
-BTN_COLORS = {"blue": "🔵", "green": "🟢", "red": "🔴", "yellow": "🟡",
-              "purple": "🟣", "orange": "🟠", "black": "⚫"}
-BTN_COLOR_FA = {"blue": "آبی", "green": "سبز", "red": "قرمز", "yellow": "زرد",
-                "purple": "بنفش", "orange": "نارنجی", "black": "مشکی"}
-EMOJI_RE = re.compile(r'<tg-emoji\s+emoji-id="(\d+)"\s*>(.*?)</tg-emoji\s*>', re.S)
+PLANS = [
+    {"id": "free", "title": "رایگان", "stars": 0, "tokens": 0, "perks": {}},
+    {"id": "premium", "title": "پرمیوم", "stars": _int("PREMIUM_STARS", 150), "tokens": 300 * T,
+     "perks": {"bots": 3, "disc": 10, "daily": 2 * T, "mb": 60, "files": 40, "ver": 4, "bc": 5000, "ub": 1, "emoji": 30, "btn": True}},
+    {"id": "pro", "title": "پرو", "stars": _int("PRO_STARS", 400), "tokens": 1000 * T,
+     "perks": {"bots": 8, "disc": 20, "daily": 5 * T, "mb": 200, "files": 120, "ver": 8, "bc": 20000, "ub": 2, "emoji": 200, "btn": True, "free_enhance": True}},
+]
+PLAN_BY_ID = {p["id"]: p for p in PLANS}
+PLAN_RANK = {p["id"]: i for i, p in enumerate(PLANS)}
 
 
-def style_text(text, perks):
-    """متن آماده‌ی ارسال: اگه اشتراک ایموجی پرمیوم نداشته باشه، تگ‌های tg-emoji به همون شکلک ساده‌ی داخلشون تبدیل می‌شن"""
-    if not text or (perks or {}).get("emoji"):
-        return text or ""
-    return EMOJI_RE.sub(lambda m: m.group(2), text)
-
-
-def style_label(label, color, perks):
-    """متن روی دکمه موقع ارسال: تگ tg-emoji فقط به شکلک ساده‌ی داخلش تبدیل می‌شه (دکمه تلگرام ایموجی سفارشی نشون نمی‌ده)؛
-    با اشتراک رنگی، نقطه‌ی رنگی اولش می‌آد؛ بدون اشتراک، ساده"""
-    label = str(label or "")
-    if "<tg-emoji" in label or "</tg-emoji" in label:
-        label = style_plain(label, perks)
-    dot = BTN_COLORS.get(str(color or "").strip().lower())
-    if dot and (perks or {}).get("color"):
-        label = f"{dot} {label}".strip()[:64]
-    return label
-
-
-def style_plain(text, perks):
-    """متن ساده (دکمه، پاپ‌آپ، کپی، اشتراک‌گذاری): بدون قالب HTML.
-    با اشتراک ایموجی، فقط شکلک ساده‌ی داخل تگ می‌مونه؛ بدون اشتراک کل تگ حذف می‌شه"""
-    if not text:
-        return ""
-    if (perks or {}).get("emoji"):
-        return EMOJI_RE.sub(lambda m: m.group(2), text)
-    return EMOJI_RE.sub("", text)
-
-
-# ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن) بعد از دریافت جایزه‌ی قبلی باز می‌شه و فقط پاداش توکنی می‌ده
+# ماموریت‌ها زنجیره‌ای‌ان؛ هر مرحله (هدف، توکن) بعد از دریافت جایزه‌ی قبلی باز می‌شه. پاداش همه‌ی مرحله‌ها توکنه.
 TASKS = [
-    # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن, معیار, کلید, عنوان, توضیح)
+    # rich=True: کارت مرحله‌ای؛ هر مرحله می‌تونه معیار و عنوان مخصوص خودش رو داشته باشه: (هدف، توکن، معیار, کلید, عنوان, توضیح)
     {"id": "bots",     "icon": "bot",    "title": "ساخت ربات",        "metric": "bots",     "text": "ساخت {n} ربات", "rich": True,
      "desc": "از ایده تا ربات حرفه‌ای در سه قدم",
      "steps": [(1, 5, "bots", "bots:1", "ساخت ربات", "اولین ربات خودت رو بساز"),
@@ -602,48 +560,35 @@ def task_steps(t):
     return out
 
 
-def plan_of(uid):
-    """پلن فعال کاربر (اگه تاریخش گذشته باشه «رایگان»؛ بدون اینکه چیزی رو پاک کنیم)"""
-    if uid is None:
-        return "free"
-    d = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
-    p = str(d.get("plan") or "free")
-    if p not in PLANS:
-        return "free"
-    exp = d.get("plan_exp")
-    if p != "free" and (not exp or naive(exp) < naive()):
-        return "free"
-    return p
+def plan_of(d):
+    """شناسه‌ی پلنِ فعالِ کاربر (سند کاربر)؛ اگه اشتراک تموم شده باشه free"""
+    d = d or {}
+    p, exp = d.get("plan"), d.get("plan_exp")
+    return p if p in PLAN_BY_ID and p != "free" and exp and naive(exp) > naive() else "free"
 
 
-def activate_plan(uid, plan, days=0, bonus=0, key=None):
-    """فعال‌سازی/تمدید اشتراک + هدیه‌ی توکنی (با key تکراری نمی‌شه). خروجی: (پلن، تاریخ پایان)"""
-    if plan not in PLANS or plan == "free":
-        db.users.update_one({"_id": uid}, {"$set": {"plan": "free"}, "$unset": {"plan_exp": ""}})
-        return "free", None
-    days = max(1, int(days or PLANS[plan]["days"] or SUB_DAYS))
-    cur = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
-    base = naive()
-    if cur.get("plan") == plan and cur.get("plan_exp") and naive(cur["plan_exp"]) > base:
-        base = naive(cur["plan_exp"])          # تمدید هم‌پلن: به باقی‌مونده اضافه می‌شه
-    exp = base + timedelta(days=days)
-    db.users.update_one({"_id": uid}, {"$set": {"plan": plan, "plan_exp": exp}})
-    if bonus:
-        credit(uid, int(bonus), "sub", key=key)
-    return plan, exp
-
-
-def perks_of(uid):
-    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0,
-         "free_enhance": False, "emoji": False, "color": False, "userbot": False}
-    for k, v in PLANS.get(plan_of(uid), PLANS["free"])["perks"].items():
-        p[k] = (p[k] or v) if isinstance(v, bool) else p[k] + v
+def perks_at(plan_id):
+    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0, "ub": 0, "emoji": 0, "btn": False, "free_enhance": False}
+    for k, v in (PLAN_BY_ID.get(plan_id) or PLANS[0])["perks"].items():
+        p[k] = v
     p["disc"] = min(p["disc"], MAX_DISCOUNT)
     return p
 
 
+def perks_of(uid):
+    if uid is None:
+        return perks_at("free")
+    return perks_at(plan_of(db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1})))
+
+
 def perk_texts(p):
     out = []
+    if p.get("btn"):
+        out.append("دکمه‌های رنگی (آبی، سبز، قرمز)")
+    if p.get("emoji"):
+        out.append(f"ایموجی پرمیوم در متن و دکمه‌ها (تا {p['emoji']} ایموجی)")
+    if p.get("ub"):
+        out.append(f"یوزربات: {p['ub']} اکانت")
     if p.get("bots"):
         out.append(f"سقف ساخت ربات +{p['bots']}")
     if p.get("disc"):
@@ -656,17 +601,49 @@ def perk_texts(p):
         out.append(f"+{p['ver']} نسخه‌ی قابل بازگشت برای هر ربات")
     if p.get("bc"):
         out.append(f"سقف پیام همگانی +{p['bc']} نفر")
-    if p.get("emoji"):
-        out.append("ایموجی پرمیوم در متن و دکمه‌های ربات‌ها")
-    if p.get("color"):
-        out.append("دکمه‌های رنگی")
-    if p.get("userbot"):
-        out.append("دسترسی به یوزربات")
     if p.get("free_enhance"):
         out.append("«کامل‌ترش کن» رایگان")
-    if p.get("userbot"):
-        out.append("+ قابلیت‌های حرفه‌ای در حال توسعه")
     return out
+
+
+def plans_public():
+    return [{"id": p["id"], "title": p["title"], "stars": p["stars"], "tokens": p["tokens"], "days": PLAN_DAYS,
+             "perks": perk_texts(perks_at(p["id"]))} for p in PLANS]
+
+
+def plan_info(uid):
+    d = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
+    pid = plan_of(d)
+    exp = naive(d["plan_exp"]) if pid != "free" else None
+    return {"id": pid, "title": PLAN_BY_ID[pid]["title"], "exp": exp.isoformat() + "Z" if exp else None,
+            "days_left": max(0, math.ceil((exp - naive()).total_seconds() / 86400)) if exp else 0}
+
+
+def activate_plan(uid, plan_id, days=None):
+    """فعال‌سازی یا تمدید اشتراک. تمدیدِ همون پلن از انتهای زمان فعلی حساب می‌شه؛ پلن دیگه از همین الان شروع می‌شه.
+    plan_id = free یعنی لغو. خروجی: زمان پایان (یا None)"""
+    if plan_id == "free":
+        db.users.update_one({"_id": uid}, {"$unset": {"plan": "", "plan_exp": ""}})
+        return None
+    if plan_id not in PLAN_BY_ID:
+        return None
+    d = db.users.find_one({"_id": uid}) or {}
+    base = naive(d["plan_exp"]) if plan_of(d) == plan_id else naive()
+    exp = base + timedelta(days=int(days or PLAN_DAYS))
+    db.users.update_one({"_id": uid}, {"$set": {"plan": plan_id, "plan_exp": exp}})
+    return exp
+
+
+def plan_from_payload(payload, uid):
+    """payload فاکتور اشتراک: sub_<plan>:<uid>"""
+    try:
+        pid, owner = str(payload).split(":")
+        if int(owner) != uid or not pid.startswith("sub_"):
+            return None
+    except ValueError:
+        return None
+    p = PLAN_BY_ID.get(pid[4:])
+    return p if p and p["id"] != "free" else None
 
 
 def max_bots(uid):
@@ -687,21 +664,74 @@ def ai_per(uid):
     return max(1, round(AI_MSGS_PER_TOKEN * 100 / (100 - perks_of(uid)["disc"])))
 
 
-def plan_info(uid):
-    """وضعیت اشتراک کاربر برای مینی‌اپ: پلن فعلی، روزهای باقی‌مونده و مزایا"""
-    d = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
-    pid = plan_of(uid)
-    exp = aware(d.get("plan_exp")) if pid != "free" and d.get("plan_exp") else None
-    left = max(0, (exp - now()).days) if exp else 0
-    return {"id": pid, "title": PLANS[pid]["title"], "exp": exp.isoformat() if exp else None, "left": left,
-            "emoji": bool(PLANS[pid]["perks"].get("emoji")), "color": bool(PLANS[pid]["perks"].get("color")),
-            "userbot": bool(PLANS[pid]["perks"].get("userbot")),
-            "perks": perk_texts(PLANS[pid]["perks"])}
+# ───────────────────────── ایموجی پرمیوم (کتابخونه‌ی هر کاربر) ─────────────────────────
+# کاربر ایموجی پرمیوم رو برای ربات مادر می‌فرسته؛ شناسه‌ش اینجا ذخیره می‌شه و تو ادیتور داخل متن و دکمه‌ها قابل انتخابه.
+def emoji_sig(eid):
+    return hmac.new(SECRET_KEY.encode(), f"emoji:{eid}".encode(), hashlib.sha256).hexdigest()[:24]
 
 
-def plans_public():
-    return [{"id": pid, "title": p["title"], "stars": p["stars"], "days": p["days"], "tokens": p["tokens"],
-             "perks": perk_texts(p["perks"])} for pid, p in PLANS.items()]
+def emoji_public(e):
+    return {"id": e["eid"], "char": e.get("char") or "⭐", "url": f"/e/{e['eid']}?s={emoji_sig(e['eid'])}" if e.get("thumb") else ""}
+
+
+def emoji_list(uid):
+    return [emoji_public(e) for e in db.emojis.find({"owner": uid}).sort("t", -1)]
+
+
+def emoji_info(ids):
+    """{شناسه: (ایموجی معمولی، فایل پیش‌نمایش)} از تلگرام"""
+    out, ids = {}, [str(i) for i in ids]
+    for i in range(0, len(ids), 50):
+        r = tg(MOTHER_TOKEN, "getCustomEmojiStickers", custom_emoji_ids=ids[i:i + 50])
+        for st in r.get("result") or []:
+            th = (st.get("thumbnail") or {}).get("file_id") or ("" if st.get("is_animated") or st.get("is_video") else st.get("file_id", ""))
+            out[str(st.get("custom_emoji_id"))] = (st.get("emoji") or "⭐", th)
+    return out
+
+
+def emoji_add(uid, items):
+    """items = [(emoji_id, ایموجی معمولی)]؛ خروجی: (چندتا اضافه شد، چندتا جا نشد)"""
+    cap = perks_of(uid)["emoji"]
+    have = db.emojis.count_documents({"owner": uid})
+    new = [(str(e), c) for e, c in items if str(e).isdigit() and not db.emojis.find_one({"_id": f"{uid}:{e}"})]
+    seen, uniq = set(), []
+    for e, c in new:
+        if e not in seen:
+            seen.add(e); uniq.append((e, c))
+    take, full = uniq[:max(0, cap - have)], max(0, len(uniq) - max(0, cap - have))
+    info = emoji_info([e for e, _ in take]) if take else {}
+    for e, c in take:
+        ch, th = info.get(e, (c or "⭐", ""))
+        db.emojis.insert_one({"_id": f"{uid}:{e}", "owner": uid, "eid": e, "char": (c or ch)[:8], "thumb": th, "t": now()})
+    return len(take), full
+
+
+_EMJ_IMG, _EMJ_LOCK = {}, threading.Lock()
+
+
+def emoji_image(eid):
+    """(بایت‌ها، نوع فایل) پیش‌نمایش کوچک ایموجی؛ از تلگرام گرفته و در حافظه کش می‌شه"""
+    with _EMJ_LOCK:
+        if eid in _EMJ_IMG:
+            return _EMJ_IMG[eid]
+    e = db.emojis.find_one({"eid": eid, "thumb": {"$nin": ["", None]}})
+    if not e:
+        return None
+    path = (tg(MOTHER_TOKEN, "getFile", file_id=e["thumb"]).get("result") or {}).get("file_path")
+    if not path:
+        return None
+    try:
+        r = requests.get(f"https://api.telegram.org/file/bot{MOTHER_TOKEN}/{path}", timeout=15)
+    except Exception:
+        return None
+    if r.status_code != 200 or len(r.content) > 400_000:
+        return None
+    res = (r.content, "image/webp" if path.endswith(".webp") else "image/png" if path.endswith(".png") else "image/jpeg")
+    with _EMJ_LOCK:
+        if len(_EMJ_IMG) > 300:
+            _EMJ_IMG.clear()
+        _EMJ_IMG[eid] = res
+    return res
 
 
 def task_metrics(uid, d):
@@ -874,10 +904,61 @@ def is_block_err(r):
     return bool(r.get("error_code") == 403 or re.search(r"blocked|deactivated|chat not found", str(r.get("description", "")), re.I))
 
 
+# ایموجی پرمیوم در متن (<tg-emoji>) و ظاهر دکمه‌ها (style / icon_custom_emoji_id)
+TGE_RE = re.compile(r"<tg-emoji\s+emoji-id=[\"']?\d+[\"']?\s*>(.*?)</tg-emoji>", re.S)
+
+
+def strip_fx_text(t):
+    """تگ ایموجی پرمیوم رو برمی‌داره و همون ایموجی معمولی داخلش می‌مونه"""
+    return TGE_RE.sub(r"\1", t) if isinstance(t, str) and "<tg-emoji" in t else t
+
+
+def strip_fx_markup(mk, style=False):
+    """آیکن ایموجیِ دکمه‌ها (و اگه style=True رنگشون) رو از کیبورد برمی‌داره"""
+    if not isinstance(mk, dict):
+        return mk
+    out = {}
+    for k, v in mk.items():
+        if k in ("inline_keyboard", "keyboard"):
+            out[k] = [[{a: b for a, b in btn.items() if a != "icon_custom_emoji_id" and not (style and a == "style")}
+                       if isinstance(btn, dict) else btn for btn in row] for row in v]
+        else:
+            out[k] = v
+    return out
+
+
+def fx_in(data):
+    """توی این درخواست ایموجی پرمیوم یا آیکن دکمه هست؟"""
+    for k in ("text", "caption"):
+        if "<tg-emoji" in str(data.get(k) or ""):
+            return True
+    mk = data.get("reply_markup")
+    if isinstance(mk, dict):
+        for row in (mk.get("inline_keyboard") or mk.get("keyboard") or []):
+            if any(isinstance(b, dict) and "icon_custom_emoji_id" in b for b in row):
+                return True
+    return False
+
+
+def strip_fx(data):
+    d = dict(data)
+    for k in ("text", "caption"):
+        if k in d:
+            d[k] = strip_fx_text(d[k])
+    if "reply_markup" in d:
+        d["reply_markup"] = strip_fx_markup(d["reply_markup"])
+    return d
+
+
 def tg_html(token, method, **data):
-    """ارسال/ویرایش با parse_mode=HTML (بولد، لینک و…)؛ اگه تلگرام تگ‌ها رو نپذیرفت همون متن بدون تگ می‌ره"""
+    """ارسال/ویرایش با parse_mode=HTML (بولد، لینک و…)؛ اگه تلگرام تگ‌ها رو نپذیرفت همون متن بدون تگ می‌ره.
+    اگه ایموجی پرمیوم/آیکن دکمه پذیرفته نشد (مثلاً صاحب ربات پرمیوم تلگرام نیست) بدون اونا دوباره می‌فرسته"""
     key = "caption" if "caption" in data else "text"
+    orig = dict(data)
     r = tg(token, method, parse_mode="HTML", **data)
+    if not r.get("ok") and fx_in(orig) and "not modified" not in str(r.get("description", "")) and not is_block_err(r):
+        data = strip_fx(orig)
+        r = tg(token, method, parse_mode="HTML", **data)
     if not r.get("ok") and parse_err(r):
         data[key] = plain_html(data.get(key, ""))
         r = tg(token, method, **data)
@@ -908,6 +989,8 @@ def tg_media(token, bot_id, chat_id, mid, caption="", markup=None, parse=None):
         r = tg(token, method, **base, **{kind: c["fid"]})
         if r.get("ok"):
             return True
+        if fx_in({"caption": caption, "reply_markup": markup}):
+            return tg_media(token, bot_id, chat_id, mid, strip_fx_text(caption), strip_fx_markup(markup), parse)
         if parse and caption and parse_err(r):
             return tg_media(token, bot_id, chat_id, mid, plain_html(caption), markup, None)
         db.mfid.delete_one({"_id": ck})
@@ -921,6 +1004,8 @@ def tg_media(token, bot_id, chat_id, mid, caption="", markup=None, parse=None):
         log.warning("media upload failed: %s", e)
         return False
     if not resp.get("ok"):
+        if fx_in({"caption": caption, "reply_markup": markup}):
+            return tg_media(token, bot_id, chat_id, mid, strip_fx_text(caption), strip_fx_markup(markup), parse)
         if parse and caption and parse_err(resp):
             return tg_media(token, bot_id, chat_id, mid, plain_html(caption), markup, None)
         log.warning("media send rejected: %s", resp.get("description"))
