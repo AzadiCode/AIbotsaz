@@ -64,16 +64,17 @@ def pack_from_payload(payload, uid):
 
 
 START_TEXT = (
-    "🟢 SYSTEM ONLINE\n\n"
-    "AI BotMaker Terminal\n"
-    "Server infrastructure, AI engine and your private bot-building dashboard are fully operational.\n\n"
-    "ورود به استودیو حرفه‌ای و ساخت ربات (VPN روشن) 👇🏻"
+    "<b>🧠 AI Engine: Ready for Evolution</b>\n"
+    "<blockquote>ابزار شما برای اتوماسیون، رشد فروش و ساخت ربات‌های فوق‌هوشمند آماده‌ست.\n"
+    "هیچ حد و مرزی برای رشد وجود نداره؛ همین امروز سیستم خودت رو بنا کن!</blockquote>\n"
+    "​​<b>🦿 یک گام تا جهش کسب‌وکارت...</b>\n"
+    "<code>​👇🏻 ورود به استودیو هوشمند (vpn روشن!)</code>"
 )
 
 
 def start_keyboard():
     return {"inline_keyboard": [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
-                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}}]]}
+                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}, "style": "primary"}]]}
 
 
 def start_media():
