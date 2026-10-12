@@ -73,7 +73,7 @@ START_TEXT = (
 
 
 def start_keyboard():
-    return {"inline_keyboard": [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
+    return {"inline_keyboard": [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new", "style": "primary"}],
                                 [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}}]]}
 
 
