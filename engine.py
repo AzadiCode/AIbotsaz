@@ -55,6 +55,28 @@ from ai import (
 
 # ترگرهای کلمه‌کلیدی (گروه/پیوی): کلمه -> لیست اکشن/پاسخ
 TRIGGER_RE = re.compile(r"^trigger:(\w+)$")
+
+def _word_match(pattern, text, whole_word, case_sensitive):
+    """مطابقت کلمه با پشتیبانی از فارسی/عربی و Unicode"""
+    if not pattern:
+        return False
+    if case_sensitive:
+        hay = text
+        pat = pattern
+    else:
+        hay = text.lower()
+        pat = pattern.lower()
+    
+    if whole_word:
+        # word boundary با پشتیبانی Unicode: قبل/بعد از pattern باید non-word یا شروع/پایان رشته باشه
+        # word character = حرف/عدد/آندرلاین در هر اسکریپتی
+        escaped = re.escape(pat)
+        # (?<!\w) = قبلش word char نیست، (?!\w) = بعدش word char نیست
+        regex = r"(?<!\w)" + escaped + r"(?!\w)"
+        return bool(re.search(regex, hay))
+    else:
+        return pat in hay
+
 _WEEK = {5: "شنبه", 6: "یکشنبه", 0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه"}
 FORM_HINT = {"number": "فقط عدد بفرست.", "phone": "یه شماره‌ی تماس معتبر بفرست، مثل 09123456789.",
              "email": "یه ایمیل معتبر بفرست."}
@@ -1122,22 +1144,7 @@ def mod_group(bot, bot_id, token, cfg, msg):
         whole_word = tr.get("whole_word", True)
         actions = tr.get("actions", [])
         reply_text = tr.get("reply", "")
-        match = False
-        hay = text if case_sensitive else low
-        if whole_word:
-            if case_sensitive:
-                match = re.search(r"\b" + re.escape(pattern) + r"\b", text)
-            else:
-                match = re.search(r"\b" + re.escape(pattern) + r"\b", low)
-        else:
-            match = pattern in hay
-        if match:
-            env = Env(bot, token, chat, user, text=text)
-            if actions:
-                run_actions(actions, env)
-            if reply_text:
-                tg_html(token, "sendMessage", chat_id=chat, text=fill(reply_text, env, True)[:4000])
-            return True
+        match = _word_match(pattern, text, whole_word, case_sensitive)
     fl = mod.get("flood")
     if fl:
         k, t = (bot_id, chat, uid), time.time()
@@ -1863,16 +1870,7 @@ def sub_hook(bot_id):
                         whole_word = tr.get("whole_word", True)
                         actions = tr.get("actions", [])
                         reply_text = tr.get("reply", "")
-                        match = False
-                        hay = text if case_sensitive else low
-                        if whole_word:
-                            if case_sensitive:
-                                match = re.search(r"\b" + re.escape(pattern) + r"\b", text)
-                            else:
-                                match = re.search(r"\b" + re.escape(pattern) + r"\b", low)
-                        else:
-                            match = pattern in hay
-                        if match:
+                        if _word_match(pattern, text, whole_word, case_sensitive):
                             user = msg.get("from", {})
                             env = Env(bot, token, msg["chat"]["id"], user, text=text)
                             if tr.get("actions"):
