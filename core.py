@@ -118,9 +118,9 @@ try:
 except ValueError:
     PACKS = []
 if not PACKS:   # بسته‌های خرید با Telegram Stars
-    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 50},
-             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 150},
-             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 380}]
+    PACKS = [{"id": "p1", "tokens": 200 * TOKEN_SCALE, "stars": 20},
+             {"id": "p2", "tokens": 700 * TOKEN_SCALE, "stars": 45},
+             {"id": "p3", "tokens": 2000 * TOKEN_SCALE, "stars": 120}]
 
 # رسانه
 MEDIA_MAX_MB   = _int("MEDIA_MAX_MB", 15)       # سقف حجم هر فایل
@@ -513,9 +513,9 @@ PLAN_DAYS = max(1, _int("PLAN_DAYS", 30))
 T = TOKEN_SCALE
 PLANS = [
     {"id": "free", "title": "Free", "stars": 0, "tokens": 0, "perks": {}},
-    {"id": "premium", "title": "Premium", "stars": _int("PREMIUM_STARS", 150), "tokens": 300 * T,
+    {"id": "premium", "title": "Premium", "stars": _int("PREMIUM_STARS", 80), "tokens": 300 * T,
      "perks": {"bots": 3, "disc": 10, "daily": 2 * T, "mb": 60, "files": 40, "ver": 4, "bc": 5000, "ub": 1, "emoji": 30, "btn": True}},
-    {"id": "pro", "title": "Pro", "stars": _int("PRO_STARS", 400), "tokens": 1000 * T,
+    {"id": "pro", "title": "Pro", "stars": _int("PRO_STARS", 150), "tokens": 1000 * T,
      "perks": {"bots": 8, "disc": 20, "daily": 5 * T, "mb": 200, "files": 120, "ver": 8, "bc": 20000, "ub": 2, "emoji": 200, "btn": True, "free_enhance": True}},
 ]
 PLAN_BY_ID = {p["id"]: p for p in PLANS}
