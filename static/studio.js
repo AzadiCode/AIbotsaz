@@ -533,20 +533,34 @@ function stGridFallback(){
     Object.keys(S.cur?.config?.nodes || {}).forEach((id, i) => { if(!ST.pos[id]) ST.pos[id] = {x: -(i % 4) * 330, y: 40 + Math.floor(i / 4) * 520}; });
   }catch(_){}
 }
-/* حالت لیستی اضطراری: اگر نقشه گرافیکی هیچ کارتی نساخت، کاربر هیچ‌وقت با صفحه خالی گیر نکند */
-function stListFallback(){
-  try{
-    const wr = $("#stw");
-    if(!wr || !S.cur) return;
-    const cfg = S.cur.config || {}, ids = Object.keys(cfg.nodes || {});
-    wr.innerHTML = `<div class="st-list">${ids.map(id => {
-      let t = id;
-      try{ t = titleOf(cfg, id); }catch(_){}
-      return `<button class="st-li" data-a="stopen" data-n="${esc(id)}"><b>${esc(t)}</b><small class="ltr">${esc(id)}</small></button>`;
-    }).join("")}</div>`;
-    const b = $("#stdbg");
-    if(b) b.textContent = `حالت لیستی: ${ids.length} بخش`;
-  }catch(err){ console.error("studio list", err); }
+/* نمای لیستی استودیو: برای ربات‌های بزرگ (۲۵+ بخش) پیش‌فرض است تا همیشه سریع باز شود؛ ویرایش با همان شیت‌هاست */
+function renderStudioList(){
+  document.documentElement.classList.remove("st-lock");
+  const bot = S.cur;
+  if(!bot) return;
+  const cfg = bot.config || {}, nodes = cfg.nodes || {}, ids = Object.keys(nodes);
+  const rows = ids.map(id => {
+    const n = nodes[id] || {};
+    let t = id, nb = 0;
+    try{ t = titleOf(cfg, id); }catch(_){}
+    try{ nb = (Array.isArray(n.buttons) ? n.buttons : []).reduce((a, r) => a + (Array.isArray(r) ? r.length : 0), 0); }catch(_){}
+    const kind = n.ai ? "هوش مصنوعی" : n.fields ? "فرم" : n.ask ? "دریافت پیام" : nb ? `${fa(nb)} دکمه` : "بدون دکمه";
+    return `<button class="gi" data-a="stopen" data-n="${esc(id)}" data-t="${esc((t + " " + id + " " + (n.text || "")).slice(0, 200))}"><span class="gt"><b>${esc(t)}</b><span class="ltr">${esc(id)} · ${kind}</span></span>${goIc}</button>`;
+  }).join("");
+  $("#app").innerHTML = `
+    <div class="st-picker"><div class="ph"><h1>${esc(bot.name)}</h1><span class="cnt">${N(ids.length)} بخش</span></div>
+      <p class="muted" style="margin:-4px 4px 14px">ربات بزرگ است؛ لیست سریع باز شد. برای ویرایش روی هر بخش بزن.</p>
+      <div class="two" style="margin-bottom:10px"><button class="b o sm" data-a="stgraph">${IC.layers}نقشه گرافیکی</button><button class="b sm" data-a="staddlist">${IC.plus}بخش جدید</button></div>
+      <input id="stq2" class="fa" placeholder="جستجوی بخش…" autocomplete="off" aria-label="جستجوی بخش">
+      <div class="group sep" id="stlist" style="margin-top:10px">${rows || '<div class="gi static"><span class="muted">بخشی نیست.</span></div>'}</div>
+      <div class="fgap"></div></div>`;
+  scrollTo(0, 0);
+  $("#stq2")?.addEventListener("input", e => {
+    const v = e.target.value.trim().toLowerCase();
+    document.querySelectorAll("#stlist .gi[data-t]").forEach(el => {
+      el.style.display = !v || (el.dataset.t || "").toLowerCase().includes(v) ? "" : "none";
+    });
+  });
 }
 function stDbg(){
   try{
@@ -634,8 +648,10 @@ function renderStudio(){
     return;
   }
   S.cur = bot; S.sbot = bot.id;
-  if(ST.botId !== bot.id){ ST.botId = bot.id; stLoad(); }
-  const nodes = Object.keys(bot.config.nodes).length;
+  if(ST.botId !== bot.id){ ST.botId = bot.id; ST.forceGraph = false; stLoad(); }
+  const nodes = Object.keys(bot.config?.nodes || {}).length;
+  const big = nodes > 25;
+  if(big && !ST.forceGraph){ renderStudioList(); return; }
   $("#app").innerHTML = `
     <div class="studio${bot.active ? " live" : ""}" id="stu">
       <div class="st-bar">
@@ -661,6 +677,7 @@ function renderStudio(){
           <button class="tb" data-a="stzin" aria-label="بزرگ‌نمایی">${IC.plus}</button>
           <span class="sep"></span>
           <button class="tb" data-a="stfit" aria-label="نمایش همه‌ی بخش‌ها" title="نمایش همه‌ی بخش‌ها">${IC.fit}</button>
+          ${big ? `<button class="tb lbl" data-a="stlist" aria-label="نمای لیستی" title="نمای لیستی">${IC.form}<span>لیست</span></button>` : ""}
           <button class="tb lbl" data-a="stlay" aria-label="چیدمان خودکار" title="بخش‌ها را خودکار مرتب می‌کند">${IC.layers}<span>مرتب‌سازی</span></button>
         </div>
       </div>
@@ -674,9 +691,10 @@ function renderStudio(){
     ST._ro.observe(cv0);
   }
   try{ stPaintWorld(); }
-  catch(err){ console.error("studio paint", err); toast("نمایش نقشه با مشکل روبه‌رو شد؛ یک بار دیگر وارد استودیو شو"); }
+  catch(err){ console.error("studio paint", err); }
   if(!ST.els || !ST.els.size){
-    try{ stListFallback(); }catch(err){ console.error("studio list", err); }
+    ST.forceGraph = false;
+    try{ renderStudioList(); return; }catch(err){ console.error("studio list", err); toast("نمایش نقشه با مشکل روبه‌رو شد؛ یک بار دیگر وارد استودیو شو"); }
   }
   if(!ST.cam) requestAnimationFrame(stHome);
   else requestAnimationFrame(() => { if(S.view === "studio" && $("#stc")){ ST.vw = $("#stc").clientWidth || innerWidth; ST.vh = $("#stc").clientHeight || innerHeight; stCull(); } });
@@ -685,7 +703,8 @@ function renderStudio(){
 }
 function refreshStudio(){
   if(S.view !== "studio" || !S.cur) return;
-  if(!$("#stc")) return renderStudio();
+  if(!$("#stc") && !$("#stlist")) return renderStudio();
+  if(!$("#stc")) return renderStudioList();
   stPaintWorld();
   const t = $("#stsub"), b = S.cur;
   if(t) t.textContent = `${b.active ? "@" + b.username : "غیرفعال"} · ${fa(Object.keys(b.config.nodes).length)} بخش`;
