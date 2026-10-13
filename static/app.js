@@ -880,7 +880,7 @@ function adminSettings(){
       <span class="lbl">آیدی عددی کاربر</span><input class="ltr" id="ap-uid" inputmode="numeric" autocomplete="off" aria-label="آیدی کاربر">
       <span class="lbl">پلن</span><select id="ap-plan" aria-label="پلن">${(S.cfg.plans || []).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select>
       <span class="lbl">تعداد روز (اختیاری)</span><input class="ltr" id="ap-days" inputmode="numeric" autocomplete="off" aria-label="تعداد روز">
-      <button class="b o" data-a="adplan">اعمال</button></div></div></details>`;
+      <button class="b o" data-a="adplan">اعمال</button></div></details>`;
   return planPanel + `<details class="adv acc" data-ak="card"${_op("card")}><summary>کارت‌به‌کارت</summary><div class="accb"><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="cd-on"${cd.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">شماره کارت (۱۶ رقم)</span><input class="ltr" id="cd-num" inputmode="numeric" value="${esc(cd.number)}" placeholder="6037 0000 0000 0000" autocomplete="off" aria-label="شماره کارت">
@@ -894,13 +894,13 @@ function adminSettings(){
       <button class="b o" data-a="cdsave">ذخیره</button>
       <h3 class="mt" style="font-size:14px">آخرین سفارش‌ها</h3>
       ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${o.plan ? "اشتراک " + esc(o.plan) : N(o.tokens) + " توکن"} · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
-      <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div></div></details>
+      <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div></details>
     ` + `<details class="adv acc" data-ak="fj"${_op("fj")}><summary>عضویت اجباری ربات‌ساز</summary><div class="accb"><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">آیدی کانال‌ها (تا ۳ تا، با فاصله)</span><input class="ltr" id="fj-ch" value="${esc(fj.channels)}" placeholder="@channel1 @channel2" autocomplete="off" aria-label="آیدی کانال‌ها">
       <p class="muted">کانال خصوصی: <b dir="ltr">-1001234567890=https://t.me/+invite</b></p>
       <span class="lbl">متن پیام عضویت (قالب HTML)</span><textarea class="fa" id="fj-tx" data-fmt maxlength="1500" style="min-height:90px" aria-label="متن پیام عضویت">${esc(fj.text)}</textarea>${fmtTools("fj-tx")}
-      <button class="b o" data-a="afj">ذخیره</button></div></div></details>
+      <button class="b o" data-a="afj">ذخیره</button></div></details>
     ` + `<details class="adv acc" data-ak="promo"${_op("promo")}><summary>تبلیغ روی ورودی‌های جدید</summary><div class="accb"><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="pr-on"${pr.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">حداقل مخاطب هر ربات (بیشتر از این عدد)</span><input class="ltr" id="pr-min" inputmode="numeric" value="${esc(pr.min_users)}" autocomplete="off" aria-label="حداقل مخاطب">
@@ -910,16 +910,17 @@ function adminSettings(){
       <span class="lbl">متن پیام تبلیغی (قالب HTML)</span><textarea class="fa" id="pr-tx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن پیام تبلیغی">${esc(pr.text)}</textarea>${fmtTools("pr-tx")}
       <span class="lbl">متن قفل عضویت (قالب HTML)</span><textarea class="fa" id="pr-ltx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن قفل عضویت">${esc(pr.lock_text)}</textarea>${fmtTools("pr-ltx")}
       <div class="promo-f"><div><span>هدف‌گیری شدند</span>${N(pr.stats?.tgt || 0)}</div><div><span>قفل نشان داده شد</span>${N(pr.stats?.lock || 0)}</div><div><span>پیام تبلیغ</span>${N(pr.stats?.msg || 0)}</div><div><span>عضو شدند</span>${N(pr.stats?.joined || 0)}</div></div>
-      ${(pr.stats?.err || 0) > 0 ? `<p class="muted" style="color:var(--bad)">${N(pr.stats.err)} بار بررسی عضویت خطا داد؛ ربات مادر باید در کانال «ادمین» باشد و آیدی کانال درست باشد. تا آن موقع کسی قفل نمی‌شود.</p>` : ""}
+      ${(pr.stats?.err || 0) > 0 ? `<p class="muted" style="color:var(--bad)">${N(pr.stats.err)} بار بررسی عضویت خطا داد (ممکن است قدیمی باشد؛ بعد از اصلاح «صفر کردن آمار» را بزن).${pr.last_err ? `<br>آخرین خطای تلگرام: <span class="ltr">${esc(pr.last_err)}</span>` : ""}</p>` : ""}
+      <button class="b o sm" data-a="aprreset">صفر کردن آمار</button>
       ${(pr.stats?.terr || 0) > 0 ? `<p class="muted">${N(pr.stats.terr)} بار هم تلگرام موقتاً جواب نداد (محدودیت سرعت)؛ آن کاربرها دفعه‌ی بعد دوباره بررسی می‌شوند.</p>` : ""}
-      <button class="b o" data-a="apr">ذخیره</button></div></div></details>
+      <button class="b o" data-a="apr">ذخیره</button></div></details>
     ` + `<details class="adv acc" data-ak="tok"${_op("tok")}><summary>توکن کاربر</summary><div class="accb"><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
       <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
-      <button class="b o" data-a="agrant">اعمال</button></div></div></details>
+      <button class="b o" data-a="agrant">اعمال</button></div></details>
     <details class="adv acc" data-ak="cpn"${_op("cpn")}><summary>کد هدیه</summary><div class="accb"><div class="fgap"></div>
       <div class="cmd"><input id="ac-code" placeholder="کد (خالی = خودکار)" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
       <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
-      <button class="b o" data-a="acoupon">ساخت کد</button></div></div></details>
+      <button class="b o" data-a="acoupon">ساخت کد</button></div></details>
 `;
 }
 let UQ = "";
@@ -973,7 +974,11 @@ Object.assign(A, {
     S.fj = {on: on && !!v("#fj-ch"), channels: v("#fj-ch"), text: v("#fj-tx")}; toast(d.warn?.length ? d.warn[0] : "ذخیره شد"); }),
   apr: el => busy(el, async () => { const v = id => $(id).value.trim(), on = $("#pr-on").checked;
     const body = {on, min_users: v("#pr-min"), pct: v("#pr-pct"), lock_pct: v("#pr-lock"), channels: v("#pr-ch"), text: v("#pr-tx"), lock_text: v("#pr-ltx")};
-    const d = await api("/api/admin/promo", "POST", body); S.pr = undefined; toast(d.warn?.length ? d.warn[0] : "ذخیره شد"); render(); }),
+    const d = await api("/api/admin/promo", "POST", body);
+    S.pr = Object.assign({}, S.pr || {}, {on: on && !!(body.channels || S.fj?.channels), min_users: body.min_users, pct: body.pct, lock_pct: body.lock_pct, channels: body.channels, text: body.text, lock_text: body.lock_text});
+    admSetPaint(); toast(d.warn?.length ? d.warn[0] : "ذخیره شد");
+    api("/api/admin/promo").then(x => { S.pr = x; admSetPaint(); }).catch(() => {}); }),
+  aprreset: el => busy(el, async () => { await api("/api/admin/promo/reset", "POST"); S.pr = await api("/api/admin/promo"); admSetPaint(); toast("آمار صفر شد"); }),
   cpf: el => { const t = $("#" + el.dataset.p + "-text"); if(!t) return; const tg_ = FMT_TAGS[+el.dataset.i], o = tg_[2], c = tg_[3];
     const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
     t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true})); },

@@ -1797,6 +1797,10 @@ def promo_missing(uid, channels):
                 promo_stat("terr")
                 return None
             promo_stat("err")
+            try:
+                db.settings.update_one({"_id": "promo_stats"}, {"$set": {"last_err": f"{c.get('id')}: {r.get('description')}"[:300]}}, upsert=True)
+            except Exception:
+                pass
             if time.time() - _PROMO_ERR_LOG[0] > 60:
                 _PROMO_ERR_LOG[0] = time.time()
                 log.warning("promo getChatMember failed for %s: %s", c.get("id"), r.get("description"))

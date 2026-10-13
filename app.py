@@ -1060,7 +1060,14 @@ def api_admin_promo_get(uid):
     st = db.settings.find_one({"_id": "promo_stats"}) or {}
     return jsonify(on=bool(d.get("on")), min_users=int(d.get("min_users", 10)), pct=int(d.get("pct", 30)), lock_pct=int(d.get("lock_pct", 20)),
                    channels=" ".join(fj_str(c) for c in d.get("channels", [])), text=d.get("text") or PROMO_DEF_TEXT,
-                   lock_text=d.get("lock_text") or PROMO_DEF_LOCK, stats={k: int(st.get(k, 0)) for k in ("tgt", "msg", "lock", "joined", "err", "terr")})
+                   lock_text=d.get("lock_text") or PROMO_DEF_LOCK, stats={k: int(st.get(k, 0)) for k in ("tgt", "msg", "lock", "joined", "err", "terr")}, last_err=st.get("last_err", ""))
+
+
+@app.post("/api/admin/promo/reset")
+@admin_only
+def api_admin_promo_reset(uid):
+    db.settings.delete_one({"_id": "promo_stats"})
+    return jsonify(ok=True)
 
 
 @app.post("/api/admin/promo")
