@@ -107,9 +107,9 @@ BROADCAST_PER_TOKEN = max(1, _int("BROADCAST_PER_TOKEN", max(1, 50 // TOKEN_SCAL
 BROADCAST_MAX     = _int("BROADCAST_MAX", 5000)
 START_TOKENS      = _int("START_TOKENS", _int("WELCOME_TOKENS", 100 * TOKEN_SCALE))   # هدیه‌ی ثبت‌نام
 DAILY_BONUS       = _int("DAILY_BONUS", 5 * TOKEN_SCALE)          # جایزه‌ی روزانه (با استریک تا +۴ بیشتر)
-REF_INVITER       = _int("REF_INVITER", _int("REF_BONUS_INVITER", 60 * TOKEN_SCALE))   # پاداش دعوت‌کننده
-REF_INVITEE       = _int("REF_INVITEE", _int("REF_BONUS_NEW", 40 * TOKEN_SCALE))       # هدیه‌ی دعوت‌شده
-REF_MAX_PER_USER  = _int("REF_MAX_PER_USER", 100)   # سقف دعوت پاداش‌دار هر نفر
+REF_INVITER       = _int("REF_INVITER", _int("REF_BONUS_INVITER", 30 * TOKEN_SCALE))   # پاداش دعوت‌کننده
+REF_INVITEE       = _int("REF_INVITEE", _int("REF_BONUS_NEW", 20 * TOKEN_SCALE))       # هدیه‌ی دعوت‌شده
+REF_MAX_PER_USER  = _int("REF_MAX_PER_USER", 1000)   # سقف دعوت پاداش‌دار هر نفر
 REF_ON            = "create" if os.environ.get("REF_ON", "activate").strip().lower() == "create" else "activate"
 REF_MILESTONES    = [(5, 50 * TOKEN_SCALE), (15, 150 * TOKEN_SCALE), (50, 500 * TOKEN_SCALE)]   # (تعداد دعوت موفق، پاداش اضافه)
 LOW_TOKENS        = _int("LOW_TOKENS", 10 * TOKEN_SCALE)          # زیر این مقدار به صاحب ربات هشدار می‌دیم

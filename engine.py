@@ -1792,6 +1792,10 @@ def promo_missing(uid, channels):
     for c in channels:
         r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
         if not r.get("ok"):
+            desc = str(r.get("description") or "")
+            if "PARTICIPANT_ID_INVALID" in desc or "user not found" in desc.lower():
+                miss.append(c)            # تلگرام کاربر رو برای این کانال نمی‌شناسه ← عضو نیست (عضو بود جواب می‌داد)
+                continue
             code = r.get("error_code")
             if code is None or code == 429 or code >= 500:
                 promo_stat("terr")
