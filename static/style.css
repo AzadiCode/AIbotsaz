@@ -958,10 +958,3 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
    روی ۲۵+ بخش حافظه‌ی WebView تلگرام پر می‌شود و کل بوم (حتی دکمه‌های زوم و جستجو) سفید می‌ماند. بدونش فقط ناحیه‌ی دیده‌شده در مقیاس واقعی رسم می‌شود. */
 .studio.big .st-world{will-change:auto}
 .studio.big .stc-card{box-shadow:none}
-/* نشانگر تعداد بخش/کارت + حالت لیستی اضطراری (وقتی نقشه گرافیکی بالا نیاید، کاربر گیر نکند) */
-.st-dbg{position:absolute;bottom:calc(12px + env(safe-area-inset-bottom));right:10px;z-index:6;font-size:10.5px;color:var(--mut);background:var(--sf);border:1px solid var(--line);border-radius:99px;padding:3px 10px;pointer-events:none}
-.st-dbg:empty{display:none}
-.st-list{position:absolute;inset:0;overflow-y:auto;padding:60px 14px 110px;display:flex;flex-direction:column;gap:8px;touch-action:pan-y}
-.st-li{display:flex;align-items:center;gap:10px;text-align:right;background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:11px 13px}
-.st-li b{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.st-li small{color:var(--mut);font-size:10.5px}

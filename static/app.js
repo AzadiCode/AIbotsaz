@@ -796,12 +796,9 @@ const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""'
 
 Object.assign(A, {
   studio: () => { const b = S.cur; if(!b) return toast("اول یک ربات انتخاب کن"); S.view = "studio"; S.btab = "ai"; S.sbot = b.id; closeSheet(); render(); },
-  stback: () => stGuardClose(() => { stSaveNow(); ST._ro?.disconnect(); ST.forceGraph = false; S.view = "bot"; S.btab = "ai"; closeSheet(); render(); scrollTo(0, 0); }),
-  stbots: () => stGuardClose(() => { stSaveNow(); ST._ro?.disconnect(); ST.forceGraph = false; S.view = "studio"; S.cur = null; S.sbot = null; ST.botId = null; render(); }),
-  spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.view = "studio"; ST.botId = null; ST.forceGraph = false; render(); },
-  stlist: () => stGuardClose(() => { stSaveNow(); ST._ro?.disconnect(); ST.forceGraph = false; renderStudioList(); }),
-  stgraph: () => { ST.forceGraph = true; renderStudio(); },
-  staddlist: () => addNode(),
+  stback: () => stGuardClose(() => { stSaveNow(); S.view = "bot"; S.btab = "ai"; closeSheet(); render(); scrollTo(0, 0); }),
+  stbots: () => stGuardClose(() => { stSaveNow(); S.view = "studio"; S.cur = null; S.sbot = null; ST.botId = null; render(); }),
+  spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.view = "studio"; ST.botId = null; render(); },
   stadd: () => addNode(),
   stzin: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1.22, true); },
   stzout: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / 1.22, true); },
