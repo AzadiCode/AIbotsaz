@@ -19,7 +19,7 @@ const WK = (() => { try{
 const API_BASE = "";
 
 let S = {
-  view: "create", btab: "ai", atab: "wallet", sbot: null,
+  view: "create", btab: "ai", atab: "wallet", actab: "home", sbot: null,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
   ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null, emojis: undefined
@@ -855,31 +855,109 @@ Object.assign(A, {
   agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید کاربر: ${d.bal}`); }),
   acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
     toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
-  astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
-    $("#astats").innerHTML = statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید امروز", d.new24], ["ربات‌ها", d.bots], ["ربات فعال", d.active],
-      ["مخاطب ربات‌ها", d.bot_users], ["پاسخ فرم‌ها", d.forms], ["توکن در گردش", d.circulation], ["دعوت موفق", d.referrals]]); }),
   aannounce: el => { const {text, media, fmt} = cpPayload("an"); if(!media && text.length < 3) return toast("متن اعلان را بنویس");
     const b = !!$("#an-b")?.checked, a = !!$("#an-a")?.checked; if(!b && !a) return toast("حداقل یک گیرنده را تیک بزن");
     confirmQ(`این اعلان برای ${[b && "سازنده‌ها", a && "مخاطبان ربات‌های فعال"].filter(Boolean).join(" و ")} فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text, media, fmt, builders: b, audience: a}); toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("an"); })); },
-  ausers: () => openUsers(),
+  /* مدیریت پنل ادمین: تب‌ها و اکشن‌های هر زیربخش */
+  actab: el => { S.actab = el.dataset.k; renderAccount(); },
+  astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
+    $("#astats").innerHTML = statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید امروز", d.new24], ["ربات‌ها", d.bots], ["ربات فعال", d.active],
+      ["مخاطب ربات‌ها", d.bot_users], ["پاسخ فرم‌ها", d.forms], ["توکن در گردش", d.circulation], ["دعوت موفق", d.referrals]]); }),
+  /* کاربران */
+  usall: () => { if(!UD.d) return; usFilter(UD.d).filter(r => !r.blocked).forEach(r => US.sel.add(String(r.id))); usPaint(); },
+  usclear: () => { US.sel.clear(); usPaint(); },
+  ussend: el => { if(!US.sel.size) return toast("اول کاربرها را انتخاب کن (روی هر کاربر بزن)");
+    const {text, media, fmt} = cpPayload("us"); if(!media && text.length < 3) return toast("متن یا رسانه‌ی اطلاعیه را بنویس");
+    confirmQ(`این پیام برای ${US.sel.size} سازنده‌ی انتخاب‌شده فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {ids: [...US.sel], text, media, fmt});
+      toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("us"); })); },
+  /* برترین ربات‌ها */
+  absort: el => { AB.sort = el.dataset.k; AB.page = 1; abRefresh(); },
+  abon: el => { AB.on = el.dataset.k; AB.page = 1; abRefresh(); },
+  abpg: el => { const k = +el.dataset.k; if(k < 0 && AB.page > 1) AB.page--; else if(k > 0 && AB.d && AB.page < AB.d.pages) AB.page++; abRefresh(); },
+  abq: el => { clearTimeout(AB.qt); AB.qt = setTimeout(() => { AB.q = el.value; AB.page = 1; abRefresh(); }, 250); },
+  abref: () => abRefresh(),
 });
 document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
 
-/* ═════════════════ مدیریت ═════════════════ */
 function adminCard(){
-  if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; if(S.atab === "admin") render(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
+  if(!AD_TABS.some(t => t[0] === S.actab)) S.actab = "home";
+  if(S.actab !== "users") usStop();
+  if(S.actab !== "bots") abStop();
+  const body = ({home: adHome, bots: adBots, users: adUsers, msg: adMsg, cfg: adCfg})[S.actab]();
+  return `<div class="adsub">${tabsHTML(AD_TABS, S.actab, "actab")}</div>` + body;
+}
+
+/* ── نمای کلی: آمار زنده + دسترسی سریع + ابزار کاربر ── */
+const adStatsCells = d => statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید ۲۴ ساعت", d.new24],
+  ["ربات‌ها", d.bots], ["ربات فعال", d.active], ["مخاطب ربات‌ها", d.bot_users], ["توکن در گردش", d.circulation],
+  ["دعوت موفق", d.referrals], ["پاسخ فرم‌ها", d.forms]]);
+
+async function adStatsLoad(){
+  try{ S.ads = await api("/api/admin/stats"); }
+  catch(e){ S.ads = null; }
+  if(S.view === "account" && S.atab === "admin" && S.actab === "home") renderAccount();
+}
+
+function adHome(){
+  if(S.ads === undefined){ S.ads = null; adStatsLoad(); }
+  const cells = S.ads ? adStatsCells(S.ads) : `<div class="stat"><div class="k">در حال بارگذاری…</div><span class="n">—</span></div>`;
+  const nav = [["bots", "chart", "برترین ربات‌ها", "رتبه‌بندی، مدیریت و اطلاعیه"],
+               ["users", "users", "کاربران آنلاین", "فهرست زنده و ارسال گروهی"],
+               ["msg", "mega", "اطلاعیه", "اعلان همگانی سازنده‌ها"],
+               ["cfg", "gear", "تنظیمات", "پرداخت، عضویت و تبلیغ"]]
+    .map(([k, ic, t, s]) => `<button class="qn" data-a="actab" data-k="${k}">${IC[ic]}<b>${t}</b><small>${s}</small></button>`).join("");
+  return `<div class="sec"><h2>نمای کلی سیستم</h2><button class="b o sm" data-a="astats" style="width:auto;min-height:32px;padding:0 12px;font-size:12.5px">${IC.refresh}تازه‌سازی</button></div>
+    <div class="stats c3" id="astats">${cells}</div>
+    <div class="qnav">${nav}</div>
+    ${adTools()}`;
+}
+
+function adTools(){
+  return `<div class="panel mt2"><h2>ابزارهای سریع کاربر</h2>
+    <p class="muted">آیدی عددی کاربر را از زیربخش «کاربران» بگیر؛ مقدار منفی در شارژ یعنی کسر توکن.</p>
+    <div class="qth"><span>شارژ توکن</span><small>موجودی لحظه‌ای کاربر</small></div>
+    <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" autocomplete="off" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
+    <button class="b o sm" data-a="agrant">اعمال شارژ</button>
+    <div class="qth"><span>اشتراک دستی</span><small>«Free» لغو می‌کند؛ روز خالی = یک دوره‌ی کامل</small></div>
+    <div class="cmd"><input class="ltr" id="ap-uid" placeholder="آیدی عددی" inputmode="numeric" autocomplete="off" aria-label="آیدی کاربر"><select id="ap-plan" aria-label="پلن">${(S.cfg.plans || []).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select></div>
+    <div class="cmd"><input class="ltr" id="ap-days" placeholder="تعداد روز (اختیاری)" inputmode="numeric" autocomplete="off" aria-label="تعداد روز"></div>
+    <button class="b o sm" data-a="adplan">فعال‌سازی اشتراک</button>
+    <div class="qth"><span>کد هدیه</span><small>کد خالی = ساخت خودکار</small></div>
+    <div class="cmd"><input id="ac-code" placeholder="کد" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
+    <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
+    <button class="b o sm" data-a="acoupon">ساخت کد هدیه</button></div>`;
+}
+
+/* ── اطلاعیه: اعلان همگانی از ربات مادر ── */
+function adMsg(){
+  if(S.adaud === undefined){
+    S.adaud = null;
+    api("/api/admin/audience").then(d => { S.adaud = d; if(S.atab === "admin" && S.actab === "msg") renderAccount(); })
+      .catch(() => { S.adaud = {}; });
+  }
+  const a = S.adaud;
+  const reach = a && a.builders != null ? `الان ${N(fa(a.builders))} سازنده و ${N(fa(a.audience))} مخاطبِ ربات‌های فعال در دسترس‌اند.` : "از ربات مادر برای سازنده‌ها، یا از ربات‌های فعال برای مخاطبانشان.";
+  return `<div class="panel"><h2>اعلان همگانی</h2><p class="muted">${reach}</p><div class="fgap"></div>
+      ${cpBox("an", "متن اعلان")}
+      <label class="chk"><input type="checkbox" id="an-b" checked style="width:auto;margin:0">سازنده‌ها (از طریق ربات‌ساز)</label>
+      <label class="chk"><input type="checkbox" id="an-a" style="width:auto;margin:0">مخاطبان ربات‌های فعال (از طریق خود رباتشان، بدون سازنده)</label>
+      <div class="fgap"></div>
+      <button class="b" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
+    <div class="panel mt2"><h2>اطلاعیه از رباتِ خودِ کاربران</h2>
+      <p class="muted">برای ارسال با نام خودِ ربات‌ها به بخش «ربات‌ها» برو؛ ربات را پیدا کن و رویش بزن تا مخاطبانش را ببینی و از همان ربات پیام بفرستی.</p>
+      <button class="b o" data-a="actab" data-k="bots">دیدن برترین ربات‌ها</button></div>`;
+}
+
+/* ── تنظیمات: کارت‌به‌کارت، عضویت اجباری، تبلیغ روی ورودی‌های جدید ── */
+function adCfg(){
+  if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; if(S.atab === "admin" && S.actab === "cfg") renderAccount(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
   const fj = S.fj || {on: false, channels: "", text: ""};
   const PRD = {on: false, min_users: 10, pct: 30, lock_pct: 20, channels: "", text: "", lock_text: "", stats: {}};
-  if(S.pr === undefined){ S.pr = null; api("/api/admin/promo").then(d => { S.pr = d; if(S.atab === "admin") render(); }).catch(() => { S.pr = PRD; }); }
+  if(S.pr === undefined){ S.pr = null; api("/api/admin/promo").then(d => { S.pr = d; if(S.atab === "admin" && S.actab === "cfg") renderAccount(); }).catch(() => { S.pr = PRD; }); }
   const pr = S.pr || PRD;
-  if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; if(S.atab === "admin") render(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
+  if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; if(S.atab === "admin" && S.actab === "cfg") renderAccount(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
   const cd = S.cd || {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []};
-  const planPanel = `<div class="panel"><h2>اشتراک دستی</h2><p class="muted">برای هدیه یا اصلاح اشتراک یک کاربر. «Free» اشتراک رو لغو می‌کند. تعداد روز خالی = یک دوره‌ی کامل.</p><div class="fgap"></div>
-      <span class="lbl">آیدی عددی کاربر</span><input class="ltr" id="ap-uid" inputmode="numeric" autocomplete="off" aria-label="آیدی کاربر">
-      <span class="lbl">پلن</span><select id="ap-plan" aria-label="پلن">${(S.cfg.plans || []).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select>
-      <span class="lbl">تعداد روز (اختیاری)</span><input class="ltr" id="ap-days" inputmode="numeric" autocomplete="off" aria-label="تعداد روز">
-      <button class="b o" data-a="adplan">اعمال</button></div>`;
-  return planPanel + `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
+  return `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="cd-on"${cd.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">شماره کارت (۱۶ رقم)</span><input class="ltr" id="cd-num" inputmode="numeric" value="${esc(cd.number)}" placeholder="6037 0000 0000 0000" autocomplete="off" aria-label="شماره کارت">
       <span class="lbl">به نام (اختیاری)</span><input class="fa" id="cd-holder" value="${esc(cd.holder)}" maxlength="60" aria-label="نام صاحب کارت">
@@ -890,16 +968,16 @@ function adminCard(){
       ${(S.cfg.plans || []).filter(p => p.id !== "free").map(p => `<div class="cdp"><span>${esc(p.title)}</span><input class="ltr" id="cd-p-plan_${esc(p.id)}" inputmode="numeric" value="${esc((cd.prices || {})["plan_" + p.id] || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت اشتراک ${esc(p.title)}"></div>`).join("")}
       <span class="lbl">متن راهنما زیر مشخصات کارت (قالب HTML)</span><textarea class="fa" id="cd-tx" data-fmt maxlength="1200" style="min-height:90px" aria-label="متن راهنما">${esc(cd.text)}</textarea>${fmtTools("cd-tx")}
       <button class="b o" data-a="cdsave">ذخیره</button>
-      <h3 class="mt" style="font-size:14px">آخرین سفارش‌ها</h3>
+      <div class="qth"><span>آخرین سفارش‌ها</span><button class="b o sm" data-a="cdrefresh" style="width:auto;min-height:30px;padding:0 12px;font-size:12px">تازه‌سازی</button></div>
       ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${o.plan ? "اشتراک " + esc(o.plan) : N(o.tokens) + " توکن"} · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
-      <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div>
-    ` + `<div class="panel"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
+    </div>
+    <div class="panel mt2"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">آیدی کانال‌ها (تا ۳ تا، با فاصله)</span><input class="ltr" id="fj-ch" value="${esc(fj.channels)}" placeholder="@channel1 @channel2" autocomplete="off" aria-label="آیدی کانال‌ها">
       <p class="muted">کانال خصوصی: <b dir="ltr">-1001234567890=https://t.me/+invite</b></p>
       <span class="lbl">متن پیام عضویت (قالب HTML)</span><textarea class="fa" id="fj-tx" data-fmt maxlength="1500" style="min-height:90px" aria-label="متن پیام عضویت">${esc(fj.text)}</textarea>${fmtTools("fj-tx")}
       <button class="b o" data-a="afj">ذخیره</button></div>
-    ` + `<div class="panel"><h2>تبلیغ روی ورودی‌های جدید</h2><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
+    <div class="panel mt2"><h2>تبلیغ روی ورودی‌های جدید</h2><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="pr-on"${pr.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">حداقل مخاطب هر ربات (بیشتر از این عدد)</span><input class="ltr" id="pr-min" inputmode="numeric" value="${esc(pr.min_users)}" autocomplete="off" aria-label="حداقل مخاطب">
       <span class="lbl">درصد ورودی‌های جدیدی که هدف می‌شوند</span><input class="ltr" id="pr-pct" inputmode="numeric" value="${esc(pr.pct)}" autocomplete="off" aria-label="درصد هدف">
@@ -908,21 +986,7 @@ function adminCard(){
       <span class="lbl">متن پیام تبلیغی (قالب HTML)</span><textarea class="fa" id="pr-tx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن پیام تبلیغی">${esc(pr.text)}</textarea>${fmtTools("pr-tx")}
       <span class="lbl">متن قفل عضویت (قالب HTML)</span><textarea class="fa" id="pr-ltx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن قفل عضویت">${esc(pr.lock_text)}</textarea>${fmtTools("pr-ltx")}
       <p class="muted">نمایش تا الان: پیام ${N(pr.stats?.msg || 0)} · قفل ${N(pr.stats?.lock || 0)} · عضو شدند از قفل ${N(pr.stats?.joined || 0)}</p>
-      <button class="b o" data-a="apr">ذخیره</button></div>
-    ` + `<div class="panel"><h2>توکن کاربر</h2><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
-      <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
-      <button class="b o" data-a="agrant">اعمال</button></div>
-    <div class="panel"><h2>کد هدیه</h2><div class="fgap"></div>
-      <div class="cmd"><input id="ac-code" placeholder="کد (خالی = خودکار)" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
-      <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
-      <button class="b o" data-a="acoupon">ساخت کد</button></div>
-    <div class="panel"><h2>اعلان همگانی</h2><div class="fgap"></div>
-      ${cpBox("an", "متن اعلان")}<div class="fgap"></div>
-      <label class="muted" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="an-b" checked style="width:auto;margin:0">سازنده‌ها (از طریق ربات‌ساز)</label>
-      <label class="muted" style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><input type="checkbox" id="an-a" style="width:auto;margin:0">مخاطبان ربات‌های فعال (از طریق خود رباتشان، بدون سازنده)</label><div class="fgap"></div>
-      <button class="b o" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
-    <div class="two"><button class="b o" data-a="ausers">${IC.users}کاربران</button><button class="b o" data-a="astats">${IC.chart}آمار سیستم</button></div>
-    <div class="stats mt" id="astats" style="border:0"></div>`;
+      <button class="b o" data-a="apr">ذخیره</button></div>`;
 }
 let UQ = "";
 const ago = t => { if(!t) return "—"; const m = Math.max(0, (Date.now() - new Date(t)) / 60000); return m < 1 ? "همین الان" : m < 60 ? Math.floor(m) + " دقیقه پیش" : m < 1440 ? Math.floor(m / 60) + " ساعت پیش" : Math.floor(m / 1440) + " روز پیش"; };
@@ -984,13 +1048,14 @@ Object.assign(A, {
   rb: el => { if(el.classList.contains("spin")) return; const u = el.dataset.s === "u";
     busy(el, async () => { const d = await api(u ? "/api/admin/users/refresh-blocks" : `/api/admin/bots/${AU.id}/refresh-blocks`, "POST");
       toast(d.started ? "بررسی بلاک‌ها شروع شد؛ نتیجه خودکار به‌روز می‌شود" : "یک بررسی دیگر هنوز در حال انجام است");
-      clearTimeout(window.__ut); clearTimeout(window.__at); const f = u ? openUsers.tick : openAudience.tick; if(f) setTimeout(f, 1200); }); },
+      clearTimeout(window.__ut); clearTimeout(window.__at); const f = u ? usFetch : abFetch; if(f) setTimeout(f, 1200); }); },
 });
 const headRb = (t, s) => `<div class="grab"></div><div class="sh"><h2>${t}</h2><div style="display:flex;gap:6px"><button class="iconb sm" id="rb-btn" data-a="rb" data-s="${s}" aria-label="بررسی دوباره‌ی بلاک‌ها" title="بررسی دوباره‌ی بلاک‌ها">${IC.refresh}</button><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div></div>`;
 const scanTxt = d => d.scan ? ` · در حال بررسی ${N(d.scan.done)} از ${N(d.scan.total)}` : "";
 
-/* ── کاربران ربات‌ساز ── */
+/* ── کاربران ربات‌ساز (زیربخش «کاربران» پنل مدیریت: فهرست زنده + ارسال گروهی) ── */
 const US = {sel: new Set()};
+const UD = {d: null, t: null, run: false};
 const usTg = () => US.sel.size ? `${N(US.sel.size)} نفر انتخاب‌شده` : "هیچ‌کس انتخاب نشده";
 function userRow(r){
   const nm = r.name || (r.un ? "@" + r.un : "—"), id = String(r.id);
@@ -1002,28 +1067,124 @@ const uSum = d => `<span class="dot on"></span><b>${N(d.online)}</b> آنلای�
 const usFilter = d => { const q = UQ.trim().toLowerCase().replace(/^@/, "");
   return d.items.filter(r => !q || String(r.id).includes(q) || (r.un || "").toLowerCase().includes(q) || (r.name || "").toLowerCase().includes(q) || r.bots.some(b => (b.un || "").toLowerCase().includes(q))); };
 const uList = d => usFilter(d).map(userRow).join("") || '<p class="muted">موردی پیدا نشد</p>';
-const usPaint = () => { const t = $("#utg"); if(t) t.innerHTML = usTg(); const l = $("#ulist"); if(l && openUsers.d) l.innerHTML = uList(openUsers.d); };
-async function openUsers(){
-  clearTimeout(window.__ut); clearTimeout(window.__at); clearInterval(window.__ut); clearInterval(window.__at);
-  S.sheet = {kind: "info"}; UQ = ""; US.sel = new Set(); CPS.us = cpNew(); openUsers.d = null;
-  showSheet(head("کاربران ربات‌ساز") + `<p class="muted">در حال بارگذاری…</p>`);
-  const tick = async () => {
-    if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return;
-    let again = 10000;
-    try{
-      const d = await api("/api/admin/users"); openUsers.d = d; again = d.scan ? 2500 : 10000;
-      if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); $("#rb-btn")?.classList.toggle("spin", !!d.scan); }
-      else showSheet(headRb("کاربران ربات‌ساز", "u") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px"><div id="ulist" class="scrl">${uList(d)}</div>
-        <div class="atg"><span class="muted">برای ارسال، روی کاربرها بزن. گیرنده:</span><b id="utg">${usTg()}</b></div>
-        <div class="cmd"><button class="b o sm" data-a="usall">انتخاب همه‌ی لیست</button><button class="b o sm" data-a="usclear">پاک کردن انتخاب</button></div>
-        <div class="fgap"></div>${cpBox("us", "متن اطلاعیه برای کاربرهای انتخاب‌شده")}<div class="fgap"></div>
-        <button class="b" data-a="ussend">${IC.mega}ارسال</button><div class="fgap"></div>`);
-      $("#rb-btn")?.classList.toggle("spin", !!d.scan);
-    }catch(e){ closeSheet(); return toast(e.message); }
-    window.__ut = setTimeout(tick, again);
-  };
-  openUsers.tick = tick; await tick();
+const usPaint = () => { const t = $("#utg"); if(t) t.innerHTML = usTg(); const l = $("#ulist"); if(l && UD.d) l.innerHTML = uList(UD.d); };
+const usOn = () => S.view === "account" && S.atab === "admin" && S.actab === "users";
+
+function adUsers(){
+  usStart();
+  const d = UD.d;
+  if(!d) return `<div class="panel"><div class="sh"><h2>کاربران ربات‌ساز</h2></div><p class="muted">در حال بارگذاری فهرست کاربرها…</p></div>`;
+  return `<div class="panel">
+    <div class="sh"><h2>کاربران ربات‌ساز</h2><button class="iconb sm" id="rb-btn" data-a="rb" data-s="u" aria-label="بررسی دوباره‌ی بلاک‌ها" title="بررسی دوباره‌ی بلاک‌ها">${IC.refresh}</button></div>
+    <div class="usum" id="usum">${uSum(d)}</div>
+    <input id="uq" class="fa" value="${esc(UQ)}" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px">
+    <div id="ulist" class="scrl adlist">${uList(d)}</div>
+    <div class="atg"><span class="muted">برای ارسال، روی کاربرها بزن. گیرنده:</span><b id="utg">${usTg()}</b></div>
+    <div class="cmd"><button class="b o sm" data-a="usall">انتخاب همه‌ی لیست</button><button class="b o sm" data-a="usclear">پاک کردن انتخاب</button></div>
+    <div class="fgap"></div>${cpBox("us", "متن اطلاعیه برای کاربرهای انتخاب‌شده")}<div class="fgap"></div>
+    <button class="b" data-a="ussend">${IC.mega}ارسال اطلاعیه</button></div>
+    <div class="panel mt2"><h2>ارسال از خودِ ربات‌ها</h2>
+      <p class="muted">برای اطلاعیه با نام خودِ ربات‌ها (به مخاطبان هر ربات)، به زیربخش «ربات‌ها» برو.</p>
+      <button class="b o" data-a="actab" data-k="bots">دیدن برترین ربات‌ها</button></div>`;
 }
+
+async function usFetch(){
+  if(UD.run) return;
+  UD.run = true; UD.t = null;
+  let again = 10000;
+  try{
+    const d = await api("/api/admin/users"); UD.d = d; again = d.scan ? 2500 : 10000;
+    if($("#ulist")){ const s = $("#usum"); if(s) s.innerHTML = uSum(d); usPaint(); $("#rb-btn")?.classList.toggle("spin", !!d.scan); }
+    else if(usOn()) renderAccount();
+  }catch(e){ if(!UD.d) toast(e.message); again = 45000; }
+  UD.run = false;
+  if(usOn()) UD.t = setTimeout(usFetch, again);
+}
+const usStart = () => { if(!UD.t && !UD.run) usFetch(); };
+const usRefresh = () => { if(UD.run) return; if(UD.t) clearTimeout(UD.t); UD.t = null; usFetch(); };
+const usStop = () => { if(UD.t) clearTimeout(UD.t); UD.t = null; };
+
+/* ── برترین و فعال‌ترین ربات‌ها (زیربخش «ربات‌ها») ── */
+const AB = {d: null, q: "", sort: "subs", on: "", page: 1, t: null, run: false, dirty: false, qt: null};
+const AB_SORTS = [["subs", "مخاطب"], ["online", "آنلاین"], ["week", "فعال ۷ روز"], ["day", "جدید ۲۴ ساعت"], ["created", "جدیدترین"]];
+const abOn = () => S.view === "account" && S.atab === "admin" && S.actab === "bots";
+
+const abSumHTML = d => statCells([["ربات‌ها", fa(d.sum.bots)], ["فعال", fa(d.sum.active)], ["مخاطب کل", fa(d.sum.subs)],
+  ["آنلاین", fa(d.sum.online)], ["جدید ۲۴ ساعت", fa(d.sum.new24)], ["بلاک", fa(d.sum.blocked)]]);
+
+function abRowHTML(r, i, d){
+  const rank = (d.page - 1) * (d.per || 25) + i + 1;
+  const owner = r.onm || r.onun ? `${esc(r.onm || "")}${r.onun ? ` <span class="ltr">@${esc(r.onun)}</span>` : ""}` : `<span class="ltr">ID ${esc(r.owner)}</span>`;
+  return `<div class="brow${r.on ? "" : " off"}" data-ab="${esc(r.id)}" role="button" tabindex="0" aria-label="مخاطبان ربات ${esc(r.name || r.un || r.id)}">
+    <span class="brk t${rank <= 3 ? rank : 0}">${rank}</span>
+    <div class="bi">
+      <div class="b1"><b>${esc(r.name || "ربات بی‌نام")}</b>${r.un ? `<span class="muted ltr">@${esc(r.un)}</span>` : ""}
+        <span class="ub${r.on ? " on" : ""}">${r.on ? "فعال" : "غیرفعال"}</span>${r.sending ? '<span class="ub send">در حال ارسال</span>' : ""}</div>
+      <div class="b2">
+        <span class="bm">${IC.users}${N(fa(r.subs))}<small>مخاطب</small></span>
+        <span class="bm${r.online ? " hot" : ""}">${N(fa(r.online))}<small>آنلاین</small></span>
+        <span class="bm">${N(fa(r.week))}<small>۷ روز</small></span>
+        <span class="bm">${N(fa(r.day))}<small>۲۴ ساعت</small></span>
+        ${r.blocked ? `<span class="bm bad">${N(fa(r.blocked))}<small>بلاک</small></span>` : ""}
+      </div>
+      <div class="b3"><span class="muted">سازنده: ${owner}</span></div>
+    </div>
+    <span class="ba" title="مخاطبان و اطلاعیه">${IC.mega}</span></div>`;
+}
+const abListHTML = d => d.items.length
+  ? d.items.map((r, i) => abRowHTML(r, i, d)).join("")
+  : `<div class="empty" style="padding:26px 8px"><p class="muted">رباتی با این جستجو پیدا نشد.</p></div>`;
+const abSortsHTML = () => AB_SORTS.map(([k, t]) => `<button class="sbt${AB.sort === k ? " on" : ""}" data-a="absort" data-k="${k}">${t}</button>`).join("");
+const abFiltersHTML = () => [["", "همه"], ["on", "فعال"], ["off", "غیرفعال"]]
+  .map(([k, t]) => `<button class="sbt${AB.on === k ? " on" : ""}" data-a="abon" data-k="${k}">${t}</button>`).join("");
+const abPageHTML = d => `<div class="pgn"><button class="b o sm" data-a="abpg" data-k="-1"${d.page <= 1 ? " disabled" : ""}>قبلی</button>
+  <span class="muted">صفحه ${N(d.page)} از ${N(d.pages)} · ${N(d.total)} ربات</span>
+  <button class="b o sm" data-a="abpg" data-k="1"${d.page >= d.pages ? " disabled" : ""}>بعدی</button></div>`;
+
+function adBots(){
+  abStart();
+  const d = AB.d;
+  if(!d) return `<div class="stats c3"><div class="stat"><div class="k">در حال بارگذاری…</div><span class="n">—</span></div></div>
+    <div class="panel"><p class="muted">در حال دریافت آمار ربات‌ها…</p></div>`;
+  return `<div class="stats c3 absum" id="absum">${abSumHTML(d)}</div>
+  <div class="panel">
+    <div class="sh"><h2>برترین و فعال‌ترین ربات‌ها</h2><button class="iconb sm" data-a="abref" aria-label="تازه‌سازی" title="تازه‌سازی">${IC.refresh}</button></div>
+    <p class="muted">رتبه‌بندی بر اساس مخاطب و فعالیت زنده. روی هر ربات بزن تا مخاطبانش را ببینی و از خودِ همان ربات اطلاعیه بفرستی.</p>
+    <div class="sortbar" id="absort">${abSortsHTML()}</div>
+    <div class="fbar" id="abfilters">${abFiltersHTML()}</div>
+    <input id="abq" class="fa" value="${esc(AB.q)}" placeholder="جستجو: نام، @یوزرنیم، آیدی سازنده" autocomplete="off" aria-label="جستجوی ربات" style="margin:8px 0 6px">
+    <div class="blist" id="blist">${abListHTML(d)}</div>
+    <div id="abpg">${abPageHTML(d)}</div>
+  </div>`;
+}
+
+function abPaint(d){
+  const l = $("#blist"); if(l) l.innerHTML = abListHTML(d);
+  const s = $("#absort"); if(s) s.innerHTML = abSortsHTML();
+  const f = $("#abfilters"); if(f) f.innerHTML = abFiltersHTML();
+  const sm = $("#absum"); if(sm) sm.innerHTML = abSumHTML(d);
+  const p = $("#abpg"); if(p) p.innerHTML = abPageHTML(d);
+}
+
+async function abFetch(){
+  if(AB.run) return;
+  AB.run = true; AB.t = null;
+  const p = new URLSearchParams({q: AB.q, sort: AB.sort, on: AB.on, page: AB.page});
+  let again = 15000;
+  try{
+    const d = await api("/api/admin/bots?" + p);
+    AB.d = d;
+    if($("#blist")) abPaint(d);
+    else if(abOn()) renderAccount();
+  }catch(e){ if(!AB.d) toast(e.message); again = 45000; }
+  AB.run = false;
+  if(!abOn()) return;
+  const fast = AB.dirty; AB.dirty = false;
+  AB.t = setTimeout(abFetch, fast ? 60 : again);
+}
+const abStart = () => { if(!AB.t && !AB.run) abFetch(); };
+const abRefresh = () => { if(AB.run){ AB.dirty = true; return; } if(AB.t) clearTimeout(AB.t); AB.t = null; abFetch(); };
+const abStop = () => { if(AB.t) clearTimeout(AB.t); AB.t = null; };
 
 /* ── مخاطبان یک ربات + ارسال اطلاعیه از طریق همان ربات ── */
 const AU = {id: "", mode: "ex", sel: new Set(), d: null};
@@ -1068,13 +1229,14 @@ document.addEventListener("click", e => {
   const c = e.target.closest("[data-ab]"); if(c){ e.stopPropagation(); return openAudience(c.dataset.ab); }
   if(e.target.closest("[data-pf]")) return;
   const r = e.target.closest("[data-au]"); if(r && AU.d){ const id = r.dataset.au; AU.sel.has(id) ? AU.sel.delete(id) : AU.sel.add(id); return auPaint(); }
-  const u = e.target.closest("[data-us]"); if(u && openUsers.d){ const id = u.dataset.us; US.sel.has(id) ? US.sel.delete(id) : US.sel.add(id); usPaint(); }
+  const u = e.target.closest("[data-us]"); if(u && UD.d){ const id = u.dataset.us; US.sel.has(id) ? US.sel.delete(id) : US.sel.add(id); usPaint(); }
 }, true);
 Object.assign(A, {
   autg: el => { AU.mode = el.dataset.t; AU.sel.clear(); auPaint(); },
   auall: () => { if(!AU.d) return; auFilter(AU.d).filter(r => !r.blocked).forEach(r => AU.sel.add(String(r.id))); auPaint(); },
   auclear: () => { AU.sel.clear(); auPaint(); },
-  usall: () => { if(!openUsers.d) return; usFilter(openUsers.d).filter(r => !r.blocked).forEach(r => US.sel.add(String(r.id))); usPaint(); },
+  ausers: () => { S.atab = "admin"; S.actab = "users"; closeSheet(); renderAccount(); },
+  usall: () => { if(!UD.d) return; usFilter(UD.d).filter(r => !r.blocked).forEach(r => US.sel.add(String(r.id))); usPaint(); },
   usclear: () => { US.sel.clear(); usPaint(); },
   ausend: el => { const {text, media, fmt} = cpPayload("au"); if(!media && text.length < 2) return toast("متن یا رسانه‌ی اطلاعیه را بنویس");
     const n = AU.sel.size, body = n ? {scope: "many", uids: [...AU.sel], text, media, fmt} : {scope: AU.mode === "all" ? "all" : "except_owner", text, media, fmt};
@@ -1086,7 +1248,7 @@ Object.assign(A, {
       toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("us"); })); },
 });
 document.addEventListener("input", e => { if(e.target.id === "aq" && AU.d) auPaint(); });
-document.addEventListener("input", e => { if(e.target.id === "uq" && openUsers.d){ UQ = e.target.value; usPaint(); } });
+document.addEventListener("input", e => { if(e.target.id === "uq" && UD.d){ UQ = e.target.value; usPaint(); } });
 
 /* حضور آنلاین */
 if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); }; setInterval(ping, 25000); document.addEventListener("visibilitychange", ping); }

@@ -692,6 +692,94 @@ def api_admin_stats(uid):
                    new24=sum(1 for u in users if u.get("created") and naive(u["created"]) >= day))
 
 
+_AB = {"t": 0.0, "rows": None}
+_AB_SORT = {"subs": "subs", "online": "online", "week": "active7", "day": "new24",
+            "blocked": "blocked", "created": "created", "updated": "updated"}
+_AB_PER = 25
+
+
+def _iso(d):
+    """تاریخ مونگو → متن ISO با پسوند Z (برای مرتب‌سازی و نمایش در مینی‌اپ)"""
+    return naive(d).isoformat() + "Z" if d else ""
+
+
+def _bot_metrics():
+    """آمار مخاطب همه‌ی ربات‌ها در یک پرس‌وجوی گروهی؛ با کش کوتاه چون پنل ادمین مرتب تازه می‌شود"""
+    if _AB["rows"] is not None and time.time() - _AB["t"] < 15:
+        return _AB["rows"]
+    t = naive()
+    cut_on, week, day = t - timedelta(seconds=300), t - timedelta(days=7), t - timedelta(days=1)
+    st = {}
+    try:
+        pipe = [{"$group": {"_id": "$bot",
+                            "n": {"$sum": 1},
+                            "on": {"$sum": {"$cond": [{"$gte": ["$last", cut_on]}, 1, 0]}},
+                            "w": {"$sum": {"$cond": [{"$gt": ["$last", week]}, 1, 0]}},
+                            "d": {"$sum": {"$cond": [{"$gt": ["$t", day]}, 1, 0]}},
+                            "bl": {"$sum": {"$cond": [{"$eq": ["$blocked", True]}, 1, 0]}}}}]
+        for r in db.subs.aggregate(pipe):
+            st[str(r.get("_id") or "")] = r
+    except Exception:
+        log.exception("aggregation آمار ربات‌ها نرفت؛ شمارش تک‌تک جایگزین شد")
+        st = {}
+        for r in db.subs.find({}, {"bot": 1, "last": 1, "t": 1, "blocked": 1}):
+            g = st.setdefault(str(r.get("bot") or ""), {"n": 0, "on": 0, "w": 0, "d": 0, "bl": 0})
+            last = naive(r["last"]) if r.get("last") else None
+            g["n"] += 1
+            g["on"] += 1 if last and last >= cut_on else 0
+            g["w"] += 1 if last and last > week else 0
+            g["d"] += 1 if r.get("t") and naive(r["t"]) > day else 0
+            g["bl"] += 1 if r.get("blocked") else 0
+    rows = []
+    for b in db.bots.find({}, {"name": 1, "username": 1, "owner": 1, "active": 1, "token_enc": 1,
+                               "created": 1, "updated": 1}):
+        g = st.get(str(b["_id"]), {})
+        rows.append({"id": str(b["_id"]), "name": b.get("name") or "", "un": b.get("username") or "",
+                     "owner": int(b.get("owner") or 0), "on": bool(b.get("active") and b.get("token_enc")),
+                     "created": _iso(b.get("created")), "updated": _iso(b.get("updated")),
+                     "subs": int(g.get("n", 0)), "online": int(g.get("on", 0)), "active7": int(g.get("w", 0)),
+                     "new24": int(g.get("d", 0)), "blocked": int(g.get("bl", 0))})
+    _AB["t"], _AB["rows"] = time.time(), rows
+    return rows
+
+
+@app.get("/api/admin/bots")
+@admin_only
+def api_admin_bots(uid):
+    """برترین و فعال‌ترین ربات‌ها: مرتب‌سازی بر اساس مخاطب، آنلاین، فعالیت هفت‌روزه و رشد ۲۴ ساعت + جستجو و صفحه‌بندی"""
+    q = str(request.args.get("q") or "").strip().lower().lstrip("@")[:60]
+    sort = _AB_SORT.get(str(request.args.get("sort") or ""), "subs")
+    only = str(request.args.get("on") or "")
+    try:
+        page = max(1, int(request.args.get("page") or 1))
+    except ValueError:
+        page = 1
+    rows = _bot_metrics()
+    tot = {"bots": len(rows), "active": sum(1 for r in rows if r["on"]), "subs": sum(r["subs"] for r in rows),
+           "online": sum(r["online"] for r in rows), "new24": sum(r["new24"] for r in rows),
+           "blocked": sum(r["blocked"] for r in rows)}
+    if only == "on":
+        rows = [r for r in rows if r["on"]]
+    elif only == "off":
+        rows = [r for r in rows if not r["on"]]
+    if q:
+        rows = [r for r in rows if q in r["name"].lower() or q in r["un"].lower()
+                or q in str(r["owner"]) or q in r["id"]]
+    rows.sort(key=lambda r: (r[sort], r["subs"], r["updated"]), reverse=True)
+    pages = max(1, math.ceil(len(rows) / _AB_PER))
+    page = min(page, pages)
+    cut = rows[(page - 1) * _AB_PER: page * _AB_PER]
+    owners = {u["_id"]: u for u in db.users.find({"_id": {"$in": sorted({r["owner"] for r in cut})}},
+                                                 {"tg_name": 1, "tg_user": 1})}
+    sending = {x["_id"] for x in db.locks.find({"_id": {"$in": [f"abc:{r['id']}" for r in cut]}}, {"_id": 1})}
+    out = []
+    for r in cut:
+        o = owners.get(r["owner"], {})
+        out.append({**r, "onm": o.get("tg_name") or "", "onun": o.get("tg_user") or "",
+                    "sending": f"abc:{r['id']}" in sending})
+    return jsonify(items=out, page=page, pages=pages, total=len(rows), per=_AB_PER, sum=tot)
+
+
 @app.get("/api/admin/users")
 @admin_only
 def api_admin_users(uid):
