@@ -189,14 +189,23 @@ function stCull(){
   const many = ST.els.size > 8, c = ST.cam || {x: 40, y: 40, z: 1}, m = 280;
   const vw = ST.vw || innerWidth, vh = ST.vh || innerHeight;
   const x1 = (-m - c.x) / c.z, x2 = (vw + m - c.x) / c.z, y1 = (-m - c.y) / c.z, y2 = (vh + m - c.y) / c.z;
+  let vis = 0, tot = 0;
   for(const [id, el] of ST.els){
     const p = ST.pos[id]; if(!p) continue;
+    tot++;
     let hide = false;
     if(many && !(ST.mode && ST.mode.id === id)){
       const z = ST.size[id], w = z ? z.w : ST_W, h = z ? z.h : stCardH(S.cur.config.nodes[id] || {});
       hide = !(p.x < x2 && p.x + w > x1 && p.y < y2 && p.y + h > y1);
-    }
+      if(!hide) vis++;
+    } else { vis++; }
     if(el._cv !== hide){ el._cv = hide; el.classList.toggle("cv", hide); }
+  }
+  // fail-safe: دوربین قدیمی ذخیره‌شده ممکنه هیچ بخشی رو پوشش نده (مخصوصا بعد از بزرگ شدن ربات با AI)؛
+  // در این حالت صفحه سیاه/خالی نمونـه: همه رو نشون بده و یک بار نما رو فیت کن
+  if(many && tot > 0 && vis === 0){
+    for(const [, el] of ST.els){ el._cv = false; el.classList.remove("cv"); }
+    if(!ST._autofit || Date.now() - ST._autofit > 2000){ ST._autofit = Date.now(); setTimeout(() => { if(S.view === "studio" && $("#stc")) stFit(true); }, 60); }
   }
 }
 function stZoomAt(px, py, f, glide){
@@ -215,7 +224,7 @@ function stFit(glide){
     x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + w); y2 = Math.max(y2, p.y + h);
   }
   if(x1 > x2) return;
-  const cw = cv.clientWidth, ch = cv.clientHeight, bw = x2 - x1, bh = y2 - y1;
+  const cw = cv.clientWidth || innerWidth, ch = cv.clientHeight || innerHeight, bw = x2 - x1, bh = y2 - y1;
   const z = Math.min(1.25, Math.max(.16, Math.min((cw - 70) / Math.max(1, bw), (ch - 150) / Math.max(1, bh))));
   ST.cam = {z, x: (cw - bw * z) / 2 - x1 * z, y: (ch - bh * z) / 2 - y1 * z + 8};
   stApply(glide); stSave();
@@ -578,7 +587,7 @@ function renderStudio(){
     </div>`;
   ST.sig = {}; ST.els = new Map(); ST.q = ""; ST.w = null; ST.rect = null;
   const cv0 = $("#stc");
-  ST.vw = cv0.clientWidth; ST.vh = cv0.clientHeight;
+  ST.vw = cv0.clientWidth || innerWidth; ST.vh = cv0.clientHeight || innerHeight;
   ST._ro?.disconnect();
   if(window.ResizeObserver){
     ST._ro = new ResizeObserver(() => { ST.vw = cv0.clientWidth; ST.vh = cv0.clientHeight; ST.rect = null; if(S.view === "studio" && cv0.isConnected){ stMini(); stCull(); } });
@@ -587,6 +596,7 @@ function renderStudio(){
   try{ stPaintWorld(); }
   catch(err){ console.error("studio paint", err); toast("نمایش نقشه با مشکل روبه‌رو شد؛ یک بار دیگر وارد استودیو شو"); }
   if(!ST.cam) requestAnimationFrame(stHome);
+  else requestAnimationFrame(() => { if(S.view === "studio" && $("#stc")){ ST.vw = $("#stc").clientWidth || innerWidth; ST.vh = $("#stc").clientHeight || innerHeight; stCull(); } });
   stBindCanvas();
   $("#stq")?.addEventListener("input", () => stSearchApply(true));
 }
