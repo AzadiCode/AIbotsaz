@@ -41,16 +41,29 @@ function stNextId(){
 }
 const stNodeIcon = n => n.ai ? IC.spark : n.fields ? IC.form : n.ask ? IC.inbox : n.board ? IC.medal : IC.bot;
 
-/* همه‌ی سیم‌های ربات: هر goto یک سیم است */
+/* همه‌ی سیم‌های ربات: هر goto یک سیم است (نسخه مقاوم: یک دکمه خراب کل نقشه را خراب نمی‌کند) */
 function stEdges(){
-  const cfg = S.cur.config, out = [];
+  const cfg = S.cur?.config, out = [];
+  if(!cfg || !cfg.nodes || typeof cfg.nodes !== "object") return out;
   for(const [id, n] of Object.entries(cfg.nodes)){
-    (n.buttons || []).forEach((row, r) => row.forEach((b, c) => {
-      if(b.goto !== undefined) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.goto, kind: "btn", n: id, r, c});
-      else if(b.pay?.goto) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.pay.goto, kind: "pay", n: id, r, c});
-    }));
-    (n.route || []).forEach((ru, i) => out.push({key: `r|${id}|${i}`, from: id, to: ru.goto, kind: "route", n: id, ri: i}));
-    if(n.next) out.push({key: `x|${id}`, from: id, to: n.next, kind: "next", n: id});
+    if(!n || typeof n !== "object") continue;
+    try{
+      const btns = Array.isArray(n.buttons) ? n.buttons : [];
+      btns.forEach((row, r) => {
+        if(!Array.isArray(row)) return;
+        row.forEach((b, c) => {
+          if(!b || typeof b !== "object") return;
+          if(typeof b.goto === "string" && b.goto) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.goto, kind: "btn", n: id, r, c});
+          else if(b.pay && typeof b.pay.goto === "string" && b.pay.goto) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.pay.goto, kind: "pay", n: id, r, c});
+        });
+      });
+      const route = Array.isArray(n.route) ? n.route : [];
+      route.forEach((ru, i) => {
+        if(!ru || typeof ru.goto !== "string" || !ru.goto) return;
+        out.push({key: `r|${id}|${i}`, from: id, to: ru.goto, kind: "route", n: id, ri: i});
+      });
+      if(typeof n.next === "string" && n.next) out.push({key: `x|${id}`, from: id, to: n.next, kind: "next", n: id});
+    }catch(_){}
   }
   return out;
 }
@@ -72,25 +85,54 @@ function stWireIn(cfg, src, tid){
     else if(n.buttons.length < 6) n.buttons.push([{text: "دکمه‌ی جدید", goto: tid}]);
   }
 }
-/* بخش‌های قابل دسترس از شروع/ناشناس/دستورها */
+/* بخش‌های قابل دسترس از شروع/ناشناس/دستورها (نسخه مقاوم) */
 function stReach(){
-  const cfg = S.cur.config, seen = new Set(), st = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})];
-  while(st.length){
-    const i = st.pop();
-    if(seen.has(i) || !cfg.nodes[i]) continue;
-    seen.add(i);
-    const n = cfg.nodes[i];
-    for(const row of n.buttons || []) for(const b of row){ if(b.goto) st.push(b.goto); if(b.pay?.goto) st.push(b.pay.goto); }
-    for(const ru of n.route || []) st.push(ru.goto);
-    if(n.next) st.push(n.next);
-  }
-  return seen;
+  try{
+    const cfg = S.cur?.config;
+    if(!cfg || !cfg.nodes || typeof cfg.nodes !== "object") return new Set();
+    const seen = new Set(), st = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})];
+    let guard = 0;
+    while(st.length && guard++ < 5000){
+      const i = st.pop();
+      if(typeof i !== "string" || !i || seen.has(i) || !cfg.nodes[i]) continue;
+      seen.add(i);
+      const n = cfg.nodes[i];
+      if(!n || typeof n !== "object") continue;
+      try{
+        const btns = Array.isArray(n.buttons) ? n.buttons : [];
+        for(const row of btns){
+          if(!Array.isArray(row)) continue;
+          for(const b of row){
+            if(!b || typeof b !== "object") continue;
+            if(typeof b.goto === "string" && b.goto) st.push(b.goto);
+            if(b.pay && typeof b.pay.goto === "string" && b.pay.goto) st.push(b.pay.goto);
+          }
+        }
+        const route = Array.isArray(n.route) ? n.route : [];
+        for(const ru of route){ if(ru && typeof ru.goto === "string" && ru.goto) st.push(ru.goto); }
+        if(typeof n.next === "string" && n.next) st.push(n.next);
+      }catch(_){}
+    }
+    return seen;
+  }catch(_){ return new Set(Object.keys(S.cur?.config?.nodes || {})); }
 }
 /* چیدمان لایه‌ای از راست (شروع) به چپ */
 /* چیدمان لایه‌ای از راست (شروع) به چپ؛ هر بخش نزدیکِ میانگینِ بخش‌هایی قرار می‌گیرد که به آن می‌رسند تا سیم‌ها کوتاه و کم‌تقاطع باشند */
-const stH = id => (ST.size[id] ? ST.size[id].h : stCardH(S.cur.config.nodes[id]));
+const stH = id => {
+  try{
+    if(ST.size[id]) return ST.size[id].h;
+    const n = S.cur?.config?.nodes?.[id];
+    if(!n || typeof n !== "object") return 240;
+    return stCardH(n);
+  }catch(_){ return 240; }
+};
 function stAutoLayout(save){
-  const cfg = S.cur.config, ids = Object.keys(cfg.nodes), col = {}, q = [];
+  try{
+  const cfg = S.cur?.config;
+  if(!cfg || !cfg.nodes || typeof cfg.nodes !== "object") return;
+  const ids = Object.keys(cfg.nodes);
+  if(!ids.length) return;
+  const col = {}, q = [];
   const roots = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})].filter((r, i, a) => cfg.nodes[r] && a.indexOf(r) === i);
   const edges = stEdges(), out = {};
   for(const e of edges) (out[e.from] = out[e.from] || []).push(e.to);
@@ -135,14 +177,17 @@ function stAutoLayout(save){
     }
   }
   let minY = 1e9;
-  for(const id of ids) minY = Math.min(minY, ST.pos[id].y);
-  for(const id of ids) ST.pos[id].y += 40 - minY;
+  for(const id of ids){ if(ST.pos[id]) minY = Math.min(minY, ST.pos[id].y); }
+  if(minY > 1e8) return;
+  for(const id of ids){ if(ST.pos[id]) ST.pos[id].y += 40 - minY; }
   if(save) stSave();
+  }catch(err){ console.error("studio layout", err); stGridFallback(); }
 }
 /* جای بخش‌های بدون مختصات ذخیره‌شده */
 /* جای بخش‌های بدون مختصات ذخیره‌شده؛ اگر همه تازه بودند true برمی‌گرداند */
 function stEnsurePositions(){
-  const ids = Object.keys(S.cur.config.nodes);
+  const ids = Object.keys(S.cur?.config?.nodes || {});
+  if(!ids.length) return false;
   const missing = ids.filter(id => !ST.pos[id]);
   if(!missing.length) return false;
   const keep = {...ST.pos};
@@ -366,9 +411,13 @@ function stBtnCell(id, r, c, b, cfg){
   return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${anchor}</div>`;
 }
 function stCardH(n){
-  const gr = [false, true].map(x => (n.buttons || []).filter(row => row.some(b => (b.kb === "reply") === x)).length), rows = gr[0] + gr[1], caps = (gr[0] ? 1 : 0) + (gr[1] ? 1 : 0), lg = (n.route?.length || 0) + (n.next ? 1 : 0);
-  const lines = Math.min(5, Math.ceil(((n.text || "").length || 1) / 34));
-  return 196 + ((n.media || n.photo) ? 118 : 0) + lines * 21 + (rows ? 24 * caps + rows * 39 : 0) + (lg ? 22 + lg * 30 : 0);
+  try{
+    if(!n || typeof n !== "object") return 240;
+    const btns = Array.isArray(n.buttons) ? n.buttons.filter(r => Array.isArray(r)) : [];
+    const gr = [false, true].map(x => btns.filter(row => row.some(b => b && typeof b === "object" && (b.kb === "reply") === x)).length), rows = gr[0] + gr[1], caps = (gr[0] ? 1 : 0) + (gr[1] ? 1 : 0), lg = (Array.isArray(n.route) ? n.route.length : 0) + (typeof n.next === "string" && n.next ? 1 : 0);
+    const lines = Math.min(5, Math.ceil(((n.text || "").length || 1) / 34));
+    return 196 + ((n.media || n.photo) ? 118 : 0) + lines * 21 + (rows ? 24 * caps + rows * 39 : 0) + (lg ? 22 + lg * 30 : 0);
+  }catch(_){ return 260; }
 }
 function stCardHTML(id, dead){
   const cfg = S.cur.config, n = cfg.nodes[id], p = ST.pos[id] || {x: 0, y: 0};
@@ -480,7 +529,9 @@ function stCardSafe(id, dead){
   }
 }
 function stGridFallback(){
-  Object.keys(S.cur.config.nodes).forEach((id, i) => { if(!ST.pos[id]) ST.pos[id] = {x: -(i % 4) * 330, y: 40 + Math.floor(i / 4) * 520}; });
+  try{
+    Object.keys(S.cur?.config?.nodes || {}).forEach((id, i) => { if(!ST.pos[id]) ST.pos[id] = {x: -(i % 4) * 330, y: 40 + Math.floor(i / 4) * 520}; });
+  }catch(_){}
 }
 function stSearchApply(center){
   const cv = $("#stc"), q = $("#stq"); if(!cv || !S.cur) return;
@@ -501,8 +552,12 @@ function stPaintWorld(){
   if(!wr || !cv || !S.cur) return;
   let fresh = false;
   try{ fresh = stEnsurePositions(); }catch(err){ console.error("studio layout", err); stGridFallback(); }
-  const ids = Object.keys(S.cur.config.nodes), seen = stReach();
-  const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
+  let ids = [], seen = new Set(), _ed = [];
+  try{ ids = Object.keys(S.cur?.config?.nodes || {}); }catch(_){ ids = []; }
+  if(!ids.length) return;
+  try{ seen = stReach(); }catch(err){ console.error("studio reach", err); seen = new Set(ids); }
+  try{ _ed = stEdges(); }catch(err){ console.error("studio edges", err); _ed = []; }
+  ST.inc = {}; try{ for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1; }catch(_){}
   $("#stu")?.classList.toggle("many", _ed.length > 8 || ids.length > 10);
   $("#stu")?.classList.toggle("big", ids.length > 14);      // نقشه‌ی بزرگ: لایه‌ی GPU غول‌پیکر نساز (جلوگیری از بوم سفید)
   if(!wr.querySelector("#stsvg")) wr.insertAdjacentHTML("afterbegin", `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`);
