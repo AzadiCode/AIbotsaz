@@ -1819,8 +1819,10 @@ _PROMO_ERR_LOG = [0.0]
 def promo_missing(uid, channels):
     """کانال‌هایی که کاربر عضوشون نیست؛ با توکن ربات مادر.
     None = خطای موقت (محدودیت ۴۲۹، شبکه، ۵xx): نه قفل می‌شه نه «انجام‌شده» حساب می‌شه، دفعه‌ی بعد دوباره امتحان می‌شه.
-    خطای دائمی (مثلاً مادر ادمین کانال نیست): مانع کاربر نمی‌شیم ولی توی آمار «خطا» شمرده و لاگ می‌شه"""
+    خطای دائمی (مثلاً مادر ادمین کانال نیست): دیگه «عضوه» حساب نمی‌شه؛ state="perm" برمی‌گرده تا تبلیغ «انجام‌شده» ثبت نشه.
+    خروجی: (miss, state) با state یکی از ok / temp / perm"""
     miss = []
+    state = "ok"
     for c in channels:
         r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
         if not r.get("ok"):
@@ -1831,7 +1833,8 @@ def promo_missing(uid, channels):
             code = r.get("error_code")
             if code is None or code == 429 or code >= 500:
                 promo_stat("terr")
-                return None
+                return None, "temp"
+            state = "perm"
             promo_stat("err")
             try:
                 db.settings.update_one({"_id": "promo_stats"}, {"$set": {"last_err": f"{c.get('id')}: {r.get('description')}"[:300]}}, upsert=True)
@@ -1844,7 +1847,7 @@ def promo_missing(uid, channels):
         res = r.get("result") or {}
         if res.get("status") in ("left", "kicked") or (res.get("status") == "restricted" and not res.get("is_member", True)):
             miss.append(c)
-    return miss
+    return miss, state
 
 
 def promo_done(bot_id, uid):
@@ -1877,9 +1880,12 @@ def promo_lock(bot, token, chat_id, uid, ad):
         if not conf:
             promo_trace(bot, uid, "قفل: تنظیمات تبلیغ خاموش/بدون کانال شده")
             return False
-        miss = promo_missing(uid, conf["channels"])
+        miss, st = promo_missing(uid, conf["channels"])
         if miss is None:
             promo_trace(bot, uid, "قفل: تلگرام موقتاً جواب نداد (دفعه‌ی بعد دوباره)")
+            return False
+        if st == "perm" and not miss and not ad.get("v"):
+            promo_trace(bot, uid, "⚠️ خطا: بررسی عضویت ممکن نیست (ربات مادر ادمین کانال نیست یا آیدی کانال اشتباه است)")
             return False
         if not miss and ad.get("v"):
             miss = conf["channels"]                                        # حالت تست: حتی اگه عضو باشی قفل را نشان بده
@@ -1906,9 +1912,12 @@ def promo_msg(bot, token, bot_id, chat_id, uid, ad=None):
     vip = bool(ad and ad.get("v"))
     if not conf or (uid in staff_ids(bot) and not vip):
         return
-    miss = promo_missing(uid, conf["channels"])
+    miss, st = promo_missing(uid, conf["channels"])
     if miss is None:
         promo_trace(bot, uid, "پیام: تلگرام موقتاً جواب نداد (دفعه‌ی بعد دوباره)")
+        return
+    if st == "perm" and not miss and not vip:
+        promo_trace(bot, uid, "⚠️ خطا: بررسی عضویت ممکن نیست (ربات مادر ادمین کانال نیست یا آیدی کانال اشتباه است)")
         return
     if not promo_done(bot_id, uid):
         return
@@ -2017,7 +2026,10 @@ def sub_hook(bot_id):
             if data == "pm:chk":                                         # «عضو شدم» روی قفل تبلیغ ربات‌ساز
                 pc = promo_conf()
                 pend = bool(ad and ad.get("k") == "l" and not ad.get("d"))
-                miss_now = promo_missing(user["id"], pc["channels"]) if pend and pc else []
+                miss_now, st_now = promo_missing(user["id"], pc["channels"]) if pend and pc else ([], "ok")
+                if st_now == "perm" and miss_now == []:
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="بررسی عضویت فعلاً ممکن نیست.", show_alert=True)
+                    return "ok"
                 if miss_now is None:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="الان نتونستم بررسی کنم؛ چند ثانیه‌ی دیگه دوباره بزن.", show_alert=True)
                     return "ok"
