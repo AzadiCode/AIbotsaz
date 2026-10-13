@@ -909,7 +909,9 @@ function adminSettings(){
       <span class="lbl">کانال‌ها (خالی = همان کانال‌های عضویت اجباری)</span><input class="ltr" id="pr-ch" value="${esc(pr.channels)}" placeholder="@channel" autocomplete="off" aria-label="کانال‌های تبلیغ">
       <span class="lbl">متن پیام تبلیغی (قالب HTML)</span><textarea class="fa" id="pr-tx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن پیام تبلیغی">${esc(pr.text)}</textarea>${fmtTools("pr-tx")}
       <span class="lbl">متن قفل عضویت (قالب HTML)</span><textarea class="fa" id="pr-ltx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن قفل عضویت">${esc(pr.lock_text)}</textarea>${fmtTools("pr-ltx")}
-      <p class="muted">نمایش تا الان: پیام ${N(pr.stats?.msg || 0)} · قفل ${N(pr.stats?.lock || 0)} · عضو شدند از قفل ${N(pr.stats?.joined || 0)}</p>
+      <div class="promo-f"><div><span>هدف‌گیری شدند</span>${N(pr.stats?.tgt || 0)}</div><div><span>قفل نشان داده شد</span>${N(pr.stats?.lock || 0)}</div><div><span>پیام تبلیغ</span>${N(pr.stats?.msg || 0)}</div><div><span>عضو شدند</span>${N(pr.stats?.joined || 0)}</div></div>
+      ${(pr.stats?.err || 0) > 0 ? `<p class="muted" style="color:var(--bad)">${N(pr.stats.err)} بار بررسی عضویت خطا داد؛ ربات مادر باید در کانال «ادمین» باشد و آیدی کانال درست باشد. تا آن موقع کسی قفل نمی‌شود.</p>` : ""}
+      ${(pr.stats?.terr || 0) > 0 ? `<p class="muted">${N(pr.stats.terr)} بار هم تلگرام موقتاً جواب نداد (محدودیت سرعت)؛ آن کاربرها دفعه‌ی بعد دوباره بررسی می‌شوند.</p>` : ""}
       <button class="b o" data-a="apr">ذخیره</button></div></div></details>
     ` + `<details class="adv acc" data-ak="tok"${_op("tok")}><summary>توکن کاربر</summary><div class="accb"><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
       <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>

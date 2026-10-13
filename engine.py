@@ -1774,19 +1774,35 @@ def promo_decide(bot, bot_id, actor):
             return None
         ad = {"k": "l" if promo_roll(bot_id, uid, "k", conf["lock_pct"]) else "m", "d": False}
         db.subs.update_one({"_id": f"{bot_id}:{uid}"}, {"$set": {"ad": ad}})
+        promo_stat("tgt")
         return ad
     except Exception:
         log.exception("promo_decide failed")
         return None
 
 
+_PROMO_ERR_LOG = [0.0]
+
+
 def promo_missing(uid, channels):
-    """کانال‌هایی که کاربر عضوشون نیست؛ با توکن ربات مادر. اگه مادر ادمین کانال نباشه (یا خطا بشه) مانع کاربر نمی‌شیم"""
+    """کانال‌هایی که کاربر عضوشون نیست؛ با توکن ربات مادر.
+    None = خطای موقت (محدودیت ۴۲۹، شبکه، ۵xx): نه قفل می‌شه نه «انجام‌شده» حساب می‌شه، دفعه‌ی بعد دوباره امتحان می‌شه.
+    خطای دائمی (مثلاً مادر ادمین کانال نیست): مانع کاربر نمی‌شیم ولی توی آمار «خطا» شمرده و لاگ می‌شه"""
     miss = []
     for c in channels:
         r = tg(MOTHER_TOKEN, "getChatMember", chat_id=fj_chat(c), user_id=uid)
+        if not r.get("ok"):
+            code = r.get("error_code")
+            if code is None or code == 429 or code >= 500:
+                promo_stat("terr")
+                return None
+            promo_stat("err")
+            if time.time() - _PROMO_ERR_LOG[0] > 60:
+                _PROMO_ERR_LOG[0] = time.time()
+                log.warning("promo getChatMember failed for %s: %s", c.get("id"), r.get("description"))
+            continue
         res = r.get("result") or {}
-        if r.get("ok") and (res.get("status") in ("left", "kicked") or (res.get("status") == "restricted" and not res.get("is_member", True))):
+        if res.get("status") in ("left", "kicked") or (res.get("status") == "restricted" and not res.get("is_member", True)):
             miss.append(c)
     return miss
 
@@ -1821,11 +1837,15 @@ def promo_lock(bot, token, chat_id, uid, ad):
         if not conf:
             return False
         miss = promo_missing(uid, conf["channels"])
+        if miss is None:
+            return False
         if not miss:
-            promo_done(str(bot["_id"]), uid)
+            if promo_done(str(bot["_id"]), uid) and ad.get("s"):          # قفل نشونش داده شده بود و حالا عضوه
+                promo_stat("joined")
             return False
         promo_send(token, chat_id, conf, miss, True)
         promo_stat("lock")
+        db.subs.update_one({"_id": f"{bot['_id']}:{uid}"}, {"$set": {"ad.s": True}})
         return True
     except Exception:
         log.exception("promo_lock failed")
@@ -1838,7 +1858,7 @@ def promo_msg(bot, token, bot_id, chat_id, uid):
     if not conf or uid in staff_ids(bot):
         return
     miss = promo_missing(uid, conf["channels"])
-    if not promo_done(bot_id, uid):
+    if miss is None or not promo_done(bot_id, uid):
         return
     if miss:                                    # اگه از قبل عضو کانال بوده، تبلیغ نشونش نمی‌دیم
         promo_send(token, chat_id, conf, miss, False)
@@ -1937,7 +1957,11 @@ def sub_hook(bot_id):
             if data == "pm:chk":                                         # «عضو شدم» روی قفل تبلیغ ربات‌ساز
                 pc = promo_conf()
                 pend = bool(ad and ad.get("k") == "l" and not ad.get("d"))
-                if pend and pc and promo_missing(user["id"], pc["channels"]):
+                miss_now = promo_missing(user["id"], pc["channels"]) if pend and pc else []
+                if miss_now is None:
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="الان نتونستم بررسی کنم؛ چند ثانیه‌ی دیگه دوباره بزن.", show_alert=True)
+                    return "ok"
+                if miss_now:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="هنوز عضو نشدی.", show_alert=True)
                     return "ok"
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
