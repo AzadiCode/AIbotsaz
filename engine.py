@@ -1862,16 +1862,24 @@ def promo_stat(k):
         pass
 
 
-def promo_send(token, chat_id, conf, miss, lock, retry="pm:chk"):
+def promo_send(token, chat_id, conf, miss, lock, retry="pm:chk", edit=None):
     rows = [[{"text": "عضویت در " + x["label"], "url": x["url"]}] for x in fj_public(conf, miss)["channels"]]
     if lock:
         rows.append([{"text": "✅ عضو شدم", "callback_data": retry}])
     body = (conf.get("lock_text") or PROMO_DEF_LOCK) if lock else (conf.get("text") or PROMO_DEF_TEXT)
-    tg_html(token, "sendMessage", chat_id=chat_id, text=("<i>تبلیغ ربات‌ساز</i>\n\n" + body)[:4000],
+    text = body[:4000]                                   # دقیقاً همون متنی که ادمین توی پنل تنظیم کرده، بدون پیشوند
+    if edit and not any(k in edit for k in MEDIA_KEYS):  # پیامِ قفلِ سازنده رو ویرایش می‌کنیم، نه پیام جدید
+        r = tg_html(token, "editMessageText", chat_id=chat_id, message_id=edit["message_id"], text=text,
+                    reply_markup={"inline_keyboard": rows}, disable_web_page_preview=True)
+        if r.get("ok") or "not modified" in str(r.get("description", "")):
+            return
+    if edit:
+        tg(token, "deleteMessage", chat_id=chat_id, message_id=edit["message_id"])
+    tg_html(token, "sendMessage", chat_id=chat_id, text=text,
             reply_markup={"inline_keyboard": rows}, disable_web_page_preview=True)
 
 
-def promo_lock(bot, token, chat_id, uid, ad):
+def promo_lock(bot, token, chat_id, uid, ad, edit=None):
     """ورودیِ تازه‌ی قفل‌شده و عضو نیست؟ پیام عضویت می‌فرسته و True برمی‌گردونه"""
     if not ad or ad.get("k") != "l" or ad.get("d") or (uid in staff_ids(bot) and not ad.get("v")):
         return False
@@ -1895,7 +1903,7 @@ def promo_lock(bot, token, chat_id, uid, ad):
                     promo_stat("joined")
                 promo_trace(bot, uid, "قفل نشان داده نشد: کاربر از قبل عضو کانال است" if not ad.get("s") else "عضو کانال شد ✅")
             return False
-        promo_send(token, chat_id, conf, miss, True)
+        promo_send(token, chat_id, conf, miss, True, edit=edit)
         promo_stat("lock")
         if not ad.get("s"):
             promo_trace(bot, uid, "قفل نشان داده شد")
@@ -2039,10 +2047,9 @@ def sub_hook(bot_id):
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                 if pend and promo_done(bot_id, user["id"]):
                     promo_stat("joined")
-                tg(token, "deleteMessage", chat_id=chat_id, message_id=m.get("message_id"))
-                send_node(env, cfg["start"])
+                send_node(env, cfg["start"], edit=m)                     # همون پیام قفل ویرایش می‌شه و می‌شه صفحه‌ی شروع
                 return "ok"
-            if promo_lock(bot, token, chat_id, user["id"], ad):
+            if promo_lock(bot, token, chat_id, user["id"], ad, edit=m if data == "chk" else None):
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                 return "ok"
             if data.startswith("u:t:"):                                  # کاربر زیر پاسخ پشتیبان «پاسخ به پشتیبانی» رو زد
