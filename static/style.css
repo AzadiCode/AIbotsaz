@@ -937,3 +937,5 @@ details.acc .accb{padding:0 0 16px}
 
 .promo-f{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:12px 0 8px;background:var(--line2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .promo-f>div{background:var(--sf);padding:8px 6px;text-align:center}.promo-f span{display:block;font-size:10.5px;color:var(--mut);line-height:1.5;margin-bottom:2px}.promo-f .n{font-size:16px}
+.ptr{max-height:220px;overflow:auto;margin:8px 0;padding:8px 10px;border-radius:12px;background:var(--sf2);font-size:12px;line-height:1.9}
+.ptr>div{border-top:1px solid var(--line2);padding:2px 0}.ptr>div:first-child{border-top:0}

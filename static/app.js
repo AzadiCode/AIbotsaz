@@ -903,6 +903,8 @@ function adminSettings(){
       <button class="b o" data-a="afj">ذخیره</button></div></details>
     ` + `<details class="adv acc" data-ak="promo"${_op("promo")}><summary>تبلیغ روی ورودی‌های جدید</summary><div class="accb"><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="pr-on"${pr.on ? " checked" : ""}> فعال باشد</label>
+      <label class="chk"><input type="checkbox" id="pr-test"${pr.test ? " checked" : ""}> حالت تست (فقط برای ادمین‌های ربات‌ساز)</label>
+      <p class="muted">در حالت تست، هر بار با <b dir="ltr">/start</b> توی هر رباتی (حتی ربات خودت، حتی اگر عضو کانال باشی) تبلیغ را می‌بینی. کار که تمام شد خاموشش کن.</p>
       <span class="lbl">حداقل مخاطب هر ربات (بیشتر از این عدد)</span><input class="ltr" id="pr-min" inputmode="numeric" value="${esc(pr.min_users)}" autocomplete="off" aria-label="حداقل مخاطب">
       <span class="lbl">درصد ورودی‌های جدیدی که هدف می‌شوند</span><input class="ltr" id="pr-pct" inputmode="numeric" value="${esc(pr.pct)}" autocomplete="off" aria-label="درصد هدف">
       <span class="lbl">از هدف‌ها، چند درصد قفل عضویت بگیرند (بقیه فقط پیام می‌گیرند؛ ۰ = فقط پیام)</span><input class="ltr" id="pr-lock" inputmode="numeric" value="${esc(pr.lock_pct)}" autocomplete="off" aria-label="درصد قفل">
@@ -911,7 +913,9 @@ function adminSettings(){
       <span class="lbl">متن قفل عضویت (قالب HTML)</span><textarea class="fa" id="pr-ltx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن قفل عضویت">${esc(pr.lock_text)}</textarea>${fmtTools("pr-ltx")}
       <div class="promo-f"><div><span>هدف‌گیری شدند</span>${N(pr.stats?.tgt || 0)}</div><div><span>قفل نشان داده شد</span>${N(pr.stats?.lock || 0)}</div><div><span>پیام تبلیغ</span>${N(pr.stats?.msg || 0)}</div><div><span>عضو شدند</span>${N(pr.stats?.joined || 0)}</div></div>
       ${(pr.stats?.err || 0) > 0 ? `<p class="muted" style="color:var(--bad)">${N(pr.stats.err)} بار بررسی عضویت خطا داد (ممکن است قدیمی باشد؛ بعد از اصلاح «صفر کردن آمار» را بزن).${pr.last_err ? `<br>آخرین خطای تلگرام: <span class="ltr">${esc(pr.last_err)}</span>` : ""}</p>` : ""}
-      <button class="b o sm" data-a="aprreset">صفر کردن آمار</button>
+      <h3 class="mt" style="font-size:13.5px">آخرین تصمیم‌ها <small class="muted">(چرا کسی هدف شد یا نشد)</small></h3>
+      ${(pr.trace || []).length ? `<div class="ptr">${pr.trace.map(x => `<div><span class="muted">${ago(new Date(x.t * 1000).toISOString())}</span> ${esc(x.s)}</div>`).join("")}</div>` : '<p class="muted">هنوز ورودی جدیدی ثبت نشده.</p>'}
+      <button class="b o sm" data-a="aprreset">صفر کردن آمار و تصمیم‌ها</button>
       ${(pr.stats?.terr || 0) > 0 ? `<p class="muted">${N(pr.stats.terr)} بار هم تلگرام موقتاً جواب نداد (محدودیت سرعت)؛ آن کاربرها دفعه‌ی بعد دوباره بررسی می‌شوند.</p>` : ""}
       <button class="b o" data-a="apr">ذخیره</button></div></details>
     ` + `<details class="adv acc" data-ak="tok"${_op("tok")}><summary>توکن کاربر</summary><div class="accb"><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
@@ -973,9 +977,9 @@ Object.assign(A, {
     const d = await api("/api/admin/force-join", "POST", {on, channels: v("#fj-ch"), text: v("#fj-tx")});
     S.fj = {on: on && !!v("#fj-ch"), channels: v("#fj-ch"), text: v("#fj-tx")}; toast(d.warn?.length ? d.warn[0] : "ذخیره شد"); }),
   apr: el => busy(el, async () => { const v = id => $(id).value.trim(), on = $("#pr-on").checked;
-    const body = {on, min_users: v("#pr-min"), pct: v("#pr-pct"), lock_pct: v("#pr-lock"), channels: v("#pr-ch"), text: v("#pr-tx"), lock_text: v("#pr-ltx")};
+    const body = {on, test: $("#pr-test").checked, min_users: v("#pr-min"), pct: v("#pr-pct"), lock_pct: v("#pr-lock"), channels: v("#pr-ch"), text: v("#pr-tx"), lock_text: v("#pr-ltx")};
     const d = await api("/api/admin/promo", "POST", body);
-    S.pr = Object.assign({}, S.pr || {}, {on: on && !!(body.channels || S.fj?.channels), min_users: body.min_users, pct: body.pct, lock_pct: body.lock_pct, channels: body.channels, text: body.text, lock_text: body.lock_text});
+    S.pr = Object.assign({}, S.pr || {}, {on: on && !!(body.channels || S.fj?.channels), min_users: body.min_users, pct: body.pct, lock_pct: body.lock_pct, channels: body.channels, text: body.text, lock_text: body.lock_text, test: body.test});
     admSetPaint(); toast(d.warn?.length ? d.warn[0] : "ذخیره شد");
     api("/api/admin/promo").then(x => { S.pr = x; admSetPaint(); }).catch(() => {}); }),
   aprreset: el => busy(el, async () => { await api("/api/admin/promo/reset", "POST"); S.pr = await api("/api/admin/promo"); admSetPaint(); toast("آمار صفر شد"); }),

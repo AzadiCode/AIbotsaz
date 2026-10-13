@@ -39,7 +39,7 @@ from bson.errors import InvalidId
 
 from core import (
     AI_CHAT_MODEL, AI_NODE_MAX_TOKENS, ai_tick, app, balance, BASE_URL, BILLING, BOARD_SCAN, calc_cost,
-    charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND,
+    ADMIN_IDS, charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND,
     MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, strip_fx_text, tehran_day, tg, tg_html, tg_media,
     TOKEN_SCALE,
 )
@@ -1761,20 +1761,52 @@ def promo_roll(bot_id, uid, salt, pct):
     return h % 100 < pct
 
 
-def promo_decide(bot, bot_id, actor):
-    """ورودیِ تازه: فقط اگه ربات از آستانه گذشته باشه و صاحب/پشتیبان نباشه، با هش ثابت هدف می‌شه. نتیجه روی رکوردش ذخیره می‌شه"""
+_TRACE_OFF = [0.0]
+
+
+def promo_trace(bot, uid, why):
+    """ردپای تصمیم‌ها (آخرین ۳۰ مورد) تا توی پنل ببینی چرا یک نفر هدف شد یا نشد"""
+    try:
+        s = f"@{bot.get('username') or bot.get('name') or '?'} · {uid} · {why}"
+        db.settings.update_one({"_id": "promo_trace"}, {"$push": {"items": {"$each": [{"t": time.time(), "s": s[:200]}], "$slice": -30}}}, upsert=True)
+    except Exception:
+        pass
+
+
+def promo_decide(bot, bot_id, actor, is_new=True, prev=None, fresh=False):
+    """ورودیِ تازه: فقط اگه ربات از آستانه گذشته باشه و صاحب/پشتیبان نباشه، با هش ثابت هدف می‌شه. نتیجه روی رکوردش ذخیره می‌شه.
+    حالت تست: ادمین‌های ربات‌ساز با /start هر بار دوباره هدف می‌شن (حتی اگه قدیمی، سازنده یا عضو کانال باشن)"""
+    old_ad = (prev or {}).get("ad") or None
     try:
         conf = promo_conf()
         uid = actor.get("id")
-        if not conf or not uid or actor.get("is_bot") or uid in staff_ids(bot):
+        if not conf or not uid or actor.get("is_bot"):
+            if is_new and time.time() - _TRACE_OFF[0] > 300:
+                _TRACE_OFF[0] = time.time()
+                promo_trace(bot, uid, "رد شد: تبلیغ خاموشه یا کانالی تنظیم نشده")
+            return None if is_new else old_ad
+        vip = bool(conf.get("test")) and uid in ADMIN_IDS
+        if not is_new and not (vip and fresh):
+            return old_ad
+        if vip:
+            ad = {"k": "l" if conf["lock_pct"] > 0 else "m", "d": False, "v": True}
+            db.subs.update_one({"_id": f"{bot_id}:{uid}"}, {"$set": {"ad": ad}})
+            promo_trace(bot, uid, f"حالت تست: هدف شد ({'قفل' if ad['k'] == 'l' else 'پیام'})")
+            return ad
+        if uid in staff_ids(bot):
+            promo_trace(bot, uid, "رد شد: سازنده یا پشتیبان همین ربات است")
             return None
-        if db.subs.count_documents({"bot": bot_id}) <= conf["min_users"]:
+        n = db.subs.count_documents({"bot": bot_id})
+        if n <= conf["min_users"]:
+            promo_trace(bot, uid, f"رد شد: ربات فقط {n} مخاطب دارد (حداقل لازم: بیشتر از {conf['min_users']})")
             return None
         if not promo_roll(bot_id, uid, "t", conf["pct"]):
+            promo_trace(bot, uid, f"رد شد: قرعه‌ی درصد هدف ({conf['pct']}٪)")
             return None
         ad = {"k": "l" if promo_roll(bot_id, uid, "k", conf["lock_pct"]) else "m", "d": False}
         db.subs.update_one({"_id": f"{bot_id}:{uid}"}, {"$set": {"ad": ad}})
         promo_stat("tgt")
+        promo_trace(bot, uid, f"هدف شد ({'قفل' if ad['k'] == 'l' else 'پیام'}) — مخاطب شماره‌ی {n}")
         return ad
     except Exception:
         log.exception("promo_decide failed")
@@ -1838,21 +1870,29 @@ def promo_send(token, chat_id, conf, miss, lock, retry="pm:chk"):
 
 def promo_lock(bot, token, chat_id, uid, ad):
     """ورودیِ تازه‌ی قفل‌شده و عضو نیست؟ پیام عضویت می‌فرسته و True برمی‌گردونه"""
-    if not ad or ad.get("k") != "l" or ad.get("d") or uid in staff_ids(bot):
+    if not ad or ad.get("k") != "l" or ad.get("d") or (uid in staff_ids(bot) and not ad.get("v")):
         return False
     try:
         conf = promo_conf()
         if not conf:
+            promo_trace(bot, uid, "قفل: تنظیمات تبلیغ خاموش/بدون کانال شده")
             return False
         miss = promo_missing(uid, conf["channels"])
         if miss is None:
+            promo_trace(bot, uid, "قفل: تلگرام موقتاً جواب نداد (دفعه‌ی بعد دوباره)")
             return False
+        if not miss and ad.get("v"):
+            miss = conf["channels"]                                        # حالت تست: حتی اگه عضو باشی قفل را نشان بده
         if not miss:
-            if promo_done(str(bot["_id"]), uid) and ad.get("s"):          # قفل نشونش داده شده بود و حالا عضوه
-                promo_stat("joined")
+            if promo_done(str(bot["_id"]), uid):
+                if ad.get("s"):                                            # قفل نشونش داده شده بود و حالا عضوه
+                    promo_stat("joined")
+                promo_trace(bot, uid, "قفل نشان داده نشد: کاربر از قبل عضو کانال است" if not ad.get("s") else "عضو کانال شد ✅")
             return False
         promo_send(token, chat_id, conf, miss, True)
         promo_stat("lock")
+        if not ad.get("s"):
+            promo_trace(bot, uid, "قفل نشان داده شد")
         db.subs.update_one({"_id": f"{bot['_id']}:{uid}"}, {"$set": {"ad.s": True}})
         return True
     except Exception:
@@ -1860,17 +1900,26 @@ def promo_lock(bot, token, chat_id, uid, ad):
         return False
 
 
-def promo_msg(bot, token, bot_id, chat_id, uid):
+def promo_msg(bot, token, bot_id, chat_id, uid, ad=None):
     """پیام تبلیغیِ غیرمسدودکننده، بعد از جواب ربات به اولین تعاملِ کاربر؛ هر نفر فقط یک بار"""
     conf = promo_conf()
-    if not conf or uid in staff_ids(bot):
+    vip = bool(ad and ad.get("v"))
+    if not conf or (uid in staff_ids(bot) and not vip):
         return
     miss = promo_missing(uid, conf["channels"])
-    if miss is None or not promo_done(bot_id, uid):
+    if miss is None:
+        promo_trace(bot, uid, "پیام: تلگرام موقتاً جواب نداد (دفعه‌ی بعد دوباره)")
         return
-    if miss:                                    # اگه از قبل عضو کانال بوده، تبلیغ نشونش نمی‌دیم
+    if not promo_done(bot_id, uid):
+        return
+    if not miss and vip:
+        miss = conf["channels"]
+    if miss:
         promo_send(token, chat_id, conf, miss, False)
         promo_stat("msg")
+        promo_trace(bot, uid, "پیام تبلیغ نشان داده شد")
+    else:                                       # اگه از قبل عضو کانال بوده، تبلیغ نشونش نمی‌دیم
+        promo_trace(bot, uid, "پیام نشان داده نشد: کاربر از قبل عضو کانال است")
 
 
 # ───────────────────────── وب‌هوک ربات‌ها: ثبت و دستورها ─────────────────────────
@@ -1941,7 +1990,7 @@ def sub_hook(bot_id):
                 upsert=True, return_document=ReturnDocument.BEFORE)
             is_new = prev is None
             ad_chat, ad_uid = chat0["id"], actor["id"]
-            ad = promo_decide(bot, bot_id, actor) if is_new else (prev.get("ad") or None)
+            ad = promo_decide(bot, bot_id, actor, is_new, prev, bool(msg and str(msg.get("text") or "").startswith("/start")))
         if cq:
             data, user, m = cq.get("data", ""), cq.get("from", {}), cq.get("message") or {}
             chat_id = (m.get("chat") or {}).get("id")
@@ -1961,6 +2010,8 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_gate(token, chat_id, cfg)
+                if is_new and ad:
+                    promo_trace(bot, user["id"], "منتظر قفل عضویتِ خودِ سازنده است؛ بعدش تبلیغ می‌آید")
                 ad_chat = 0                                          # عضویت اجباریِ خودِ سازنده اولویت دارد؛ تبلیغ ما همزمان نمی‌آید
                 return "ok"
             if data == "pm:chk":                                         # «عضو شدم» روی قفل تبلیغ ربات‌ساز
@@ -2081,6 +2132,8 @@ def sub_hook(bot_id):
             child_referral(env)
         if not gate_ok(token, cfg, user.get("id", chat_id)):
             send_gate(token, chat_id, cfg)
+            if is_new and ad:
+                promo_trace(bot, user.get("id", chat_id), "منتظر قفل عضویتِ خودِ سازنده است؛ بعدش تبلیغ می‌آید")
             ad_chat = 0                                              # تبلیغ ربات‌ساز تا گذشتن از قفل سازنده صبر می‌کند
             return "ok"
         if promo_lock(bot, token, chat_id, user.get("id", chat_id), ad):
@@ -2174,7 +2227,7 @@ def sub_hook(bot_id):
                 log.exception("saving user vars failed")
         if ad and ad.get("k") == "m" and not ad.get("d") and ad_chat:
             try:
-                promo_msg(bot, token, bot_id, ad_chat, ad_uid)
+                promo_msg(bot, token, bot_id, ad_chat, ad_uid, ad)
             except Exception:
                 log.exception("promo_msg failed")
     return "ok"

@@ -1060,13 +1060,15 @@ def api_admin_promo_get(uid):
     st = db.settings.find_one({"_id": "promo_stats"}) or {}
     return jsonify(on=bool(d.get("on")), min_users=int(d.get("min_users", 10)), pct=int(d.get("pct", 30)), lock_pct=int(d.get("lock_pct", 20)),
                    channels=" ".join(fj_str(c) for c in d.get("channels", [])), text=d.get("text") or PROMO_DEF_TEXT,
-                   lock_text=d.get("lock_text") or PROMO_DEF_LOCK, stats={k: int(st.get(k, 0)) for k in ("tgt", "msg", "lock", "joined", "err", "terr")}, last_err=st.get("last_err", ""))
+                   lock_text=d.get("lock_text") or PROMO_DEF_LOCK, stats={k: int(st.get(k, 0)) for k in ("tgt", "msg", "lock", "joined", "err", "terr")}, last_err=st.get("last_err", ""), test=bool(d.get("test")),
+                   trace=[{"t": x["t"], "s": x["s"]} for x in ((db.settings.find_one({"_id": "promo_trace"}) or {}).get("items") or [])[-15:]][::-1])
 
 
 @app.post("/api/admin/promo/reset")
 @admin_only
 def api_admin_promo_reset(uid):
     db.settings.delete_one({"_id": "promo_stats"})
+    db.settings.delete_one({"_id": "promo_trace"})
     return jsonify(ok=True)
 
 
@@ -1086,7 +1088,7 @@ def api_admin_promo_set(uid):
         if not r.get("ok"):
             warn.append(f"{c['id']}: ربات مادر باید ادمین این کانال باشه (یا آیدی درست نیست)؛ تا اون موقع کسی قفل نمی‌شه")
     db.settings.update_one({"_id": "promo"}, {"$set": {
-        "on": bool(b.get("on")) and bool(eff), "channels": chans,
+        "on": bool(b.get("on")) and bool(eff), "test": bool(b.get("test")), "channels": chans,
         "min_users": _clamp(b.get("min_users"), 0, 10_000_000, 10), "pct": _clamp(b.get("pct"), 0, 100, 30),
         "lock_pct": _clamp(b.get("lock_pct"), 0, 100, 20),
         "text": str(b.get("text") or "").strip()[:1500] or PROMO_DEF_TEXT,
