@@ -495,6 +495,7 @@ function stPaintWorld(){
   const ids = Object.keys(S.cur.config.nodes), seen = stReach();
   const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
   $("#stu")?.classList.toggle("many", _ed.length > 8 || ids.length > 10);
+  $("#stu")?.classList.toggle("big", ids.length > 14);      // نقشه‌ی بزرگ: لایه‌ی GPU غول‌پیکر نساز (جلوگیری از بوم سفید)
   if(!wr.querySelector("#stsvg")) wr.insertAdjacentHTML("afterbegin", `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`);
   const old = new Map();
   for(const el of wr.children) if(el.classList.contains("stc-card")) old.set(el.dataset.id, el);
