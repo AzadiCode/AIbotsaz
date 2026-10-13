@@ -802,7 +802,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .stc-act button:active{transform:scale(.97)}
 .stc-act svg{width:13px;height:13px}
 .stc-sec{font-size:10.5px;color:var(--mut);padding:7px 14px 2px;border-top:1px dashed var(--line2)}
-#stw.far .stc-media img{display:none}
+#stw.far .stc-media img{visibility:hidden}
 .studio.many .wire .w-line{animation:none;stroke-dasharray:none}
 .studio.many .wire .w-glow{opacity:0}
 .w-dot{filter:none!important}
@@ -939,3 +939,17 @@ details.acc .accb{padding:0 0 16px}
 .promo-f>div{background:var(--sf);padding:8px 6px;text-align:center}.promo-f span{display:block;font-size:10.5px;color:var(--mut);line-height:1.5;margin-bottom:2px}.promo-f .n{font-size:16px}
 .ptr{max-height:220px;overflow:auto;margin:8px 0;padding:8px 10px;border-radius:12px;background:var(--sf2);font-size:12px;line-height:1.9}
 .ptr>div{border-top:1px solid var(--line2);padding:2px 0}.ptr>div:first-child{border-top:0}
+
+/* ═══════ بهینه‌سازی استودیو: روان، بدون پرپر ═══════ */
+/* هدر اصلی زیر استودیو پنهان است ولی انیمیشن بی‌پایانِ لوگو (width/blur) هنوز هر فریم صفحه را دوباره می‌چید؛ متوقفش می‌کنیم */
+html.st-lock .top{visibility:hidden}
+html.st-lock .top *,html.st-lock .top *::after{animation-play-state:paused!important}
+/* بخش‌های بیرون از کادر دید رسم نمی‌شوند (از JS: stCull) */
+.stc-card.cv{visibility:hidden}
+.stc-card{transition:none}
+/* وقتی دور هستیم همه‌چیز سبک می‌شود */
+#stw.far .stc-card{box-shadow:none}
+#stw.far .stk-btn{background:var(--sf2);transition:none}
+/* حین حرکت دوربین: بلورِ نوار ناوبری و انیمیشن‌های همیشگی می‌خوابند */
+html.st-moving .dpanel{-webkit-backdrop-filter:none;backdrop-filter:none}
+html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::after,html.st-moving .st-energy svg{animation-play-state:paused}

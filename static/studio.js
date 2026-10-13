@@ -104,18 +104,34 @@ function stAutoLayout(save){
   for(const e of edges) if(cfg.nodes[e.to] && col[e.from] < col[e.to]) (parents[e.to] = parents[e.to] || []).push(e.from);
   const cols = {};
   for(const id of [...new Set([...roots, ...ids])]) (cols[col[id]] = cols[col[id]] || []).push(id);
-  const cy = {}, DW = ST_W + ST_GAP, GAP = 52;
-  for(const c of Object.keys(cols).map(Number).sort((a, b) => a - b)){
-    const list = cols[c].map((id, i) => {
+  /* دنیای بی‌نهایت ممنوع: هر ستونِ بلند به چند ستونِ کوتاه (حداکثر PER بخش) شکسته می‌شود و اگر ستون‌ها از MAXL بیشتر شدند،
+     نقشه مثل خط‌های متن به نوار بعدی (زیر نوار قبلی) می‌پیچد. نتیجه: نقشه‌ی جمع‌وجور، قابل نمایش و سبک حتی با ۶۰ بخش */
+  const DW = ST_W + ST_GAP, GAP = 52, PER = 5, MAXL = 6;
+  const cmp = (a, b) => ((a.b === null) - (b.b === null)) || ((a.b ?? 0) - (b.b ?? 0)) || (a.i - b.i);
+  const order = Object.keys(cols).map(Number).sort((a, b) => a - b), minC = order.length ? order[0] : 0;
+  const cy = {}, band = {};
+  let lane = minC, curBand = 0, bandTop = 40, maxBottom = 40;
+  for(const c of order){
+    const raw = cols[c].map((id, i) => {
       const ps = (parents[id] || []).filter(p => cy[p] !== undefined);
       return {id, i, b: ps.length ? ps.reduce((a, p) => a + cy[p], 0) / ps.length : null};
     });
-    list.sort((a, b) => ((a.b === null) - (b.b === null)) || ((a.b ?? 0) - (b.b ?? 0)) || (a.i - b.i));
-    let cur = 40;
-    for(const it of list){
-      const h = stH(it.id), y = it.b === null ? cur : Math.max(cur, it.b - h / 2);
-      ST.pos[it.id] = {x: -c * DW, y: Math.round(y)};
-      cy[it.id] = y + h / 2; cur = y + h + GAP;
+    raw.sort(cmp);
+    const k = Math.max(1, Math.ceil(raw.length / PER)), size = Math.max(1, Math.ceil(raw.length / k));
+    for(let s0 = 0; s0 < raw.length; s0 += size, lane++){
+      const L = lane - minC, bd = Math.floor(L / MAXL);
+      if(bd !== curBand){ curBand = bd; bandTop = maxBottom + 150; }
+      const chunk = raw.slice(s0, s0 + size).map(it => {
+        const ps = (parents[it.id] || []).filter(p => cy[p] !== undefined && band[p] === bd);
+        return {id: it.id, i: it.i, b: ps.length ? ps.reduce((a, p) => a + cy[p], 0) / ps.length : null};
+      });
+      chunk.sort(cmp);
+      let cur = bandTop;
+      for(const it of chunk){
+        const h = stH(it.id), y = it.b === null ? cur : Math.max(cur, it.b - h / 2);
+        ST.pos[it.id] = {x: -(minC + (L % MAXL)) * DW, y: Math.round(y)};
+        cy[it.id] = y + h / 2; band[it.id] = bd; cur = y + h + GAP; maxBottom = Math.max(maxBottom, cur);
+      }
     }
   }
   let minY = 1e9;
@@ -143,16 +159,45 @@ function stEnsurePositions(){
 }
 
 /* ── دوربین ── */
+/* در حین حرکت دوربین، کلاس st-moving روی html می‌نشیند تا انیمیشن‌ها و بلورِ پس‌زمینه موقتاً بخوابند و تمام توان صرف حرکت نرم شود */
+function stMovePulse(){
+  ST._mat = performance.now();
+  if(ST._mv) return;
+  ST._mv = 1; document.documentElement.classList.add("st-moving");
+  ST._mt = setTimeout(stMoveChk, 200);
+}
+function stMoveChk(){
+  if(performance.now() - ST._mat < 180){ ST._mt = setTimeout(stMoveChk, 100); return; }
+  ST._mv = 0; document.documentElement.classList.remove("st-moving");
+}
 function stApply(glide){
-  const c = ST.cam || {x: 40, y: 40, z: 1}, w = $("#stw");
+  const c = ST.cam || {x: 40, y: 40, z: 1}, w = (ST.w && ST.w.isConnected) ? ST.w : (ST.w = $("#stw"));
   if(w){
     if(glide && !reduced()){ w.classList.add("glide"); clearTimeout(ST._gt); ST._gt = setTimeout(() => w.classList.remove("glide"), 460); }
     else if(w.classList.contains("glide")){ w.classList.remove("glide"); clearTimeout(ST._gt); }
     w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`;
-    const far = c.z < .5; if(far !== w.classList.contains("far")) w.classList.toggle("far", far);
+    const was = w.classList.contains("far"), far = was ? c.z < .5 : c.z < .42;     // فاصله‌ی دو آستانه: دیگر روی مرز زوم پرپر نمی‌زند
+    if(far !== was) w.classList.toggle("far", far);
   }
-  const z = $("#stz"); if(z) z.textContent = Math.round(c.z * 100) + "%";
-  if(!ST._mr) ST._mr = requestAnimationFrame(() => { ST._mr = 0; stMini(); });
+  const zt = Math.round(c.z * 100) + "%", z = $("#stz"); if(z && z.textContent !== zt) z.textContent = zt;
+  stMovePulse();
+  if(!ST._mr) ST._mr = requestAnimationFrame(() => { ST._mr = 0; stMini(); stCull(); });
+}
+/* فقط بخش‌هایی که در کادر دید (به‌علاوه‌ی حاشیه) هستند کشیده می‌شوند؛ بقیه visibility:hidden می‌شوند و هزینه‌ی رسم ندارند */
+function stCull(){
+  if(!ST.els || !S.cur) return;
+  const many = ST.els.size > 8, c = ST.cam || {x: 40, y: 40, z: 1}, m = 280;
+  const vw = ST.vw || innerWidth, vh = ST.vh || innerHeight;
+  const x1 = (-m - c.x) / c.z, x2 = (vw + m - c.x) / c.z, y1 = (-m - c.y) / c.z, y2 = (vh + m - c.y) / c.z;
+  for(const [id, el] of ST.els){
+    const p = ST.pos[id]; if(!p) continue;
+    let hide = false;
+    if(many && !(ST.mode && ST.mode.id === id)){
+      const z = ST.size[id], w = z ? z.w : ST_W, h = z ? z.h : stCardH(S.cur.config.nodes[id] || {});
+      hide = !(p.x < x2 && p.x + w > x1 && p.y < y2 && p.y + h > y1);
+    }
+    if(el._cv !== hide){ el._cv = hide; el.classList.toggle("cv", hide); }
+  }
 }
 function stZoomAt(px, py, f, glide){
   const c = ST.cam || {x: 40, y: 40, z: 1};
@@ -166,8 +211,7 @@ function stFit(glide){
   let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
   for(const id of ids){
     const p = ST.pos[id]; if(!p) continue;
-    const el = cv.querySelector(`.stc-card[data-id="${id}"]`);
-    const w = el ? el.offsetWidth : 268, h = el ? el.offsetHeight : stCardH(S.cur.config.nodes[id]);
+    const zs = ST.size[id], w = zs ? zs.w : ST_W, h = zs ? zs.h : stCardH(S.cur.config.nodes[id]);
     x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + w); y2 = Math.max(y2, p.y + h);
   }
   if(x1 > x2) return;
@@ -205,7 +249,7 @@ function stRoute(e, idx, rects){
   const mid = rects.filter(r => r.id !== e.from && r.id !== e.to), noSrc = rects.filter(r => r.id !== e.from), noTgt = rects.filter(r => r.id !== e.to);
   if(A.x - B.x > 70){
     const lo = B.x + 20, hi = A.x - 20, base = (lo + hi) / 2 + lane - 14;
-    for(const d of [0, 14, -14, 28, -28, 42, -42, 56, -56, 70, -70]){
+    for(const d of ST.fast ? [0, 18, -18, 36, -36] : [0, 14, -14, 28, -28, 42, -42, 56, -56, 70, -70]){
       const xm = Math.min(hi, Math.max(lo, base + d));
       if(free(mid, xm, A.y, xm, B.y) && free(noSrc, A.x, A.y, xm, A.y) && free(noTgt, xm, B.y, B.x, B.y))
         return {pts: [A, {x: xm, y: A.y}, {x: xm, y: B.y}, B], back: false};
@@ -214,7 +258,7 @@ function stRoute(e, idx, rects){
   const ax = A.x - 22 - lane, bx = B.x + 22 + lane, lx = Math.min(ax, bx), hx = Math.max(ax, bx);
   const ys = new Set(), sR = rects.find(r => r.id === e.from), tR = rects.find(r => r.id === e.to);
   if(sR && tR){ ys.add(Math.min(sR.y, tR.y) - 26 - lane); ys.add(Math.max(sR.y + sR.h, tR.y + tR.h) + 26 + lane); }
-  for(const r of rects){ ys.add(r.y - 24 - lane); ys.add(r.y + r.h + 24 + lane); }
+  if(!ST.fast) for(const r of rects){ ys.add(r.y - 24 - lane); ys.add(r.y + r.h + 24 + lane); }
   const cand = [...ys].map(y => ({y, c: Math.abs(y - A.y) + Math.abs(y - B.y)})).sort((a, b) => a.c - b.c);
   for(const {y} of cand){
     if(free(rects, lx, y, hx, y) && free(rects, ax, A.y, ax, y) && free(rects, bx, y, bx, B.y))
@@ -255,22 +299,30 @@ function stMeasure(){
   });
 }
 /* دایره‌های خروجی روی لبه‌ی چپ بخش، هم‌تراز با دکمه‌شان؛ اگر چند دکمه در یک ردیف باشند کمی بالا و پایین می‌روند */
-function stPlacePorts(card){
-  card.querySelectorAll(".p-out").forEach(po => po.remove());
-  const groups = new Map();
-  card.querySelectorAll(".pa").forEach(a => {
-    let y = 0, n = a;
-    while(n && n !== card){ y += n.offsetTop; n = n.offsetParent; }
-    const g = a.closest(".stk-row") || a;
-    if(!groups.has(g)) groups.set(g, []);
-    groups.get(g).push({a, cy: y + a.offsetHeight / 2});
-  });
-  let h = "";
-  for(const list of groups.values()) list.forEach((it, i) => {
-    const d = it.a.dataset, off = (i - (list.length - 1) / 2) * 13;
-    h += `<span class="p-out" data-port="${esc(d.pa)}" data-n="${esc(d.n)}"${d.r !== undefined ? ` data-r="${d.r}" data-c="${d.c}"` : ""} style="top:${(it.cy + off).toFixed(1)}px;--pc:${d.pc}"></span>`;
-  });
-  card.insertAdjacentHTML("beforeend", h);
+/* دایره‌های خروجی روی لبه‌ی چپ بخش، هم‌تراز با دکمه‌شان؛ اگر چند دکمه در یک ردیف باشند کمی بالا و پایین می‌روند.
+   اول از همه‌ی کارت‌ها می‌خواند، بعد می‌نویسد: فقط یک reflow به‌جای یکی برای هر کارت */
+function stPlacePorts(cards){
+  const plan = [];
+  for(const card of cards){
+    const groups = new Map();
+    card.querySelectorAll(".pa").forEach(a => {
+      let y = 0, n = a;
+      while(n && n !== card){ y += n.offsetTop; n = n.offsetParent; }
+      const g = a.closest(".stk-row") || a;
+      if(!groups.has(g)) groups.set(g, []);
+      groups.get(g).push({a, cy: y + a.offsetHeight / 2});
+    });
+    let h = "";
+    for(const list of groups.values()) list.forEach((it, i) => {
+      const d = it.a.dataset, off = (i - (list.length - 1) / 2) * 13;
+      h += `<span class="p-out" data-port="${esc(d.pa)}" data-n="${esc(d.n)}"${d.r !== undefined ? ` data-r="${d.r}" data-c="${d.c}"` : ""} style="top:${(it.cy + off).toFixed(1)}px;--pc:${d.pc}"></span>`;
+    });
+    plan.push([card, h]);
+  }
+  for(const [card, h] of plan){
+    card.querySelectorAll(".p-out").forEach(po => po.remove());
+    if(h) card.insertAdjacentHTML("beforeend", h);
+  }
 }
 function stPlaceCards(){
   const cv = $("#stc"); if(!cv) return;
@@ -333,7 +385,7 @@ function stCardHTML(id, dead){
   let logic = "";
   (n.route || []).forEach((ru, i) => { logic += `<div class="stc-row"><span class="pa" data-pa="r|${id}|${i}" data-n="${esc(id)}" data-pc="var(--vio)"></span><span class="ric">${IC.go}</span><span class="rlb">${esc(condTxt(ru.when))} <small>· مسیر شرطی</small></span></div>`; });
   if(n.next) logic += `<div class="stc-row"><span class="pa" data-pa="x|${id}" data-n="${esc(id)}" data-pc="var(--ok)"></span><span class="ric">${IC.go}</span><span class="rlb">بعد از ثبت پاسخ <small>· رفتن به بخش بعدی</small></span></div>`;
-  return `<div class="stc-card${isStart ? " start" : ""}${dead ? " dead" : ""}" data-id="${esc(id)}" style="transform:translate(${p.x}px,${p.y}px)">
+  return `<div class="stc-card${isStart ? " start" : ""}${dead ? " dead" : ""}" data-id="${esc(id)}">
     <span class="stc-in${inc ? " has" : ""}" data-in="${esc(id)}"></span>
     <div class="stc-h"><span class="stc-ic">${stNodeIcon(n)}</span>
       <div class="stc-t"><b>${esc(titleOf(cfg, id))}</b><span class="ids">${esc(id)}</span></div>
@@ -350,12 +402,13 @@ function stPaintWires(){
   if(!svg || !cv) return;
   ST.wires.clear();
   let h = "", i = 0;
-  const edges = stEdges(), flow = !!S.cur?.active && !reduced() && edges.length <= 10, rects = stRects();
+  const edges = stEdges(), rects = stRects(), flow = !!S.cur?.active && !reduced() && edges.length <= 8, glow = edges.length <= 20;
+  ST.fast = edges.length > 80 || rects.length > 28;
   for(const e of edges){
     const g = stEdgeGeom(e, i, rects);
     if(!g) continue;
     const dot = flow ? `<circle class="w-dot" r="3.2"><animateMotion dur="${(2 + (i % 5) * .4).toFixed(1)}s" begin="-${(i * .43).toFixed(2)}s" repeatCount="indefinite" path="${g.d}"/></circle>` : "";
-    h += `<g class="wire k-${e.kind}${g.back ? " back" : ""}" data-w="${e.key}"><path class="w-glow" d="${g.d}"/><path class="w-line" d="${g.d}"/><path class="w-hit" d="${g.d}"/>${dot}</g>`;
+    h += `<g class="wire k-${e.kind}${g.back ? " back" : ""}" data-w="${e.key}">${glow ? `<path class="w-glow" d="${g.d}"/>` : ""}<path class="w-line" d="${g.d}"/><path class="w-hit" d="${g.d}"/>${dot}</g>`;
     e.i = i; ST.wires.set(e.key, e); i++;
   }
   svg.innerHTML = h + `<path class="w-tmp" id="sttmp" d=""/>`;
@@ -409,25 +462,68 @@ function stHome(){
   ST.cam = {z, x: cv.clientWidth - (p.x + el.offsetWidth) * z - 16, y: 136 - p.y * z};
   stApply(); stSave();
 }
+/* اگر داده‌ی یک بخش خراب باشد، فقط همان کارت خطا نشان می‌دهد و بقیه‌ی نقشه باز می‌شود */
+function stCardSafe(id, dead){
+  try{ return stCardHTML(id, dead); }
+  catch(err){
+    console.error("studio card", id, err);
+    return `<div class="stc-card dead" data-id="${esc(id)}"><span class="stc-in" data-in="${esc(id)}"></span><div class="stc-h"><span class="stc-ic">${IC.bot}</span><div class="stc-t"><b>${esc(id)}</b><span class="ids">خطا در نمایش این بخش</span></div><button class="stc-menu" data-a="stmenu" data-n="${esc(id)}" aria-label="گزینه‌های بخش">⋮</button></div></div>`;
+  }
+}
+function stGridFallback(){
+  Object.keys(S.cur.config.nodes).forEach((id, i) => { if(!ST.pos[id]) ST.pos[id] = {x: -(i % 4) * 330, y: 40 + Math.floor(i / 4) * 520}; });
+}
+function stSearchApply(center){
+  const cv = $("#stc"), q = $("#stq"); if(!cv || !S.cur) return;
+  const v = (q ? q.value : ST.q || "").trim().toLowerCase(); ST.q = v;
+  let first = null;
+  cv.querySelectorAll(".stc-card").forEach(el => {
+    const n = S.cur.config.nodes[el.dataset.id] || {};
+    const hit = !v || el.dataset.id.includes(v) || (n.title || "").toLowerCase().includes(v) || (n.text || "").toLowerCase().includes(v);
+    el.classList.toggle("dim", !!v && !hit);
+    if(v && hit && !first) first = el.dataset.id;
+  });
+  cv.querySelectorAll(".wire").forEach(w => w.classList.toggle("dim", !!v));
+  if(center && v && first) stCenter(first);
+}
+/* رسم نقشه به‌صورت تفاضلی: کارتی که تغییری نکرده دست نمی‌خورد (نه پرپر، نه دوباره‌لود عکس، نه ازدست‌رفتن لمس) */
 function stPaintWorld(){
   const wr = $("#stw"), cv = $("#stc");
   if(!wr || !cv || !S.cur) return;
-  const fresh = stEnsurePositions();
-  const seen = stReach();
+  let fresh = false;
+  try{ fresh = stEnsurePositions(); }catch(err){ console.error("studio layout", err); stGridFallback(); }
+  const ids = Object.keys(S.cur.config.nodes), seen = stReach();
   const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
-  $("#stu")?.classList.toggle("many", _ed.length > 12 || Object.keys(S.cur.config.nodes).length > 14);
-  let h = `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`;
-  for(const id of Object.keys(S.cur.config.nodes)) h += stCardHTML(id, !seen.has(id));
-  wr.innerHTML = h;
-  cv.querySelectorAll(".stc-card").forEach(stPlacePorts);
+  $("#stu")?.classList.toggle("many", _ed.length > 8 || ids.length > 10);
+  if(!wr.querySelector("#stsvg")) wr.insertAdjacentHTML("afterbegin", `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`);
+  const old = new Map();
+  for(const el of wr.children) if(el.classList.contains("stc-card")) old.set(el.dataset.id, el);
+  ST.sig = ST.sig || {}; ST.els = new Map();
+  const added = [], tpl = document.createElement("template");
+  for(const id of ids){
+    const html = stCardSafe(id, !seen.has(id)), prev = old.get(id);
+    if(prev && ST.sig[id] === html){ old.delete(id); ST.els.set(id, prev); continue; }
+    tpl.innerHTML = html.trim();
+    const el = tpl.content.firstElementChild;
+    if(prev){ prev.replaceWith(el); old.delete(id); } else wr.appendChild(el);
+    ST.sig[id] = html; ST.els.set(id, el); added.push(el);
+  }
+  for(const [id, el] of old){ el.remove(); delete ST.sig[id]; }
+  stPlaceCards();
+  stPlacePorts(added);
   stMeasure();
   if(fresh){ stAutoLayout(false); stPlaceCards(); stSave(); }      // بار اول: با اندازه‌ی واقعی بخش‌ها دوباره بچین
   stPaintWires();
+  if(ST.q) stSearchApply(false);
   stMini(true);
   stApply();
   if(document.fonts?.ready && !ST._fw){            // بعد از آمدن فونت، ارتفاع‌ها عوض می‌شود؛ جای دایره‌ها را دوباره بسنج
     ST._fw = 1;
-    document.fonts.ready.then(() => { ST._fw = 0; if(S.view === "studio" && $("#stc")){ stMeasure(); stPaintWires(); stMini(true); } });
+    document.fonts.ready.then(() => {
+      ST._fw = 0;
+      const c2 = $("#stc");
+      if(S.view === "studio" && c2){ stPlacePorts([...c2.querySelectorAll(".stc-card")]); stMeasure(); stPaintWires(); stMini(true); stCull(); }
+    });
   }
 }
 
@@ -479,23 +575,19 @@ function renderStudio(){
         </div>
       </div>
     </div>`;
-  stPaintWorld();
+  ST.sig = {}; ST.els = new Map(); ST.q = ""; ST.w = null; ST.rect = null;
+  const cv0 = $("#stc");
+  ST.vw = cv0.clientWidth; ST.vh = cv0.clientHeight;
+  ST._ro?.disconnect();
+  if(window.ResizeObserver){
+    ST._ro = new ResizeObserver(() => { ST.vw = cv0.clientWidth; ST.vh = cv0.clientHeight; ST.rect = null; if(S.view === "studio" && cv0.isConnected){ stMini(); stCull(); } });
+    ST._ro.observe(cv0);
+  }
+  try{ stPaintWorld(); }
+  catch(err){ console.error("studio paint", err); toast("نمایش نقشه با مشکل روبه‌رو شد؛ یک بار دیگر وارد استودیو شو"); }
   if(!ST.cam) requestAnimationFrame(stHome);
   stBindCanvas();
-  const q = $("#stq");
-  q?.addEventListener("input", () => {
-    const v = q.value.trim().toLowerCase(), cv = $("#stc");
-    if(!cv) return;
-    let first = null;
-    cv.querySelectorAll(".stc-card").forEach(el => {
-      const n = S.cur.config.nodes[el.dataset.id] || {};
-      const hit = !v || el.dataset.id.includes(v) || (n.title || "").toLowerCase().includes(v) || (n.text || "").toLowerCase().includes(v);
-      el.classList.toggle("dim", !!v && !hit);
-      if(v && hit && !first) first = el.dataset.id;
-    });
-    cv.querySelectorAll(".wire").forEach(w => w.classList.toggle("dim", !!v));
-    if(v && first) stCenter(first);
-  });
+  $("#stq")?.addEventListener("input", () => stSearchApply(true));
 }
 function refreshStudio(){
   if(S.view !== "studio" || !S.cur) return;
@@ -539,13 +631,14 @@ function stBindCanvas(){
   const cv = $("#stc"); if(!cv) return;
   const P = ST.ptr;
   const w2p = e => {
-    const r = cv.getBoundingClientRect(), c = ST.cam || {x: 40, y: 40, z: 1};
+    const r = ST.rect || (ST.rect = cv.getBoundingClientRect()), c = ST.cam || {x: 40, y: 40, z: 1};
     return {x: (e.clientX - r.left - c.x) / c.z, y: (e.clientY - r.top - c.y) / c.z};
   };
   cv.addEventListener("pointerdown", e => {
     if(e.pointerType === "mouse" && e.button !== 0) return;
     if(e.target.closest(".st-tools,.st-search,.st-hint,.st-energy,.st-pop,.st-mini,.stc-menu")) return;   // دکمه‌های روی بوم: بدون capture تا کلیکشان به خودشان برسد
     stClosePop();
+    ST.rect = cv.getBoundingClientRect();
     cancelAnimationFrame(ST._in); $("#stw")?.classList.remove("glide");
     P.set(e.pointerId, {x: e.clientX, y: e.clientY});
     const port = e.target.closest(".p-out"), card = e.target.closest(".stc-card");
@@ -590,7 +683,7 @@ function stBindCanvas(){
     }
     else if(m.t === "pinch"){
       if(P.size < 2) return;
-      const d = stDist(P), md = stMid(P), r = cv.getBoundingClientRect();
+      const d = stDist(P), md = stMid(P), r = ST.rect || (ST.rect = cv.getBoundingClientRect());
       const z = Math.min(1.5, Math.max(.16, m.z0 * d / Math.max(20, m.d0)));
       const wx = (m.m0.x - r.left - m.c0.x) / m.z0, wy = (m.m0.y - r.top - m.c0.y) / m.z0;
       ST.cam = {z, x: (md.x - r.left) - wx * z, y: (md.y - r.top) - wy * z};
@@ -634,7 +727,7 @@ function stBindCanvas(){
     else if(m.t === "card"){
       cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
       stHot(m.id, false);
-      if(m.moved){ stUpdateWiresFor(m.id); stSave(); stMini(true); }
+      if(m.moved){ stUpdateWiresFor(m.id); stSave(); stMini(true); stCull(); }
       else if(Date.now() - m.t0 < 500) openNode(m.id);
     }
     else if(m.t === "pan"){
