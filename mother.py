@@ -844,8 +844,33 @@ def audience_targets():
             yield bt, bid, chats
 
 
-def run_announce(text, admin, builders=True, audience=False, mid="", fmt="", ids=None):
+def ann_new(kind, admin, text, total, label="", mid=""):
+    """رکورد تاریخچه‌ی یک ارسال؛ آیدی رکورد برگردونده می‌شه (خالی اگه ثبت نشد)"""
+    rid = secrets.token_hex(6)
+    try:
+        db.announces.insert_one({"_id": rid, "kind": kind, "by": admin, "text": str(text or "")[:300], "media": bool(mid), "label": label,
+                                 "total": int(total), "ok": 0, "sent": 0, "done": False, "t": now()})
+    except Exception:
+        log.exception("ann_new failed")
+        return ""
+    return rid
+
+
+def ann_prog(rid, ok, sent, done=False):
+    if not rid:
+        return
+    try:
+        s = {"ok": int(ok), "sent": int(sent)}
+        if done:
+            s.update(done=True, fin=now())
+        db.announces.update_one({"_id": rid}, {"$set": s})
+    except Exception:
+        pass
+
+
+def run_announce(text, admin, builders=True, audience=False, mid="", fmt="", ids=None, rec=""):
     ok_b = tot_b = ok_a = tot_a = 0
+    sent_n = 0
     try:
         if builders:
             kb = {"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": BASE_URL}}]]}
@@ -854,6 +879,9 @@ def run_announce(text, admin, builders=True, audience=False, mid="", fmt="", ids
             for u_id in targets:
                 sent, blocked = send_rich(MOTHER_TOKEN, "mother", u_id, text, mid, fmt, kb)
                 ok_b += 1 if sent else 0
+                sent_n += 1
+                if sent_n % 25 == 0:
+                    ann_prog(rec, ok_b + ok_a, sent_n)
                 if blocked:
                     db.users.update_one({"_id": u_id}, {"$set": {"mb_blocked": True}})
                 elif sent:
@@ -866,6 +894,9 @@ def run_announce(text, admin, builders=True, audience=False, mid="", fmt="", ids
                 for chat in chats:
                     sent, blocked = send_rich(token, bid, chat, text, mid, fmt)
                     ok_a += 1 if sent else 0
+                    sent_n += 1
+                    if sent_n % 25 == 0:
+                        ann_prog(rec, ok_b + ok_a, sent_n)
                     if blocked:
                         db.subs.update_one({"_id": f"{bid}:{chat}"}, {"$set": {"blocked": True}})
                     time.sleep(0.04)
@@ -873,6 +904,7 @@ def run_announce(text, admin, builders=True, audience=False, mid="", fmt="", ids
         log.exception("announce crashed")
     finally:
         db.locks.delete_one({"_id": "announce"})
+        ann_prog(rec, ok_b + ok_a, sent_n, done=True)
     parts = []
     if builders:
         parts.append(f"سازنده‌ها: {ok_b} از {tot_b} نفر")
@@ -905,12 +937,16 @@ def start_announce(text, admin, builders=True, audience=False, mid="", fmt="", i
         if lk and age_sec(lk["t"]) < 3600:
             return 0, "یه اعلان دیگه هنوز در حال ارساله"
         db.locks.update_one({"_id": "announce"}, {"$set": {"t": now()}})
-    threading.Thread(target=run_announce, args=(text, admin, builders, audience, mid, fmt, ids), daemon=True).start()
     if ids is not None:
-        return len(ids), ""
-    n = db.users.count_documents({}) if builders else 0
-    if audience:
-        n += sum(len(c) for _, _, c in audience_targets())
+        n, kind, label = len(ids), "users", f"{len(ids)} کاربر انتخاب‌شده"
+    else:
+        n = db.users.count_documents({}) if builders else 0
+        if audience:
+            n += sum(len(c) for _, _, c in audience_targets())
+        kind = "both" if builders and audience else "builders" if builders else "audience"
+        label = {"both": "سازنده‌ها + مخاطبان ربات‌ها", "builders": "سازنده‌های ربات‌ساز", "audience": "مخاطبان ربات‌های فعال"}[kind]
+    rec = ann_new(kind, admin, text, n, label, mid)
+    threading.Thread(target=run_announce, args=(text, admin, builders, audience, mid, fmt, ids, rec), daemon=True).start()
     return n, ""
 
 
@@ -973,22 +1009,55 @@ def start_block_scan(bot, admin):
     return True
 
 
-def run_admin_send(bot, chats, text, admin, mid="", fmt=""):
-    bot_id, token, ok = str(bot["_id"]), dec(bot["token_enc"]), 0
+def run_admin_send(bot, chats, text, admin, mid="", fmt="", rec=""):
+    bot_id, token, ok, n = str(bot["_id"]), dec(bot["token_enc"]), 0, 0
     try:
         for chat in chats:
             sent, blocked = send_rich(token, bot_id, chat, text, mid, fmt)
+            n += 1
             if sent:
                 ok += 1
                 db.subs.update_one({"_id": f"{bot_id}:{chat}", "blocked": True}, {"$set": {"blocked": False}})
             elif blocked:
                 db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": True}})
+            if n % 25 == 0:
+                ann_prog(rec, ok, n)
             time.sleep(0.04)
     except Exception:
         log.exception("admin send crashed")
     finally:
         db.locks.delete_one({"_id": f"abc:{bot_id}"})
+        ann_prog(rec, ok, n, done=True)
     tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=f"اطلاعیه‌ی ربات @{bot.get('username') or bot.get('name', '')} تموم شد. به {ok} نفر از {len(chats)} نفر رسید.")
+
+
+def run_multi_send(pairs, text, admin, mid="", fmt="", rec=""):
+    """ارسال اطلاعیه از چند ربات پشت‌سرهم. pairs = [(bot_doc, [chat, ...]), ...]؛ قفل abc:<bot> را خودش آزاد می‌کنه"""
+    ok = n = 0
+    try:
+        for bot, chats in pairs:
+            bot_id, token = str(bot["_id"]), dec(bot["token_enc"])
+            try:
+                for chat in chats:
+                    sent, blocked = send_rich(token, bot_id, chat, text, mid, fmt)
+                    n += 1
+                    if sent:
+                        ok += 1
+                        db.subs.update_one({"_id": f"{bot_id}:{chat}", "blocked": True}, {"$set": {"blocked": False}})
+                    elif blocked:
+                        db.subs.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"blocked": True}})
+                    if n % 25 == 0:
+                        ann_prog(rec, ok, n)
+                    time.sleep(0.04)
+            finally:
+                db.locks.delete_one({"_id": f"abc:{bot_id}"})
+    except Exception:
+        log.exception("multi send crashed")
+    finally:
+        for bot, _ in pairs:
+            db.locks.delete_one({"_id": f"abc:{bot['_id']}"})
+        ann_prog(rec, ok, n, done=True)
+    tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=f"اطلاعیه‌ی {len(pairs)} ربات تموم شد. به {ok} نفر از {n} نفر رسید.")
 
 
 # ───────────────────────── عضویت اجباری ربات‌ساز: پیام قفل و پنل ادمین ─────────────────────────

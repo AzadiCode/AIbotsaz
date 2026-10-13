@@ -80,8 +80,8 @@ from core import (
 from ai import enhance_prompt, EXT_API, lint, reserve_cost, sanitize, TEMPLATES, typical_cost
 from engine import PROMO_CONF, PROMO_DEF_LOCK, PROMO_DEF_TEXT, sched_loop, sync_commands
 from mother import (
-    audience_targets, card_public, do_activate, fj_parse, fj_str, gen_job, lint_fa, MAX_USERBOTS,
-    new_bot_doc, recover_jobs, run_admin_send, scan_key, scan_state, start_announce, start_block_scan,
+    ann_new, audience_targets, card_public, do_activate, fj_parse, fj_str, gen_job, lint_fa, MAX_USERBOTS,
+    new_bot_doc, recover_jobs, run_admin_send, run_multi_send, scan_key, scan_state, start_announce, start_block_scan,
     ub_boot, ub_limit, ub_ready,
 )
 
@@ -692,101 +692,18 @@ def api_admin_stats(uid):
                    new24=sum(1 for u in users if u.get("created") and naive(u["created"]) >= day))
 
 
-_AB = {"t": 0.0, "rows": None}
-_AB_SORT = {"subs": "subs", "online": "online", "week": "active7", "day": "new24",
-            "blocked": "blocked", "created": "created", "updated": "updated"}
-_AB_PER = 25
-
-
-def _iso(d):
-    """تاریخ مونگو → متن ISO با پسوند Z (برای مرتب‌سازی و نمایش در مینی‌اپ)"""
-    return naive(d).isoformat() + "Z" if d else ""
-
-
-def _bot_metrics():
-    """آمار مخاطب همه‌ی ربات‌ها در یک پرس‌وجوی گروهی؛ با کش کوتاه چون پنل ادمین مرتب تازه می‌شود"""
-    if _AB["rows"] is not None and time.time() - _AB["t"] < 15:
-        return _AB["rows"]
-    t = naive()
-    cut_on, week, day = t - timedelta(seconds=300), t - timedelta(days=7), t - timedelta(days=1)
-    st = {}
-    try:
-        pipe = [{"$group": {"_id": "$bot",
-                            "n": {"$sum": 1},
-                            "on": {"$sum": {"$cond": [{"$gte": ["$last", cut_on]}, 1, 0]}},
-                            "w": {"$sum": {"$cond": [{"$gt": ["$last", week]}, 1, 0]}},
-                            "d": {"$sum": {"$cond": [{"$gt": ["$t", day]}, 1, 0]}},
-                            "bl": {"$sum": {"$cond": [{"$eq": ["$blocked", True]}, 1, 0]}}}}]
-        for r in db.subs.aggregate(pipe):
-            st[str(r.get("_id") or "")] = r
-    except Exception:
-        log.exception("aggregation آمار ربات‌ها نرفت؛ شمارش تک‌تک جایگزین شد")
-        st = {}
-        for r in db.subs.find({}, {"bot": 1, "last": 1, "t": 1, "blocked": 1}):
-            g = st.setdefault(str(r.get("bot") or ""), {"n": 0, "on": 0, "w": 0, "d": 0, "bl": 0})
-            last = naive(r["last"]) if r.get("last") else None
-            g["n"] += 1
-            g["on"] += 1 if last and last >= cut_on else 0
-            g["w"] += 1 if last and last > week else 0
-            g["d"] += 1 if r.get("t") and naive(r["t"]) > day else 0
-            g["bl"] += 1 if r.get("blocked") else 0
-    rows = []
-    for b in db.bots.find({}, {"name": 1, "username": 1, "owner": 1, "active": 1, "token_enc": 1,
-                               "created": 1, "updated": 1}):
-        g = st.get(str(b["_id"]), {})
-        rows.append({"id": str(b["_id"]), "name": b.get("name") or "", "un": b.get("username") or "",
-                     "owner": int(b.get("owner") or 0), "on": bool(b.get("active") and b.get("token_enc")),
-                     "created": _iso(b.get("created")), "updated": _iso(b.get("updated")),
-                     "subs": int(g.get("n", 0)), "online": int(g.get("on", 0)), "active7": int(g.get("w", 0)),
-                     "new24": int(g.get("d", 0)), "blocked": int(g.get("bl", 0))})
-    _AB["t"], _AB["rows"] = time.time(), rows
-    return rows
-
-
-@app.get("/api/admin/bots")
-@admin_only
-def api_admin_bots(uid):
-    """برترین و فعال‌ترین ربات‌ها: مرتب‌سازی بر اساس مخاطب، آنلاین، فعالیت هفت‌روزه و رشد ۲۴ ساعت + جستجو و صفحه‌بندی"""
-    q = str(request.args.get("q") or "").strip().lower().lstrip("@")[:60]
-    sort = _AB_SORT.get(str(request.args.get("sort") or ""), "subs")
-    only = str(request.args.get("on") or "")
-    try:
-        page = max(1, int(request.args.get("page") or 1))
-    except ValueError:
-        page = 1
-    rows = _bot_metrics()
-    tot = {"bots": len(rows), "active": sum(1 for r in rows if r["on"]), "subs": sum(r["subs"] for r in rows),
-           "online": sum(r["online"] for r in rows), "new24": sum(r["new24"] for r in rows),
-           "blocked": sum(r["blocked"] for r in rows)}
-    if only == "on":
-        rows = [r for r in rows if r["on"]]
-    elif only == "off":
-        rows = [r for r in rows if not r["on"]]
-    if q:
-        rows = [r for r in rows if q in r["name"].lower() or q in r["un"].lower()
-                or q in str(r["owner"]) or q in r["id"]]
-    rows.sort(key=lambda r: (r[sort], r["subs"], r["updated"]), reverse=True)
-    pages = max(1, math.ceil(len(rows) / _AB_PER))
-    page = min(page, pages)
-    cut = rows[(page - 1) * _AB_PER: page * _AB_PER]
-    owners = {u["_id"]: u for u in db.users.find({"_id": {"$in": sorted({r["owner"] for r in cut})}},
-                                                 {"tg_name": 1, "tg_user": 1})}
-    sending = {x["_id"] for x in db.locks.find({"_id": {"$in": [f"abc:{r['id']}" for r in cut]}}, {"_id": 1})}
-    out = []
-    for r in cut:
-        o = owners.get(r["owner"], {})
-        out.append({**r, "onm": o.get("tg_name") or "", "onun": o.get("tg_user") or "",
-                    "sending": f"abc:{r['id']}" in sending})
-    return jsonify(items=out, page=page, pages=pages, total=len(rows), per=_AB_PER, sum=tot)
-
-
 @app.get("/api/admin/users")
 @admin_only
 def api_admin_users(uid):
     cut = naive() - timedelta(seconds=ONLINE_SECS)
     total = db.users.count_documents({})
     online = db.users.count_documents({"seen": {"$gte": cut}})
-    users = list(db.users.find({}, {"seen": 1, "tg_user": 1, "tg_name": 1, "created": 1, "tokens": 1, "mb_blocked": 1}).sort("seen", -1).limit(300))
+    q = str(request.args.get("q", "")).strip().lstrip("@")[:40]
+    flt = {}
+    if q:
+        rx = {"$regex": re.escape(q), "$options": "i"}
+        flt = {"$or": [{"tg_user": rx}, {"tg_name": rx}] + ([{"_id": int(q)}] if q.isdigit() else [])}
+    users = list(db.users.find(flt, {"seen": 1, "tg_user": 1, "tg_name": 1, "created": 1, "tokens": 1, "mb_blocked": 1}).sort("seen", -1).limit(300))
     by = {}
     for bt in db.bots.find({"owner": {"$in": [x["_id"] for x in users]}}, {"owner": 1, "username": 1, "name": 1, "active": 1}):
         by.setdefault(bt["owner"], []).append({"id": str(bt["_id"]), "name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active"))})
@@ -971,14 +888,10 @@ def api_admin_bot_send(uid, bot_id):
         chats = [x["chat"] for x in db.subs.find(q, {"chat": 1})]
     if not chats:
         return jsonify(error="گیرنده‌ای پیدا نشد"), 400
-    try:
-        db.locks.insert_one({"_id": f"abc:{bot_id}", "t": now()})
-    except DuplicateKeyError:
-        lk = db.locks.find_one({"_id": f"abc:{bot_id}"})
-        if lk and age_sec(lk["t"]) < 1800:
-            return jsonify(error="یه ارسال دیگه برای این ربات هنوز در حاله"), 409
-        db.locks.update_one({"_id": f"abc:{bot_id}"}, {"$set": {"t": now()}})
-    threading.Thread(target=run_admin_send, args=(bot, chats, text, uid, mid, fmt), daemon=True).start()
+    if not _abc_lock(bot_id):
+        return jsonify(error="یه ارسال دیگه برای این ربات هنوز در حاله"), 409
+    rec = ann_new("bot", uid, text, len(chats), "@" + (bot.get("username") or bot.get("name", "")), mid)
+    threading.Thread(target=run_admin_send, args=(bot, chats, text, uid, mid, fmt, rec), daemon=True).start()
     return jsonify(queued=len(chats))
 
 
@@ -987,6 +900,149 @@ def api_admin_bot_send(uid, bot_id):
 def api_admin_audience(uid):
     return jsonify(builders=db.users.count_documents({}), bots=db.bots.count_documents({"active": True}),
                    audience=sum(len(c) for _, _, c in audience_targets()))
+
+
+def _abc_lock(bot_id):
+    """قفل ارسال اطلاعیه برای یک ربات؛ True یعنی گرفته شد"""
+    try:
+        db.locks.insert_one({"_id": f"abc:{bot_id}", "t": now()})
+        return True
+    except DuplicateKeyError:
+        lk = db.locks.find_one({"_id": f"abc:{bot_id}"})
+        if lk and age_sec(lk["t"]) < 1800:
+            return False
+        db.locks.update_one({"_id": f"abc:{bot_id}"}, {"$set": {"t": now()}})
+        return True
+
+
+# ───────────────────────── آمار ربات‌ها: رتبه‌بندی، فعال‌ترین‌ها و نمای کلی (پنل ادمین) ─────────────────────────
+_BR = {"t": 0.0, "rows": []}
+
+
+def _bot_rows(fresh=False):
+    """همه‌ی ربات‌ها + آمار مخاطب (کش ۲۰ ثانیه‌ای تا با هزار ربات هم سرور درگیر نشه)"""
+    if not fresh and time.time() - _BR["t"] < 20:
+        return _BR["rows"]
+    cut_on, d1 = naive() - timedelta(seconds=300), naive() - timedelta(days=1)
+
+    def cnt(cond):
+        return {"$sum": {"$cond": [cond, 1, 0]}}
+    st = {r["_id"]: r for r in db.subs.aggregate([{"$group": {
+        "_id": "$bot", "total": {"$sum": 1}, "blocked": cnt({"$eq": ["$blocked", True]}),
+        "online": cnt({"$and": [{"$gte": ["$last", cut_on]}, {"$ne": ["$blocked", True]}]}),
+        "act24": cnt({"$and": [{"$gte": ["$last", d1]}, {"$ne": ["$blocked", True]}]}),
+        "new24": cnt({"$gte": ["$t", d1]}), "last": {"$max": "$last"}}}], allowDiskUse=True)}
+    bots = list(db.bots.find({}, {"name": 1, "username": 1, "owner": 1, "active": 1, "token_enc": 1, "created": 1}))
+    owners = {u["_id"]: u for u in db.users.find({"_id": {"$in": list({b.get("owner") for b in bots})}}, {"tg_user": 1, "tg_name": 1})}
+    rows = []
+    for bt in bots:
+        bid, s, o = str(bt["_id"]), st.get(str(bt["_id"]), {}), owners.get(bt.get("owner"), {})
+        rows.append({"id": bid, "name": bt.get("name", ""), "un": bt.get("username") or "", "on": bool(bt.get("active") and bt.get("token_enc")),
+                     "owner": {"id": bt.get("owner"), "un": o.get("tg_user", ""), "name": o.get("tg_name", "")},
+                     "total": int(s.get("total", 0)), "blocked": int(s.get("blocked", 0)), "online": int(s.get("online", 0)),
+                     "act24": int(s.get("act24", 0)), "new24": int(s.get("new24", 0)),
+                     "last": naive(s["last"]).isoformat() + "Z" if s.get("last") else "",
+                     "created": naive(bt["created"]).isoformat() + "Z" if bt.get("created") else ""})
+    _BR["t"], _BR["rows"] = time.time(), rows
+    return rows
+
+
+_BSORT = {"subs": lambda r: (r["total"] - r["blocked"], r["act24"]), "act24": lambda r: (r["act24"], r["online"], r["total"]),
+          "online": lambda r: (r["online"], r["act24"], r["total"]), "new24": lambda r: (r["new24"], r["total"]),
+          "recent": lambda r: r["created"]}
+
+
+@app.get("/api/admin/bots")
+@admin_only
+def api_admin_bots(uid):
+    rows = _bot_rows(bool(request.args.get("fresh")))
+    summary = {"bots": len(rows), "active": sum(1 for r in rows if r["on"]), "subs": sum(r["total"] for r in rows),
+               "online": sum(r["online"] for r in rows)}
+    q = str(request.args.get("q", "")).strip().lower().lstrip("@")[:40]
+    status = request.args.get("st", "all")
+    if status in ("on", "off"):
+        rows = [r for r in rows if r["on"] == (status == "on")]
+    if q:
+        rows = [r for r in rows if q in r["name"].lower() or q in r["un"].lower() or q == str(r["owner"]["id"])
+                or q in (r["owner"]["un"] or "").lower() or q in (r["owner"]["name"] or "").lower()]
+    rows = sorted(rows, key=_BSORT.get(request.args.get("sort"), _BSORT["subs"]), reverse=True)
+    lim = _clamp(request.args.get("limit"), 10, 100, 40)
+    off = _clamp(request.args.get("offset"), 0, 100000, 0)
+    return jsonify(items=rows[off:off + lim], matched=len(rows), more=off + lim < len(rows), summary=summary)
+
+
+@app.get("/api/admin/overview")
+@admin_only
+def api_admin_overview(uid):
+    cut, day = naive() - timedelta(seconds=ONLINE_SECS), naive() - timedelta(days=1)
+    agg = list(db.users.aggregate([{"$group": {"_id": None, "tok": {"$sum": {"$ifNull": ["$tokens", 0]}}, "refs": {"$sum": {"$ifNull": ["$refs", 0]}}}}]))
+    rows = _bot_rows()
+    top = lambda key, n=5: sorted([r for r in rows if r[key] > 0], key=_BSORT[key], reverse=True)[:n]
+    return jsonify(users=db.users.count_documents({}), online=db.users.count_documents({"seen": {"$gte": cut}}),
+                   new24=db.users.count_documents({"created": {"$gte": day}}), builders_blocked=db.users.count_documents({"mb_blocked": True}),
+                   bots=len(rows), active=sum(1 for r in rows if r["on"]), subs=sum(r["total"] for r in rows),
+                   subs_blocked=sum(r["blocked"] for r in rows), subs_online=sum(r["online"] for r in rows),
+                   subs_act24=sum(r["act24"] for r in rows), subs_new24=sum(r["new24"] for r in rows),
+                   forms=db.submissions.count_documents({}), circulation=int(agg[0]["tok"]) if agg else 0,
+                   referrals=int(agg[0]["refs"]) if agg else 0,
+                   top_subs=sorted(rows, key=_BSORT["subs"], reverse=True)[:5], top_act=top("act24"), top_new=top("new24", 3))
+
+
+@app.get("/api/admin/announces")
+@admin_only
+def api_admin_announces(uid):
+    items = []
+    for x in db.announces.find({}).sort("t", -1).limit(20):
+        done = bool(x.get("done"))
+        stale = not done and age_sec(x["t"]) > 7200
+        items.append({"id": x["_id"], "kind": x.get("kind", ""), "label": x.get("label", ""), "text": x.get("text", ""), "media": bool(x.get("media")),
+                      "total": int(x.get("total", 0)), "ok": int(x.get("ok", 0)), "sent": int(x.get("sent", 0)),
+                      "state": "done" if done else "stale" if stale else "run", "t": naive(x["t"]).isoformat() + "Z"})
+    lk = db.locks.find_one({"_id": "announce"})
+    return jsonify(items=items, busy=bool(lk and age_sec(lk["t"]) < 3600))
+
+
+@app.post("/api/admin/bots/broadcast")
+@admin_only
+def api_admin_bots_broadcast(uid):
+    """اطلاعیه از طریق چند ربات انتخاب‌شده (حداکثر ۳۰ ربات) برای مخاطب‌های همان ربات‌ها"""
+    b = request.get_json(silent=True) or {}
+    ids = []
+    for x in (b.get("bots") or [])[:60]:
+        try:
+            ids.append(ObjectId(str(x)))
+        except InvalidId:
+            pass
+    ids = list(dict.fromkeys(ids))[:30]
+    if not ids:
+        return jsonify(error="اول چند ربات انتخاب کن"), 400
+    text = str(b.get("text", "")).strip()[:3500]
+    mid = str(b.get("media") or "")
+    if mid and not get_media(mid, uid):
+        mid = ""
+    fmt = "html" if b.get("fmt") == "html" else ""
+    if not mid and len(text) < 2:
+        return jsonify(error="متن یا رسانه‌ی پیام رو وارد کن"), 400
+    with_owner = bool(b.get("with_owner"))
+    pairs, busy = [], 0
+    for bt in db.bots.find({"_id": {"$in": ids}, "active": True, "token_enc": {"$exists": True}}):
+        bid = str(bt["_id"])
+        q = {"bot": bid, "blocked": {"$ne": True}}
+        if not with_owner:
+            q["uid"] = {"$ne": bt["owner"]}
+        chats = [x["chat"] for x in db.subs.find(q, {"chat": 1})]
+        if not chats:
+            continue
+        if not _abc_lock(bid):
+            busy += 1
+            continue
+        pairs.append((bt, chats))
+    if not pairs:
+        return jsonify(error="ارسال دیگه‌ای در حاله" if busy else "گیرنده‌ای پیدا نشد (ربات‌ها غیرفعال‌ان یا مخاطب ندارن)"), 409 if busy else 400
+    total = sum(len(c) for _, c in pairs)
+    rec = ann_new("bots", uid, text, total, f"{len(pairs)} ربات", mid)
+    threading.Thread(target=run_multi_send, args=(pairs, text, uid, mid, fmt, rec), daemon=True).start()
+    return jsonify(queued=total, bots=len(pairs), skipped=busy)
 
 
 # ───────────────────────── تنظیمات تبلیغ روی ورودی‌های جدید (پنل ادمین) ─────────────────────────

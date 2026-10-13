@@ -19,7 +19,7 @@ const WK = (() => { try{
 const API_BASE = "";
 
 let S = {
-  view: "create", btab: "ai", atab: "wallet", actab: "home", sbot: null,
+  view: "create", btab: "ai", atab: "wallet", sbot: null,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
   ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null, emojis: undefined
@@ -601,6 +601,7 @@ function renderAccount(){
     ${body}`;
   if(S.atab === "history") loadLedger();
   animBars();
+  if(S.atab === "admin") admStart(); else admStop();
 }
 
 const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: renderMedia, account: renderAccount, userbot: renderUserbot };   // «studio» در انتهای studio.js ثبت می‌شود
@@ -855,109 +856,32 @@ Object.assign(A, {
   agrant: el => busy(el, async () => { const d = await api("/api/admin/grant", "POST", {uid: $("#ag-uid").value.trim(), amount: $("#ag-amt").value.trim()}); toast(`موجودی جدید کاربر: ${d.bal}`); }),
   acoupon: el => busy(el, async () => { const v = id => $(id).value.trim(); const d = await api("/api/admin/coupon", "POST", {code: v("#ac-code"), tokens: v("#ac-tok"), max_uses: v("#ac-max"), days: v("#ac-days")});
     toast("کد ساخته شد: " + d.code); navigator.clipboard?.writeText(d.code); }),
-  aannounce: el => { const {text, media, fmt} = cpPayload("an"); if(!media && text.length < 3) return toast("متن اعلان را بنویس");
-    const b = !!$("#an-b")?.checked, a = !!$("#an-a")?.checked; if(!b && !a) return toast("حداقل یک گیرنده را تیک بزن");
-    confirmQ(`این اعلان برای ${[b && "سازنده‌ها", a && "مخاطبان ربات‌های فعال"].filter(Boolean).join(" و ")} فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text, media, fmt, builders: b, audience: a}); toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("an"); })); },
-  /* مدیریت پنل ادمین: تب‌ها و اکشن‌های هر زیربخش */
-  actab: el => { S.actab = el.dataset.k; renderAccount(); },
   astats: el => busy(el, async () => { const d = await api("/api/admin/stats");
     $("#astats").innerHTML = statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید امروز", d.new24], ["ربات‌ها", d.bots], ["ربات فعال", d.active],
       ["مخاطب ربات‌ها", d.bot_users], ["پاسخ فرم‌ها", d.forms], ["توکن در گردش", d.circulation], ["دعوت موفق", d.referrals]]); }),
-  /* کاربران */
-  usall: () => { if(!UD.d) return; usFilter(UD.d).filter(r => !r.blocked).forEach(r => US.sel.add(String(r.id))); usPaint(); },
-  usclear: () => { US.sel.clear(); usPaint(); },
-  ussend: el => { if(!US.sel.size) return toast("اول کاربرها را انتخاب کن (روی هر کاربر بزن)");
-    const {text, media, fmt} = cpPayload("us"); if(!media && text.length < 3) return toast("متن یا رسانه‌ی اطلاعیه را بنویس");
-    confirmQ(`این پیام برای ${US.sel.size} سازنده‌ی انتخاب‌شده فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {ids: [...US.sel], text, media, fmt});
-      toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("us"); })); },
-  /* برترین ربات‌ها */
-  absort: el => { AB.sort = el.dataset.k; AB.page = 1; abRefresh(); },
-  abon: el => { AB.on = el.dataset.k; AB.page = 1; abRefresh(); },
-  abpg: el => { const k = +el.dataset.k; if(k < 0 && AB.page > 1) AB.page--; else if(k > 0 && AB.d && AB.page < AB.d.pages) AB.page++; abRefresh(); },
-  abq: el => { clearTimeout(AB.qt); AB.qt = setTimeout(() => { AB.q = el.value; AB.page = 1; abRefresh(); }, 250); },
-  abref: () => abRefresh(),
+  aannounce: el => { const {text, media, fmt} = cpPayload("an"); if(!media && text.length < 3) return toast("متن اعلان را بنویس");
+    const b = !!$("#an-b")?.checked, a = !!$("#an-a")?.checked; if(!b && !a) return toast("حداقل یک گیرنده را تیک بزن");
+    confirmQ(`این اعلان برای ${[b && "سازنده‌ها", a && "مخاطبان ربات‌های فعال"].filter(Boolean).join(" و ")} فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api("/api/admin/announce", "POST", {text, media, fmt, builders: b, audience: a}); toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("an"); })); },
+  ausers: () => openUsers(),
 });
 document.addEventListener("click", e => { const c = e.target.closest("[data-pf=copyid]"); if(c) A.copyid(c); });
 
-function adminCard(){
-  if(!AD_TABS.some(t => t[0] === S.actab)) S.actab = "home";
-  if(S.actab !== "users") usStop();
-  if(S.actab !== "bots") abStop();
-  const body = ({home: adHome, bots: adBots, users: adUsers, msg: adMsg, cfg: adCfg})[S.actab]();
-  return `<div class="adsub">${tabsHTML(AD_TABS, S.actab, "actab")}</div>` + body;
-}
-
-/* ── نمای کلی: آمار زنده + دسترسی سریع + ابزار کاربر ── */
-const adStatsCells = d => statCells([["کاربران", d.users], ["آنلاین", d.online], ["جدید ۲۴ ساعت", d.new24],
-  ["ربات‌ها", d.bots], ["ربات فعال", d.active], ["مخاطب ربات‌ها", d.bot_users], ["توکن در گردش", d.circulation],
-  ["دعوت موفق", d.referrals], ["پاسخ فرم‌ها", d.forms]]);
-
-async function adStatsLoad(){
-  try{ S.ads = await api("/api/admin/stats"); }
-  catch(e){ S.ads = null; }
-  if(S.view === "account" && S.atab === "admin" && S.actab === "home") renderAccount();
-}
-
-function adHome(){
-  if(S.ads === undefined){ S.ads = null; adStatsLoad(); }
-  const cells = S.ads ? adStatsCells(S.ads) : `<div class="stat"><div class="k">در حال بارگذاری…</div><span class="n">—</span></div>`;
-  const nav = [["bots", "chart", "برترین ربات‌ها", "رتبه‌بندی، مدیریت و اطلاعیه"],
-               ["users", "users", "کاربران آنلاین", "فهرست زنده و ارسال گروهی"],
-               ["msg", "mega", "اطلاعیه", "اعلان همگانی سازنده‌ها"],
-               ["cfg", "gear", "تنظیمات", "پرداخت، عضویت و تبلیغ"]]
-    .map(([k, ic, t, s]) => `<button class="qn" data-a="actab" data-k="${k}">${IC[ic]}<b>${t}</b><small>${s}</small></button>`).join("");
-  return `<div class="sec"><h2>نمای کلی سیستم</h2><button class="b o sm" data-a="astats" style="width:auto;min-height:32px;padding:0 12px;font-size:12.5px">${IC.refresh}تازه‌سازی</button></div>
-    <div class="stats c3" id="astats">${cells}</div>
-    <div class="qnav">${nav}</div>
-    ${adTools()}`;
-}
-
-function adTools(){
-  return `<div class="panel mt2"><h2>ابزارهای سریع کاربر</h2>
-    <p class="muted">آیدی عددی کاربر را از زیربخش «کاربران» بگیر؛ مقدار منفی در شارژ یعنی کسر توکن.</p>
-    <div class="qth"><span>شارژ توکن</span><small>موجودی لحظه‌ای کاربر</small></div>
-    <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" autocomplete="off" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
-    <button class="b o sm" data-a="agrant">اعمال شارژ</button>
-    <div class="qth"><span>اشتراک دستی</span><small>«Free» لغو می‌کند؛ روز خالی = یک دوره‌ی کامل</small></div>
-    <div class="cmd"><input class="ltr" id="ap-uid" placeholder="آیدی عددی" inputmode="numeric" autocomplete="off" aria-label="آیدی کاربر"><select id="ap-plan" aria-label="پلن">${(S.cfg.plans || []).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select></div>
-    <div class="cmd"><input class="ltr" id="ap-days" placeholder="تعداد روز (اختیاری)" inputmode="numeric" autocomplete="off" aria-label="تعداد روز"></div>
-    <button class="b o sm" data-a="adplan">فعال‌سازی اشتراک</button>
-    <div class="qth"><span>کد هدیه</span><small>کد خالی = ساخت خودکار</small></div>
-    <div class="cmd"><input id="ac-code" placeholder="کد" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
-    <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
-    <button class="b o sm" data-a="acoupon">ساخت کد هدیه</button></div>`;
-}
-
-/* ── اطلاعیه: اعلان همگانی از ربات مادر ── */
-function adMsg(){
-  if(S.adaud === undefined){
-    S.adaud = null;
-    api("/api/admin/audience").then(d => { S.adaud = d; if(S.atab === "admin" && S.actab === "msg") renderAccount(); })
-      .catch(() => { S.adaud = {}; });
-  }
-  const a = S.adaud;
-  const reach = a && a.builders != null ? `الان ${N(fa(a.builders))} سازنده و ${N(fa(a.audience))} مخاطبِ ربات‌های فعال در دسترس‌اند.` : "از ربات مادر برای سازنده‌ها، یا از ربات‌های فعال برای مخاطبانشان.";
-  return `<div class="panel"><h2>اعلان همگانی</h2><p class="muted">${reach}</p><div class="fgap"></div>
-      ${cpBox("an", "متن اعلان")}
-      <label class="chk"><input type="checkbox" id="an-b" checked style="width:auto;margin:0">سازنده‌ها (از طریق ربات‌ساز)</label>
-      <label class="chk"><input type="checkbox" id="an-a" style="width:auto;margin:0">مخاطبان ربات‌های فعال (از طریق خود رباتشان، بدون سازنده)</label>
-      <div class="fgap"></div>
-      <button class="b" data-a="aannounce">${IC.mega}ارسال اعلان</button></div>
-    <div class="panel mt2"><h2>اطلاعیه از رباتِ خودِ کاربران</h2>
-      <p class="muted">برای ارسال با نام خودِ ربات‌ها به بخش «ربات‌ها» برو؛ ربات را پیدا کن و رویش بزن تا مخاطبانش را ببینی و از همان ربات پیام بفرستی.</p>
-      <button class="b o" data-a="actab" data-k="bots">دیدن برترین ربات‌ها</button></div>`;
-}
-
-/* ── تنظیمات: کارت‌به‌کارت، عضویت اجباری، تبلیغ روی ورودی‌های جدید ── */
-function adCfg(){
-  if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; if(S.atab === "admin" && S.actab === "cfg") renderAccount(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
+/* ═════════════════ مدیریت ═════════════════ */
+const _op = k => S.aopen?.[k] ? " open" : "";
+function adminSettings(){
+  if(S.fj === undefined){ S.fj = null; api("/api/admin/force-join").then(d => { S.fj = d; admSetPaint(); }).catch(() => { S.fj = {on: false, channels: "", text: ""}; }); }
   const fj = S.fj || {on: false, channels: "", text: ""};
   const PRD = {on: false, min_users: 10, pct: 30, lock_pct: 20, channels: "", text: "", lock_text: "", stats: {}};
-  if(S.pr === undefined){ S.pr = null; api("/api/admin/promo").then(d => { S.pr = d; if(S.atab === "admin" && S.actab === "cfg") renderAccount(); }).catch(() => { S.pr = PRD; }); }
+  if(S.pr === undefined){ S.pr = null; api("/api/admin/promo").then(d => { S.pr = d; admSetPaint(); }).catch(() => { S.pr = PRD; }); }
   const pr = S.pr || PRD;
-  if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; if(S.atab === "admin" && S.actab === "cfg") renderAccount(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
+  if(S.cd === undefined){ S.cd = null; api("/api/admin/card").then(d => { S.cd = d; admSetPaint(); }).catch(() => { S.cd = {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []}; }); }
   const cd = S.cd || {on: false, number: "", holder: "", bank: "", text: "", prices: {}, orders: []};
-  return `<div class="panel"><h2>کارت‌به‌کارت</h2><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
+  const planPanel = `<details class="adv acc" data-ak="plan"${_op("plan")}><summary>اشتراک دستی</summary><div class="accb"><p class="muted">برای هدیه یا اصلاح اشتراک یک کاربر. «Free» اشتراک رو لغو می‌کند. تعداد روز خالی = یک دوره‌ی کامل.</p><div class="fgap"></div>
+      <span class="lbl">آیدی عددی کاربر</span><input class="ltr" id="ap-uid" inputmode="numeric" autocomplete="off" aria-label="آیدی کاربر">
+      <span class="lbl">پلن</span><select id="ap-plan" aria-label="پلن">${(S.cfg.plans || []).map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select>
+      <span class="lbl">تعداد روز (اختیاری)</span><input class="ltr" id="ap-days" inputmode="numeric" autocomplete="off" aria-label="تعداد روز">
+      <button class="b o" data-a="adplan">اعمال</button></div></div></details>`;
+  return planPanel + `<details class="adv acc" data-ak="card"${_op("card")}><summary>کارت‌به‌کارت</summary><div class="accb"><p class="muted">کاربر مبلغ را واریز می‌کند، عکس رسید را در ربات می‌فرستد و تو با یک دکمه تأیید می‌کنی؛ توکن همان لحظه شارژ می‌شود. اسم صاحب کارت اختیاری است، ولی اپ بانکِ پرداخت‌کننده در هر حال اسم صاحب کارت را نشان می‌دهد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="cd-on"${cd.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">شماره کارت (۱۶ رقم)</span><input class="ltr" id="cd-num" inputmode="numeric" value="${esc(cd.number)}" placeholder="6037 0000 0000 0000" autocomplete="off" aria-label="شماره کارت">
       <span class="lbl">به نام (اختیاری)</span><input class="fa" id="cd-holder" value="${esc(cd.holder)}" maxlength="60" aria-label="نام صاحب کارت">
@@ -968,16 +892,16 @@ function adCfg(){
       ${(S.cfg.plans || []).filter(p => p.id !== "free").map(p => `<div class="cdp"><span>${esc(p.title)}</span><input class="ltr" id="cd-p-plan_${esc(p.id)}" inputmode="numeric" value="${esc((cd.prices || {})["plan_" + p.id] || "")}" placeholder="تومان" autocomplete="off" aria-label="قیمت اشتراک ${esc(p.title)}"></div>`).join("")}
       <span class="lbl">متن راهنما زیر مشخصات کارت (قالب HTML)</span><textarea class="fa" id="cd-tx" data-fmt maxlength="1200" style="min-height:90px" aria-label="متن راهنما">${esc(cd.text)}</textarea>${fmtTools("cd-tx")}
       <button class="b o" data-a="cdsave">ذخیره</button>
-      <div class="qth"><span>آخرین سفارش‌ها</span><button class="b o sm" data-a="cdrefresh" style="width:auto;min-height:30px;padding:0 12px;font-size:12px">تازه‌سازی</button></div>
+      <h3 class="mt" style="font-size:14px">آخرین سفارش‌ها</h3>
       ${(cd.orders || []).length ? cd.orders.map(o => `<div class="cdo"><div class="cdi"><b>${N("#" + o.id)}</b> ${esc(o.name || o.uid)}<br><span class="muted">${o.plan ? "اشتراک " + esc(o.plan) : N(o.tokens) + " توکن"} · ${N(Number(o.toman).toLocaleString("en"))} تومان · ${CD_ST[o.status] || esc(o.status)}</span></div>${o.status === "wait" || o.status === "sent" ? `<div class="cdb"><button class="b sm" data-a="cdok" data-id="${o.id}" aria-label="تأیید سفارش ${o.id}">✅</button><button class="b o sm" data-a="cdno" data-id="${o.id}" aria-label="رد سفارش ${o.id}">❌</button></div>` : ""}</div>`).join("") : `<p class="muted">هنوز سفارشی ثبت نشده.</p>`}
-    </div>
-    <div class="panel mt2"><h2>عضویت اجباری ربات‌ساز</h2><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
+      <button class="b o sm mt" data-a="cdrefresh">تازه‌سازی</button></div></div></details>
+    ` + `<details class="adv acc" data-ak="fj"${_op("fj")}><summary>عضویت اجباری ربات‌ساز</summary><div class="accb"><p class="muted">کاربر تا عضو این کانال‌ها نشود، نه ربات مادر و نه مینی‌اپ کار می‌کند. ربات مادر باید در کانال ادمین باشد. ادمین‌ها قفل نمی‌شوند.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="fj-on"${fj.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">آیدی کانال‌ها (تا ۳ تا، با فاصله)</span><input class="ltr" id="fj-ch" value="${esc(fj.channels)}" placeholder="@channel1 @channel2" autocomplete="off" aria-label="آیدی کانال‌ها">
       <p class="muted">کانال خصوصی: <b dir="ltr">-1001234567890=https://t.me/+invite</b></p>
       <span class="lbl">متن پیام عضویت (قالب HTML)</span><textarea class="fa" id="fj-tx" data-fmt maxlength="1500" style="min-height:90px" aria-label="متن پیام عضویت">${esc(fj.text)}</textarea>${fmtTools("fj-tx")}
-      <button class="b o" data-a="afj">ذخیره</button></div>
-    <div class="panel mt2"><h2>تبلیغ روی ورودی‌های جدید</h2><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
+      <button class="b o" data-a="afj">ذخیره</button></div></div></details>
+    ` + `<details class="adv acc" data-ak="promo"${_op("promo")}><summary>تبلیغ روی ورودی‌های جدید</summary><div class="accb"><p class="muted">فقط برای ورودی‌های تازه‌ی ربات‌هایی که مخاطبشان از حد زیر بیشتر شده. مخاطبان قبلی، صاحب ربات و پشتیبان‌ها هرگز هدف نمی‌شوند. هر نفر یک بار می‌بیند، و کسی که از قبل عضو کانال است چیزی نمی‌بیند. ربات مادر باید در کانال ادمین باشد.</p><div class="fgap"></div>
       <label class="chk"><input type="checkbox" id="pr-on"${pr.on ? " checked" : ""}> فعال باشد</label>
       <span class="lbl">حداقل مخاطب هر ربات (بیشتر از این عدد)</span><input class="ltr" id="pr-min" inputmode="numeric" value="${esc(pr.min_users)}" autocomplete="off" aria-label="حداقل مخاطب">
       <span class="lbl">درصد ورودی‌های جدیدی که هدف می‌شوند</span><input class="ltr" id="pr-pct" inputmode="numeric" value="${esc(pr.pct)}" autocomplete="off" aria-label="درصد هدف">
@@ -986,7 +910,15 @@ function adCfg(){
       <span class="lbl">متن پیام تبلیغی (قالب HTML)</span><textarea class="fa" id="pr-tx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن پیام تبلیغی">${esc(pr.text)}</textarea>${fmtTools("pr-tx")}
       <span class="lbl">متن قفل عضویت (قالب HTML)</span><textarea class="fa" id="pr-ltx" data-fmt maxlength="1500" style="min-height:70px" aria-label="متن قفل عضویت">${esc(pr.lock_text)}</textarea>${fmtTools("pr-ltx")}
       <p class="muted">نمایش تا الان: پیام ${N(pr.stats?.msg || 0)} · قفل ${N(pr.stats?.lock || 0)} · عضو شدند از قفل ${N(pr.stats?.joined || 0)}</p>
-      <button class="b o" data-a="apr">ذخیره</button></div>`;
+      <button class="b o" data-a="apr">ذخیره</button></div></div></details>
+    ` + `<details class="adv acc" data-ak="tok"${_op("tok")}><summary>توکن کاربر</summary><div class="accb"><p class="muted">مقدار منفی یعنی کسر.</p><div class="fgap"></div>
+      <div class="cmd"><input id="ag-uid" placeholder="آیدی عددی" inputmode="numeric" aria-label="آیدی عددی کاربر"><input id="ag-amt" placeholder="مقدار" inputmode="numeric" aria-label="مقدار توکن"></div>
+      <button class="b o" data-a="agrant">اعمال</button></div></div></details>
+    <details class="adv acc" data-ak="cpn"${_op("cpn")}><summary>کد هدیه</summary><div class="accb"><div class="fgap"></div>
+      <div class="cmd"><input id="ac-code" placeholder="کد (خالی = خودکار)" aria-label="کد"><input id="ac-tok" placeholder="توکن" inputmode="numeric" aria-label="توکن"></div>
+      <div class="cmd"><input id="ac-max" placeholder="ظرفیت (نفر)" inputmode="numeric" aria-label="ظرفیت"><input id="ac-days" placeholder="انقضا (روز)" inputmode="numeric" aria-label="انقضا"></div>
+      <button class="b o" data-a="acoupon">ساخت کد</button></div></div></details>
+`;
 }
 let UQ = "";
 const ago = t => { if(!t) return "—"; const m = Math.max(0, (Date.now() - new Date(t)) / 60000); return m < 1 ? "همین الان" : m < 60 ? Math.floor(m) + " دقیقه پیش" : m < 1440 ? Math.floor(m / 60) + " ساعت پیش" : Math.floor(m / 1440) + " روز پیش"; };
@@ -1014,7 +946,7 @@ document.addEventListener("input", e => { const p = e.target.dataset?.cp; if(p) 
 document.addEventListener("change", e => { const p = e.target.dataset?.cpfmt; if(!p) return; cpSt(p).fmt = e.target.value;
   const t = $("#" + p + "-tools"); if(t) t.style.display = e.target.value === "html" ? "" : "none"; });
 const CD_ST = {wait: "منتظر رسید", sent: "رسید آمد", ok: "تأیید شد", no: "رد شد"};
-const cdReload = async () => { S.cd = await api("/api/admin/card"); render(); };
+const cdReload = async () => { S.cd = await api("/api/admin/card"); admSetPaint(); };
 const cdDecide = (el, ok) => confirmQ(ok ? "این پرداخت تأیید و توکن شارژ شود؟" : "این سفارش رد شود؟", yes => yes && busy(el, async () => {
   await api("/api/admin/card-orders/" + el.dataset.id, "POST", {ok}); toast(ok ? "تأیید شد" : "رد شد"); await cdReload(); }));
 Object.assign(A, {
@@ -1048,14 +980,13 @@ Object.assign(A, {
   rb: el => { if(el.classList.contains("spin")) return; const u = el.dataset.s === "u";
     busy(el, async () => { const d = await api(u ? "/api/admin/users/refresh-blocks" : `/api/admin/bots/${AU.id}/refresh-blocks`, "POST");
       toast(d.started ? "بررسی بلاک‌ها شروع شد؛ نتیجه خودکار به‌روز می‌شود" : "یک بررسی دیگر هنوز در حال انجام است");
-      clearTimeout(window.__ut); clearTimeout(window.__at); const f = u ? usFetch : abFetch; if(f) setTimeout(f, 1200); }); },
+      clearTimeout(window.__ut); clearTimeout(window.__at); const f = u ? openUsers.tick : openAudience.tick; if(f) setTimeout(f, 1200); }); },
 });
 const headRb = (t, s) => `<div class="grab"></div><div class="sh"><h2>${t}</h2><div style="display:flex;gap:6px"><button class="iconb sm" id="rb-btn" data-a="rb" data-s="${s}" aria-label="بررسی دوباره‌ی بلاک‌ها" title="بررسی دوباره‌ی بلاک‌ها">${IC.refresh}</button><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div></div>`;
 const scanTxt = d => d.scan ? ` · در حال بررسی ${N(d.scan.done)} از ${N(d.scan.total)}` : "";
 
-/* ── کاربران ربات‌ساز (زیربخش «کاربران» پنل مدیریت: فهرست زنده + ارسال گروهی) ── */
+/* ── کاربران ربات‌ساز ── */
 const US = {sel: new Set()};
-const UD = {d: null, t: null, run: false};
 const usTg = () => US.sel.size ? `${N(US.sel.size)} نفر انتخاب‌شده` : "هیچ‌کس انتخاب نشده";
 function userRow(r){
   const nm = r.name || (r.un ? "@" + r.un : "—"), id = String(r.id);
@@ -1067,124 +998,28 @@ const uSum = d => `<span class="dot on"></span><b>${N(d.online)}</b> آنلای�
 const usFilter = d => { const q = UQ.trim().toLowerCase().replace(/^@/, "");
   return d.items.filter(r => !q || String(r.id).includes(q) || (r.un || "").toLowerCase().includes(q) || (r.name || "").toLowerCase().includes(q) || r.bots.some(b => (b.un || "").toLowerCase().includes(q))); };
 const uList = d => usFilter(d).map(userRow).join("") || '<p class="muted">موردی پیدا نشد</p>';
-const usPaint = () => { const t = $("#utg"); if(t) t.innerHTML = usTg(); const l = $("#ulist"); if(l && UD.d) l.innerHTML = uList(UD.d); };
-const usOn = () => S.view === "account" && S.atab === "admin" && S.actab === "users";
-
-function adUsers(){
-  usStart();
-  const d = UD.d;
-  if(!d) return `<div class="panel"><div class="sh"><h2>کاربران ربات‌ساز</h2></div><p class="muted">در حال بارگذاری فهرست کاربرها…</p></div>`;
-  return `<div class="panel">
-    <div class="sh"><h2>کاربران ربات‌ساز</h2><button class="iconb sm" id="rb-btn" data-a="rb" data-s="u" aria-label="بررسی دوباره‌ی بلاک‌ها" title="بررسی دوباره‌ی بلاک‌ها">${IC.refresh}</button></div>
-    <div class="usum" id="usum">${uSum(d)}</div>
-    <input id="uq" class="fa" value="${esc(UQ)}" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px">
-    <div id="ulist" class="scrl adlist">${uList(d)}</div>
-    <div class="atg"><span class="muted">برای ارسال، روی کاربرها بزن. گیرنده:</span><b id="utg">${usTg()}</b></div>
-    <div class="cmd"><button class="b o sm" data-a="usall">انتخاب همه‌ی لیست</button><button class="b o sm" data-a="usclear">پاک کردن انتخاب</button></div>
-    <div class="fgap"></div>${cpBox("us", "متن اطلاعیه برای کاربرهای انتخاب‌شده")}<div class="fgap"></div>
-    <button class="b" data-a="ussend">${IC.mega}ارسال اطلاعیه</button></div>
-    <div class="panel mt2"><h2>ارسال از خودِ ربات‌ها</h2>
-      <p class="muted">برای اطلاعیه با نام خودِ ربات‌ها (به مخاطبان هر ربات)، به زیربخش «ربات‌ها» برو.</p>
-      <button class="b o" data-a="actab" data-k="bots">دیدن برترین ربات‌ها</button></div>`;
+const usPaint = () => { const t = $("#utg"); if(t) t.innerHTML = usTg(); const l = $("#ulist"); if(l && openUsers.d) l.innerHTML = uList(openUsers.d); };
+async function openUsers(){
+  clearTimeout(window.__ut); clearTimeout(window.__at); clearInterval(window.__ut); clearInterval(window.__at);
+  S.sheet = {kind: "info"}; UQ = ""; US.sel = new Set(); CPS.us = cpNew(); openUsers.d = null;
+  showSheet(head("کاربران ربات‌ساز") + `<p class="muted">در حال بارگذاری…</p>`);
+  const tick = async () => {
+    if(S.sheet?.kind !== "info" || !$("#sheet").classList.contains("show")) return;
+    let again = 10000;
+    try{
+      const d = await api("/api/admin/users"); openUsers.d = d; again = d.scan ? 2500 : 10000;
+      if($("#ulist")){ $("#usum").innerHTML = uSum(d); $("#ulist").innerHTML = uList(d); $("#rb-btn")?.classList.toggle("spin", !!d.scan); }
+      else showSheet(headRb("کاربران ربات‌ساز", "u") + `<div class="usum" id="usum">${uSum(d)}</div><input id="uq" class="fa" placeholder="جستجو: آیدی، یوزرنیم، ربات" autocomplete="off" aria-label="جستجو" style="margin-bottom:6px"><div id="ulist" class="scrl">${uList(d)}</div>
+        <div class="atg"><span class="muted">برای ارسال، روی کاربرها بزن. گیرنده:</span><b id="utg">${usTg()}</b></div>
+        <div class="cmd"><button class="b o sm" data-a="usall">انتخاب همه‌ی لیست</button><button class="b o sm" data-a="usclear">پاک کردن انتخاب</button></div>
+        <div class="fgap"></div>${cpBox("us", "متن اطلاعیه برای کاربرهای انتخاب‌شده")}<div class="fgap"></div>
+        <button class="b" data-a="ussend">${IC.mega}ارسال</button><div class="fgap"></div>`);
+      $("#rb-btn")?.classList.toggle("spin", !!d.scan);
+    }catch(e){ closeSheet(); return toast(e.message); }
+    window.__ut = setTimeout(tick, again);
+  };
+  openUsers.tick = tick; await tick();
 }
-
-async function usFetch(){
-  if(UD.run) return;
-  UD.run = true; UD.t = null;
-  let again = 10000;
-  try{
-    const d = await api("/api/admin/users"); UD.d = d; again = d.scan ? 2500 : 10000;
-    if($("#ulist")){ const s = $("#usum"); if(s) s.innerHTML = uSum(d); usPaint(); $("#rb-btn")?.classList.toggle("spin", !!d.scan); }
-    else if(usOn()) renderAccount();
-  }catch(e){ if(!UD.d) toast(e.message); again = 45000; }
-  UD.run = false;
-  if(usOn()) UD.t = setTimeout(usFetch, again);
-}
-const usStart = () => { if(!UD.t && !UD.run) usFetch(); };
-const usRefresh = () => { if(UD.run) return; if(UD.t) clearTimeout(UD.t); UD.t = null; usFetch(); };
-const usStop = () => { if(UD.t) clearTimeout(UD.t); UD.t = null; };
-
-/* ── برترین و فعال‌ترین ربات‌ها (زیربخش «ربات‌ها») ── */
-const AB = {d: null, q: "", sort: "subs", on: "", page: 1, t: null, run: false, dirty: false, qt: null};
-const AB_SORTS = [["subs", "مخاطب"], ["online", "آنلاین"], ["week", "فعال ۷ روز"], ["day", "جدید ۲۴ ساعت"], ["created", "جدیدترین"]];
-const abOn = () => S.view === "account" && S.atab === "admin" && S.actab === "bots";
-
-const abSumHTML = d => statCells([["ربات‌ها", fa(d.sum.bots)], ["فعال", fa(d.sum.active)], ["مخاطب کل", fa(d.sum.subs)],
-  ["آنلاین", fa(d.sum.online)], ["جدید ۲۴ ساعت", fa(d.sum.new24)], ["بلاک", fa(d.sum.blocked)]]);
-
-function abRowHTML(r, i, d){
-  const rank = (d.page - 1) * (d.per || 25) + i + 1;
-  const owner = r.onm || r.onun ? `${esc(r.onm || "")}${r.onun ? ` <span class="ltr">@${esc(r.onun)}</span>` : ""}` : `<span class="ltr">ID ${esc(r.owner)}</span>`;
-  return `<div class="brow${r.on ? "" : " off"}" data-ab="${esc(r.id)}" role="button" tabindex="0" aria-label="مخاطبان ربات ${esc(r.name || r.un || r.id)}">
-    <span class="brk t${rank <= 3 ? rank : 0}">${rank}</span>
-    <div class="bi">
-      <div class="b1"><b>${esc(r.name || "ربات بی‌نام")}</b>${r.un ? `<span class="muted ltr">@${esc(r.un)}</span>` : ""}
-        <span class="ub${r.on ? " on" : ""}">${r.on ? "فعال" : "غیرفعال"}</span>${r.sending ? '<span class="ub send">در حال ارسال</span>' : ""}</div>
-      <div class="b2">
-        <span class="bm">${IC.users}${N(fa(r.subs))}<small>مخاطب</small></span>
-        <span class="bm${r.online ? " hot" : ""}">${N(fa(r.online))}<small>آنلاین</small></span>
-        <span class="bm">${N(fa(r.week))}<small>۷ روز</small></span>
-        <span class="bm">${N(fa(r.day))}<small>۲۴ ساعت</small></span>
-        ${r.blocked ? `<span class="bm bad">${N(fa(r.blocked))}<small>بلاک</small></span>` : ""}
-      </div>
-      <div class="b3"><span class="muted">سازنده: ${owner}</span></div>
-    </div>
-    <span class="ba" title="مخاطبان و اطلاعیه">${IC.mega}</span></div>`;
-}
-const abListHTML = d => d.items.length
-  ? d.items.map((r, i) => abRowHTML(r, i, d)).join("")
-  : `<div class="empty" style="padding:26px 8px"><p class="muted">رباتی با این جستجو پیدا نشد.</p></div>`;
-const abSortsHTML = () => AB_SORTS.map(([k, t]) => `<button class="sbt${AB.sort === k ? " on" : ""}" data-a="absort" data-k="${k}">${t}</button>`).join("");
-const abFiltersHTML = () => [["", "همه"], ["on", "فعال"], ["off", "غیرفعال"]]
-  .map(([k, t]) => `<button class="sbt${AB.on === k ? " on" : ""}" data-a="abon" data-k="${k}">${t}</button>`).join("");
-const abPageHTML = d => `<div class="pgn"><button class="b o sm" data-a="abpg" data-k="-1"${d.page <= 1 ? " disabled" : ""}>قبلی</button>
-  <span class="muted">صفحه ${N(d.page)} از ${N(d.pages)} · ${N(d.total)} ربات</span>
-  <button class="b o sm" data-a="abpg" data-k="1"${d.page >= d.pages ? " disabled" : ""}>بعدی</button></div>`;
-
-function adBots(){
-  abStart();
-  const d = AB.d;
-  if(!d) return `<div class="stats c3"><div class="stat"><div class="k">در حال بارگذاری…</div><span class="n">—</span></div></div>
-    <div class="panel"><p class="muted">در حال دریافت آمار ربات‌ها…</p></div>`;
-  return `<div class="stats c3 absum" id="absum">${abSumHTML(d)}</div>
-  <div class="panel">
-    <div class="sh"><h2>برترین و فعال‌ترین ربات‌ها</h2><button class="iconb sm" data-a="abref" aria-label="تازه‌سازی" title="تازه‌سازی">${IC.refresh}</button></div>
-    <p class="muted">رتبه‌بندی بر اساس مخاطب و فعالیت زنده. روی هر ربات بزن تا مخاطبانش را ببینی و از خودِ همان ربات اطلاعیه بفرستی.</p>
-    <div class="sortbar" id="absort">${abSortsHTML()}</div>
-    <div class="fbar" id="abfilters">${abFiltersHTML()}</div>
-    <input id="abq" class="fa" value="${esc(AB.q)}" placeholder="جستجو: نام، @یوزرنیم، آیدی سازنده" autocomplete="off" aria-label="جستجوی ربات" style="margin:8px 0 6px">
-    <div class="blist" id="blist">${abListHTML(d)}</div>
-    <div id="abpg">${abPageHTML(d)}</div>
-  </div>`;
-}
-
-function abPaint(d){
-  const l = $("#blist"); if(l) l.innerHTML = abListHTML(d);
-  const s = $("#absort"); if(s) s.innerHTML = abSortsHTML();
-  const f = $("#abfilters"); if(f) f.innerHTML = abFiltersHTML();
-  const sm = $("#absum"); if(sm) sm.innerHTML = abSumHTML(d);
-  const p = $("#abpg"); if(p) p.innerHTML = abPageHTML(d);
-}
-
-async function abFetch(){
-  if(AB.run) return;
-  AB.run = true; AB.t = null;
-  const p = new URLSearchParams({q: AB.q, sort: AB.sort, on: AB.on, page: AB.page});
-  let again = 15000;
-  try{
-    const d = await api("/api/admin/bots?" + p);
-    AB.d = d;
-    if($("#blist")) abPaint(d);
-    else if(abOn()) renderAccount();
-  }catch(e){ if(!AB.d) toast(e.message); again = 45000; }
-  AB.run = false;
-  if(!abOn()) return;
-  const fast = AB.dirty; AB.dirty = false;
-  AB.t = setTimeout(abFetch, fast ? 60 : again);
-}
-const abStart = () => { if(!AB.t && !AB.run) abFetch(); };
-const abRefresh = () => { if(AB.run){ AB.dirty = true; return; } if(AB.t) clearTimeout(AB.t); AB.t = null; abFetch(); };
-const abStop = () => { if(AB.t) clearTimeout(AB.t); AB.t = null; };
 
 /* ── مخاطبان یک ربات + ارسال اطلاعیه از طریق همان ربات ── */
 const AU = {id: "", mode: "ex", sel: new Set(), d: null};
@@ -1229,14 +1064,13 @@ document.addEventListener("click", e => {
   const c = e.target.closest("[data-ab]"); if(c){ e.stopPropagation(); return openAudience(c.dataset.ab); }
   if(e.target.closest("[data-pf]")) return;
   const r = e.target.closest("[data-au]"); if(r && AU.d){ const id = r.dataset.au; AU.sel.has(id) ? AU.sel.delete(id) : AU.sel.add(id); return auPaint(); }
-  const u = e.target.closest("[data-us]"); if(u && UD.d){ const id = u.dataset.us; US.sel.has(id) ? US.sel.delete(id) : US.sel.add(id); usPaint(); }
+  const u = e.target.closest("[data-us]"); if(u && openUsers.d){ const id = u.dataset.us; US.sel.has(id) ? US.sel.delete(id) : US.sel.add(id); usPaint(); }
 }, true);
 Object.assign(A, {
   autg: el => { AU.mode = el.dataset.t; AU.sel.clear(); auPaint(); },
   auall: () => { if(!AU.d) return; auFilter(AU.d).filter(r => !r.blocked).forEach(r => AU.sel.add(String(r.id))); auPaint(); },
   auclear: () => { AU.sel.clear(); auPaint(); },
-  ausers: () => { S.atab = "admin"; S.actab = "users"; closeSheet(); renderAccount(); },
-  usall: () => { if(!UD.d) return; usFilter(UD.d).filter(r => !r.blocked).forEach(r => US.sel.add(String(r.id))); usPaint(); },
+  usall: () => { if(!openUsers.d) return; usFilter(openUsers.d).filter(r => !r.blocked).forEach(r => US.sel.add(String(r.id))); usPaint(); },
   usclear: () => { US.sel.clear(); usPaint(); },
   ausend: el => { const {text, media, fmt} = cpPayload("au"); if(!media && text.length < 2) return toast("متن یا رسانه‌ی اطلاعیه را بنویس");
     const n = AU.sel.size, body = n ? {scope: "many", uids: [...AU.sel], text, media, fmt} : {scope: AU.mode === "all" ? "all" : "except_owner", text, media, fmt};
@@ -1248,7 +1082,205 @@ Object.assign(A, {
       toast(`ارسال برای ${d.queued} نفر شروع شد`); cpReset("us"); })); },
 });
 document.addEventListener("input", e => { if(e.target.id === "aq" && AU.d) auPaint(); });
-document.addEventListener("input", e => { if(e.target.id === "uq" && UD.d){ UQ = e.target.value; usPaint(); } });
+document.addEventListener("input", e => { if(e.target.id === "uq" && openUsers.d){ UQ = e.target.value; usPaint(); } });
+
+/* ═════════════════ هاب مدیریت: نمای کلی · ربات‌ها · کاربران · اطلاعیه · تنظیمات ═════════════════ */
+const ASUBS = [["home", "نمای کلی"], ["bots", "ربات‌ها"], ["users", "کاربران"], ["ann", "اطلاعیه"], ["set", "تنظیمات"]];
+const ADM = {d: {}, q: "", sort: "subs", st: "all", lim: 40, bsel: new Set(), meta: {}, uq: "", uf: "all", usel: new Set(), mode: "b", bto: "aud", own: false, hist: [], cnt: null};
+const fnum = x => Number(x || 0).toLocaleString("en");
+const admDot = n => `<span class="dot${n ? " on" : ""}"></span>`;
+const ADM_SORTS = [["subs", "بیشترین مخاطب"], ["act24", "فعال‌ترین ۲۴ساعت"], ["online", "آنلاین الان"], ["new24", "رشد امروز"], ["recent", "جدیدترین"]];
+const ADM_SORT_LBL = {subs: "مخاطب", act24: "فعال ۲۴س", online: "آنلاین", new24: "جدید امروز", recent: "مخاطب"};
+
+function adminCard(){
+  if(!ASUBS.some(s => s[0] === S.asub)) S.asub = "home";
+  return `<div class="asubs" role="tablist">${ASUBS.map(([k, t]) => `<button class="${k === S.asub ? "on" : ""}" role="tab" aria-selected="${k === S.asub}" data-a="admsub" data-k="${k}">${t}${k === "ann" && ADM.hist.some(h => h.state === "run") ? '<span class="qdot"></span>' : ""}</button>`).join("")}</div>
+    <div id="adm-body">${admBody()}</div>`;
+}
+const admBody = () => ({home: admHome, bots: admBots, users: admUsers, ann: admAnn, set: adminSettings})[S.asub]();
+const admLoading = () => `<p class="muted adm-ld">در حال بارگذاری…</p>`;
+
+/* ── بارگذاری و تازه‌سازی خودکار ── */
+const admUrl = k => ({home: "/api/admin/overview", users: "/api/admin/users" + (ADM.uq ? "?q=" + encodeURIComponent(ADM.uq) : ""), ann: "/api/admin/announces",
+  bots: `/api/admin/bots?sort=${ADM.sort}&st=${ADM.st}&limit=${ADM.lim}&q=${encodeURIComponent(ADM.q)}`})[k];
+async function admLoad(k, fresh){
+  try{
+    const jobs = [api(admUrl(k) + (fresh ? (admUrl(k).includes("?") ? "&" : "?") + "fresh=1" : ""))];
+    if(k === "ann") jobs.push(api("/api/admin/audience"));
+    const [d, c] = await Promise.all(jobs);
+    if(k === "ann"){ ADM.hist = d.items; ADM.cnt = c; }
+    if(k === "bots") d.items.forEach(r => { ADM.meta[r.id] = r; });
+    ADM.d[k] = d;
+    if(S.asub === k) admPaint();
+  }catch(e){ if(S.asub === k && !ADM.d[k]){ const b = $("#adm-body"); if(b) b.innerHTML = `<p class="muted">${esc(e.message || "خطا در دریافت اطلاعات")}</p>`; } }
+}
+function admStop(){ clearTimeout(window.__adm); }
+function admStart(){
+  admStop(); const k = S.asub;
+  if(k === "set") return;
+  admLoad(k);
+  const gap = {home: 15000, bots: 20000, users: 10000, ann: ADM.hist.some(h => h.state === "run") ? 4000 : 15000}[k];
+  window.__adm = setTimeout(function tick(){
+    if(S.view !== "account" || S.atab !== "admin" || S.asub !== k || !$("#adm-body")) return;
+    const run = !document.hidden && !S.sheet && !(k === "bots" && document.activeElement?.id === "abq");
+    (run ? admLoad(k) : Promise.resolve()).finally(() => { window.__adm = setTimeout(tick, k === "ann" && ADM.hist.some(h => h.state === "run") ? 4000 : gap); });
+  }, gap);
+}
+function admPaint(){
+  if(S.view !== "account" || S.atab !== "admin") return;
+  const k = S.asub, b = $("#adm-body"); if(!b) return;
+  const part = id => $(id);
+  if(k === "home") b.innerHTML = admHome();
+  else if(k === "bots" && part("#abl")){ $("#abs").innerHTML = admBotsSum(); $("#abl").innerHTML = admBotsList(); admBotsBar(); }
+  else if(k === "users" && part("#aul")){ $("#aus").innerHTML = admUsersSum(); $("#aul").innerHTML = admUsersList(); admUsersBar(); }
+  else if(k === "ann" && part("#ahist")){ $("#aopts").innerHTML = admAnnOpts(); $("#ahist").innerHTML = admAnnHist(); admAnnPrev(); }
+  else b.innerHTML = admBody();
+}
+
+/* ── نمای کلی ── */
+function admBotRow(r, i, o = {}){
+  const nm = r.un ? "@" + r.un : r.name || "ربات", sel = ADM.bsel.has(r.id), key = o.key || ADM.sort;
+  const main = key === "recent" ? r.total : key === "subs" ? r.total - r.blocked : r[key];
+  const rank = o.rank !== false && key !== "recent" ? `<span class="rk${i < 3 ? " r" + (i + 1) : ""}">${i + 1}</span>` : "";
+  const own = r.owner?.name || (r.owner?.un ? "@" + r.owner.un : r.owner?.id || "");
+  return `<div class="abr${sel ? " sel" : ""}" data-abo="${esc(r.id)}">
+    ${o.pick === false ? "" : `<button class="ck" data-abk="${esc(r.id)}" aria-label="انتخاب ربات">${IC.check}</button>`}${rank}
+    <div class="abi"><div class="ab1"><b class="ltr">${esc(nm)}</b>${r.on ? "" : '<span class="ub">غیرفعال</span>'}</div>
+      <div class="ab2 muted">${r.un && r.name ? esc(r.name) + " · " : ""}سازنده: ${esc(own)}</div>
+      <div class="abm"><span>${admDot(r.online)}<i>آنلاین</i> ${fnum(r.online)}</span><span><i>۲۴س</i> ${fnum(r.act24)}</span><span><i>جدید</i> +${fnum(r.new24)}</span>${r.blocked ? `<span class="bd"><i>بلاک</i> ${fnum(r.blocked)}</span>` : ""}</div></div>
+    <div class="abn"><b class="n">${fnum(main)}</b><small>${ADM_SORT_LBL[key]}</small></div></div>`;
+}
+function admHome(){
+  const d = ADM.d.home; if(!d) return admLoading();
+  const cells = [["کاربران ربات‌ساز", d.users], ["جدید ۲۴ساعت", d.new24], ["ربات‌ها", d.bots], ["ربات فعال", d.active], ["مخاطب همه‌ی ربات‌ها", d.subs],
+    ["فعال ۲۴ساعت", d.subs_act24], ["رشد امروز", d.subs_new24], ["بلاک‌شده", d.subs_blocked], ["پاسخ فرم‌ها", d.forms], ["توکن در گردش", d.circulation]];
+  const list = (arr, key) => arr.length ? arr.map((r, i) => admBotRow(r, i, {key, pick: false})).join("") : '<p class="muted">هنوز داده‌ای نیست.</p>';
+  return `<div class="live"><div><span class="dot on"></span><b class="n">${fnum(d.online)}</b><span class="muted"> سازنده آنلاین</span></div><div><b class="n">${fnum(d.subs_online)}</b><span class="muted"> مخاطب آنلاین در ربات‌ها</span></div></div>
+    <div class="stats s3 mt">${statCells(cells.map(([k, v]) => [k, fnum(v)]))}</div>
+    <div class="sec"><h2>برترین ربات‌ها <small>بیشترین مخاطب</small></h2><button class="b t" data-a="admgo" data-k="bots" data-s="subs">همه</button></div>
+    <div class="panel abl-p">${list(d.top_subs, "subs")}</div>
+    <div class="sec"><h2>فعال‌ترین ربات‌ها <small>۲۴ ساعت اخیر</small></h2><button class="b t" data-a="admgo" data-k="bots" data-s="act24">همه</button></div>
+    <div class="panel abl-p">${list(d.top_act, "act24")}</div>
+    <div class="two"><button class="b" data-a="admgo" data-k="ann">${IC.mega}اطلاعیه جدید</button><button class="b o" data-a="admgo" data-k="users">${IC.users}کاربران آنلاین</button></div>`;
+}
+
+/* ── ربات‌ها ── */
+const admBotsSum = () => { const d = ADM.d.bots; if(!d) return ""; const s = d.summary;
+  return `<b>${N(fnum(d.matched))}</b> ربات<span class="muted"> از ${N(fnum(s.bots))} · ${N(fnum(s.active))} فعال · ${N(fnum(s.subs))} مخاطب · ${N(fnum(s.online))} آنلاین</span>`; };
+const admBotsList = () => { const d = ADM.d.bots; if(!d) return admLoading();
+  return (d.items.map((r, i) => admBotRow(r, i)).join("") || '<p class="muted">رباتی پیدا نشد</p>') + (d.more ? '<button class="b o sm mt" data-a="admmore">نمایش بیشتر</button>' : ""); };
+function admBotsBar(){
+  const bar = $("#absel"); if(!bar) return; const n = ADM.bsel.size;
+  bar.classList.toggle("show", n > 0);
+  bar.innerHTML = n ? `<span><b class="n">${n}</b> ربات انتخاب‌شده</span><button class="b sm" data-a="admbsend">${IC.mega}ارسال اطلاعیه</button><button class="b o sm" data-a="admclr" data-w="b">پاک</button>` : "";
+}
+function admBots(){
+  setTimeout(admBotsBar, 0);
+  return `<div class="abtool"><input id="abq" class="fa" value="${esc(ADM.q)}" placeholder="جستجو: نام ربات، یوزرنیم یا سازنده" autocomplete="off" aria-label="جستجو"></div>
+    <div class="chips">${ADM_SORTS.map(([k, t]) => `<button class="${ADM.sort === k ? "on" : ""}" data-a="admsort" data-k="${k}">${t}</button>`).join("")}</div>
+    <div class="chips sm">${[["all", "همه"], ["on", "فعال"], ["off", "غیرفعال"]].map(([k, t]) => `<button class="${ADM.st === k ? "on" : ""}" data-a="admst" data-k="${k}">${t}</button>`).join("")}<button class="rf" data-a="admref" aria-label="تازه‌سازی">${IC.refresh}</button></div>
+    <div class="usum" id="abs">${admBotsSum()}</div>
+    <div class="panel abl-p"><div id="abl">${admBotsList()}</div></div><div class="absel" id="absel"></div>`;
+}
+
+/* ── کاربران ── */
+const UFILT = [["all", "همه"], ["on", "آنلاین"], ["bots", "دارای ربات"], ["blk", "بلاک‌شده"]];
+const admUsersFiltered = () => { const d = ADM.d.users; if(!d) return []; return d.items.filter(r => ADM.uf === "all" || (ADM.uf === "on" && r.online) || (ADM.uf === "bots" && r.bots.length) || (ADM.uf === "blk" && r.blocked)); };
+const admUsersSum = () => { const d = ADM.d.users; if(!d) return ""; return `${admDot(1)}<b>${N(fnum(d.online))}</b> آنلاین<span class="muted"> از ${N(fnum(d.total))} کاربر${d.blocked ? " · " + N(fnum(d.blocked)) + " بلاک" : ""}${scanTxt(d)}</span>`; };
+function admUserRow(r){
+  const id = String(r.id), nm = r.name || (r.un ? "@" + r.un : "—");
+  const bots = r.bots.map(b => `<span class="ub${b.on ? " on" : ""}" data-ab="${esc(b.id)}">${b.on ? "@" + esc(b.un) : esc(b.name)}</span>`).join("");
+  return `<div class="urow pick${ADM.usel.has(id) ? " sel" : ""}" data-utk="${esc(id)}"><span class="ck">${IC.check}</span>${admDot(r.online)}<div class="ui"><div class="u1"><b>${esc(nm)}</b>${r.un && r.name ? `<span class="muted ltr">@${esc(r.un)}</span>` : ""}${r.blocked ? '<span class="ub">بلاک‌شده</span>' : ""}</div>
+    <div class="u2"><span class="cpy" data-pf="copyid" data-id="${esc(r.id)}">${esc(r.id)}</span><span class="muted">${r.blocked ? "غیرفعال" : r.online ? "آنلاین" : ago(r.seen)}</span><span class="muted">${N(fnum(r.tokens))} توکن</span></div>${bots ? `<div class="u3">${bots}</div>` : ""}</div><span class="ucnt n">${r.bots.length}</span></div>`;
+}
+const admUsersList = () => ADM.d.users ? (admUsersFiltered().map(admUserRow).join("") || '<p class="muted">موردی پیدا نشد</p>') : admLoading();
+function admUsersBar(){
+  const bar = $("#ausel"); if(!bar) return; const n = ADM.usel.size;
+  bar.classList.toggle("show", n > 0);
+  bar.innerHTML = n ? `<span><b class="n">${n}</b> کاربر انتخاب‌شده</span><button class="b sm" data-a="admusend">${IC.mega}ارسال پیام</button><button class="b o sm" data-a="admclr" data-w="u">پاک</button>` : "";
+}
+function admUsers(){
+  setTimeout(admUsersBar, 0);
+  return `<input id="auq" class="fa" value="${esc(ADM.uq)}" placeholder="جستجو: آیدی، یوزرنیم یا اسم" autocomplete="off" aria-label="جستجو">
+    <div class="chips sm">${UFILT.map(([k, t]) => `<button class="${ADM.uf === k ? "on" : ""}" data-a="admuf" data-k="${k}">${t}</button>`).join("")}<button class="rf" data-a="admurb" aria-label="بررسی دوباره‌ی بلاک‌ها" title="بررسی دوباره‌ی بلاک‌ها">${IC.refresh}</button><button class="b t" data-a="admuall">انتخاب لیست</button></div>
+    <div class="usum" id="aus">${admUsersSum()}</div>
+    <div class="panel abl-p"><div id="aul">${admUsersList()}</div></div><p class="muted">آخرین ۳۰۰ کاربر؛ برای پیدا کردن بقیه جستجو کن.</p><div class="absel" id="ausel"></div>`;
+}
+
+/* ── اطلاعیه ── */
+const ANN_MODES = [["b", "همه‌ی سازنده‌ها", "کسانی که با ربات‌ساز ربات می‌سازند"], ["a", "مخاطبان همه‌ی ربات‌های فعال", "از طریق خودِ رباتشان، بدون سازنده"],
+  ["ba", "سازنده‌ها + مخاطبان", "هر دو گروه"], ["bots", "ربات‌های انتخاب‌شده", "از تب «ربات‌ها» انتخاب کن"], ["users", "کاربران انتخاب‌شده", "از تب «کاربران» انتخاب کن"]];
+function admAnnCount(m){
+  const c = ADM.cnt || {}, sel = [...ADM.bsel].map(id => ADM.meta[id]).filter(Boolean);
+  if(m === "b") return c.builders; if(m === "a") return c.audience; if(m === "ba") return (c.builders || 0) + (c.audience || 0);
+  if(m === "users") return ADM.usel.size;
+  return ADM.bto === "own" ? new Set(sel.map(r => r.owner?.id)).size : sel.reduce((s, r) => s + (r.on ? Math.max(0, r.total - r.blocked) : 0), 0);
+}
+function admAnnOpts(){
+  return ANN_MODES.map(([k, t, h]) => { const n = admAnnCount(k);
+    return `<button class="arad${ADM.mode === k ? " on" : ""}" data-a="admmode" data-k="${k}"><i></i><div><b>${t}</b><small>${k === "bots" && ADM.bsel.size ? ADM.bsel.size + " ربات انتخاب شده" : k === "users" && ADM.usel.size ? ADM.usel.size + " کاربر انتخاب شده" : h}</small></div><span class="n">${n === undefined ? "…" : fnum(n)}</span></button>`; }).join("")
+    + (ADM.mode === "bots" ? `<div class="chips sm"><button class="${ADM.bto === "aud" ? "on" : ""}" data-a="admbto" data-k="aud">به مخاطبان آن ربات‌ها</button><button class="${ADM.bto === "own" ? "on" : ""}" data-a="admbto" data-k="own">به سازنده‌ی آن ربات‌ها</button></div>
+      ${ADM.bto === "aud" ? `<label class="chk"><input type="checkbox" id="an-own"${ADM.own ? " checked" : ""}> سازنده‌ی هر ربات هم پیام را بگیرد</label>` : ""}<button class="b o sm mt" data-a="admgo" data-k="bots">${IC.bot}انتخاب ربات‌ها</button>` : "")
+    + (ADM.mode === "users" ? `<button class="b o sm mt" data-a="admgo" data-k="users">${IC.users}انتخاب کاربرها</button>` : "");
+}
+const ANN_ST = {run: "در حال ارسال", done: "تمام شد", stale: "ناتمام ماند"};
+const admAnnHist = () => ADM.hist.length ? ADM.hist.map(h => { const p = h.total ? Math.min(100, Math.round(h.sent / h.total * 100)) : 100;
+  return `<div class="ahi ${h.state}"><div class="ah1"><b>${esc(h.label || h.kind)}</b><span class="muted">${ago(h.t)}</span></div>
+    <div class="ah2">${h.media ? "🖼 " : ""}${esc(h.text.slice(0, 90)) || "بدون متن"}</div>
+    ${h.state === "run" ? `<div class="lqbar"><i style="width:${p}%"></i></div>` : ""}
+    <div class="muted">${ANN_ST[h.state]} · رسید به ${N(fnum(h.ok))} از ${N(fnum(h.total))} نفر</div></div>`; }).join("") : '<p class="muted">هنوز اطلاعیه‌ای نفرستادی.</p>';
+function admAnnPrev(){ const el = $("#aprev"); if(!el) return; const m = ANN_MODES.find(x => x[0] === ADM.mode), n = admAnnCount(ADM.mode);
+  el.innerHTML = `گیرنده: <b>${m[1]}</b> · حدود <b class="n">${n === undefined ? "…" : fnum(n)}</b> ${ADM.mode === "bots" && ADM.bto === "own" ? "سازنده" : "نفر"}`; }
+function admAnn(){
+  setTimeout(admAnnPrev, 0);
+  return `<div class="panel"><h2>گیرنده</h2><div class="fgap"></div><div id="aopts">${admAnnOpts()}</div></div>
+    <div class="panel mt"><h2>پیام</h2><div class="fgap"></div>${cpBox("an", "متن اطلاعیه")}<p class="aprev" id="aprev"></p>
+      <button class="b" data-a="admsend">${IC.mega}ارسال اطلاعیه</button></div>
+    <div class="sec"><h2>آخرین ارسال‌ها</h2></div><div class="panel abl-p" id="ahist">${admAnnHist()}</div>`;
+}
+
+/* ── رویدادها ── */
+let __abq;
+document.addEventListener("input", e => {
+  if(e.target.id === "abq"){ ADM.q = e.target.value.trim(); ADM.lim = 40; clearTimeout(__abq); __abq = setTimeout(() => admLoad("bots"), 350); }
+  if(e.target.id === "auq"){ ADM.uq = e.target.value.trim().replace(/^@/, ""); clearTimeout(__abq); __abq = setTimeout(() => admLoad("users"), 350); }
+});
+document.addEventListener("change", e => { if(e.target.id === "an-own") ADM.own = e.target.checked; });
+document.addEventListener("click", e => {
+  if(S.view !== "account" || S.atab !== "admin") return;
+  const k = e.target.closest("[data-abk]"); if(k){ e.stopPropagation(); const id = k.dataset.abk; ADM.bsel.has(id) ? ADM.bsel.delete(id) : ADM.bsel.add(id); k.closest(".abr")?.classList.toggle("sel", ADM.bsel.has(id)); return admBotsBar(); }
+  const o = e.target.closest("[data-abo]"); if(o && !e.target.closest("[data-pf]")) return openAudience(o.dataset.abo);
+  const u = e.target.closest("[data-utk]"); if(u && !e.target.closest("[data-pf],[data-ab]")){ const id = u.dataset.utk; ADM.usel.has(id) ? ADM.usel.delete(id) : ADM.usel.add(id); u.classList.toggle("sel", ADM.usel.has(id)); admUsersBar(); }
+});
+const admTo = k => { S.asub = k; renderAccount(); scrollTo({top: 0, behavior: "smooth"}); };
+Object.assign(A, {
+  admsub: el => { if(S.asub !== el.dataset.k){ S.asub = el.dataset.k; renderAccount(); } },
+  admgo: el => { if(el.dataset.s){ ADM.d.bots = null; ADM.sort = el.dataset.s; ADM.q = ""; ADM.st = "all"; ADM.lim = 40; } admTo(el.dataset.k); },
+  admsort: el => { ADM.sort = el.dataset.k; ADM.lim = 40; ADM.d.bots = null; renderAccount(); },
+  admst: el => { ADM.st = el.dataset.k; ADM.lim = 40; ADM.d.bots = null; renderAccount(); },
+  admuf: el => { ADM.uf = el.dataset.k; renderAccount(); },
+  admmore: () => { ADM.lim += 40; admLoad("bots"); },
+  admref: el => { ADM.d.bots = null; $("#abl").innerHTML = admLoading(); admLoad("bots", true); },
+  admclr: el => { if(el.dataset.w === "b"){ ADM.bsel.clear(); document.querySelectorAll(".abr.sel").forEach(x => x.classList.remove("sel")); admBotsBar(); } else { ADM.usel.clear(); document.querySelectorAll(".urow.sel[data-utk]").forEach(x => x.classList.remove("sel")); admUsersBar(); } },
+  admuall: () => { admUsersFiltered().filter(r => !r.blocked).forEach(r => ADM.usel.add(String(r.id))); $("#aul").innerHTML = admUsersList(); admUsersBar(); },
+  admurb: el => busy(el, async () => { const d = await api("/api/admin/users/refresh-blocks", "POST"); toast(d.started ? "بررسی بلاک‌ها شروع شد؛ نتیجه خودکار به‌روز می‌شود" : "یک بررسی دیگر هنوز در حال انجام است"); setTimeout(() => admLoad("users"), 1500); }),
+  admbsend: () => { ADM.mode = "bots"; admTo("ann"); },
+  admusend: () => { ADM.mode = "users"; admTo("ann"); },
+  admmode: el => { ADM.mode = el.dataset.k; $("#aopts").innerHTML = admAnnOpts(); admAnnPrev(); },
+  admbto: el => { ADM.bto = el.dataset.k; $("#aopts").innerHTML = admAnnOpts(); admAnnPrev(); },
+  admsend: el => { const {text, media, fmt} = cpPayload("an"), m = ADM.mode; if(!media && text.length < 3) return toast("متن اعلان را بنویس");
+    let url = "/api/admin/announce", body = {text, media, fmt};
+    if(m === "b" || m === "a" || m === "ba") Object.assign(body, {builders: m !== "a", audience: m !== "b"});
+    else if(m === "users"){ if(!ADM.usel.size) return toast("اول کاربرها را انتخاب کن"); body.ids = [...ADM.usel]; }
+    else { const sel = [...ADM.bsel]; if(!sel.length) return toast("اول چند ربات انتخاب کن");
+      if(ADM.bto === "own"){ const ids = [...new Set(sel.map(id => ADM.meta[id]?.owner?.id).filter(Boolean))]; if(!ids.length) return toast("سازنده‌ای پیدا نشد"); body.ids = ids; }
+      else { url = "/api/admin/bots/broadcast"; body = {text, media, fmt, bots: sel, with_owner: !!$("#an-own")?.checked}; } }
+    const lbl = ANN_MODES.find(x => x[0] === m)[1], n = admAnnCount(m);
+    confirmQ(`این اعلان برای «${lbl}» (حدود ${n ?? "؟"} نفر) فرستاده شود؟`, ok => ok && busy(el, async () => { const d = await api(url, "POST", body);
+      toast(`ارسال برای ${d.queued} نفر شروع شد${d.skipped ? ` (${d.skipped} ربات مشغول بود)` : ""}`); cpReset("an"); admLoad("ann"); setTimeout(admStart, 300); })); },
+});
+const admSetPaint = () => { if(S.view === "account" && S.atab === "admin" && S.asub === "set"){ const b = $("#adm-body"); if(b) b.innerHTML = adminSettings(); } };
+document.addEventListener("toggle", e => { const d = e.target; if(d.classList?.contains("acc")){ (S.aopen = S.aopen || {})[d.dataset.ak] = d.open; } }, true);
 
 /* حضور آنلاین */
 if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); }; setInterval(ping, 25000); document.addEventListener("visibilitychange", ping); }
