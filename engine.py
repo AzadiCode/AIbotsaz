@@ -1957,6 +1957,7 @@ def sub_hook(bot_id):
                 else:
                     tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                     send_gate(token, chat_id, cfg)
+                ad_chat = 0                                          # عضویت اجباریِ خودِ سازنده اولویت دارد؛ تبلیغ ما همزمان نمی‌آید
                 return "ok"
             if data == "pm:chk":                                         # «عضو شدم» روی قفل تبلیغ ربات‌ساز
                 pc = promo_conf()
@@ -2076,6 +2077,7 @@ def sub_hook(bot_id):
             child_referral(env)
         if not gate_ok(token, cfg, user.get("id", chat_id)):
             send_gate(token, chat_id, cfg)
+            ad_chat = 0                                              # تبلیغ ربات‌ساز تا گذشتن از قفل سازنده صبر می‌کند
             return "ok"
         if promo_lock(bot, token, chat_id, user.get("id", chat_id), ad):
             return "ok"
