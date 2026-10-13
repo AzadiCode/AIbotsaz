@@ -533,6 +533,29 @@ function stGridFallback(){
     Object.keys(S.cur?.config?.nodes || {}).forEach((id, i) => { if(!ST.pos[id]) ST.pos[id] = {x: -(i % 4) * 330, y: 40 + Math.floor(i / 4) * 520}; });
   }catch(_){}
 }
+/* حالت لیستی اضطراری: اگر نقشه گرافیکی هیچ کارتی نساخت، کاربر هیچ‌وقت با صفحه خالی گیر نکند */
+function stListFallback(){
+  try{
+    const wr = $("#stw");
+    if(!wr || !S.cur) return;
+    const cfg = S.cur.config || {}, ids = Object.keys(cfg.nodes || {});
+    wr.innerHTML = `<div class="st-list">${ids.map(id => {
+      let t = id;
+      try{ t = titleOf(cfg, id); }catch(_){}
+      return `<button class="st-li" data-a="stopen" data-n="${esc(id)}"><b>${esc(t)}</b><small class="ltr">${esc(id)}</small></button>`;
+    }).join("")}</div>`;
+    const b = $("#stdbg");
+    if(b) b.textContent = `حالت لیستی: ${ids.length} بخش`;
+  }catch(err){ console.error("studio list", err); }
+}
+function stDbg(){
+  try{
+    const b = $("#stdbg");
+    if(!b) return;
+    const n = Object.keys(S.cur?.config?.nodes || {}).length, c = ST.els ? ST.els.size : 0;
+    b.textContent = `${fa(n)} بخش · ${fa(c)} کارت`;
+  }catch(_){}
+}
 function stSearchApply(center){
   const cv = $("#stc"), q = $("#stq"); if(!cv || !S.cur) return;
   const v = (q ? q.value : ST.q || "").trim().toLowerCase(); ST.q = v;
@@ -582,6 +605,7 @@ function stPaintWorld(){
   if(ST.q) stSearchApply(false);
   stMini(true);
   stApply();
+  try{ stDbg(); }catch(_){}
   if(document.fonts?.ready && !ST._fw){            // بعد از آمدن فونت، ارتفاع‌ها عوض می‌شود؛ جای دایره‌ها را دوباره بسنج
     ST._fw = 1;
     document.fonts.ready.then(() => {
@@ -628,6 +652,7 @@ function renderStudio(){
         <div class="st-world" id="stw"></div>
         <div class="st-mini" id="stmini" aria-hidden="true"><div class="mm" id="stmm"></div></div>
         <div class="st-search"><input id="stq" placeholder="جستجوی بخش…" autocomplete="off" aria-label="جستجوی بخش"></div>
+        <div class="st-dbg" id="stdbg" aria-hidden="true"></div>
         <button class="st-energy${bot.active ? " live" : ""}" data-a="stenergy">${IC.bolt}${bot.active ? "ربات روشن است" : "ربات خاموش است"}</button>
         ${stHintHTML()}
         <div class="st-tools">
@@ -650,6 +675,9 @@ function renderStudio(){
   }
   try{ stPaintWorld(); }
   catch(err){ console.error("studio paint", err); toast("نمایش نقشه با مشکل روبه‌رو شد؛ یک بار دیگر وارد استودیو شو"); }
+  if(!ST.els || !ST.els.size){
+    try{ stListFallback(); }catch(err){ console.error("studio list", err); }
+  }
   if(!ST.cam) requestAnimationFrame(stHome);
   else requestAnimationFrame(() => { if(S.view === "studio" && $("#stc")){ ST.vw = $("#stc").clientWidth || innerWidth; ST.vh = $("#stc").clientHeight || innerHeight; stCull(); } });
   stBindCanvas();
@@ -1813,6 +1841,7 @@ Object.assign(A, {
   },
 });
 Object.assign(A, {
+  stopen: el => { if(el.dataset.n) openNode(el.dataset.n); },
   stbtn: el => {
     if(!$("#stc")) return;
     const id = el.dataset.n, n = S.cur.config.nodes[id]; if(!n) return;
