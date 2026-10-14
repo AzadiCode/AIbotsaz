@@ -183,10 +183,43 @@ function stApply(glide){
   stMovePulse();
   if(!ST._mr) ST._mr = requestAnimationFrame(() => { ST._mr = 0; stMini(); stCull(); });
 }
+/* عکس‌های بزرگ (چند مگاپیکسل) نباید برای ۲۵+ کارت هم‌زمان decode شوند؛ حافظه‌ی WebView تلگرام پر می‌شود و برنامه کرش می‌کند.
+   هر عکس فقط یک‌بار (پشت‌سرهم) به نسخه‌ی ۶۴۰پیکسلی تبدیل می‌شود و فقط کارت‌های دیده‌شده (با زوم خوانا) آن را نشان می‌دهند. */
+const ST_TH = new Map(), ST_THQ = []; let ST_THN = 0;
+function stThumb(url){
+  let p = ST_TH.get(url); if(p) return p;
+  p = new Promise(res => { ST_THQ.push([url, res]); stThumbPump(); });
+  ST_TH.set(url, p); return p;
+}
+function stThumbPump(){
+  while(ST_THN < 2 && ST_THQ.length){
+    const [url, res] = ST_THQ.shift(); ST_THN++;
+    (async () => {
+      try{
+        const r = await fetch(url); if(!r.ok) throw 0;
+        const bm = await createImageBitmap(await r.blob(), {resizeWidth: 640, resizeQuality: "medium"});
+        const cv = document.createElement("canvas"); cv.width = bm.width; cv.height = bm.height;
+        cv.getContext("2d").drawImage(bm, 0, 0); bm.close?.();
+        const b = await new Promise(ok => cv.toBlob(ok, "image/jpeg", .82));
+        cv.width = cv.height = 0;
+        res(b ? URL.createObjectURL(b) : url);
+      }catch(_){ res(url); }        // نشد: همان آدرس اصلی (باز هم فقط برای کارت‌های دیده‌شده)
+      finally{ ST_THN--; stThumbPump(); }
+    })();
+  }
+}
+function stImgSet(el, on){
+  el.querySelectorAll("img[data-src]").forEach(im => {
+    if(on){
+      if(im._on) return; im._on = 1;
+      stThumb(im.dataset.src).then(u => { if(im._on && im.isConnected && im.getAttribute("src") !== u) im.src = u; });
+    }else if(im._on){ im._on = 0; im.removeAttribute("src"); }
+  });
+}
 /* فقط بخش‌هایی که در کادر دید (به‌علاوه‌ی حاشیه) هستند کشیده می‌شوند؛ بقیه visibility:hidden می‌شوند و هزینه‌ی رسم ندارند */
 function stCull(){
   if(!ST.els || !S.cur) return;
-  const many = ST.els.size > 8, c = ST.cam || {x: 40, y: 40, z: 1}, m = 280;
+  const many = ST.els.size > 8, c = ST.cam || {x: 40, y: 40, z: 1}, m = 380, sharp = c.z >= .45;
   const vw = ST.vw || innerWidth, vh = ST.vh || innerHeight;
   const x1 = (-m - c.x) / c.z, x2 = (vw + m - c.x) / c.z, y1 = (-m - c.y) / c.z, y2 = (vh + m - c.y) / c.z;
   for(const [id, el] of ST.els){
@@ -197,6 +230,8 @@ function stCull(){
       hide = !(p.x < x2 && p.x + w > x1 && p.y < y2 && p.y + h > y1);
     }
     if(el._cv !== hide){ el._cv = hide; el.classList.toggle("cv", hide); }
+    const want = !hide && sharp;
+    if(el._im !== want){ el._im = want; stImgSet(el, want); }
   }
 }
 function stZoomAt(px, py, f, glide){
@@ -242,29 +277,68 @@ const stRects = () => { const r = []; for(const id of Object.keys(S.cur.config.n
 const stHit = (r, x1, y1, x2, y2, m = 10) => Math.min(x1, x2) < r.x + r.w + m && Math.max(x1, x2) > r.x - m && Math.min(y1, y2) < r.y + r.h + m && Math.max(y1, y2) > r.y - m;
 const stPortPos = key => { const o = ST.po[key], p = o && ST.pos[o.id]; return o && p ? {x: p.x + o.x, y: p.y + o.y} : null; };
 const stInPos = id => { const o = ST.pi[id], p = ST.pos[id]; return o && p ? {x: p.x + o.x, y: p.y + o.y} : null; };
+/* مسیریاب: راهروهای عمودیِ همیشه‌خالی (فاصله‌ی بین ستون‌های بخش‌ها) + کانال‌های افقیِ خالی بین بخش‌ها.
+   روی این شبکه کوتاه‌ترین مسیر با کمترین پیچ (Dijkstra) پیدا می‌شود؛ پس سیم هیچ‌وقت روی بخشی نمی‌افتد، حتی با ۱۰۰ بخش. */
+function stRouterBuild(rects){
+  const M = 14, iv = rects.map(r => [r.x - M, r.x + r.w + M]).sort((a, b) => a[0] - b[0]), mg = [];
+  for(const v of iv){ const l = mg[mg.length - 1]; if(l && v[0] <= l[1]) l[1] = Math.max(l[1], v[1]); else mg.push([v[0], v[1]]); }
+  if(!mg.length) return null;
+  const cx = [mg[0][0] - 34], hw = [30];
+  for(let i = 0; i + 1 < mg.length; i++){ const w = mg[i + 1][0] - mg[i][1]; if(w >= 18){ cx.push((mg[i][1] + mg[i + 1][0]) / 2); hw.push(w / 2); } }
+  cx.push(mg[mg.length - 1][1] + 34); hw.push(30);
+  const base = new Set();
+  for(const r of rects){ base.add(Math.round(r.y - 26)); base.add(Math.round(r.y + r.h + 26)); }
+  const seg = [];
+  for(let k = 0; k + 1 < cx.length; k++) seg.push(rects.filter(r => r.x + r.w > cx[k] && r.x < cx[k + 1]));
+  return {cx, hw, base: [...base], seg};
+}
+function stHeapPush(h, it){ h.push(it); let i = h.length - 1; while(i > 0){ const p = (i - 1) >> 1; if(h[p][0] <= h[i][0]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } }
+function stHeapPop(h){
+  const top = h[0], last = h.pop();
+  if(h.length){ h[0] = last; let i = 0; for(;;){ let l = 2 * i + 1, r = l + 1, m = i; if(l < h.length && h[l][0] < h[m][0]) m = l; if(r < h.length && h[r][0] < h[m][0]) m = r; if(m === i) break; [h[m], h[i]] = [h[i], h[m]]; i = m; } }
+  return top;
+}
 function stRoute(e, idx, rects){
   const A = stPortPos(e.key), B = stInPos(e.to);
   if(!A || !B) return null;
-  const lane = (idx % 5) * 7, free = (list, x1, y1, x2, y2) => !list.some(r => stHit(r, x1, y1, x2, y2));
-  const mid = rects.filter(r => r.id !== e.from && r.id !== e.to), noSrc = rects.filter(r => r.id !== e.from), noTgt = rects.filter(r => r.id !== e.to);
-  if(A.x - B.x > 70){
-    const lo = B.x + 20, hi = A.x - 20, base = (lo + hi) / 2 + lane - 14;
-    for(const d of ST.fast ? [0, 18, -18, 36, -36] : [0, 14, -14, 28, -28, 42, -42, 56, -56, 70, -70]){
-      const xm = Math.min(hi, Math.max(lo, base + d));
-      if(free(mid, xm, A.y, xm, B.y) && free(noSrc, A.x, A.y, xm, A.y) && free(noTgt, xm, B.y, B.x, B.y))
-        return {pts: [A, {x: xm, y: A.y}, {x: xm, y: B.y}, B], back: false};
-    }
+  const rt = rects.rt || (rects.rt = stRouterBuild(rects));
+  if(!rt) return null;
+  const {cx, hw, seg} = rt, C = cx.length, TURN = 46;
+  const ys = [...new Set([...rt.base, Math.round(A.y), Math.round(B.y)])].sort((a, b) => a - b), Y = ys.length;
+  const iA = ys.indexOf(Math.round(A.y)), iB = ys.indexOf(Math.round(B.y));
+  const free = (k, y, skip) => { for(const r of seg[k]) if(r.id !== skip[0] && r.id !== skip[1] && y > r.y - 10 && y < r.y + r.h + 10) return false; return true; };
+  const memo = new Map();
+  const hfree = (k, yi) => { const key = k * Y + yi; let v = memo.get(key); if(v === undefined){ v = free(k, ys[yi], [null, null]); memo.set(key, v); } return v; };
+  /* خروج از لبه‌ی چپِ مبدأ: نزدیک‌ترین راهروی سمت چپ که مسیر افقی تا آن خالی باشد */
+  let s = -1; for(let c = C - 1; c >= 0; c--){ if(cx[c] < A.x - 4){ let ok = true; for(let k = c; k < C - 1 && cx[k] < A.x; k++) if(!free(k, A.y, [e.from, null])){ ok = false; break; } if(ok){ s = c; break; } } }
+  /* ورود از لبه‌ی راستِ مقصد: نزدیک‌ترین راهروی سمت راست */
+  let t = -1; for(let c = 0; c < C; c++){ if(cx[c] > B.x + 4){ let ok = true; for(let k = c - 1; k >= 0 && cx[k + 1] > B.x; k--) if(!free(k, B.y, [e.to, null])){ ok = false; break; } if(ok){ t = c; break; } } }
+  if(s < 0 || t < 0) return null;
+  const N = C * Y * 2, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), heap = [];
+  const id = (c, y, d) => (c * Y + y) * 2 + d;
+  const st0 = id(s, iA, 1); dist[st0] = A.x - cx[s]; stHeapPush(heap, [dist[st0], st0]);
+  let goal = -1;
+  while(heap.length){
+    const [dd, u] = stHeapPop(heap);
+    if(dd > dist[u]) continue;
+    const d = u & 1, cy = (u >> 1), c = (cy / Y) | 0, y = cy % Y;
+    if(c === t && y === iB){ goal = u; break; }
+    const relax = (v, w) => { if(dd + w < dist[v]){ dist[v] = dd + w; prev[v] = u; stHeapPush(heap, [dist[v], v]); } };
+    if(y > 0) relax(id(c, y - 1, 0), ys[y] - ys[y - 1] + (d === 1 ? TURN : 0));
+    if(y < Y - 1) relax(id(c, y + 1, 0), ys[y + 1] - ys[y] + (d === 1 ? TURN : 0));
+    if(c > 0 && hfree(c - 1, y)) relax(id(c - 1, y, 1), cx[c] - cx[c - 1] + 30 + (d === 0 ? TURN : 0));
+    if(c < C - 1 && hfree(c, y)) relax(id(c + 1, y, 1), cx[c + 1] - cx[c] + 30 + (d === 0 ? TURN : 0));
   }
-  const ax = A.x - 22 - lane, bx = B.x + 22 + lane, lx = Math.min(ax, bx), hx = Math.max(ax, bx);
-  const ys = new Set(), sR = rects.find(r => r.id === e.from), tR = rects.find(r => r.id === e.to);
-  if(sR && tR){ ys.add(Math.min(sR.y, tR.y) - 26 - lane); ys.add(Math.max(sR.y + sR.h, tR.y + tR.h) + 26 + lane); }
-  if(!ST.fast) for(const r of rects){ ys.add(r.y - 24 - lane); ys.add(r.y + r.h + 24 + lane); }
-  const cand = [...ys].map(y => ({y, c: Math.abs(y - A.y) + Math.abs(y - B.y)})).sort((a, b) => a.c - b.c);
-  for(const {y} of cand){
-    if(free(rects, lx, y, hx, y) && free(rects, ax, A.y, ax, y) && free(rects, bx, y, bx, B.y))
-      return {pts: [A, {x: ax, y: A.y}, {x: ax, y}, {x: bx, y}, {x: bx, y: B.y}, B], back: true};
-  }
-  return null;
+  if(goal < 0) return null;
+  const path = []; for(let u = goal; u >= 0; u = prev[u]) path.push(u); path.reverse();
+  /* فاصله‌ی موازی: هر سیم کمی در راهرو و کانال جابه‌جا می‌شود تا سیم‌های هم‌مسیر روی هم نیفتند */
+  const off = c => ((idx % 7) - 3) * Math.min(9, Math.max(0, (hw[c] - 10) / 3));
+  const yo = ((idx % 5) - 2) * 3;
+  const pts = [A];
+  const P = u => { const cy = u >> 1, c = (cy / Y) | 0, y = cy % Y; return {x: cx[c] + off(c), y: ys[y] + (y === iA || y === iB ? 0 : yo)}; };
+  for(const u of path) pts.push(P(u));
+  pts.push(B);
+  return {pts, back: B.x > A.x - 30};
 }
 function stPoly(pts){
   const p = [pts[0]];
@@ -341,10 +415,10 @@ const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", aud
 function stMediaHTML(n){
   const m = n.media ? mediaById(n.media) : null;
   if(m && (m.kind === "photo" || m.kind === "animation") && m.url)
-    return `<div class="stc-media"><img src="${API_BASE + esc(m.url)}" alt="" draggable="false" loading="lazy" decoding="async"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
+    return `<div class="stc-media"><img data-src="${API_BASE + esc(m.url)}" alt="" draggable="false" decoding="async"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
   if(m) return `<div class="stc-media ico">${IC[m.kind] || IC.document}<b>${esc(m.name || "")}</b><span class="mk">${ST_MEDIA[m.kind] || "فایل"}</span></div>`;
   if(n.media) return `<div class="stc-media ico bad">${IC.document}<b>رسانه از کتابخانه حذف شده</b></div>`;
-  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img src="${esc(n.photo)}" alt="" draggable="false" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
+  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img data-src="${esc(n.photo)}" alt="" draggable="false" decoding="async" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
   return "";
 }
 /* یک دکمه‌ی شیشه‌ای (یا کلیدِ کیبورد پایین چت) با دایره‌ی خروجیِ سیم */
@@ -411,6 +485,13 @@ function stPaintWires(){
     h += `<g class="wire k-${e.kind}${g.back ? " back" : ""}" data-w="${e.key}">${glow ? `<path class="w-glow" d="${g.d}"/>` : ""}<path class="w-line" d="${g.d}"/><path class="w-hit" d="${g.d}"/>${dot}</g>`;
     e.i = i; ST.wires.set(e.key, e); i++;
   }
+  /* کادر مشخص + contain:paint: بدونش Chromium برای هر سیمِ بلند یک لایه‌ی GPU جدا می‌سازد (صدها لایه‌ی غول‌پیکر → بوم سفید/کرش) */
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  for(const r of rects){ x1 = Math.min(x1, r.x); y1 = Math.min(y1, r.y); x2 = Math.max(x2, r.x + r.w); y2 = Math.max(y2, r.y + r.h); }
+  if(x1 > x2){ x1 = y1 = 0; x2 = y2 = 400; }
+  const PAD = 500, bx = Math.floor(x1 - PAD), by = Math.floor(y1 - PAD), bw = Math.ceil(x2 - x1 + 2 * PAD), bh = Math.ceil(y2 - y1 + 2 * PAD);
+  svg.setAttribute("viewBox", `${bx} ${by} ${bw} ${bh}`); svg.setAttribute("width", bw); svg.setAttribute("height", bh);
+  svg.style.left = bx + "px"; svg.style.top = by + "px"; svg.style.width = bw + "px"; svg.style.height = bh + "px";
   svg.innerHTML = h + `<path class="w-tmp" id="sttmp" d=""/>`;
 }
 function stUpdateWiresFor(id){
@@ -496,7 +577,7 @@ function stPaintWorld(){
   const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
   $("#stu")?.classList.toggle("many", _ed.length > 8 || ids.length > 10);
   $("#stu")?.classList.toggle("big", ids.length > 14);      // نقشه‌ی بزرگ: لایه‌ی GPU غول‌پیکر نساز (جلوگیری از بوم سفید)
-  if(!wr.querySelector("#stsvg")) wr.insertAdjacentHTML("afterbegin", `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" style="overflow:visible" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`);
+  if(!wr.querySelector("#stsvg")) wr.insertAdjacentHTML("afterbegin", `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`);
   const old = new Map();
   for(const el of wr.children) if(el.classList.contains("stc-card")) old.set(el.dataset.id, el);
   ST.sig = ST.sig || {}; ST.els = new Map();
@@ -728,7 +809,7 @@ function stBindCanvas(){
     else if(m.t === "card"){
       cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
       stHot(m.id, false);
-      if(m.moved){ stUpdateWiresFor(m.id); stSave(); stMini(true); stCull(); }
+      if(m.moved){ stSave(); stMini(true); stCull(); stPaintWires(); }
       else if(Date.now() - m.t0 < 500) openNode(m.id);
     }
     else if(m.t === "pan"){

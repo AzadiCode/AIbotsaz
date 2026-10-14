@@ -363,7 +363,7 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .st-canvas.panning{cursor:grabbing}
 .st-world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .st-world.glide{transition:transform .38s cubic-bezier(.22,.8,.24,1)}
-#stsvg{position:absolute;left:0;top:0;width:2px;height:2px;overflow:visible;pointer-events:none}
+#stsvg{position:absolute;left:0;top:0;width:2px;height:2px;overflow:hidden;contain:paint;pointer-events:none}
 #stsvg .wire{pointer-events:auto;cursor:pointer;transition:opacity .2s}
 .wire .w-hit{fill:none;stroke:transparent;stroke-width:18}
 .wire .w-line{fill:none;stroke:var(--wc,var(--mut));stroke-width:2.2;opacity:.85;transition:opacity .2s}
@@ -954,7 +954,5 @@ html.st-lock .top *,html.st-lock .top *::after{animation-play-state:paused!impor
 html.st-moving .dpanel{-webkit-backdrop-filter:none;backdrop-filter:none}
 html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::after,html.st-moving .st-energy svg{animation-play-state:paused}
 
-/* نقشه‌های بزرگ (بیش از ۱۴ بخش): will-change روی دنیا یک لایه‌ی GPU به اندازه‌ی کل نقشه (با رزولوشن ۱:۱ × تراکم پیکسل گوشی) می‌سازد؛
-   روی ۲۵+ بخش حافظه‌ی WebView تلگرام پر می‌شود و کل بوم (حتی دکمه‌های زوم و جستجو) سفید می‌ماند. بدونش فقط ناحیه‌ی دیده‌شده در مقیاس واقعی رسم می‌شود. */
-.studio.big .st-world{will-change:auto}
+/* نقشه‌های بزرگ: سایه‌ی کارت‌ها خاموش (سبک‌تر). لایه‌ی GPU دنیا (will-change) حفظ می‌شود تا پن/زوم فقط کامپوزیت باشد؛ سیم‌ها با contain:paint روی #stsvg یک لایه می‌مانند. */
 .studio.big .stc-card{box-shadow:none}
