@@ -8,7 +8,7 @@ caps.py — رجیستری قابلیت‌ها (منبع واحد همه‌ی چ
            CAPS_GAMES (بازی)، LIMITS (سقف پلن‌محور)، caps_public()، caps_ai_text()، limit_of()
 """
 
-BUILD = "3.5.0"
+BUILD = "3.5.1"
 
 # سقف پلن‌محور: هر کلید با perks اشتراک جمع یا مقایسه می‌شود. مقدار «free» پایه است.
 # nodes = بخش‌های ربات، blocks = بلوک‌های مینی‌اپ، tables = جدول داده، screens/گروه‌های دیگر در PLANS perks هستند.

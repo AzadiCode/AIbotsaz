@@ -41,20 +41,34 @@ function mbRestore(s){
     renderMiniapp();
   }catch(_){}
 }
-function mbUndo(){ if(MB.hi > 0){ MB.hi--; mbRestore(MB.hist[MB.hi]); } }
+function mbUndo(){
+  if(MB.hi <= 0) return;
+  MB.hi--; mbRestore(MB.hist[MB.hi]);
+  clearTimeout(MB.saveT); MB._dirty = true; mbSave();      // undo بلافاصله ذخیره شود تا autosave معوق رویش ننویسد
+}
 function mbRedo(){ if(MB.hi < MB.hist.length - 1){ MB.hi++; mbRestore(MB.hist[MB.hi]); } }
 
 /* ── ذخیره‌ی خودکار (debounce یک‌ثانیه‌ای) + پیش‌نویس محلی ── */
 function mbTouch(){ MB._dirty = true; clearTimeout(MB.saveT); MB.saveT = setTimeout(mbSave, 1000); clearTimeout(MB.pvT); MB.pvT = setTimeout(mbPostPreview, 250); }
 async function mbSave(){
   if(!MB.draft || !S.cur) return;
+  const bid = S.cur.id, snap = MB.draft;          // ثبت هویت ربات: پاسخ دیرهنگام نباید بات دیگر را بازنویسی کند
   MB._dirty = false;
   try{
-    const d = await api(`/api/bots/${S.cur.id}/app`, "PUT", {app: MB.draft});
-    MB.draft = d.draft;
-    const el = $("#bsave"); if(el) el.textContent = "ذخیره شد";
-    try{ localStorage.setItem("azadi.app." + S.cur.id, JSON.stringify(MB.draft)); }catch(_){}
-  }catch(e){ toast(e.message); }
+    const d = await api(`/api/bots/${bid}/app`, "PUT", {app: snap});
+    if(S.cur?.id === bid){
+      MB.draft = d.draft;
+      const el = $("#bsave"); if(el) el.textContent = "ذخیره شد";
+      try{ localStorage.setItem("azadi.app." + bid, JSON.stringify(MB.draft)); }catch(_){}
+    }
+  }catch(e){
+    if(S.cur?.id === bid){
+      MB._dirty = true;                            // خطای شبکه: تغییرها گم نشوند، دوباره ذخیره شود
+      const el = $("#bsave"); if(el) el.textContent = "ذخیره نشد — دوباره تلاش می‌کنم";
+      clearTimeout(MB.saveT); MB.saveT = setTimeout(mbSave, 4000);
+    }
+    toast(e.message || "ذخیره ناموفق بود");
+  }
 }
 function mbPostPreview(){
   const f = $("#bpv");
@@ -113,7 +127,7 @@ async function renderMiniapp(){
     const l = MB._list;
     $("#app").innerHTML = `
       <div class="ph"><h1>مینی‌اپ</h1><span class="cnt">${l ? N((l.items || []).filter(x => x.on).length) + " فعال" : "…"}</span></div>
-      <p class="muted" style="margin:-6px 2px 14px">برای هر ربات یک مینی‌اپ بساز: بدون کدنویسی، با چیدن بلوک‌ها یا توضیح دادن به هوش مصنوعی. کاربر با یک دکمه از داخل ربات بازش می‌کند.</p>
+      <p class="muted" style="margin:-6px 2px 14px">برای هر ربات یک مینی‌اپ بساز؛ خودت بچینش یا به هوش مصنوعی بسپار.</p>
       ${MB._listErr ? `<div class="empty"><div class="ib big">${IC.bot}</div><h2>بارگذاری نشد</h2><p class="muted">${esc(MB._listErr)}</p><button class="b sm" data-a="mbrelist">تلاش دوباره</button></div>`
         : l && (l.items || []).length ? `<div class="group sep">${l.items.map(x => `
         <button class="gi" data-a="mbopen" data-id="${esc(x.id)}"><span class="dot ${x.on ? "on" : ""}"></span>
@@ -270,7 +284,7 @@ function mbDefaultBlock(t){
   if(t === "banner") return {...d, style: "info", text: "متن اطلاعیه"};
   if(t === "countdown") return {...d, to: Math.floor(Date.now() / 1000) + 86400, title: "شروع به‌زودی", done: "شروع شد!"};
   if(t === "pay") return {...d, stars: 50, title: "خرید", desc: "", text: "پرداخت انجام شد. ممنون!", do: []};
-  if(t === "ai") return {...d, prompt: "تو دستیار مفید این کسب‌وکار هستی. کوتاه و مؤدب جواب بده.", daily: 15, memory: 3, greeting: "سؤالت رو بنویس."};
+  if(t === "ai") return {...d, prompt: "تو دستیار مفید این کسب‌وکار هستی. کوتاه و مؤدب جواب بده.", daily: 15, memory: 3, greeting: "سؤالت را بنویس."};
   if(t === "links") return {...d, items: [{label: "کانال ما", url: "https://t.me/your_channel"}]};
   if(t === "spacer") return {...d, h: 16};
   if(t === "games" || t === "wallet" || t === "shopcoins") return {...d};
@@ -298,7 +312,7 @@ function bpropSheet(){
     <span class="lbl">${label}</span>
     <div class="mbdo" data-k="${key}"></div>
     <button class="b o sm" data-a="mbdoadd" data-k="${key}">${IC.plus}اکشن</button>
-    <p class="muted mt">اکشن‌ها به ترتیب اجرا می‌شوند. «رفتن به صفحه» و پیام‌های رابط همین‌جا اعمال می‌شوند؛ اکشن‌های داده و ارسال به ربات موقع انتشار بررسی می‌شوند.</p>`;
+    <p class="muted mt">اکشن‌ها به ترتیب اجرا می‌شوند. «رفتن به صفحه» و پیام‌ها در پیش‌نمایش هم اجرا می‌شوند؛ اکشن‌های مربوط به داده و ارسال به ربات، هنگام انتشار بررسی می‌شوند.</p>`;
   const doRow = (a, key, i) => {
     const op = a.op || "goto";
     let body = "";
@@ -456,7 +470,7 @@ function bpubSheet(){
         ${hasStartAppBtn() ? "" : `<button class="b o sm" data-a="mblink">افزودن دکمه</button>`}</div>
     </div>
     ${full ? `<div class="aibox">سقف مینی‌اپ فعال اشتراکت پر شده (${N(cap.apps)}). یکی را لغو انتشار کن یا اشتراکت را ارتقا بده. <button class="b t" data-a="goplan">ارتقا</button></div>` : ""}
-    ${MB.lint === null ? `<p class="muted" id="blint">بررسی منطق…</p>` : (MB.lint.length ? `<div class="bwarn">${MB.lint.map(x => `<p>⚠️ ${esc(x)}</p>`).join("")}</div>` : `<p class="muted">بررسی منطق: مشکلی پیدا نشد.</p>`)}
+    ${MB.lint === null ? `<p class="muted" id="blint">بررسی منطق…</p>` : (MB.lint.length ? `<div class="bwarn">${MB.lint.map(x => `<p>${esc(x)}</p>`).join("")}</div>` : `<p class="muted">بررسی منطق: مشکلی پیدا نشد.</p>`)}
     ${MB.pub && MB.link ? `<div class="reflink"><code>${esc(MB.link)}</code><button class="b o sm" data-a="mbcopy">کپی</button></div>
       <p class="muted">این لینک مینی‌اپ را مستقیم در تلگرام باز می‌کند. دکمه‌ی منوی کنار چت ربات هم بعد از انتشار خودکار گذاشته می‌شود.</p>` : ""}
     <p class="muted mt">نکته: اگر تلگرام هنگام باز کردن مینی‌اپ خطای دامنه داد، یک بار در BotFather دستور /setmenubutton را برای رباتت با همین آدرس بزن.</p>
@@ -466,14 +480,12 @@ function bpubSheet(){
 
 function baiSheet(){
   const hasDraft = MB.draft && Object.keys(MB.draft.screens || {}).length;
-  return head("ساخت مینی‌اپ با هوش مصنوعی") + `
-    <p class="muted">بنویس مینی‌اپ چه کاری داشته باشد؛ برای همین ربات و با متغیرها و جدول‌هایش ساخته می‌شود.</p>
-    <textarea class="fa" id="ai-prompt" maxlength="4000" style="min-height:110px" placeholder="مثلاً: یک مینی‌اپ فروشگاه با صفحه‌ی محصولات، فرم سفارش و کانال ما"></textarea>
+  return head("ساخت با هوش مصنوعی") + `
+    <textarea class="fa" id="ai-prompt" maxlength="4000" style="min-height:96px" placeholder="مثلاً: مینی‌اپ فروشگاه با محصولات و فرم سفارش"></textarea>
     <div id="ai-live" hidden><p class="muted"><span class="spin"></span> در حال ساخت…</p></div>
     <div id="ai-ideas"></div>
     <div class="bar"><button class="b" data-a="mbaiGo">${IC.spark}ساخت</button></div>
-    ${hasDraft ? `<div class="sub"><span>یا همین مینی‌اپ را بهتر کن</span></div>
-    <p class="muted">هوش مصنوعی متن‌ها را بهتر می‌کند، بلوک‌ها را مرتب می‌چیند و جاهای خالی را پر می‌کند؛ هزینه‌اش مثل یک ویرایش است.</p>
+    ${hasDraft ? `<div class="sub"><span>یا همین را بهتر کن</span></div>
     <div class="bar"><button class="b o" data-a="mbaiBetter">${IC.spark}بهتر کن</button></div>` : ""}`;
 }
 
@@ -491,10 +503,8 @@ function btplSheet(){
   const items = MB._tpls;
   return head("قالب‌های مینی‌اپ") + (items ? (items.length ? `<div class="tplgrid">${items.map(t => `
     <div class="tplc">${t.preview ? tplPrev(t.preview) : ""}
-      <div class="tplt"><span class="ib">${IC.bag}</span><div class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></div></div>
-      <div class="chips">${(t.feats || []).map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div>
-      <div class="tplf">${t.cost ? `<span class="xbd t">${N(t.cost)} توکن</span>` : '<span class="xbd t">رایگان</span>'}
-        <button class="b sm" data-a="mbtplGo" data-id="${esc(t.id)}">اعمال</button></div></div>`).join("")}</div>` : '<p class="muted">قالبی نیست.</p>')
+      <div class="tplt"><span class="ib">${IC.bag}</span><div class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></div><button class="b sm" data-a="mbtplGo" data-id="${esc(t.id)}">اعمال</button></div>
+      <div class="chips">${t.cost ? `<span class="xbd t">${N(t.cost)} توکن</span>` : '<span class="xbd t">رایگان</span>'}${(t.feats || []).slice(0, 3).map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div></div>`).join("")}</div>` : '<p class="muted">قالبی نیست.</p>')
     : '<p class="muted">در حال بارگذاری…</p>') + `<div class="fgap"></div>`;
 }
 
@@ -665,7 +675,7 @@ Object.assign(A, {
   mbredo: () => mbRedo(),
   mbreload: () => { MB.draft = null; MB._loadedFor = null; renderMiniapp(); },
   mbcopy: () => navigator.clipboard?.writeText(MB.link).then(() => toast("لینک کپی شد"), () => toast(MB.link)),
-  mbscr: el => { MB.screen = el.dataset.id; MB.lint = null; mbPaintScreens(); mbPaintBlocks(); mbPostPreview(); },
+  mbscr: el => { MB.screen = el.dataset.id; MB.lint = null; mbPaintScreens(); mbPaintBlocks(); mbPostPreview(); el.scrollIntoView({inline: "center", block: "nearest", behavior: "smooth"}); },
   mbscradd: () => {
     const id = mbNewId();
     MB.draft.screens[id] = {title: "صفحه‌ی " + (mbScreenIds().length + 1), icon: "home", blocks: []};      // عنوان متنی؛ بدون HTML
@@ -727,7 +737,7 @@ Object.assign(A, {
     const arr = MB.draft.screens[MB.screen].blocks, i = +el.dataset.i;
     const removed = arr.splice(i, 1)[0];
     mbPush(); mbTouch(); mbPaintBlocks(); mbPostPreview();
-    toast("حذف شد؛ با برگشت برمی‌گردد");
+    toast("حذف شد؛ با «برگشت» می‌توانی برش گردانی");
   },
   mbtheme: () => { S.sheet = {kind: "btheme"}; D = null; renderSheet(); },
   mbdata: () => { S.sheet = {kind: "bdata"}; D = null; renderSheet(); },

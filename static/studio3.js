@@ -49,7 +49,7 @@ Object.assign(SHEETS, {
   note: {html(){
     const id = S.sheet.id, n = sc3notes()[id] || {};
     return head("یادداشت و قاب بخش") + `
-      <span class="lbl">یادداشت خصوصی (فقط تو می‌بینی)</span><input class="fa" id="nt-note" value="${esc(n.note || "")}" maxlength="100" placeholder="مثلاً: بعد از جلسه پرش کن">
+      <span class="lbl">یادداشت خصوصی (فقط خودت می‌بینی)</span><input class="fa" id="nt-note" value="${esc(n.note || "")}" maxlength="100" placeholder="مثلاً: بعد از جلسه پرش کن">
       <span class="lbl">قاب رنگی روی نقشه</span><div class="sws">
       ${[["", "بدون"], ["red", "قرمز"], ["green", "سبز"], ["blue", "آبی"], ["amber", "طلایی"], ["violet", "بنفش"]].map(([v, l]) => `<button type="button" class="sw ${(n.frame || "") === v ? "on" : ""}" data-a="ntframe" data-v="${v}">${l}</button>`).join("")}</div>
       <div class="bar"><button class="b" data-a="ntsave">ذخیره</button></div><div class="fgap"></div>`;
@@ -86,7 +86,7 @@ const SC3_PACKS = [
 function packsSheet(){
   return head("بسته‌های آماده") + `
     <p class="muted">هر بسته چند بخش آماده به ربات اضافه می‌کند؛ بعداً همه‌چیزش قابل ویرایش است.</p>
-    <div class="bpg">${SC3_PACKS.map(([id, t, d], i) => `<button class="bpc" data-a="packgo" data-i="${i}"><span class="bpi">${IC.spark}</span><span class="bpt"><b>${esc(t)}</b><span>${esc(d)}</span></span></button>`).join("")}</div><div class="fgap"></div>`;
+    <div class="bpg">${SC3_PACKS.map(([id, t, d], i) => `<button class="bpc" data-a="packgo" data-i="${i}"><span class="bpr"><span class="bpi">${IC.spark}</span><span class="bpt"><b>${esc(t)}</b><span>${esc(d)}</span></span></span></button>`).join("")}</div><div class="fgap"></div>`;
 }
 Object.assign(SHEETS, {packs: {html: packsSheet}});
 Object.assign(A, {
@@ -294,8 +294,8 @@ scopeBarInject = function(){
 const _tabAI0 = tabAI;
 tabAI = function(b){
   let h = _tabAI0(b);
-  h += `<div class="chips" style="margin-top:8px"><button class="chip" data-a="aimode" data-m="explain">؟ توضیح بده این ربات چیکار می‌کنه</button>
-    <button class="chip" data-a="aimode" data-m="improve">🔧 بهترش کن (بازبینی تجربه)</button>
-    <button class="chip" data-a="aimode" data-m="translate">🌐 ترجمه‌ی همه‌ی متن‌ها</button></div>`;
+  h += `<div class="chips" style="margin-top:8px"><button class="chip" data-a="aimode" data-m="explain">توضیح بده این ربات چه کار می‌کند</button>
+    <button class="chip" data-a="aimode" data-m="improve">بهبود تجربه‌ی کاربر</button>
+    <button class="chip" data-a="aimode" data-m="translate">ترجمه‌ی همه‌ی متن‌ها</button></div>`;
   return h;
 };

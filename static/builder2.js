@@ -92,7 +92,7 @@ const MB_DEF2 = {
   inbox: {limit: 8},
   checkin: {},
   badges: {items: [{t: "اولین خرید", ic: "🥇"}, {t: "مشتری طلایی", ic: "🌟"}]},
-  invite: {text: "دوستات رو دعوت کن؛ برای هر دعوت جایزه بگیر!", btn: "📤 ارسال لینک دعوت"},
+  invite: {text: "دوستانت را دعوت کن؛ برای هر دعوت جایزه بگیر!", btn: "📤 ارسال لینک دعوت"},
   profile: {items: [{var: "points", label: "امتیاز"}], bio: ""},
   reviews: {items: [{t: "سارا", d: "خیلی عالی بود!", ic: "5"}]},
   team: {items: [{t: "علی محمدی", d: "مدیر فروش"}]},
@@ -427,7 +427,7 @@ function bthemeSheet2(){
     <span class="lbl">رنگ اصلی (دلخواه)</span><input id="t-accent" value="${esc(th.accent || "#3CCFE3")}" maxlength="7" class="ltr" placeholder="#3CCFE3">
     <input type="file" id="t-logo" accept="image/*" hidden>
     <button type="button" class="b o sm" data-a="mbpal">${IC.image}پالت رنگ از لوگو</button>
-    <p class="muted mt">لوگوی برندت را بده؛ از داخلش سه رنگ اصلی بیرون می‌آید. روی هر رنگ بزن تا رنگ اصلی شود.</p>
+    <p class="muted mt">لوگوی برندت را انتخاب کن تا سه رنگ اصلی‌اش را پیدا کنیم. روی هر رنگ بزن تا رنگ اصلیِ مینی‌اپ شود.</p>
     <div class="sws" id="t-palout"></div>
     <span class="lbl">فونت</span><select id="t-font">${[["vazir", "وزیرمتن (پیش‌فرض)"], ["oxanium_vazir", "عددهای رباتیک (Oxanium)"], ["system", "فونت خود گوشی"]].map(([v, l]) => `<option value="${v}"${th.font === v ? " selected" : ""}>${l}</option>`).join("")}</select>
     <span class="lbl">گردی گوشه‌ها (۰ تا ۲۸)</span><input id="t-rad" type="number" min="0" max="28" value="${esc(th.radius ?? 16)}">
@@ -448,8 +448,8 @@ function bnavSheet(){
     <span class="lbl">جای منو</span><div class="sws">${[["tabs", "نوار پایین"], ["top", "نوار بالا"], ["none", "بدون منو"]].map(([v, l]) => `<button type="button" class="sw${D.type === v ? " on" : ""}" data-a="mbnv2" data-k="type" data-v="${v}">${l}</button>`).join("")}</div>
     <span class="lbl">سبک</span><div class="sws">${[["simple", "ساده"], ["glass", "شیشه‌ای"], ["round", "گرد شناور"], ["island", "جزیره"]].map(([v, l]) => `<button type="button" class="sw${D.style === v ? " on" : ""}" data-a="mbnv2" data-k="style" data-v="${v}">${l}</button>`).join("")}</div>
     <label class="chk"><input type="checkbox" id="nv-icons"${D.icons ? " checked" : ""}> فقط آیکن (بدون نوشته)</label>
-    <div class="sub"><span>صفحه‌های منو (با فلش جابه‌جا کن)</span></div>
-    ${D.items.length ? D.items.map((id2, i) => `<div class="cmd"><span class="ib">${IC[MB_IC[(MB.draft.screens[id2] || {}).icon] || IC.home]}</span><span class="gt" style="flex:1"><b>${esc((MB.draft.screens[id2] || {}).title || id2)}</b></span>
+    <div class="sub"><span>صفحه‌های منو (با فلش‌ها جابه‌جا کن)</span></div>
+    ${D.items.length ? D.items.map((id2, i) => `<div class="cmd"><span class="ib">${IC[MB_IC[(MB.draft.screens[id2] || {}).icon] || "home"] || IC.layers}</span><span class="gt" style="flex:1"><b>${esc((MB.draft.screens[id2] || {}).title || id2)}</b></span>
       <button class="iconb sm" data-a="mbnvup" data-i="${i}" aria-label="بالا" ${i === 0 ? "disabled" : ""}>${MB_UP}</button>
       <button class="iconb sm" data-a="mbnvdown" data-i="${i}" aria-label="پایین" ${i === D.items.length - 1 ? "disabled" : ""}>${MB_DOWN}</button>
       <button class="iconb sm" data-a="mbnvrm" data-i="${i}" aria-label="برداشتن" style="color:var(--bad)">${IC.x}</button></div>`).join("")
@@ -498,7 +498,7 @@ Object.assign(A, {
     busy(el2, async () => {
       await api("/api/comps", "POST", {name, b: blk});
       MB._comps = undefined; mbComps();
-      toast("قطعه ذخیره شد و به همه‌ی دستگاه‌هایت می‌آید"); haptic("ok");
+      toast("قطعه ذخیره شد و روی همه‌ی دستگاه‌هایت در دسترس است"); haptic("ok");
     });
   },
   mbcompins: el2 => {
@@ -544,7 +544,7 @@ mbPaintBlocks = function(){
   document.querySelectorAll("#bblocks .bops").forEach(ops => {
     const cp = ops.querySelector("[data-a='mbcp']");
     if(cp && !ops.querySelector("[data-a='mbcomp']")){
-      cp.insertAdjacentHTML("afterend", `<button class="iconb sm" data-a="mbcomp" data-i="${esc(cp.dataset.i)}" aria-label="ذخیره به‌عنوان قطعه">${IC.copy}</button>`);
+      cp.insertAdjacentHTML("afterend", `<button class="iconb sm" data-a="mbcomp" data-i="${esc(cp.dataset.i)}" aria-label="ذخیره به‌عنوان قطعه" title="ذخیره به‌عنوان قطعه">${IC.star}</button>`);
     }
   });
 };
@@ -587,7 +587,7 @@ document.addEventListener("change", e => {
         return {c: "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join(""), score: bk.n * (0.25 + (mx - mn) / mx || 0)};
       }).sort((a, b) => b.score - a.score).slice(0, 3);
       const out = $("#t-palout");
-      if(out) out.innerHTML = cand.length ? cand.map(x => `<button type="button" class="sw" style="background:${x.c};color:#fff" data-a="mbpalset" data-c="${x.c}">${x.c}</button>`).join("") : '<span class="muted">رنگی پیدا نشد؛ لوگوی واضح‌تر بده.</span>';
+      if(out) out.innerHTML = cand.length ? cand.map(x => `<button type="button" class="sw" style="background:${x.c};color:#fff" data-a="mbpalset" data-c="${x.c}">${x.c}</button>`).join("") : '<span class="muted">رنگی پیدا نشد؛ لوگویی با کیفیت بهتر انتخاب کن.</span>';
       if(cand.length){ const i = $("#t-accent"); if(i) i.value = cand[0].c; }
     }catch(_){ toast("خواندن تصویر ناموفق بود"); }
     URL.revokeObjectURL(url);

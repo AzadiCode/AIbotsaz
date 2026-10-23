@@ -1045,7 +1045,7 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
             if r:
                 rows.append(r)
         node = {"text": text, "buttons": rows, "ask": bool(n.get("ask"))}
-        title = str(n.get("title") or "").strip()[:30]
+        title = re.sub(r"<[^>]*>", "", str(n.get("title") or "")).replace("&", "و").strip()[:30]
         if title:
             node["title"] = title
         ph = str(n.get("photo") or "").strip()

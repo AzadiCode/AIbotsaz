@@ -316,7 +316,7 @@ def api_arch_build(uid):
 @app.post("/api/bots/<bot_id>/archedit")
 @authed
 def api_arch_edit(uid, bot_id):
-    """تغییر ربات با گفتگو؛ خروجی: کارت‌های تغییر فارسی (بدون JSON خام)"""
+    """تغییر ربات با گفتگو — مرحله‌ی پیش‌نویس: کارت‌های تغییر فارسی + عملیات‌ها برمی‌گردند، هنوز ذخیره نمی‌شود"""
     bot = get_bot(bot_id, uid)
     if not bot:
         return jsonify(error="ربات پیدا نشد"), 404
@@ -326,12 +326,29 @@ def api_arch_edit(uid, bot_id):
     if not hold(uid, cut(uid, EDIT_COST)):
         return jsonify(error="موجودی توکن برای این تغییر کافی نیست", need=EDIT_COST, wallet=wallet_info(uid)), 402
     try:
-        cfg, cards, applied = architect.apply_edit(uid, bot, req)
+        ops, cards = architect.plan_edit(uid, bot, req)
     except ValueError as e:
         return jsonify(error=str(e)), 400
     cost = charge_up_to(uid, cut(uid, EDIT_COST), "edit")
-    bot2 = architect.save_edit(uid, bot, cfg)
-    return jsonify(bot=public(bot2), cards=cards, applied=applied, cost=cost, wallet=wallet_info(uid))
+    return jsonify(ops=ops, cards=cards, cost=cost, wallet=wallet_info(uid))
+
+
+@app.post("/api/bots/<bot_id>/archedit/apply")
+@authed
+def api_arch_apply(uid, bot_id):
+    """اعمال فقط کارت‌های تاییدشده‌ی کاربر (هر کارت مستقل رد یا قبول می‌شود)"""
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    ops = (request.get_json(silent=True) or {}).get("ops")
+    if not isinstance(ops, list) or not ops or len(ops) > 8 or not all(isinstance(o, dict) for o in ops):
+        return jsonify(error="تغییری برای اعمال انتخاب نشده"), 400
+    try:
+        cfg, applied = architect.apply_selected(uid, bot, ops)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    bot2 = db.bots.find_one({"_id": bot["_id"]})
+    return jsonify(bot=public(bot2), cards=applied, wallet=wallet_info(uid))
 
 
 # ───────────────────────── ماموریت‌ها ─────────────────────────
@@ -909,6 +926,8 @@ def api_comps(uid):
 @app.post("/api/comps")
 @authed
 def api_comps_add(uid):
+    if not rate_ok(f"comps:{uid}", 20, 60):
+        return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره"), 429
     if db.comps.count_documents({"owner": uid}) >= _COMP_MAX:
         return jsonify(error=f"حداکثر {_COMP_MAX} قطعه می‌توانی ذخیره کنی؛ یکی را پاک کن"), 400
     b = request.get_json(silent=True) or {}
@@ -952,6 +971,8 @@ def api_dcodes(uid, bot_id):
 @app.post("/api/bots/<bot_id>/dcodes")
 @authed
 def api_dcodes_add(uid, bot_id):
+    if not rate_ok(f"dcodes:{uid}", 20, 60):
+        return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره"), 429
     if not get_bot(bot_id, uid):
         return jsonify(error="ربات پیدا نشد"), 404
     if db.dcodes.count_documents({"bot": bot_id}) >= _DCODE_MAX:

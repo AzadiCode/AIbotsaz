@@ -449,7 +449,7 @@ function stCardHTML(id, dead){
   if(inc) tags.push(`<span class="tag cnt">${fa(inc)} ورودی</span>`);
   if(dead) tags.push('<span class="tag warn" title="هیچ دکمه یا مسیری به این بخش نمی‌رسد">بدون ورودی</span>');
   if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn" title="بعد از این بخش، کاربر راهی برای ادامه ندارد">بدون ادامه</span>');
-  const txt = (n.text || "").trim();
+  const txt = stripTags(n.text).trim();
   const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
   const grp = isRk => {
     const keys = btns.map((row, r) => { const cells = row.map((b, c) => (b.kb === "reply") === isRk ? stBtnCell(id, r, c, b, cfg) : "").join(""); return cells ? `<div class="stk-row">${cells}</div>` : ""; }).join("");
@@ -612,7 +612,7 @@ function stPaintWorld(){
 /* ── ورود به استودیو ── */
 function stHintHTML(){
   try{ if(localStorage.getItem("azadi.studio.hint") === "1") return ""; }catch(_){}
-  return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
+  return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیام ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به بخش دیگری وصلش کن.</span><button class="iconb sm" data-a="sthint" aria-label="بستن راهنما">${IC.x}</button></div>`;
 }
 function renderStudio(){
   if(!S.bots.length){
@@ -1538,16 +1538,21 @@ function saveGrp(){
   }
   busy($('[data-sh="save"]'), () => commit(cfg => { if(list.length) cfg.group = {triggers: list}; else delete cfg.group; }, "ماشه‌های گروه ذخیره شد"));
 }
-function openBot(){
+function botDraft(){
   const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
-  S.sheet = {kind: "bot"};
-  D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
+  return { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
         cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}), globs: Object.entries(cfg.globals || {}),
         staff: (cfg.desk?.staff || []).join(" "), dclosed: cfg.desk?.closed || "", drbtn: cfg.desk?.reply_btn || "",
         refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "" };
+}
+function openBot(){
+  if(!S.cur) return toast("اول یک ربات انتخاب کن");
+  S.sheet = {kind: "bot"};
+  D = botDraft();
   renderSheet();
 }
 function botSheet(){
+  if(!D) D = botDraft();
   const cfg = S.cur.config, d = D;
   return head("تنظیمات ربات") + `
     <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
@@ -1737,7 +1742,11 @@ function shAction(a, ds){
   if(a.startsWith("ub")) return ubAct(a, ds);
   if(a === "stkm"){ const n = ds.n; return stGuardClose(() => { closeSheet(); openKm(n); }); }
   if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این بخش شروع می‌شود")); }
-  if(a === "save") return SHEETS[S.sheet.kind].save();
+  if(a === "save"){
+    const sh = SHEETS[S.sheet.kind];
+    if(!sh?.save) return toast("چیزی برای ذخیره نیست");
+    return sh.save();
+  }
   if(a === "del") return SHEETS[S.sheet.kind].del();
   if(a === "upmedia"){ S.pickKey = ds.k; return $("#fileIn").click(); }
   if(a === "stedit"){ const n = ds.n; closeSheet(); openNode(n); return; }

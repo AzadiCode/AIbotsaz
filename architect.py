@@ -235,22 +235,10 @@ _PATCH_PROMPT = """You are a precise bot-config patcher. Given a bot config (JSO
 Rules: ids in ^[a-z0-9_]{1,30}$; "goto"/"back_to" must be an existing node id (or the new one of add_section); max 8 ops; cards in Persian describing each change for a non-technical user; no other keys."""
 
 
-def apply_edit(uid, bot, request_text, media_ids=()):
-    """ویرایش با پچ: مدل عملیات می‌دهد، apply_patch اعمال می‌کند، sanitize تأیید می‌کند. خروجی: (bot جدید، کارت‌ها، خطا)"""
-    cfg_in = json.loads(json.dumps(bot["config"]))
-    user = "Change request:\n" + request_text[:1500] + "\n\nCurrent config:\n" + json.dumps(cfg_in, ensure_ascii=False)[:12000]
-    txt, _ = llm_post([{"role": "system", "content": _PATCH_PROMPT}, {"role": "user", "content": user}],
-                      1200, temperature=0.2, timeout=90, model=AI_CHAT_MODEL)
-    m = re.search(r"\{.*\}", txt, re.S)
-    if not m:
-        raise ValueError("پاسخ هوش مصنوعی قابل خواندن نبود؛ دوباره امتحان کن")
-    data = json.loads(m.group(0))
-    ops = data.get("ops") if isinstance(data.get("ops"), list) else []
-    cards = [str(x).strip()[:120] for x in (data.get("cards") if isinstance(data.get("cards"), list) else []) if str(x).strip()][:8]
-    if not ops:
-        raise ValueError("هیچ تغییری از درخواستت فهمیدم؛ دقیق‌تر بنویس")
+def _apply_ops(cfg_in, ops):
+    """عملیات پچ را روی کانفیگ اعمال می‌کند؛ خروجی: (عملیات‌های موفق، برچسب‌های فارسی)"""
     nodes = cfg_in.setdefault("nodes", {})
-    applied = []
+    done_ops, applied = [], []
     for op in ops[:8]:
         if not isinstance(op, dict):
             continue
@@ -266,11 +254,13 @@ def apply_edit(uid, bot, request_text, media_ids=()):
                 back = str(op.get("back_to") or "")
                 if back in nodes:
                     nodes[nid]["buttons"][0][0]["goto"] = back
+                done_ops.append(op)
                 applied.append("اضافه شد: بخش «" + (nodes[nid].get("title") or nid) + "»")
             elif k == "update_text" and str(op.get("node")) in nodes:
                 n = nodes[str(op["node"])]
                 old_t = n.get("text", "")
                 n["text"] = str(op.get("text") or old_t)[:3500]
+                done_ops.append(op)
                 applied.append("متن «" + (n.get("title") or str(op["node"])) + "» عوض شد")
             elif k == "add_button" and str(op.get("node")) in nodes and str(op.get("goto")) in nodes:
                 n = nodes[str(op["node"])]
@@ -282,16 +272,19 @@ def apply_edit(uid, bot, request_text, media_ids=()):
                     rows.append([{"text": lbl, "goto": str(op["goto"])}])
                 else:
                     rows[-1].append({"text": lbl, "goto": str(op["goto"])})
+                done_ops.append(op)
                 applied.append(f"دکمه‌ی «{lbl}» به «{(n.get('title') or op['node'])}» اضافه شد")
             elif k == "set_ai_prompt" and str(op.get("node")) in nodes:
                 n = nodes[str(op["node"])]
                 n.pop("ask", None); n.pop("fields", None)
                 n["ai"] = {"prompt": str(op.get("prompt") or "")[:1500], "daily": int(n.get("ai", {}).get("daily", 15)), "memory": int(n.get("ai", {}).get("memory", 3))}
+                done_ops.append(op)
                 applied.append("دستور دستیارِ «" + (n.get("title") or str(op["node"])) + "» عوض شد")
             elif k == "set_welcome":
                 md = cfg_in.get("mod") or {}
                 md["welcome"] = str(op.get("text") or "")[:1000]
                 cfg_in["mod"] = md
+                done_ops.append(op)
                 applied.append("پیام خوش‌آمد عوض شد")
             elif k == "add_group_trigger":
                 words = [w.strip()[:40] for w in (op.get("words") or [])[:10] if str(w).strip()]
@@ -300,21 +293,55 @@ def apply_edit(uid, bot, request_text, media_ids=()):
                     g = cfg_in.get("group") or {"triggers": []}
                     g.setdefault("triggers", []).append({"on": "contains", "words": words, "reply": reply})
                     cfg_in["group"] = g
+                    done_ops.append(op)
                     applied.append("قانون گروه اضافه شد: «" + "، ".join(words[:3]) + "»")
             elif k == "rename":
+                done_ops.append(op)
                 applied.append("نام ربات عوض شد")
                 cfg_in["name"] = str(op.get("name") or cfg_in.get("name"))[:50]
             elif k == "add_command":
                 cmd = re.sub(r"[^a-z0-9_]", "", str(op.get("cmd") or "").lstrip("/").lower())[:30]
                 if cmd and cmd != "start" and str(op.get("node")) in nodes:
                     cfg_in.setdefault("commands", {})[cmd] = str(op["node"])
+                    done_ops.append(op)
                     applied.append("دستور /" + cmd + " ساخته شد")
         except Exception:
             continue
     if not applied:
         raise ValueError("این تغییر با ابزارهای فعلی ربات ممکن نیست؛ دقیق‌تر بنویس")
+    return done_ops, applied
+
+
+def plan_edit(uid, bot, request_text):
+    """پیش‌نویس تغییر: مدل عملیات می‌دهد، روی نسخه‌ی آزمایشی اعتبارسنجی می‌شود ولی ذخیره نمی‌شود.
+    خروجی: (عملیات‌های موفق، کارت‌های فارسی) — کاربر تک‌تک تایید می‌کند"""
+    cfg_in = json.loads(json.dumps(bot["config"]))
+    user = "Change request:\n" + request_text[:1500] + "\n\nCurrent config:\n" + json.dumps(cfg_in, ensure_ascii=False)[:12000]
+    txt, _ = llm_post([{"role": "system", "content": _PATCH_PROMPT}, {"role": "user", "content": user}],
+                      1200, temperature=0.2, timeout=90, model=AI_CHAT_MODEL)
+    m = re.search(r"\{.*\}", txt, re.S)
+    if not m:
+        raise ValueError("پاسخ هوش مصنوعی قابل خواندن نبود؛ دوباره امتحان کن")
+    data = json.loads(m.group(0))
+    ops = data.get("ops") if isinstance(data.get("ops"), list) else []
+    cards = [str(x).strip()[:120] for x in (data.get("cards") if isinstance(data.get("cards"), list) else []) if str(x).strip()][:8]
+    if not ops:
+        raise ValueError("هیچ تغییری از درخواستت فهمیدم؛ دقیق‌تر بنویس")
+    trial = json.loads(json.dumps(cfg_in))
+    done_ops, applied = _apply_ops(trial, ops)
+    sanitize(trial, strict=False, nodes_cap=limits_of(uid)["nodes"])      # نامعتبر همین‌جا بیفتد، قبل از نمایش
+    return done_ops, (cards or applied)
+
+
+def apply_selected(uid, bot, ops):
+    """اعمال فقط عملیات‌های تاییدشده‌ی کاربر روی کانفیگ فعلی + نسخه‌ی برگشت"""
+    cfg_in = json.loads(json.dumps(bot["config"]))
+    done_ops, applied = _apply_ops(cfg_in, ops)
+    if not applied:
+        raise ValueError("تغییری برای اعمال نمانده")
     cfg = sanitize(cfg_in, strict=False, nodes_cap=limits_of(uid)["nodes"])
-    return cfg, (cards or applied), applied
+    save_edit(uid, bot, cfg)
+    return cfg, applied
 
 
 def save_edit(uid, bot, cfg):

@@ -141,7 +141,7 @@ Object.assign(A, {
     if(!(t.reply || "").trim() && t.act === "none" && !t.del) return toast("حداقل یک کار برای «آنگاه» انتخاب کن");
     D.trs.push(t); D.new = null; renderSheet();
   },
-  wtcmd: () => { closeSheet(); toast("دستورها در تنظیمات ربات ویرایش می‌شوند"); S.sheet = {kind: "bot"}; D = null; renderSheet(); },
+  wtcmd: () => { closeSheet(); toast("دستورها در تنظیمات ربات ویرایش می‌شوند"); openBot(); },
   wtmod: () => { closeSheet(); openMod(); },
 });
 
@@ -408,6 +408,7 @@ function agentSheet(){
 Object.assign(SHEETS, {agent: {html: agentSheet}});
 Object.assign(A, {
   agentopen: () => { if(!S.cur) return toast("اول یک ربات انتخاب کن"); S2._agn = undefined; S2._kbl = undefined; S.sheet = {kind: "agent"}; D = null; renderSheet(); },
+  growthopen: () => { if(!S.cur) return toast("اول یک ربات انتخاب کن"); S.sheet = {kind: "growth"}; D = null; renderSheet(); },
   agnode: () => {},
   agsave: el => {
     const nid = $("#ag-node")?.value || S2._agn;
@@ -498,7 +499,7 @@ Object.assign(A, {
 
 /* ═════════════════ ۶) شبیه‌ساز چت ═════════════════
    موتور بدون تماس با تلگرام و بدون هزینه اجرا می‌شود: همان معنای کانفیگ (متغیر، شرط،
-   اکشن، فرم، دستیار ساختگی، پرداخت ساختگی) در مرورگر. حالت گروه با چند کاربر ساختگی. */
+   اکشن، فرم، دستیار ساختگی، پرداخت آزمایشی) در مرورگر. حالت گروه با چند کاربر ساختگی. */
 const SIM = {on: false, mode: "pv", users: [], ui: 0, glo: {}, tables: {}, clock: 0, timers: [], log: [], scens: [], rec: []};
 const SIM_NAMES = ["آرش", "سارا", "نیما"];
 const SIM_TZ = 3.5 * 3600 * 1000;
@@ -781,7 +782,7 @@ function simPress(id, key){
   st.chat.push({who: "me", text: "👆 " + simFill(b.text, st)});
   if(b.pay){
     simDo(b.do, st);
-    simSys("💳 پرداخت ساختگی تأیید شد («" + simFill(b.pay.title || b.text, st) + "»)");
+    simSys("💳 پرداخت آزمایشی تأیید شد («" + simFill(b.pay.title || b.text, st) + "»)");
     if(b.pay.text) simBot(simFill(b.pay.text, st), st);
     if(b.pay.goto) return simSend(b.pay.goto, st);
     return simPaint();
@@ -847,7 +848,7 @@ function simEvent(kind){
     else simBot("(پیام خوش‌آمد تنظیم نشده — در «مدیریت گروه و کانال» بگذار)", st);
   }
   if(kind === "leave") simSys("🚪 " + st.name + " گروه را ترک کرد");
-  if(kind === "pay"){ simSys("💳 یک پرداخت ساختگی انجام شد"); simBot("✅ پرداخت دریافت شد. ممنون!", st); }
+  if(kind === "pay"){ simSys("💳 یک پرداخت آزمایشی انجام شد"); simBot("✅ پرداخت دریافت شد. ممنون!", st); }
   if(kind === "jump"){ SIM.clock += 3600 * 1000; simSys("⏩ یک ساعت جلو رفتیم؛ الان ساعت " + simVar(st, "time") + " است");
     const due = SIM.timers.filter(x => x.at <= SIM.clock);
     for(const x of due) simBot("⏰ " + x.text, st);
@@ -879,27 +880,30 @@ function simHTML(){
   const users = SIM.users.map((u, i) => `<button class="chip ${i === SIM.ui ? "on" : ""}" data-a="simuser" data-i="${i}">${esc(u.name)}</button>`).join("");
   return `<div class="simwrap" id="simwrap">
     <div class="simbar">
-      <b>${IC.sim} شبیه‌ساز</b>
-      <div class="seg simseg">
-        <button class="${SIM.mode === "pv" ? "on" : ""}" data-a="simmode" data-v="pv">چت خصوصی</button>
-        <button class="${SIM.mode === "group" ? "on" : ""}" data-a="simmode" data-v="group">گروه</button>
+      <div class="simtop">
+        <b>${IC.sim} شبیه‌ساز</b>
+        <div class="seg simseg">
+          <button class="${SIM.mode === "pv" ? "on" : ""}" data-a="simmode" data-v="pv">چت خصوصی</button>
+          <button class="${SIM.mode === "group" ? "on" : ""}" data-a="simmode" data-v="group">گروه</button>
+        </div>
+        <span class="fgap"></span>
+        <button class="iconb" data-a="simclose" aria-label="بستن شبیه‌ساز">${IC.x}</button>
       </div>
-      ${SIM.mode === "group" ? `<div class="simusers">${users}</div>` : ""}
-      <span class="fgap"></span>
-      ${SIM.mode === "group" ? `<button class="b t" data-a="simev" data-v="join">${IC.plus}عضو جدید</button>` : ""}
-      <button class="b t" data-a="simev" data-v="pay">${IC.coin}پرداخت ساختگی</button>
-      <button class="b t" data-a="simev" data-v="jump">${IC.clock}پرش زمان</button>
-      <button class="b t" data-a="simreset">${IC.refresh}ریست</button>
-      <button class="iconb" data-a="simclose" aria-label="بستن شبیه‌ساز">${IC.x}</button>
+      <div class="simacts">
+        ${SIM.mode === "group" ? `${users}<button class="b t" data-a="simev" data-v="join">${IC.plus}عضو جدید</button>` : ""}
+        <button class="b t" data-a="simev" data-v="pay">${IC.coin}پرداخت آزمایشی</button>
+        <button class="b t" data-a="simev" data-v="jump">${IC.clock}جلو بردن زمان</button>
+        <button class="b t" data-a="simreset">${IC.refresh}شروع دوباره</button>
+      </div>
     </div>
     <div class="simbody">
       <div class="simphone"><div class="simchat" id="simlog"></div>
         <div class="simcomp"><input id="simtext" placeholder="پیام بنویس و اینتر بزن…" autocomplete="off"><button class="b" data-a="simsend">فرست</button></div>
         <div id="simkbd"></div></div>
       <div class="simside">
-        <p class="muted">این تست واقعی است و هیچ توکنی مصرف نمی‌کند. هر بخش از ربات که اجرا شود، روی نقشه سبز می‌شود.</p>
+        <p class="muted">این فقط یک شبیه‌سازی است و توکنی مصرف نمی‌کند. هر بخش از ربات که اجرا شود، روی نقشه سبز می‌شود.</p>
         <button class="b o sm" data-a="simstart">${IC.play}اجرای /start</button>
-        <div class="sub"><span>سناریوها</span><button class="b o sm" data-a="simscsave">${IC.copy}ذخیره‌ی وضعیت</button></div>
+        <div class="sub"><span>سناریوها</span><button class="b o sm" data-a="simscsave">${IC.copy}ذخیره‌ی سناریو</button></div>
         ${SIM.scens.length ? SIM.scens.map((s, i) => `<button class="gi" data-a="simscgo" data-i="${i}"><span class="ib">${IC.play}</span><span class="gt"><b>${esc(s.name || "سناریو " + (i + 1))}</b><span>اجرای خودکار</span></span></button>`).join("") : `<p class="muted">سناریویی ذخیره نشده.</p>`}
       </div>
     </div></div>`;
