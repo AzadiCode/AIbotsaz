@@ -503,8 +503,10 @@ function btplSheet(){
   const items = MB._tpls;
   return head("قالب‌های مینی‌اپ") + (items ? (items.length ? `<div class="tplgrid">${items.map(t => `
     <div class="tplc">${t.preview ? tplPrev(t.preview) : ""}
-      <div class="tplt"><span class="ib">${IC.bag}</span><div class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></div><button class="b sm" data-a="mbtplGo" data-id="${esc(t.id)}">اعمال</button></div>
-      <div class="chips">${t.cost ? `<span class="xbd t">${N(t.cost)} توکن</span>` : '<span class="xbd t">رایگان</span>'}${(t.feats || []).slice(0, 3).map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div></div>`).join("")}</div>` : '<p class="muted">قالبی نیست.</p>')
+      <div class="tplt"><span class="ib">${IC.bag}</span><div class="gt"><b>${esc(t.title)}</b><span>${esc(t.desc)}</span></div></div>
+      <div class="chips">${(t.feats || []).map(f => `<span class="chip">${esc(f)}</span>`).join("")}</div>
+      <div class="tplf">${t.cost ? `<span class="xbd t">${N(t.cost)} توکن</span>` : '<span class="xbd t">رایگان</span>'}
+        <button class="b sm" data-a="mbtplGo" data-id="${esc(t.id)}">اعمال</button></div></div>`).join("")}</div>` : '<p class="muted">قالبی نیست.</p>')
     : '<p class="muted">در حال بارگذاری…</p>') + `<div class="fgap"></div>`;
 }
 

@@ -246,26 +246,13 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .daily.done .dt b{color:var(--ink)}
 
 /* ── فهرست گروهی ── */
-.tplgrid{display:flex;flex-direction:column;gap:8px}
-.tplc{background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:9px 12px;display:flex;flex-direction:column;gap:7px}
-.tplc .tplt{display:flex;align-items:center;gap:10px}
-.tplc .tplt .ib{width:32px;height:32px;border-radius:10px}
-.tplc .tplt .ib svg{width:17px;height:17px}
-.tplc .gt{flex:1;min-width:0;line-height:1.5}
-.tplc .gt b{display:block;font-size:13px}
-.tplc .gt span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:11px;line-height:1.6;color:var(--mut)}
-.tplc .chips{display:flex;flex-wrap:nowrap;gap:4px;overflow:hidden;padding:0;margin:0}
-.tplc .chips .chip{font-size:10px;padding:1px 8px;min-height:0;flex:none;white-space:nowrap;opacity:.85}
-.tplc .chips .xbd{font-size:10px;padding:4px 8px}
-.tplc .tplt .b{width:auto;flex:none;min-height:30px;padding:0 14px;font-size:12px;border-radius:99px}
-.tplc .tpv{margin:0;border-radius:11px;max-height:78px}
-.tplc .tpv-tb{height:10px}
-.tplc .tpv-hero{padding:6px 10px 3px}
-.tplc .tpv-hero b{font-size:11.5px}.tplc .tpv-hero span{font-size:10px}
-.tplc .tpv-row{padding:4px 10px}
-.tplc .tpv-row i{width:16px;height:16px;border-radius:5px}
-.tplc .tpv-row b{font-size:10.5px}.tplc .tpv-row span{font-size:10px}
-.tplc .tpv>:nth-child(n+4){display:none}
+.tplgrid{display:flex;flex-direction:column;gap:12px}
+.tplc{background:var(--sf);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.tplc .tplt{display:flex;align-items:center;gap:12px}
+.tplc .gt{flex:1;min-width:0;line-height:1.65}.tplc .gt b{display:block;font-size:15px}.tplc .gt span{display:block;font-size:12.5px;color:var(--mut)}
+.tplc .chips{padding:0}
+.tplc .tplf{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tplc .tplf .b{width:auto;min-height:38px;padding:0 18px;font-size:14px}
 .group{background:var(--sf);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .gi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid var(--line2);cursor:pointer;transition:background .15s}
 .gi:first-child{border-top:0}
@@ -464,11 +451,11 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .st-search{position:absolute;top:10px;left:10px;z-index:6;width:150px}
 .st-search input{min-height:36px;padding:5px 12px;font-size:12.5px;border-radius:99px;
   background:var(--sf)}
-.st-hint{position:absolute;bottom:calc(70px + env(safe-area-inset-bottom));left:12px;right:12px;margin:0 auto;max-width:400px;z-index:6;
-  padding:7px 8px 7px 12px;border-radius:12px;background:color-mix(in srgb,var(--sf) 92%,transparent);border:1px solid var(--line);
-  font-size:11px;line-height:1.75;color:var(--mut);box-shadow:0 6px 18px rgba(0,0,0,.18);display:flex;gap:8px;align-items:center}
+.st-hint{position:absolute;bottom:calc(66px + env(safe-area-inset-bottom));left:12px;right:12px;margin:0 auto;max-width:430px;z-index:6;
+  padding:10px 14px;border-radius:14px;background:var(--sf);border:1px solid var(--line);
+  font-size:12px;line-height:1.9;color:var(--mut);box-shadow:0 8px 26px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center}
 .st-hint b{color:var(--ink)}
-.st-hint .b,.st-hint .iconb{width:30px;height:30px;min-height:0;flex:none;padding:0}
+.st-hint .b{width:auto;flex:none}
 .st-pop{position:absolute;z-index:8;min-width:180px;padding:5px;border-radius:14px;background:var(--sf);border:1px solid var(--line);box-shadow:0 12px 34px rgba(0,0,0,.3)}
 .st-pop button{display:flex;width:100%;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;font-size:13px;text-align:right}
 .st-pop button:active{background:var(--sf2)}
@@ -726,7 +713,7 @@ textarea.code{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monos
 .ucnt{font-size:12px;min-width:24px;text-align:center;border-radius:7px;padding:1px 0;margin-top:2px;box-shadow:inset 0 0 0 1px var(--line)}
 
 /* ── کشوی ناوبری (لبه‌ی چپ) ── */
-.dock{--rw:48px;--out:16px;--pad:5px;--keep:6px;position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
+.dock{--rw:48px;--out:16px;--pad:5px;--keep:22px;position:fixed;left:0;top:50%;z-index:40;display:flex;align-items:center;direction:ltr;
   transform:translate(calc(-1 * var(--rw)),-50%);transition:transform .34s cubic-bezier(.2,.8,.2,1)}
 .dock[hidden]{display:none}
 .dock.open{transform:translate(0,-50%)}
@@ -1061,19 +1048,14 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
 /* شبیه‌ساز */
 .simwrap{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;flex-direction:column;animation:s2In .25s ease both}
 @keyframes s2In{from{opacity:0}to{opacity:1}}
-.simbar{display:flex;flex-direction:column;gap:8px;padding:10px 14px 8px;border-bottom:1px solid var(--line2);background:var(--sf);flex:none}
-.simtop{display:flex;align-items:center;gap:10px}
-.simtop .fgap{flex:1}
-.simacts{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
-.simacts::-webkit-scrollbar{display:none}
-.simacts .b,.simacts .chip{flex:none;white-space:nowrap}
+.simbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line2);background:var(--sf)}
 .simbar b{display:flex;align-items:center;gap:6px;font-size:14px}
 .simbar b svg{width:18px;height:18px;color:var(--ac)}
 .simseg{grid-auto-flow:column;grid-template-columns:none;display:flex;gap:6px}
 .simseg button{padding:6px 12px;font-size:12px;border-radius:99px}
 .simseg button.on{background:var(--acs);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
 .simusers{display:flex;gap:6px;flex-wrap:wrap}
-.simbody{flex:1;display:flex;gap:0;max-width:900px;width:100%;margin:0 auto;padding:12px;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.simbody{flex:1;display:flex;gap:0;max-width:900px;width:100%;margin:0 auto;padding:12px;min-height:0}
 .simphone{flex:0 0 340px;max-width:100%;display:flex;flex-direction:column;background:var(--sf);border-radius:22px;box-shadow:inset 0 0 0 1px var(--line2);overflow:hidden}
 .simchat{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
 .sm{max-width:82%;padding:8px 12px;border-radius:16px;font-size:13.5px;line-height:1.8;white-space:pre-wrap;word-break:break-word;animation:s2Msg .22s ease both}
@@ -1091,21 +1073,18 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
 .simcomp input{flex:1;background:var(--sf2);border:0;border-radius:12px;padding:10px 12px;font:inherit;color:var(--ink);min-width:0}
 .simside{flex:1;min-width:0;padding:4px 0 4px 16px;overflow-y:auto}
 .simside .sub{margin-top:14px}
-@media (max-width:760px){.simbody{flex-direction:column;padding:8px;gap:10px}.simphone{flex:none;width:100%;height:clamp(300px,48dvh,430px)}.simside{flex:none;overflow:visible;padding:6px 2px 24px}}
+@media (max-width:760px){.simbody{flex-direction:column;padding:8px}.simphone{flex:1 1 auto;width:100%}.simside{padding:10px 2px}}
 /* کارت‌های نقشه در صفحه‌ی ساخت */
-.bpg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-@media (max-width:620px){.bpg{grid-template-columns:1fr}}
-.bpc{display:flex;flex-direction:column;gap:7px;background:var(--sf);border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2);padding:9px 12px;min-height:44px;transition:box-shadow .15s,transform .15s;text-align:right}
+.bpg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.bpg{grid-template-columns:1fr}}
+.bpc{display:flex;flex-direction:column;gap:8px;background:var(--sf);border-radius:18px;box-shadow:inset 0 0 0 1px var(--line2);padding:14px;min-height:44px;transition:box-shadow .15s,transform .15s;text-align:right}
 .bpc:active{transform:scale(.98);box-shadow:inset 0 0 0 1.5px var(--ac)}
-.bpc .bpr{display:flex;align-items:center;gap:10px}
-.bpc .bpi{flex:none;width:32px;height:32px;border-radius:10px;background:var(--acs);color:var(--ac);display:grid;place-items:center}
-.bpc .bpi svg{width:17px;height:17px}
-.bpc .bpt{flex:1;min-width:0}
-.bpc .bpt b{font-size:13px;display:block;line-height:1.5}
-.bpc .bpt span{font-size:11px;color:var(--mut);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.bpc .bpf{display:flex;flex-wrap:nowrap;gap:4px;overflow:hidden}
-.bpc .bpf:empty{display:none}
-.bpc .bpf .chip{font-size:10px;padding:1px 8px;min-height:0;flex:none;max-width:100%;white-space:nowrap;opacity:.85}
+.bpc .bpi{width:38px;height:38px;border-radius:12px;background:var(--acs);color:var(--ac);display:grid;place-items:center}
+.bpc .bpi svg{width:20px;height:20px}
+.bpc .bpt b{font-size:14px;display:block;line-height:1.6}
+.bpc .bpt span{font-size:12px;color:var(--mut);line-height:1.7;display:block}
+.bpc .bpf{display:flex;flex-wrap:wrap;gap:5px}
+.bpc .bpf .chip{font-size:10.5px}
 /* کارت «چی ساخته شد؟» */
 .made{background:var(--sf);border-radius:18px;box-shadow:inset 0 0 0 1.5px var(--ok);padding:14px;margin:0 0 10px}
 .made h2{color:var(--ok)}
@@ -1189,8 +1168,7 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
 #bp-q{margin-bottom:10px}
 
 /* ── نوار کجا کار می‌کنه + قاب رنگی و یادداشت بخش‌ها ── */
-.scopebar{position:absolute;top:50px;inset-inline-start:10px;z-index:5;display:flex;flex-wrap:nowrap;gap:4px;align-items:center;max-width:calc(100% - 130px);overflow:hidden;background:color-mix(in srgb,var(--sf) 72%,transparent);border-radius:99px;padding:3px 8px;box-shadow:inset 0 0 0 1px var(--line2);font-size:10px;white-space:nowrap;pointer-events:none}
-.scopebar .chip{font-size:10px;padding:1px 7px;min-height:0;flex:none}
+.scopebar{position:absolute;top:8px;inset-inline-start:8px;z-index:6;display:flex;gap:5px;align-items:center;background:color-mix(in srgb,var(--sf) 80%,transparent);border-radius:99px;padding:4px 10px;box-shadow:inset 0 0 0 1px var(--line2);font-size:11px}
 .scopebar .sc3on{box-shadow:inset 0 0 0 1px var(--ac);color:var(--ac)}
 .stfr-red{outline:2px solid var(--bad);outline-offset:2px}
 .stfr-green{outline:2px solid var(--ok);outline-offset:2px}
@@ -1225,29 +1203,308 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
 .archcard.on{border-color:var(--ac)}
 .archcard.on .tick{opacity:1;background:var(--ac);color:#fff;border-color:var(--ac)}
 
-/* ── سقف‌ها و امکانات (حساب) ── */
-.capx{padding:14px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(160deg,color-mix(in srgb,var(--ac) 7%,var(--sf)),var(--sf) 55%)}
-.cx-h{display:flex;align-items:center;gap:8px}
-.cx-h h2{margin:0;font-size:15px;flex:1}
-.cx-h .bdg{background:var(--sf2);border-radius:8px;padding:1px 8px;font:700 11px "Oxanium",monospace;direction:ltr;color:var(--mut)}
-.cx-q{min-width:26px;height:26px;padding:0 8px}
-.cx-use{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cx-u{background:var(--sf2);border-radius:12px;padding:9px 11px;font-size:11.5px;color:var(--mut)}
-.cx-u b{display:block;font-size:17px;color:var(--ink);margin:2px 0 6px;line-height:1.2}
-.cx-u b small{font-size:11px;color:var(--mut);font-weight:600}
-.cx-u .lm-b{height:4px;border-radius:3px;background:color-mix(in srgb,var(--ink) 10%,transparent);overflow:hidden}
-.cx-u .lm-b i{display:block;height:100%;border-radius:3px;background:var(--ac)}
-.cx-u.full .lm-b i{background:var(--bad)}
-.cx-caps{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.cx-c{text-align:center;padding:7px 4px;border-radius:11px;box-shadow:inset 0 0 0 1px var(--line2);font-size:10.5px;color:var(--mut);line-height:1.5}
-.cx-c b{display:block;font-size:15px;color:var(--ac)}
-.cx-t{font-size:11.5px;font-weight:700;color:var(--mut);margin-top:2px}
-.cx-feats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.cx-f{display:grid;grid-template-columns:30px 1fr;grid-template-rows:auto auto;column-gap:9px;align-items:center;padding:7px 9px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line2);min-width:0}
-.cx-f .ib{grid-row:1/3;width:30px;height:30px;border-radius:9px;background:var(--acs);color:var(--ac);display:grid;place-items:center}
-.cx-f .ib svg{width:16px;height:16px}
-.cx-f b{font-size:11.5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cx-f small{font-size:9.5px;color:var(--mut);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cx-f.off{opacity:.45}
-.cx-up{align-self:stretch;gap:6px}
-.cx-up svg{width:14px;height:14px}
+/* ═══════════════════════════════════════════════
+   پرداخت نهایی رابط — آیکن‌ها، شبیه‌ساز و جزئیات
+   ═══════════════════════════════════════════════ */
+/* آیکن‌های SVG به‌جای ایموجی در رابط ربات‌ساز */
+.archcard .tick svg{width:13px;height:13px}
+.fmtbar button svg{width:16px;height:16px;margin:auto}
+.fmtbar button.fx{display:grid;place-items:center}
+.cdo .b svg,.cdi .b svg{width:16px;height:16px}
+.ah2 svg{display:inline-block;width:14px;height:14px;vertical-align:-2px;color:var(--mut)}
+.chk svg{width:14px;height:14px}
+
+/* دکمه‌های کنار هر بلوک: هیچ‌وقت متن را عمودی نشکن */
+.bops{align-items:center}
+.bops .iconb,.km-ops .iconb{flex:none;overflow:hidden;white-space:nowrap;writing-mode:horizontal-tb}
+.bblk .gt b,.bblk .gt span{overflow-wrap:anywhere}
+
+/* متن تلگرامی داخل شبیه‌ساز، مثل خود تلگرام */
+.sm b,.sm strong{font-weight:800}
+.sm i,.sm em{font-style:italic}
+.sm u,.sm ins{text-decoration:underline;text-underline-offset:3px}
+.sm s,.sm del,.sm strike{text-decoration:line-through}
+.sm code,.sm pre{direction:ltr;unicode-bidi:isolate;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:color-mix(in srgb,var(--ink) 9%,transparent);padding:1px 6px;border-radius:6px}
+.sm pre{display:block;padding:8px 10px;margin:4px 0;white-space:pre-wrap}
+.sm blockquote{margin:4px 0;padding:2px 10px;border-inline-start:3px solid var(--ac);background:color-mix(in srgb,var(--ac) 8%,transparent);border-radius:6px}
+.sm a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.sm.sys{line-height:1.7;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--ink) 5%,transparent)}
+
+/* نوار بالای شبیه‌ساز: دکمه‌ها مرتب و بدون سرریز */
+.simbar .b.t{min-height:34px;padding:0 12px;font-size:12.5px;width:auto}
+.simbar .b.t svg{width:16px;height:16px}
+
+/* جزئیات ظاهری */
+.panel{border-radius:18px;box-shadow:0 1px 0 color-mix(in srgb,var(--ink) 4%,transparent),0 8px 24px -16px color-mix(in srgb,var(--ink) 35%,transparent)}
+.chip{transition:color .15s,box-shadow .15s,background .15s}
+.chip:hover{color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+.b:focus-visible,.iconb:focus-visible,.chip:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+textarea,input[type=text],input:not([type]),select{transition:box-shadow .15s,border-color .15s}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ═══════════════════════════════════════════════════════════════
+   بازطراحی بصری — سیستم طراحی یکپارچه (سطوح لایه‌ای، سایه، نور، حرکت)
+   فقط ظاهر را تغییر می‌دهد؛ چیدمان و رفتار دست‌نخورده می‌ماند.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:26px;
+  --sh-1:0 1px 2px rgba(8,25,32,.06),0 4px 14px -8px rgba(8,25,32,.18);
+  --sh-2:0 2px 4px rgba(8,25,32,.06),0 16px 36px -18px rgba(8,25,32,.28);
+  --ease:cubic-bezier(.22,.9,.3,1);
+  --glow:0 0 0 1px color-mix(in srgb,var(--ac) 40%,transparent),0 8px 28px -10px color-mix(in srgb,var(--ac) 55%,transparent);
+}
+:root[data-theme=dark]{
+  --bg:#060D12; --sf:#0D1920; --sf2:#13242D; --line:#1D3440; --line2:#15272F;
+  --ac:#35D3E8; --acs:rgba(53,211,232,.11);
+  --sh-1:0 1px 0 rgba(255,255,255,.03) inset,0 6px 18px -10px rgba(0,0,0,.7);
+  --sh-2:0 1px 0 rgba(255,255,255,.04) inset,0 22px 44px -22px rgba(0,0,0,.85);
+}
+body{background-image:
+  radial-gradient(1100px 520px at 85% -8%,color-mix(in srgb,var(--ac) 11%,transparent),transparent 62%),
+  radial-gradient(700px 420px at -10% 8%,color-mix(in srgb,var(--vio) 9%,transparent),transparent 60%),
+  radial-gradient(var(--dot) 1px,transparent 1.3px);
+  background-size:auto,auto,22px 22px;background-attachment:fixed}
+h1{letter-spacing:-.2px}
+h2{letter-spacing:-.1px}
+
+/* دکمه‌ها */
+.b{border-radius:var(--r-md);background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 88%,#fff),var(--ac));
+  box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 8px 20px -10px color-mix(in srgb,var(--ac) 80%,transparent);
+  transition:transform .14s var(--ease),box-shadow .2s,filter .2s}
+.b:hover{filter:brightness(1.05)}
+.b:active{transform:translateY(1px) scale(.985);box-shadow:0 1px 0 rgba(255,255,255,.2) inset}
+.b.o,.b.t{background:var(--sf2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line);filter:none}
+.b.o:hover,.b.t:hover{box-shadow:inset 0 0 0 1px var(--ac);color:var(--ac)}
+.b.t{background:transparent}
+.b.amber{background:linear-gradient(180deg,#FFD479,#FFB93A);color:#2B1B00;box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 8px 20px -10px rgba(255,185,58,.7)}
+.iconb{border-radius:var(--r-md);background:var(--sf2);box-shadow:inset 0 0 0 1px var(--line);transition:transform .14s var(--ease),box-shadow .2s,color .2s}
+.iconb:hover{box-shadow:inset 0 0 0 1px var(--ac);color:var(--ac)}
+.iconb:active{transform:scale(.92)}
+
+/* ورودی‌ها */
+textarea,input,select{border-radius:var(--r-md);background:color-mix(in srgb,var(--sf2) 88%,transparent);border:1px solid var(--line);padding:12px 14px}
+textarea::placeholder,input::placeholder{color:color-mix(in srgb,var(--mut) 75%,transparent)}
+textarea:focus,input:focus,select:focus{background:var(--sf2);box-shadow:0 0 0 4px var(--acs)}
+
+/* کارت‌ها و پنل‌ها */
+.panel,.cardbox,.tplc,.bpc,.mp,.q,.plan,.pack,.stat,.tile,.cdo{
+  border-radius:var(--r-lg);border:1px solid var(--line);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--sf) 100%,#fff 2%),var(--sf));
+  box-shadow:var(--sh-1);transition:border-color .2s,box-shadow .25s,transform .2s var(--ease)}
+.tplc:active,.bpc:active,.pack:active{transform:scale(.99)}
+.tplc:hover,.bpc:hover{border-color:color-mix(in srgb,var(--ac) 45%,var(--line));box-shadow:var(--sh-2)}
+.group{border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line);background:var(--sf);box-shadow:var(--sh-1)}
+.gi{transition:background .18s}
+.gi:hover{background:color-mix(in srgb,var(--ac) 5%,transparent)}
+.gi:active{background:var(--acs)}
+.ib{border-radius:12px;background:linear-gradient(145deg,color-mix(in srgb,var(--ac) 18%,transparent),color-mix(in srgb,var(--ac) 6%,transparent));color:var(--ac);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 22%,transparent)}
+.hero-t h1{background:linear-gradient(120deg,var(--ink),var(--ac));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* یادداشت‌ها و برچسب‌ها */
+.note{border-radius:var(--r-lg);box-shadow:var(--sh-1);backdrop-filter:blur(6px)}
+.tag,.chip{border-radius:99px}
+.tag{font-weight:600;letter-spacing:.1px}
+.chip{background:color-mix(in srgb,var(--sf2) 70%,transparent);padding:3px 12px}
+.chip.on,.chip[aria-pressed=true]{color:var(--ac);background:var(--acs);box-shadow:inset 0 0 0 1px var(--ac)}
+
+/* تب‌ها و کنترل قطعه‌ای */
+.tabs{background:var(--sf2);border-radius:var(--r-md);padding:4px;box-shadow:inset 0 0 0 1px var(--line)}
+.tab{border-radius:11px;transition:background .2s,color .2s,box-shadow .2s}
+.tab.on{background:var(--sf);color:var(--ac);box-shadow:var(--sh-1),inset 0 0 0 1px color-mix(in srgb,var(--ac) 35%,transparent)}
+.seg button{border-radius:var(--r-md);background:var(--sf);transition:all .2s var(--ease)}
+.seg button.on{box-shadow:var(--glow);background:var(--acs)}
+
+/* توکن، نوارها، شمارنده‌ها */
+.tokpill{padding:5px 11px;border-radius:99px;background:var(--toks);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tok) 30%,transparent)}
+.gauge,.pbar,.meter2,.lqbar{border-radius:99px;overflow:hidden}
+.stat{padding:12px}
+.stat .n,.tile .n{letter-spacing:-.3px}
+
+/* نوار پایین (داک) */
+.dpanel,.dock{border-radius:var(--r-xl);background:color-mix(in srgb,var(--sf) 78%,transparent);
+  -webkit-backdrop-filter:blur(18px) saturate(1.3);backdrop-filter:blur(18px) saturate(1.3);
+  border:1px solid color-mix(in srgb,var(--line) 80%,transparent);box-shadow:var(--sh-2)}
+.dn{border-radius:14px}
+.dn.on{background:linear-gradient(145deg,var(--ac),color-mix(in srgb,var(--ac) 70%,var(--vio)));box-shadow:var(--glow)}
+
+/* شیت‌ها */
+.sh{border-radius:var(--r-xl) var(--r-xl) 0 0;border:1px solid var(--line);border-bottom:0;background:var(--sf);box-shadow:0 -24px 60px -20px rgba(0,0,0,.6)}
+.sheet.show{backdrop-filter:blur(4px)}
+.grab{border-radius:99px;background:var(--line);width:44px;height:5px;opacity:.9}
+
+/* استودیو: کارت بخش‌ها و دکمه‌ها */
+.stc-card{border-radius:var(--r-lg);border:1px solid var(--line);background:linear-gradient(180deg,color-mix(in srgb,var(--sf) 100%,#fff 3%),var(--sf));box-shadow:var(--sh-2)}
+.stc-card.start{border-color:color-mix(in srgb,var(--ok) 55%,var(--line));box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 30%,transparent),var(--sh-2)}
+.stc-card.sel{border-color:var(--ac);box-shadow:var(--glow)}
+.stc-ic{border-radius:11px;background:var(--acs);color:var(--ac)}
+.stc-bub{border-radius:14px;background:var(--sf2);box-shadow:inset 0 0 0 1px var(--line2)}
+.stk-btn,.stk-cell{border-radius:11px;transition:background .15s,box-shadow .15s}
+.st-bar{background:color-mix(in srgb,var(--sf) 82%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.st-canvas{border-radius:var(--r-lg)}
+.st-mini{border-radius:var(--r-md);box-shadow:var(--sh-1)}
+
+/* شبیه‌ساز */
+.simbar{background:color-mix(in srgb,var(--sf) 86%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.simphone{border-radius:28px;border:1px solid var(--line);box-shadow:var(--sh-2);overflow:hidden;background:var(--bg)}
+.sm{box-shadow:var(--sh-1)}
+.sm.bot{background:var(--sf2);box-shadow:inset 0 0 0 1px var(--line2)}
+.sm.me{background:linear-gradient(145deg,var(--ac),color-mix(in srgb,var(--ac) 75%,var(--vio)))}
+.sbtn{border-radius:13px;background:var(--acs);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 28%,transparent)}
+.simcomp{background:var(--sf);border-top:1px solid var(--line2)}
+
+/* اسکرول‌بار ظریف */
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+
+/* ورود نرم صفحه‌ها */
+@keyframes rbRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#app>*{animation:rbRise .35s var(--ease) both}
+#app>*:nth-child(2){animation-delay:.04s}#app>*:nth-child(3){animation-delay:.08s}#app>*:nth-child(4){animation-delay:.12s}
+
+/* ═══════════════════════════════════════════════════════════════
+   اصلاح چیدمان — باگ‌های ظاهری دیده‌شده در اسکرین‌شات‌ها
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ۱) پیش‌نمایش مینی‌اپ: قاب گوشی وسط و دکمه‌ها «زیرش» (قبلاً کنارش می‌نشستند) */
+.bframe{flex-direction:column;align-items:center;gap:12px;overflow:hidden}
+.bphone{margin:0 auto;flex:none}
+.bpf{width:100%;margin-top:0}
+.bpf .b.t{width:auto;flex:none;min-height:36px;padding:0 14px}
+
+/* ۲) شبیه‌ساز: ورودی پیام دیگر زیر دکمه‌ی «ارسال» گم نمی‌شود */
+.simcomp{align-items:center}
+.simcomp input{flex:1 1 auto;min-width:0;width:auto;direction:rtl;text-align:right;min-height:44px}
+.simcomp .b{flex:none;width:auto;min-width:92px;min-height:44px}
+/* نوار بالای شبیه‌ساز: سه ردیف مرتب، بدون شکستن */
+.simbar{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:10px;padding:10px 14px 12px}
+.simr1{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.simr2{display:flex;align-items:center;gap:8px;min-width:0;overflow-x:auto;scrollbar-width:none}
+.simr2::-webkit-scrollbar,.simr3::-webkit-scrollbar{display:none}
+.simr2>*{flex:none}
+.simr2 .simseg{display:inline-grid;grid-template-columns:auto auto;gap:4px;padding:3px;border-radius:99px;background:var(--sf2);box-shadow:inset 0 0 0 1px var(--line)}
+.simr2 .simseg button{flex-direction:row;padding:5px 16px;border-radius:99px;box-shadow:none;background:transparent;font-size:12.5px;font-weight:600;white-space:nowrap}
+.simr2 .simseg button.on{background:var(--sf);color:var(--ac);box-shadow:var(--sh-1),inset 0 0 0 1px color-mix(in srgb,var(--ac) 40%,transparent)}
+.simr3{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.simr3 .b.t{flex:none;white-space:nowrap}
+.simside .b.o.sm{width:auto}
+.simside>.muted{margin-bottom:10px}
+/* «/start» داخل متن راست‌به‌چپ جابه‌جا نشود */
+.simside .b{unicode-bidi:plaintext}
+
+/* ۳) نقطه‌ی قرمز هدیه روی عدد توکن نمی‌افتد */
+.tokpill.gift::after{top:-2px;left:-2px;width:10px;height:10px}
+.tokpill{margin-inline-start:6px}
+
+/* ۴) نوار کناری: آیکن بیرون‌زده کوچک‌تر، تا روی کارت‌ها نیفتد */
+.dock{--keep:30px}
+.dock:not(.open) .dn.on{opacity:.92;width:34px;height:34px}
+
+/* ۵) کارتِ «جایزه‌ی امروز» و پنل بعدی بهم نچسبند */
+.daily{margin-bottom:14px}
+.daily+.panel,.daily+.cardbox,.daily+section{margin-top:0}
+.panel+.panel,.panel+.sec{margin-top:14px}
+.panel .sec{margin-top:18px}
+
+/* ۶) چیپ‌ها: فاصله‌ی یکسان و تراز یکنواخت */
+.chips{gap:8px;align-items:center}
+.chips .chip,.chips>*{flex:none}
+.lims .lim{display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* ۷) ردیف بلوک‌ها: دکمه‌های عملیات بیرون نزنند و عنوان بشکند نه دکمه‌ها */
+.bblk{flex-wrap:nowrap}
+.bblk .bops{flex:none;display:flex;gap:4px}
+.bblk .bops .iconb{width:32px;height:32px;min-width:32px;padding:0}
+@media (max-width:400px){.bblk .bops .iconb{width:29px;height:29px;min-width:29px}.bblk .ib{display:none}}
+
+/* ۸) نوار بالای استودیو: جستجو و وضعیت روی هم نیفتند */
+.st-search{width:132px}
+.st-search input{width:100%}
+.st-mini{top:56px}
+.scopebar{max-width:calc(100% - 180px);overflow-x:auto;scrollbar-width:none}
+.st-tools{max-width:calc(100% - 20px)}
+
+/* ۹) متن‌های بلند هیچ‌وقت از کارت بیرون نزنند */
+.panel,.gi .gt,.note .dt,.tplc,.bpc{overflow-wrap:anywhere}
+.ph h1,.ph h2{min-width:0}
+button{max-width:100%}
+
+/* ═══════ اصلاحات ظاهری v3.5.2 ═══════ */
+
+/* ۱) شبیه‌ساز: سوییچ خصوصی/گروه کنار عنوان؛ کادر چت محدود؛ کل صفحه اسکرولی */
+.simwrap{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.simwrap>*{flex:none}
+.simbar{position:sticky;top:0;z-index:3;gap:8px;padding:10px 14px}
+.simr1{display:flex;align-items:center;gap:10px}
+.simr1 b{flex:none}
+.simr1 .simseg{display:inline-grid;grid-template-columns:auto auto;gap:4px;padding:3px;border-radius:99px;background:var(--sf2);box-shadow:inset 0 0 0 1px var(--line);margin-inline-end:auto}
+.simr1 .simseg button{padding:5px 14px;border-radius:99px;box-shadow:none;background:transparent;font-size:12.5px;font-weight:600;white-space:nowrap}
+.simr1 .simseg button.on{background:var(--sf);color:var(--ac);box-shadow:var(--sh-1),inset 0 0 0 1px color-mix(in srgb,var(--ac) 40%,transparent)}
+.simr3{flex-wrap:wrap;overflow:visible}
+.simbody{flex:none;min-height:0;overflow:visible;align-items:flex-start;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+.simphone{flex:0 0 340px;height:min(520px,68vh)}
+@media (max-width:760px){
+  .simbody{flex-direction:column;align-items:stretch}
+  .simphone{flex:none;width:100%;height:min(340px,42vh)}
+  .simside{flex:none;padding:12px 2px 0}
+}
+
+/* ۲) سقف‌ها و امکانات */
+.qb{padding:14px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(160deg,color-mix(in srgb,var(--ac) 8%,var(--sf)),var(--sf) 60%)}
+.qb-h{display:flex;align-items:center;gap:8px}
+.qb-h h2{margin:0;font-size:15px;flex:1}
+.qb-h .bdg{background:var(--acs);color:var(--ac);border-radius:99px;padding:2px 10px;font-family:"Oxanium",monospace;font-size:11.5px;font-weight:700;direction:ltr}
+.qb-q{min-width:26px;height:26px;padding:0 8px}
+.qb .qi{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--acs);color:var(--ac);flex:none}
+.qb .qi svg{width:16px;height:16px}
+.qb-m{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qm{display:flex;gap:9px;align-items:center;padding:10px;border-radius:14px;background:var(--sf2);min-width:0}
+.qm .qt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--mut)}
+.qm .qt b{font-size:15px;color:var(--ink);line-height:1.3}
+.qm .qt small{font-size:11px;font-weight:500;color:var(--mut)}
+.qm .lm-b{height:5px;border-radius:4px;background:var(--bg);overflow:hidden;margin-top:3px}
+.qm .lm-b i{display:block;height:100%;border-radius:4px;background:var(--ac);transition:width .6s ease}
+.qm.full .lm-b i{background:var(--bad)}
+.qb-c{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.qc{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2);font-size:11px;color:var(--mut);text-align:center;line-height:1.5}
+.qc .qi{width:26px;height:26px;border-radius:9px}
+.qc b{font-size:17px;color:var(--ink);line-height:1.2}
+.qb-f{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qf{display:flex;gap:9px;align-items:flex-start;padding:10px;border-radius:14px;background:var(--sf2);min-width:0}
+.qf .qi{width:28px;height:28px;border-radius:9px}
+.qf b{display:block;font-size:12.5px;line-height:1.5}
+.qf small{display:block;font-size:10.5px;color:var(--mut);line-height:1.6}
+@media (max-width:350px){.qb-f{grid-template-columns:1fr}}
+.qb-more summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--ac);padding:4px 2px;list-style:none}
+.qb-more summary::-webkit-details-marker{display:none}
+.qb-more[open] summary{margin-bottom:8px}
+.qb-up{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--mut);padding-top:10px;border-top:1px dashed var(--line)}
+.qb-up .b{width:auto;min-height:36px;padding:0 14px;flex:none}
+
+/* ۳) کارت‌های نقشه‌ی آماده و قالب‌ها: ظریف و جمع‌وجور */
+.bpg{gap:8px}
+.bpc{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"i t" "f f";align-items:center;gap:6px 10px;padding:10px 12px;border-radius:14px}
+.bpc .bpi{grid-area:i;width:34px;height:34px;border-radius:11px}
+.bpc .bpi svg{width:18px;height:18px}
+.bpc .bpt{grid-area:t;min-width:0}
+.bpc .bpt b{font-size:13px;line-height:1.5}
+.bpc .bpt span{font-size:11.5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bpc .bpf{grid-area:f;flex-wrap:nowrap;overflow:hidden;gap:4px}
+.bpc .bpf .chip{font-size:10px;padding:0 8px;min-height:20px;white-space:nowrap}
+.tplgrid{gap:8px}
+.tplgrid .tplc{padding:10px 12px;gap:8px;border-radius:14px}
+.tplgrid .tplc .tplt{gap:10px}
+.tplgrid .tplc .tplt .ib{width:36px;height:36px;border-radius:11px;flex:none}
+.tplgrid .tplc .tplt>.b{width:auto;min-height:34px;padding:0 14px;font-size:13px;flex:none}
+.tplgrid .tplc .gt b{font-size:13.5px}
+.tplgrid .tplc .gt span{font-size:11.5px;line-height:1.5}
+.tplgrid .tplc .chips{gap:5px;flex-wrap:nowrap;overflow:hidden}
+.tplgrid .tplc .chip,.tplgrid .tplc .xbd{font-size:10.5px;white-space:nowrap}
+
+/* ۴) استودیو: آیکن لبه‌ی چپ نیمه‌پنهان؛ نوار «کار می‌کند در» کوچک و زیر دکمه‌ی وضعیت */
+.dock{--keep:12px}
+.dock:not(.open) .dn.on{opacity:.9}
+.scopebar{top:54px;inset-inline-start:10px;inset-inline-end:auto;max-width:calc(100% - 126px);flex-wrap:nowrap;white-space:nowrap;overflow-x:auto;scrollbar-width:none;gap:4px;padding:3px 8px;font-size:10.5px}
+.scopebar::-webkit-scrollbar{display:none}
+.scopebar>*{flex:none}
+.scopebar .chip{min-height:0;height:22px;padding:0 9px;font-size:10.5px}

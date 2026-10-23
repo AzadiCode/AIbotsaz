@@ -86,7 +86,7 @@ const SC3_PACKS = [
 function packsSheet(){
   return head("بسته‌های آماده") + `
     <p class="muted">هر بسته چند بخش آماده به ربات اضافه می‌کند؛ بعداً همه‌چیزش قابل ویرایش است.</p>
-    <div class="bpg">${SC3_PACKS.map(([id, t, d], i) => `<button class="bpc" data-a="packgo" data-i="${i}"><span class="bpr"><span class="bpi">${IC.spark}</span><span class="bpt"><b>${esc(t)}</b><span>${esc(d)}</span></span></span></button>`).join("")}</div><div class="fgap"></div>`;
+    <div class="bpg">${SC3_PACKS.map(([id, t, d], i) => `<button class="bpc" data-a="packgo" data-i="${i}"><span class="bpi">${IC.spark}</span><span class="bpt"><b>${esc(t)}</b><span>${esc(d)}</span></span></button>`).join("")}</div><div class="fgap"></div>`;
 }
 Object.assign(SHEETS, {packs: {html: packsSheet}});
 Object.assign(A, {

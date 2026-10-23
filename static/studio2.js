@@ -63,7 +63,7 @@ function wtSheet(){
     <div class="wtc-t"><span class="tag t">آنگاه</span><span>${S.cur.config.mod ? "پیام خوش‌آمد فرستاده می‌شود" : "مدیریت گروه روشن نیست"}</span></div>
     <div class="wtc-ops"><button class="b t" data-a="wtmod">تنظیم خوش‌آمد</button></div></div>`;
   return head("وقتی … آنگاه") + `
-    <p class="muted">قانون‌های خودکار ربات اینجاست؛ هر قانون یعنی «وقتی این اتفاق افتاد، آنگاه این کار را بکن». بدون هیچ اصطلاح فنی.</p>
+    <p class="muted">قانون‌های خودکار ربات اینجاست. هر قانون یعنی: «وقتی این اتفاق افتاد، این کار را انجام بده».</p>
     <div class="sub"><span>قانون‌های گروه</span><button class="b sm" data-a="wtnew">${IC.plus}قانون جدید</button></div>
     ${(D.trs.length || D.new !== null) ? D.trs.map(wtCard).join("") : `<p class="muted">هنوز قانونی برای گروه نساخته‌ای.</p>`}
     ${D.new !== null ? wtEditCard(D.new) : ""}
@@ -163,7 +163,7 @@ function listsSheet(){
     <div class="sub"><span>لیست‌های این ربات</span></div>
     ${names.length ? `<div class="group">${names.map(t => `<button class="gi" data-a="ltopen" data-t="${s2Esc(t)}"><span class="ib">${S2IC.table}</span>
       <span class="gt"><b>${s2Esc(t)}</b><span>باز کردن جدول</span></span>${goIc}</button>`).join("")}</div>`
-      : `<p class="muted">هنوز لیستی نداری. لیست وقتی ساخته می‌شود که ربات یا مینی‌اپ داده ثبت کند؛ یا همین حالا یکی بساز.</p>`}
+      : `<p class="muted">هنوز لیستی نداری. لیست‌ها وقتی ساخته می‌شوند که ربات یا مینی‌اپ داده‌ای ثبت کند؛ یا می‌توانی همین حالا یکی بسازی.</p>`}
     <div class="sub"><span>جدول تازه</span></div>
     <span class="lbl">نام جدول (انگلیسی، مثل orders)</span><input class="ltr" id="lt-name" maxlength="20" placeholder="orders" autocomplete="off">
     <span class="lbl">ستون‌ها (با ویرگول؛ اسم فارسی هم می‌شود)</span><input class="fa" id="lt-cols" maxlength="200" placeholder="نام محصول، قیمت، تلفن">
@@ -185,7 +185,7 @@ function listeditSheet(){
       ${cols.map((c, ci) => `<input class="ltcell" data-i="${i}" data-c="${ci}" value="${s2Esc(r[ci] ?? "")}">`).join("")}
       <button class="iconb sm" data-a="ltrowdel" data-i="${i}" aria-label="حذف ردیف" style="color:var(--bad)">${IC.x}</button></div>`).join("");
   return head("جدول «" + s2Esc(t) + "»") + `
-    <p class="muted">مثل اکسل پر کن. ستون‌ها را از پایین اضافه کن؛ می‌توانی از اکسل کپی کنی و با «چسباندن CSV» همه‌ی ردیف‌ها را یک‌جا وارد کنی.</p>
+    <p class="muted">مثل اکسل پرش کن. ستون‌ها را از پایین اضافه کن؛ یا از اکسل کپی بگیر و با «چسباندن CSV» همه‌ی ردیف‌ها را یک‌جا وارد کن.</p>
     <div class="sub"><span>ستون‌ها (${fa(cols.length)})</span><button class="b o sm" data-a="ltcoladd">${IC.plus}ستون</button></div>
     <div class="ltrow lth">${cols.map((c, ci) => `<input class="ltcell ltc" data-c="${ci}" value="${s2Esc(c)}" placeholder="اسم ستون">`).join("")}
       <button class="iconb sm" data-a="ltcoldel" aria-label="حذف ستون آخر" style="color:var(--bad)">${IC.minus}</button></div>
@@ -346,7 +346,7 @@ function growthSheet(){
   const g = S.cur.config.growth || {};
   D = {on: !!g.on, chat: g.chat || "", reward: g.reward ?? 10, per_day: g.per_day ?? 20, clawback: g.clawback !== false};
   return head("ربات رشد") + `
-    <p class="muted">هر کاربر لینک دعوت اختصاصی خودش را می‌گیرد؛ فقط عضویتِ واقعیِ واردشده با همان لینک شمرده می‌شود و با خروج، پاداش کسر می‌شود. هیچ ابزار عضو فیک وجود ندارد.</p>
+    <p class="muted">هر کاربر یک لینک دعوت مخصوص خودش می‌گیرد. فقط عضویت‌های واقعی از همان لینک شمرده می‌شوند و اگر عضوی خارج شود، پاداشش کم می‌شود.</p>
     <label class="chk"><input type="checkbox" id="gr-on"${D.on ? " checked" : ""}> رشد فعال باشد</label>
     <span class="lbl">گروه یا کانالِ رشد (که لینک‌ها برایش ساخته می‌شوند؛ ربات باید ادمینش باشد)</span>
     <input class="ltr" id="gr-chat" value="${esc(D.chat)}" placeholder="@mychannel یا -100…" autocomplete="off">
@@ -393,7 +393,7 @@ function agentSheet(){
       : `<p class="muted">جدولی نداری؛ از «لیست‌ها» بساز تا عامل بتواند در آن‌ها جستجو کند.</p>`}
     <div class="sub"><span>شخصیت (دستور عامل)</span></div>
     <textarea class="fa" id="ag-prompt" maxlength="1500" style="min-height:110px">${esc(node.ai?.prompt || "")}</textarea>
-    <p class="muted mt">چه کسی باشد، با چه لحنی جواب بدهد، چه چیزهایی نمی‌گوید و از چه دانشی استفاده کند. فقط بر اساس «دانش» زیر جواب بدهد.</p>
+    <p class="muted mt">مشخص کن عامل چه نقشی دارد، با چه لحنی جواب می‌دهد و چه چیزهایی را نمی‌گوید. پاسخ‌ها فقط بر پایه‌ی «دانش» زیر داده می‌شوند.</p>
     <div class="sub"><span>دانش عامل (${N((kbl || []).length)} قطعه)</span></div>
     ${(kbl || []).length ? kbl.map(k => `<div class="rl"><div class="cmd" style="justify-content:space-between"><b>${esc(k.t)}</b><button class="iconb sm" data-a="agkdel" data-id="${esc(k.id)}" aria-label="حذف" style="color:var(--bad)">${IC.x}</button></div><p class="muted">${esc(k.x.slice(0, 90))}${k.x.length > 90 ? "…" : ""}</p></div>`).join("")
       : `<p class="muted">هنوز دانشی نداری؛ ساعات کاری، آدرس، خدمات و قیمت‌ها را اضافه کن.</p>`}
@@ -460,7 +460,7 @@ function discSheet(){
   if(S2._dcs === undefined) api(`/api/bots/${S.cur.id}/dcodes`).then(d => { S2._dcs = d.items || []; if(S.sheet?.kind === "discs") renderSheet(); }).catch(() => { S2._dcs = []; });
   const items = S2._dcs;
   return head("کدهای تخفیف") + `
-    <p class="muted">در ربات، اکشن «کد تخفیف را بررسی و اعمال کن» همین کدها را واقعی بررسی می‌کند: درصدی یا مبلغی، با سقف مصرف و تاریخ انقضا.</p>
+    <p class="muted">در ربات، اکشن «کد تخفیف را بررسی و اعمال کن» همین کدها را بررسی می‌کند. هر کد می‌تواند درصدی یا مبلغی باشد و سقف مصرف و تاریخ انقضا داشته باشد.</p>
     ${(items || []).length ? items.map(c => `
       <div class="rl"><div class="cmd" style="justify-content:space-between">
         <b dir="ltr">${esc(c.code)}</b>
@@ -499,7 +499,7 @@ Object.assign(A, {
 
 /* ═════════════════ ۶) شبیه‌ساز چت ═════════════════
    موتور بدون تماس با تلگرام و بدون هزینه اجرا می‌شود: همان معنای کانفیگ (متغیر، شرط،
-   اکشن، فرم، دستیار ساختگی، پرداخت آزمایشی) در مرورگر. حالت گروه با چند کاربر ساختگی. */
+   اکشن، فرم، دستیار ساختگی، پرداخت ساختگی) در مرورگر. حالت گروه با چند کاربر ساختگی. */
 const SIM = {on: false, mode: "pv", users: [], ui: 0, glo: {}, tables: {}, clock: 0, timers: [], log: [], scens: [], rec: []};
 const SIM_NAMES = ["آرش", "سارا", "نیما"];
 const SIM_TZ = 3.5 * 3600 * 1000;
@@ -601,8 +601,8 @@ function simDo(acts, st){
       }
       case "pick": { const o = val.split("|").map(x => x.trim()).filter(Boolean); if(o.length) simSet(st, a.var, o[Math.floor(Math.random() * o.length)]); break; }
       case "dice": { const MX = {"🎲": 6, "🎯": 6, "🏀": 5, "⚽": 5, "🎳": 6, "🎰": 64}; simSet(st, a.var, String(1 + Math.floor(Math.random() * ((MX[a.emoji] || 6))))); break; }
-      case "notify": simBot(" 🔔 خبر برای تو: " + simFill(a.value || "(خبر)", st), st, true); break;
-      case "remind": SIM.timers.push({at: SIM.clock + (a.minutes || 60) * 60000, text: simFill(a.value || "یادآوری", st), st}); simSys(" ⏰ یادآوری ساخته شد: " + simFill(a.value || "…", st)); break;
+      case "notify": simBot("خبر برای صاحب ربات: " + simFill(a.value || "(خبر)", st), st, true); break;
+      case "remind": SIM.timers.push({at: SIM.clock + (a.minutes || 60) * 60000, text: simFill(a.value || "یادآوری", st), st}); simSys("یادآوری ساخته شد: " + simFill(a.value || "…", st)); break;
       case "db_add": { const tab = simTables(a.table); if(tab.length < 500) tab.push({u: st.id, d: Object.fromEntries(Object.entries(a.data || {}).map(([k, v]) => [k, simFill(v, st)]))}); break; }
       case "db_del": { const tab = simTables(a.table); const w = a.when; SIM.tables[a.table] = tab.filter(r => !(w ? simCheck(w, st) : (a.scope !== "all" && r.u === st.id))); break; }
       case "db_get": { const tab = simTables(a.table), w = a.when; const r = [...tab].reverse().find(r => !w || simCheck(w, st));
@@ -611,13 +611,13 @@ function simDo(acts, st){
         tab.forEach(r => { if(!w || simCheck(w, st)) Object.entries(a.data || {}).forEach(([k, v]) => r.d[k] = simFill(v, st)); }); break; }
       case "fetch": simSet(st, a.var, ""); break;
       case "send": { const nid = a.node; if(S.cur.config.nodes[nid]) simSend(nid, st); break; }
-      case "game_play": simSys(" 🎮 بازی «" + (a.game || "") + "» شروع می‌شود (در ربات واقعی کارت بازی باز می‌شود)"); break;
+      case "game_play": simSys("بازی «" + (a.game || "") + "» شروع می‌شود (در ربات واقعی، کارت بازی باز می‌شود)"); break;
       case "calc": { const v = simCalc(simFill(a.value || "", st)); if(v !== null) simSet(st, a.var, v); break; }
       case "disc": simDisc(a, st); break;
       case "sub_add": { const plan = (a.plan || "vip").toLowerCase(); const days = Math.max(1, parseFloat(simFill(a.days || "30", st)) || 30);
         st.subs = st.subs || {}; const cur = st.subs[plan] || 0; st.subs[plan] = Math.max(SIM.clock, cur) + days * 86400000;
         if(a.var){ st.vars[a.var] = plan; st.vars[a.var + "_exp"] = new Date(st.subs[plan]).toLocaleDateString("fa-IR-u-nu-latn"); }
-        simSys(" ⭐ اشتراک «" + plan + "» برای " + days + " روز فعال شد"); break; }
+        simSys("اشتراک «" + plan + "» برای " + days + " روز فعال شد"); break; }
       case "sub_del": { const plan = (a.plan || "vip").toLowerCase(); if(st.subs) delete st.subs[plan];
         simSys(" اشتراک «" + plan + "» لغو شد"); break; }
     }
@@ -705,8 +705,12 @@ function simListHTML(n, st){
   if(!rows.length) return ls.empty || "هنوز چیزی ثبت نشده.";
   return rows.map((r, i) => simFill((ls.line || "#{n}").replace(/\{([a-z0-9_]+)\}/g, (m, k) => k === "n" ? String(i + 1) : k === "u" ? (SIM.users.find(x => x.id === r.u) || {}).name || "?" : (r.d[k] ?? "")), st)).join("\n");
 }
+function simRich(text){
+  /* متن تلگرامی (b, i, u, s, code, pre, a, blockquote) را مثل خود تلگرام نشان می‌دهد؛ هر چیز دیگر امن و خام می‌ماند */
+  return tgHtml(text).replace(/(<[^>]*>)|(\d+)/g, (m, tag, num) => tag ? tag : `<span class="n">${num}</span>`).replace(/\n/g, "<br>");
+}
 function simMsgHTML(text, kind, kw){
-  return `<div class="sm ${kind || ""}" ${kw || ""}>${digitsHTML(text).replace(/\n/g, "<br>")}</div>`;
+  return `<div class="sm ${kind || ""}" ${kw || ""}>${simRich(text)}</div>`;
 }
 function simBot(text, st, quiet){
   const u = simU();
@@ -732,8 +736,8 @@ function simExpectHTML(st){
   if(!st.expect) return "";
   const n = S.cur.config.nodes[st.expect.nid];
   if(!n) return "";
-  if(n.fields && st.expect.qi < n.fields.length) return `<div class="shint">✍️ ${esc(n.fields[st.expect.qi])} ${n.types?.[st.expect.qi] === "number" ? "(فقط عدد)" : ""}</div>`;
-  if(n.ask) return `<div class="shint">✍️ پیامت را بنویس…</div>`;
+  if(n.fields && st.expect.qi < n.fields.length) return `<div class="shint">${esc(n.fields[st.expect.qi])} ${n.types?.[st.expect.qi] === "number" ? "(فقط عدد)" : ""}</div>`;
+  if(n.ask) return `<div class="shint">پیامت را بنویس…</div>`;
   return "";
 }
 function simSend(nid, st){
@@ -747,16 +751,16 @@ function simSend(nid, st){
   st.expect = null;
   if(n.ai){
     simBot(simFill(simAlt(n, st) || n.text, st), st);
-    simBot("🤖 (پاسخ آزمایشی دستیار — در ربات واقعی جواب هوشمند همین‌جا می‌آید)", st);
+    simBot("(پاسخ آزمایشی دستیار؛ در ربات واقعی، پاسخ هوشمند همین‌جا نمایش داده می‌شود)", st);
     simPaint();
     return;
   }
   let text = simAlt(n, st) || n.text;
   const lt = simListHTML(n, st);
   if(lt) text += "\n" + lt;
-  if(n.board) text += "\n🏆 (جدول برترین‌ها در ربات واقعی اینجا نمایش داده می‌شود)";
+  if(n.board) text += "\n(جدول برترین‌ها در ربات واقعی اینجا نمایش داده می‌شود)";
   simBot(simFill(text, st), st);
-  if(n.join) { simBot("🔒 (قفل عضویت — در ربات واقعی تا عضویت کانال، ادامه نمی‌دهد)", st); simPaint(); return; }
+  if(n.join) { simBot("(قفل عضویت؛ در ربات واقعی، تا زمانی که کاربر عضو کانال نشود ادامه پیدا نمی‌کند)", st); simPaint(); return; }
   const goto2 = simRoute(n, st);
   if(goto2) return simSend(goto2, st);
   if(n.fields?.length || n.ask){
@@ -779,20 +783,20 @@ function simFindBtn(nid, key){
 function simPress(id, key){
   const st = simU(), b = simFindBtn(id, key);
   if(!b) return;
-  st.chat.push({who: "me", text: "👆 " + simFill(b.text, st)});
+  st.chat.push({who: "me", text: simFill(b.text, st)});
   if(b.pay){
     simDo(b.do, st);
-    simSys("💳 پرداخت آزمایشی تأیید شد («" + simFill(b.pay.title || b.text, st) + "»)");
+    simSys("پرداخت آزمایشی تأیید شد («" + simFill(b.pay.title || b.text, st) + "»)");
     if(b.pay.text) simBot(simFill(b.pay.text, st), st);
     if(b.pay.goto) return simSend(b.pay.goto, st);
     return simPaint();
   }
   simDo(b.do, st);
-  if(b.alert !== undefined && b.alert !== ""){ simBot("💬 " + simFill(b.alert, st), st); return simPaint(); }
-  if(b.copy){ simSys("📋 کپی شد: " + simFill(b.copy, st)); return simPaint(); }
-  if(b.share){ simSys("📤 پنجره‌ی اشتراک با لینک دعوت باز می‌شود"); return simPaint(); }
-  if(b.url){ simSys("🔗 لینک باز می‌شود: " + simFill(b.url, st)); return simPaint(); }
-  if(b.app !== undefined){ simSys("📱 مینی‌اپ باز می‌شود (در ربات واقعی)"); return simPaint(); }
+  if(b.alert !== undefined && b.alert !== ""){ simBot(simFill(b.alert, st), st); return simPaint(); }
+  if(b.copy){ simSys("متن کپی شد: " + simFill(b.copy, st)); return simPaint(); }
+  if(b.share){ simSys("پنجره‌ی اشتراک‌گذاری لینک دعوت باز می‌شود"); return simPaint(); }
+  if(b.url){ simSys("لینک باز می‌شود: " + simFill(b.url, st)); return simPaint(); }
+  if(b.app !== undefined){ simSys("مینی‌اپ باز می‌شود (در ربات واقعی)"); return simPaint(); }
   if(b.goto) return simSend(b.goto, st);
   simPaint();
 }
@@ -808,7 +812,7 @@ function simUserText(raw){
       if(!hit) continue;
       simDo(t.do, st);
       if(t.reply) simBot(simFill(t.reply, st), st);
-      if(t.delete) simSys("🧹 پیام کاربر پاک شد");
+      if(t.delete) simSys("پیام کاربر پاک شد");
       return simPaint();
     }
   }
@@ -820,7 +824,7 @@ function simUserText(raw){
       if(ty === "number") ok = !isNaN(parseFloat(raw));
       if(ty === "phone") ok = /^\+?\d{8,15}$/.test(raw.replace(/[\s\-()]/g, ""));
       if(ty === "email") ok = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(raw);
-      if(!ok) { simBot("❌ " + ({number: "فقط عدد بفرست.", phone: "شماره تماس معتبر بفرست (مثل 09123456789).", email: "ایمیل معتبر بفرست."}[ty] || "درست بنویس."), st); return simPaint(); }
+      if(!ok) { simBot(({number: "فقط عدد بفرست.", phone: "یک شماره‌ی معتبر بفرست (مثل 09123456789).", email: "یک ایمیل معتبر بفرست."}[ty] || "دوباره و درست بنویس."), st); return simPaint(); }
       if(v) simSet(st, v, raw);
       if(qi + 1 < n.fields.length){ st.expect.qi++; return simPaint(); }
       if(n.done) simBot(simFill(n.done, st), st);
@@ -842,16 +846,16 @@ function simEvent(kind){
   const st = simU();
   SIM.rec.push({type: "event", v: kind, u: SIM.ui});
   if(kind === "join"){
-    simSys("👥 عضو جدید وارد گروه شد: " + st.name);
+    simSys("عضو جدید وارد گروه شد: " + st.name);
     const w = (S.cur.config.mod || {}).welcome;
     if(w) simBot(simFill(w, st).replace(/\{group\}/g, "این گروه"), st);
     else simBot("(پیام خوش‌آمد تنظیم نشده — در «مدیریت گروه و کانال» بگذار)", st);
   }
-  if(kind === "leave") simSys("🚪 " + st.name + " گروه را ترک کرد");
-  if(kind === "pay"){ simSys("💳 یک پرداخت آزمایشی انجام شد"); simBot("✅ پرداخت دریافت شد. ممنون!", st); }
-  if(kind === "jump"){ SIM.clock += 3600 * 1000; simSys("⏩ یک ساعت جلو رفتیم؛ الان ساعت " + simVar(st, "time") + " است");
+  if(kind === "leave") simSys(st.name + " گروه را ترک کرد");
+  if(kind === "pay"){ simSys("یک پرداخت آزمایشی انجام شد"); simBot("پرداخت دریافت شد. ممنون!", st); }
+  if(kind === "jump"){ SIM.clock += 3600 * 1000; simSys("زمان یک ساعت جلو رفت؛ ساعت الان " + simVar(st, "time") + " است");
     const due = SIM.timers.filter(x => x.at <= SIM.clock);
-    for(const x of due) simBot("⏰ " + x.text, st);
+    for(const x of due) simBot(x.text, st);
     SIM.timers = SIM.timers.filter(x => x.at > SIM.clock);
   }
   simPaint();
@@ -880,17 +884,15 @@ function simHTML(){
   const users = SIM.users.map((u, i) => `<button class="chip ${i === SIM.ui ? "on" : ""}" data-a="simuser" data-i="${i}">${esc(u.name)}</button>`).join("");
   return `<div class="simwrap" id="simwrap">
     <div class="simbar">
-      <div class="simtop">
-        <b>${IC.sim} شبیه‌ساز</b>
+      <div class="simr1"><b>${IC.sim} شبیه‌ساز</b>
         <div class="seg simseg">
           <button class="${SIM.mode === "pv" ? "on" : ""}" data-a="simmode" data-v="pv">چت خصوصی</button>
           <button class="${SIM.mode === "group" ? "on" : ""}" data-a="simmode" data-v="group">گروه</button>
         </div>
-        <span class="fgap"></span>
-        <button class="iconb" data-a="simclose" aria-label="بستن شبیه‌ساز">${IC.x}</button>
-      </div>
-      <div class="simacts">
-        ${SIM.mode === "group" ? `${users}<button class="b t" data-a="simev" data-v="join">${IC.plus}عضو جدید</button>` : ""}
+        <button class="iconb" data-a="simclose" aria-label="بستن شبیه‌ساز">${IC.x}</button></div>
+      ${SIM.mode === "group" ? `<div class="simr2"><div class="simusers">${users}</div></div>` : ""}
+      <div class="simr3">
+        ${SIM.mode === "group" ? `<button class="b t" data-a="simev" data-v="join">${IC.plus}عضو جدید</button>` : ""}
         <button class="b t" data-a="simev" data-v="pay">${IC.coin}پرداخت آزمایشی</button>
         <button class="b t" data-a="simev" data-v="jump">${IC.clock}جلو بردن زمان</button>
         <button class="b t" data-a="simreset">${IC.refresh}شروع دوباره</button>
@@ -898,10 +900,10 @@ function simHTML(){
     </div>
     <div class="simbody">
       <div class="simphone"><div class="simchat" id="simlog"></div>
-        <div class="simcomp"><input id="simtext" placeholder="پیام بنویس و اینتر بزن…" autocomplete="off"><button class="b" data-a="simsend">فرست</button></div>
+        <div class="simcomp"><input id="simtext" placeholder="پیامت را بنویس…" autocomplete="off"><button class="b" data-a="simsend">ارسال</button></div>
         <div id="simkbd"></div></div>
       <div class="simside">
-        <p class="muted">این فقط یک شبیه‌سازی است و توکنی مصرف نمی‌کند. هر بخش از ربات که اجرا شود، روی نقشه سبز می‌شود.</p>
+        <p class="muted">این فقط یک شبیه‌سازی است و توکنی مصرف نمی‌کند. هر بخشی که اجرا شود، روی نقشه سبز می‌شود.</p>
         <button class="b o sm" data-a="simstart">${IC.play}اجرای /start</button>
         <div class="sub"><span>سناریوها</span><button class="b o sm" data-a="simscsave">${IC.copy}ذخیره‌ی سناریو</button></div>
         ${SIM.scens.length ? SIM.scens.map((s, i) => `<button class="gi" data-a="simscgo" data-i="${i}"><span class="ib">${IC.play}</span><span class="gt"><b>${esc(s.name || "سناریو " + (i + 1))}</b><span>اجرای خودکار</span></span></button>`).join("") : `<p class="muted">سناریویی ذخیره نشده.</p>`}
@@ -919,17 +921,17 @@ Object.assign(A, {
   },
   simclose: () => { SIM.on = false; $("#simwrap")?.remove(); },
   simreset: () => { simInit(); SIM.rec = []; simRerender(); },
-  simmode: el => { SIM.mode = el.dataset.v; SIM.ui = 0; simU().chat.push({who: "sys", text: SIM.mode === "group" ? "حالت گروه: پاسخ‌ها همان‌جا در گروه می‌آید" : "حالت چت خصوصی"}); simRerender(); },
+  simmode: el => { SIM.mode = el.dataset.v; SIM.ui = 0; simU().chat.push({who: "sys", text: SIM.mode === "group" ? "حالت گروه: پاسخ‌ها همان‌جا در گروه نمایش داده می‌شود" : "حالت چت خصوصی"}); simRerender(); },
   simuser: el => { SIM.ui = +el.dataset.i; simRerender(); },
   simev: el => simEvent(el.dataset.v),
   simsend: () => { const inp = $("#simtext"), v = (inp?.value || "").trim(); if(!v) return; inp.value = ""; simUserText(v); },
   simstart: () => { const st = simU(); SIM.rec.push({type: "start", u: SIM.ui}); st.chat = st.chat.filter(m => m.who === "sys"); simSend(S.cur.config.start, st); },
   simscsave: () => {
-    if(!SIM.rec.length) return toast("اول چند قدم در شبیه‌ساز بردار (پیام، دکمه یا رویداد)");
+    if(!SIM.rec.length) return toast("اول چند مرحله را در شبیه‌ساز انجام بده (پیام، دکمه یا رویداد)");
     SIM.scens.push({name: "سناریو " + new Date().toLocaleTimeString("fa-IR-u-nu-latn", {hour: "2-digit", minute: "2-digit"}), steps: JSON.parse(JSON.stringify(SIM.rec.slice(-60)))});
     SIM.scens = SIM.scens.slice(-6);
     try{ localStorage.setItem("azadi.sim." + S.cur.id, JSON.stringify(SIM.scens)); }catch(_){}
-    toast("سناریو ذخیره شد؛ بعداً با یک ضربه اجرایش کن"); simRerender();
+    toast("سناریو ذخیره شد؛ بعداً با یک لمس اجرایش کن"); simRerender();
   },
   simscgo: el => {
     const sc = SIM.scens[+el.dataset.i]; if(!sc) return;
@@ -1036,7 +1038,7 @@ function cpbotSheet(){
     const taken = new Set(Object.keys(cur.nodes));
     const clash = ids.filter(x => taken.has(x)).length;
     body += `<div class="sub"><span>${N(ids.length)} بخش انتخاب‌شده از «${esc(other.name)}»</span></div>
-      ${ids.map(x => `<div class="vdl">✅ ${esc(titleOf(src, x))} <small dir="ltr">${esc(x)}</small></div>`).join("") || `<p class="muted">چیزی انتخاب نشده.</p>`}
+      ${ids.map(x => `<div class="vdl">${esc(titleOf(src, x))} <small dir="ltr">${esc(x)}</small></div>`).join("") || `<p class="muted">چیزی انتخاب نشده.</p>`}
       ${clash ? `<p class="muted">نام‌های همنام خودکار تازه می‌شوند.</p>` : ""}
       <div class="bar"><button class="b" data-a="cpdo"${ids.length ? "" : " disabled"}>${IC.copy}افزودن به «${esc(S.cur.name)}»</button></div>`;
   }
@@ -1067,11 +1069,11 @@ Object.assign(A, {
       }
       const st = cfg.nodes[cfg.start];
       if(st){
-        const b = {text: "📋 بخش تازه", goto: map[ids[0]]};
+        const b = {text: "بخش تازه", goto: map[ids[0]]};
         const row = (st.buttons || []).find(r => r.length < 3);
         if(row) row.push(b); else st.buttons = (st.buttons || []).concat([[b]]);
       }
-    }, N(ids.length) + " بخش کپی شد و در شروع دکمه‌ی ورود خورد");
+    }, N(ids.length) + " بخش کپی شد و دکمه‌ی ورود به آن در «شروع» اضافه شد");
     ST.selMode = false; S2.sel = []; stSelBar(); closeSheet();
   }),
 });

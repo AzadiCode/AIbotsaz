@@ -467,7 +467,7 @@ function stCardHTML(id, dead){
     ${tags.length ? `<div class="stc-badges">${tags.join("")}</div>` : ""}
     ${bub}${kb}
     ${logic ? `<div class="stc-sec">مسیرهای شرطی و خودکار</div>${logic}` : ""}
-    <div class="stc-row plus"><span class="pa" data-pa="+" data-n="${esc(id)}" data-pc="var(--ac)"></span><span class="ric">${IC.plus}</span><span class="rlb">سیم بکش تا دکمه‌ی جدید بسازی</span></div>
+    <div class="stc-row plus"><span class="pa" data-pa="+" data-n="${esc(id)}" data-pc="var(--ac)"></span><span class="ric">${IC.plus}</span><span class="rlb">سیم بکش تا دکمه‌ی تازه بسازی</span></div>
     <div class="stc-act"><button data-a="stbtn" data-n="${esc(id)}">${IC.plus}دکمه‌ی جدید</button><button data-a="stkm" data-n="${esc(id)}">${IC.layers}مدیریت دکمه‌ها</button></div>
   </div>`;
 }
@@ -612,7 +612,7 @@ function stPaintWorld(){
 /* ── ورود به استودیو ── */
 function stHintHTML(){
   try{ if(localStorage.getItem("azadi.studio.hint") === "1") return ""; }catch(_){}
-  return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیام ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به بخش دیگری وصلش کن.</span><button class="iconb sm" data-a="sthint" aria-label="بستن راهنما">${IC.x}</button></div>`;
+  return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
 }
 function renderStudio(){
   if(!S.bots.length){
@@ -676,7 +676,7 @@ function renderStudio(){
     ST._ro.observe(cv0);
   }
   try{ stPaintWorld(); }
-  catch(err){ console.error("studio paint", err); toast("نمایش نقشه با مشکل روبه‌رو شد؛ یک بار دیگر وارد استودیو شو"); }
+  catch(err){ console.error("studio paint", err); toast("نقشه درست نمایش داده نشد؛ یک بار از استودیو خارج شو و دوباره وارد شو"); }
   if(!ST.cam) requestAnimationFrame(stHome);
   stBindCanvas();
   $("#stq")?.addEventListener("input", () => stSearchApply(true));
@@ -908,13 +908,13 @@ function stCreateConnected(){
   const m = ST.drop, at = ST.dropAt;
   ST.drop = null; ST.dropAt = null;
   if(!m || !at || !S.cur) return;
-  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیدی");
+  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیده‌ای؛ برای ادامه، اشتراکت را ارتقا بده");
   const id = stNextId();
   ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
   const src = m.p === "+" ? {t: "new", n: m.n} : stParsePort(m.p);
   busy(null, async () => {
     await commit(cfg => {
-      cfg.nodes[id] = {title: "بخش جدید", text: "متن این بخش را اینجا بنویس", ask: false, buttons: []};
+      cfg.nodes[id] = {title: "بخش جدید", text: "متنِ این بخش را اینجا بنویس…", ask: false, buttons: []};
       stWireIn(cfg, src, id);
     }, "بخش ساخته و وصل شد");
     stCenter(id);
@@ -922,7 +922,7 @@ function stCreateConnected(){
   });
 }
 function stCopy(id){
-  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیدی");
+  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیده‌ای؛ برای ادامه، اشتراکت را ارتقا بده");
   const nid = stNextId(), p = ST.pos[id] || {x: 0, y: 0};
   ST.pos[nid] = {x: p.x + 40, y: p.y + 80};
   busy(null, () => commit(cfg => {
@@ -993,7 +993,7 @@ function stSheetDirty(){
 }
 function stGuardClose(go){
   if(!stSheetDirty()) return go();
-  confirmQ("تغییرهای این فرم ذخیره نشده. بسته شود؟", ok => { if(ok) go(); });
+  confirmQ("تغییرهای این فرم هنوز ذخیره نشده‌اند. بسته شود؟", ok => { if(ok) go(); });
 }
 const nodeOpts = (cfg, cur, extra = "") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i === cur ? " selected" : ""}>${esc(titleOf(cfg, i))}</option>`).join("");
 const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div>`;
@@ -1137,11 +1137,11 @@ function kbPicker(cur){
       <button class="${cur !== "reply" ? "on" : ""}" data-sh="kbt" data-v="inline">${inl}<b>شیشه‌ای</b><small>زیر پیام، چسبیده به آن</small></button>
       <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد</b><small>پایین چت، مثل منوی ثابت</small></button>
     </div>
-    ${cur === "reply" ? `<p class="muted mt">دکمه‌های کیبورد با یک پیام کوچک (👇) زیر چت می‌آیند. در یک بخش می‌توانی هم دکمه‌ی شیشه‌ای داشته باشی هم کیبورد.</p>` : ""} : ""}`;
+    ${cur === "reply" ? `<p class="muted mt">دکمه‌های کیبورد، همراه یک پیام کوچک، پایین چت نشان داده می‌شوند. در هر بخش می‌توانی هم دکمه‌ی شیشه‌ای داشته باشی، هم کیبورد.</p>` : ""} : ""}`;
 }
 let FMT_LAST = null;
 document.addEventListener("focusin", e => { if(e.target.matches?.("[data-fmt]")) FMT_LAST = e.target; });
-const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}<button type="button" class="fx" data-a="emjbar" data-t="${tid}" aria-label="ایموجی پرمیوم" title="ایموجی پرمیوم">✨</button></div>`;
+const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}<button type="button" class="fx" data-a="emjbar" data-t="${tid}" aria-label="ایموجی پرمیوم" title="ایموجی پرمیوم">${IC.spark}</button></div>`;
 function fmtInsert(t, i){
   const tg_ = FMT_TAGS[i], o = tg_[2], c = tg_[3], a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
   t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true}));
@@ -1278,7 +1278,7 @@ function addNode(at){
   }
   ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
   busy($("#stadd"), async () => {
-    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متن این بخش را اینجا بنویس", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
+    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متنِ این بخش را اینجا بنویس…", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
     stCenter(id);
     openNode(id);
   });
@@ -1347,9 +1347,9 @@ function btnLook(d){
     ...list.map(e => `<button type="button" class="${d.icon === e.id ? "on" : ""}" data-sh="bicon" data-v="${esc(e.id)}" aria-label="${esc(e.char)}">${emjImg(e)}</button>`)].join("");
   return `<span class="lbl">رنگ دکمه ${lock(okS)}</span><div class="sws${okS ? "" : " lock"}">${sw}</div>
     <span class="lbl">ایموجی پرمیوم کنار متن دکمه ${lock(okE)}</span>
-    ${okE ? `<div class="emjpick" id="b-icons">${list.length ? picks : '<span class="muted">کتابخونه‌ی ایموجی‌هات خالیه. ایموجی پرمیوم رو برای ربات مادر بفرست.</span>'}</div>${d.icon && !cur && list.length ? `<p class="muted">این ایموجی دیگه توی کتابخونه‌ات نیست ولی هنوز روی دکمه می‌مونه.</p>` : ""}`
+    ${okE ? `<div class="emjpick" id="b-icons">${list.length ? picks : '<span class="muted">کتابخانه‌ی ایموجی‌هایت خالی است. ایموجی پرمیوم را برای ربات مادر بفرست.</span>'}</div>${d.icon && !cur && list.length ? `<p class="muted">این ایموجی دیگر در کتابخانه‌ات نیست، ولی روی دکمه می‌ماند.</p>` : ""}`
       : `<div class="sws lock"><button type="button" class="sw def" data-sh="bplan">دریافت اشتراک</button></div>`}
-    <p class="muted mt">رنگ دکمه‌ها همه‌جا کار می‌کند. ایموجی پرمیوم فقط وقتی نشان داده می‌شود که اکانتِ تلگرامیِ صاحب ربات (BotFather) پرمیوم تلگرام داشته باشد.</p>`;
+    <p class="muted mt">رنگ دکمه‌ها همه‌جا کار می‌کند. ایموجی پرمیوم فقط وقتی نشان داده می‌شود که حسابِ تلگرامِ سازنده‌ی ربات در BotFather، اشتراک پرمیوم تلگرام داشته باشد.</p>`;
 }
 function readBtn(){
   D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
@@ -1538,21 +1538,16 @@ function saveGrp(){
   }
   busy($('[data-sh="save"]'), () => commit(cfg => { if(list.length) cfg.group = {triggers: list}; else delete cfg.group; }, "ماشه‌های گروه ذخیره شد"));
 }
-function botDraft(){
+function openBot(){
   const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
-  return { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
+  S.sheet = {kind: "bot"};
+  D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
         cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}), globs: Object.entries(cfg.globals || {}),
         staff: (cfg.desk?.staff || []).join(" "), dclosed: cfg.desk?.closed || "", drbtn: cfg.desk?.reply_btn || "",
         refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "" };
-}
-function openBot(){
-  if(!S.cur) return toast("اول یک ربات انتخاب کن");
-  S.sheet = {kind: "bot"};
-  D = botDraft();
   renderSheet();
 }
 function botSheet(){
-  if(!D) D = botDraft();
   const cfg = S.cur.config, d = D;
   return head("تنظیمات ربات") + `
     <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
@@ -1731,7 +1726,8 @@ const SHEETS = {
   km:    {html: kmSheet},
   grp:   {html: grpSheet,   read: readGrp,   save: saveGrp},
 };
-function renderSheet(){ showSheet(SHEETS[S.sheet.kind].html()); }
+function renderSheet(){ if(S.sheet.kind === "bot" && !D) return openBot();   /* محافظ: شیت تنظیمات بدون داده‌ی اولیه باز نشود */
+  showSheet(SHEETS[S.sheet.kind].html()); }
 function readSheet(){ SHEETS[S.sheet?.kind]?.read?.(); }
 
 function shAction(a, ds){
@@ -1864,7 +1860,7 @@ Object.assign(A, {
     document.querySelectorAll(".fmtbar + .emjpick").forEach(x => x.remove());
     const list = await emjEnsure();
     const html = list.length ? list.map(e => `<button type="button" data-a="emjins" data-t="${esc(el.dataset.t)}" data-id="${esc(e.id)}" data-ch="${esc(e.char)}" aria-label="${esc(e.char)}">${emjImg(e)}</button>`).join("")
-      : `<span class="muted">کتابخونه‌ی ایموجی‌هات خالیه. ایموجی پرمیوم رو برای ربات مادر بفرست.</span>`;
+      : `<span class="muted">کتابخانه‌ی ایموجی‌هایت خالی است. ایموجی پرمیوم را برای ربات مادر بفرست.</span>`;
     if(bar.isConnected) bar.insertAdjacentHTML("afterend", `<div class="emjpick">${html}</div>`);
   },
   emjins: el => {
