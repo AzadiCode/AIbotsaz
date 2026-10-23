@@ -34,8 +34,10 @@
 window.onerror = function(msg, src, line){
   var b = document.getElementById("errbar");
   if(!b){ b = document.createElement("div"); b.id = "errbar";
-    b.style.cssText = "position:fixed;bottom:8px;left:8px;right:8px;z-index:99999;background:#CC3547;color:#fff;font:12px/1.7 Tahoma;padding:8px 12px;border-radius:10px;direction:rtl;white-space:pre-wrap";
+    b.style.cssText = "position:fixed;top:calc(8px + env(safe-area-inset-top));left:8px;right:8px;z-index:99999;background:#CC3547;color:#fff;font:11px/1.6 Tahoma;padding:6px 10px;border-radius:10px;direction:rtl;white-space:pre-wrap;opacity:.94";
+    b.addEventListener("click", function(){ b.remove(); });
     document.body.appendChild(b); }
+  clearTimeout(b._t); b._t = setTimeout(function(){ b.remove(); }, 7000);
   b.textContent = "خطای رابط: " + msg + " — " + String(src || "").split("/").pop() + ":" + line + " (نسخه __BUILD__)";
 };
 window.addEventListener("unhandledrejection", function(e){
