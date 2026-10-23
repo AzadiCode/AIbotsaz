@@ -29,8 +29,23 @@
 <div class="dscrim" id="dscrim"></div>
 <nav class="dock" id="dock" aria-label="ناوبری اصلی"><div class="dpanel" id="dpanel"></div></nav>
 
+<script>
+/* اگر هر خطایی در رابط رخ داد، همین‌جا روی صفحه دیده می‌شود (به‌جای صفحه‌ی خالی) */
+window.onerror = function(msg, src, line){
+  var b = document.getElementById("errbar");
+  if(!b){ b = document.createElement("div"); b.id = "errbar";
+    b.style.cssText = "position:fixed;bottom:8px;left:8px;right:8px;z-index:99999;background:#CC3547;color:#fff;font:12px/1.7 Tahoma;padding:8px 12px;border-radius:10px;direction:rtl;white-space:pre-wrap";
+    document.body.appendChild(b); }
+  b.textContent = "خطای رابط: " + msg + " — " + String(src || "").split("/").pop() + ":" + line + " (نسخه __BUILD__)";
+};
+</script>
 <script src="static/app.js"></script>
 <script src="static/studio.js"></script>
+<script src="static/builder.js"></script>
+<script src="static/studio2.js"></script>
+<script src="static/studio3.js"></script>
+<script src="static/builder2.js"></script>
+<script src="static/builder3.js"></script>
 <script>load();</script>
 </body>
 </html>

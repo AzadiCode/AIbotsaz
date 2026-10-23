@@ -956,3 +956,239 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
 
 /* نقشه‌های بزرگ: سایه‌ی کارت‌ها خاموش (سبک‌تر). لایه‌ی GPU دنیا (will-change) حفظ می‌شود تا پن/زوم فقط کامپوزیت باشد؛ سیم‌ها با contain:paint روی #stsvg یک لایه می‌مانند. */
 .studio.big .stc-card{box-shadow:none}
+
+/* ═════════════════ تب مینی‌اپ‌ساز (builder.js) ═════════════════ */
+.bph{display:flex;align-items:center;gap:8px;margin:8px 0 10px}
+.bph .bt{flex:1;min-width:0;line-height:1.5}
+.bph .bt b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bph .bt .muted{display:block;font-size:11px}
+.bph .b.sm{flex:none;min-height:36px;padding:0 14px;font-size:13px}
+.bframe{background:linear-gradient(170deg,color-mix(in srgb,var(--ac) 7%,var(--sf)),var(--sf));border:1px solid var(--line);border-radius:22px;padding:12px;display:flex;justify-content:center;position:relative}
+.bphone{position:relative;width:100%;max-width:300px;aspect-ratio:9/15.5;border-radius:26px;overflow:hidden;background:var(--bg);
+  box-shadow:0 0 0 1px var(--line),0 0 0 5px color-mix(in srgb,var(--ink) 88%,transparent),0 14px 34px rgba(0,0,0,.35)}
+.bphone iframe{width:100%;height:100%;border:0;display:block}
+.bpf{position:absolute;bottom:14px;display:flex;gap:6px}
+.bpf .b.t{background:var(--sf);border-radius:99px;box-shadow:0 4px 14px rgba(0,0,0,.3);min-height:32px;font-size:12px}
+.bpf .b.t svg{width:13px;height:13px}
+.bscr{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:12px 0 8px;padding:2px 0}
+.bscr::-webkit-scrollbar{display:none}
+.bscr .chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:99px;font-size:12.5px;color:var(--mut);box-shadow:inset 0 0 0 1px var(--line);white-space:nowrap}
+.bscr .chip.on{color:var(--ac);background:var(--acs);box-shadow:inset 0 0 0 1.5px var(--ac);font-weight:700}
+.bscr .chip.ai{color:var(--tok);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tok) 45%,transparent)}
+.bscr .chip svg{width:12px;height:12px}
+.bblocks{margin-top:4px}
+.bblocks .sub{font-size:13px;font-weight:700;margin:14px 0 8px;display:flex;justify-content:space-between;align-items:center}
+.brow-b{margin-bottom:6px}
+.bblk{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:14px;background:var(--sf);border:1px solid var(--line);text-align:right;transition:border-color .15s;cursor:pointer}
+.bblk:hover{border-color:var(--line)}
+.bblk:active{border-color:var(--ac)}
+.bblk:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.bops{display:flex;flex-direction:row;gap:2px;flex:none}
+.bblk .ib{width:34px;height:34px;border-radius:10px}
+.bblk .ib svg{width:17px;height:17px}
+.bblk .gt{flex:1;min-width:0;line-height:1.55}
+.bblk .gt b{display:block;font-size:13px}
+.bblk .gt span{display:block;font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bops{display:flex;gap:2px;flex:none}
+.bops .iconb{width:28px;height:28px}
+.bops .iconb svg{width:14px;height:14px}
+.badd{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:46px;margin:12px 0;border-radius:14px;
+  background:var(--acs);color:var(--ac);font-weight:700;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ac) 45%,transparent)}
+.badd svg{width:17px;height:17px}
+.badd:active{transform:scale(.98)}
+.bfoot{margin-top:6px}
+.bgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+.bpick{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border-radius:12px;font-size:11px;color:var(--ink);background:var(--sf);box-shadow:inset 0 0 0 1px var(--line);text-align:center}
+.bpick .ib{width:32px;height:32px;border-radius:9px}
+.bpick .ib svg{width:16px;height:16px}
+.bpick:active{box-shadow:inset 0 0 0 1.5px var(--ac);color:var(--ac)}
+.bpick.off{opacity:.45;pointer-events:none}
+.mbdo{margin:6px 0}
+.mbdo:empty{display:none}
+.mbdo .rl{background:var(--sf2)}
+.mbdo .d-op{flex:0 0 38%;padding:8px 10px;font-size:12.5px}
+.bchk{background:var(--sf);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:12px}
+.bchk .gi{padding:11px 12px}
+.bchk .b.o.sm{flex:none}
+.bwarn{background:color-mix(in srgb,var(--tok) 8%,var(--sf));border:1px solid color-mix(in srgb,var(--tok) 30%,var(--line));border-radius:14px;padding:10px 14px;margin:10px 0}
+.bwarn p{font-size:12.5px;line-height:1.9;color:var(--mut)}
+
+/* ═════════════════ استودیو نسل ۲ (studio2.js) — وقتی‌آنگاه، شبیه‌ساز، مشکل‌ها، نسخه‌ها، دکتر، لیست‌ها ═════════════════ */
+.wtc{background:var(--sf);border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px;margin:0 0 8px;display:flex;flex-direction:column;gap:6px}
+.wtc.edit{box-shadow:inset 0 0 0 1.5px var(--ac)}
+.wtc.gone{opacity:.45;text-decoration:line-through}
+.wtc-w,.wtc-t{display:flex;align-items:baseline;gap:8px;font-size:13px;line-height:1.7}
+.tag{flex:0 0 auto;font-size:10.5px;font-weight:700;border-radius:8px;padding:1px 8px}
+.tag.w{background:rgba(108,92,231,.16);color:var(--vio)}
+.tag.t{background:rgba(22,138,91,.16);color:var(--ok)}
+.wtc-p{font-size:12px;color:var(--mut);background:var(--sf2);border-radius:10px;padding:5px 10px}
+.wtc-ops{display:flex;gap:8px}
+.pbm{display:flex;align-items:center;gap:10px;background:var(--sf);border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px;margin:0 0 8px}
+.pbm.p2{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--bad) 55%,transparent)}
+.pbm-t{flex:0 0 auto;font-size:10.5px;font-weight:700;color:var(--bad);background:rgba(204,53,71,.12);border-radius:8px;padding:2px 8px}
+.pbm.p1 .pbm-t{color:var(--tok);background:var(--toks)}
+.pbm .gt{flex:1;min-width:0}
+.pbm .gt b{font-size:12.5px;font-weight:500;line-height:1.7;display:block}
+.pbm-ops{display:flex;flex-direction:column;gap:6px}
+.vdc{background:var(--sf);border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px;margin:0 0 10px}
+.vdc small{color:var(--mut);margin-inline-start:8px;font-size:11px}
+.vdl{font-size:12.5px;line-height:1.9;color:var(--mut);padding-inline-start:12px;position:relative}
+.vdl::before{content:"";position:absolute;inset-inline-start:0;top:11px;width:5px;height:5px;border-radius:50%;background:var(--ac)}
+.dr{display:flex;gap:10px;align-items:flex-start;background:var(--sf);border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px;margin:0 0 8px}
+.dr .dot{margin-top:9px}
+.dr.no{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--bad) 50%,transparent)}
+.dr .gt b{font-size:13px;font-weight:600;display:block;line-height:1.7}
+.dr .gt span{font-size:12px;color:var(--mut);line-height:1.7}
+.ltrow{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(110px,1fr);gap:6px;align-items:center;margin:0 0 6px}
+.ltrow.lth .ltcell{font-weight:700;color:var(--ac);background:var(--sf2)}
+.ltcell{background:var(--sf);border:0;border-radius:10px;box-shadow:inset 0 0 0 1px var(--line2);padding:8px 10px;font:inherit;font-size:13px;color:var(--ink);min-width:0}
+/* شبیه‌ساز */
+.simwrap{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;flex-direction:column;animation:s2In .25s ease both}
+@keyframes s2In{from{opacity:0}to{opacity:1}}
+.simbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line2);background:var(--sf)}
+.simbar b{display:flex;align-items:center;gap:6px;font-size:14px}
+.simbar b svg{width:18px;height:18px;color:var(--ac)}
+.simseg{grid-auto-flow:column;grid-template-columns:none;display:flex;gap:6px}
+.simseg button{padding:6px 12px;font-size:12px;border-radius:99px}
+.simseg button.on{background:var(--acs);color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+.simusers{display:flex;gap:6px;flex-wrap:wrap}
+.simbody{flex:1;display:flex;gap:0;max-width:900px;width:100%;margin:0 auto;padding:12px;min-height:0}
+.simphone{flex:0 0 340px;max-width:100%;display:flex;flex-direction:column;background:var(--sf);border-radius:22px;box-shadow:inset 0 0 0 1px var(--line2);overflow:hidden}
+.simchat{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.sm{max-width:82%;padding:8px 12px;border-radius:16px;font-size:13.5px;line-height:1.8;white-space:pre-wrap;word-break:break-word;animation:s2Msg .22s ease both}
+@keyframes s2Msg{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.sm.bot{align-self:flex-start;background:var(--sf2);border-start-start-radius:5px}
+.sm.me{align-self:flex-end;background:var(--ac);color:var(--acx);border-start-end-radius:5px}
+.sm.sys{align-self:center;background:none;color:var(--mut);font-size:11.5px;max-width:100%}
+.skb{display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sf);border-top:1px solid var(--line2)}
+.srow{display:flex;gap:6px}
+.srow.kb .sbtn{background:var(--sf2)}
+.sbtn{flex:1;text-align:center;background:var(--acs);color:var(--ac);border-radius:12px;padding:9px 8px;font-size:12.5px;font-weight:600;min-height:44px;animation:s2Msg .22s ease both}
+.sbtn:active{transform:scale(.97)}
+.shint{padding:8px 14px;font-size:12.5px;color:var(--tok);background:var(--toks);border-top:1px solid var(--line2)}
+.simcomp{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line2)}
+.simcomp input{flex:1;background:var(--sf2);border:0;border-radius:12px;padding:10px 12px;font:inherit;color:var(--ink);min-width:0}
+.simside{flex:1;min-width:0;padding:4px 0 4px 16px;overflow-y:auto}
+.simside .sub{margin-top:14px}
+@media (max-width:760px){.simbody{flex-direction:column;padding:8px}.simphone{flex:1 1 auto;width:100%}.simside{padding:10px 2px}}
+/* کارت‌های نقشه در صفحه‌ی ساخت */
+.bpg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.bpg{grid-template-columns:1fr}}
+.bpc{display:flex;flex-direction:column;gap:8px;background:var(--sf);border-radius:18px;box-shadow:inset 0 0 0 1px var(--line2);padding:14px;min-height:44px;transition:box-shadow .15s,transform .15s;text-align:right}
+.bpc:active{transform:scale(.98);box-shadow:inset 0 0 0 1.5px var(--ac)}
+.bpc .bpi{width:38px;height:38px;border-radius:12px;background:var(--acs);color:var(--ac);display:grid;place-items:center}
+.bpc .bpi svg{width:20px;height:20px}
+.bpc .bpt b{font-size:14px;display:block;line-height:1.6}
+.bpc .bpt span{font-size:12px;color:var(--mut);line-height:1.7;display:block}
+.bpc .bpf{display:flex;flex-wrap:wrap;gap:5px}
+.bpc .bpf .chip{font-size:10.5px}
+/* کارت «چی ساخته شد؟» */
+.made{background:var(--sf);border-radius:18px;box-shadow:inset 0 0 0 1.5px var(--ok);padding:14px;margin:0 0 10px}
+.made h2{color:var(--ok)}
+.made .vdl{color:var(--ink)}
+.made .steps2{margin:8px 0 0;font-size:12.5px;color:var(--mut);line-height:2}
+.archopt{display:block;width:100%;background:var(--sf);border-radius:12px;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px;font-size:13.5px;margin:0 0 6px;text-align:right}
+.archopt.on{box-shadow:inset 0 0 0 1.5px var(--ac);color:var(--ac)}
+/* نوار مصرف در حساب */
+.lims{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:6px}
+.lim{font-size:12px;color:var(--mut)}
+.lim .lm-b{height:5px;border-radius:4px;background:var(--sf2);margin-top:4px;overflow:hidden}
+.lim .lm-b i{display:block;height:100%;border-radius:4px;background:var(--ac);transition:width .6s ease}
+.lim.full .lm-b i{background:var(--bad)}
+.binfo{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--mut)}
+.binfo .bdg{background:var(--sf2);border-radius:8px;padding:1px 8px;font-family:"Oxanium",monospace;font-weight:700;direction:ltr}
+
+/* ── گالری نسل ۲: پیش‌نمایش کوچک بلوک‌ها + تم‌ها + قطعه‌ها ── */
+.bpick{position:relative;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.bpp{display:block;height:44px;border-radius:10px;background:var(--sf2);position:relative;overflow:hidden}
+.bpp::before,.bpp::after{content:"";position:absolute;background:var(--cell);border-radius:4px;opacity:.8}
+.bpp.txt::before{inset:10px 12px auto 12px;height:6px;width:55%}
+.bpp.txt::after{inset:24px 12px auto 12px;height:5px;width:80%}
+.bpp.txt.lg::before{height:9px;width:70%}
+.bpp.txt.many::after{inset:36px 12px auto 12px}
+.bpp.txt.code::after{inset:24px 40px auto 12px;width:45%}
+.bpp.txt.qt2::before{inset:12px 8px auto 20px}
+.bpp.img::before{inset:6px;background:var(--cell);border-radius:8px}
+.bpp.img::after{display:none}
+.bpp.img.low::before{opacity:.45}
+.bpp.img.split::before{inset:6px calc(50% + 1px) 6px 6px}
+.bpp.img.split::after{inset:6px 6px 6px calc(50% + 1px);border-radius:8px 0 0 8px}
+.bpp.imgs::before{inset:6px;background:var(--cell);border-radius:8px}
+.bpp.imgs::after{inset:6px 6px 6px auto;width:26%;background:var(--cell);border-radius:8px}
+.bpp.imgs3::before{inset:6px 34% 50% 6px}
+.bpp.imgs3::after{inset:52% 6px 6px 6px}
+.bpp.btns::before{inset:auto 10px 8px 10px;height:12px;border-radius:99px}
+.bpp.btns::after{inset:8px 10px auto 10px;height:12px;border-radius:99px}
+.bpp.btns.one::after{display:none}
+.bpp.btnrow::before{inset:auto 10px 8px 10px;height:13px;border-radius:9px}
+.bpp.btnrow::after{display:none}
+.bpp.rows2::before{inset:7px 10px auto 10px;height:12px;border-radius:8px}
+.bpp.rows2::after{inset:auto 10px 7px 10px;height:12px;border-radius:8px}
+.bpp.cards2::before{inset:6px 52% 6px 6px;border-radius:8px}
+.bpp.cards2::after{inset:6px 6px 6px 52%;border-radius:8px}
+.bpp.cards3::before{inset:6px 62% 6px 6px;border-radius:8px}
+.bpp.cards3::after{inset:6px 6px 6px 62%;border-radius:8px}
+.bpp.cardp::before{inset:6px 6px 40% 6px;border-radius:8px}
+.bpp.cardp::after{inset:62% 40% 8px 6px;height:7px}
+.bpp.tiles::before{inset:6px 52% 52% 6px;border-radius:8px}
+.bpp.tiles::after{inset:52% 6px 6px 52%;border-radius:8px}
+.bpp.stat::before{inset:auto 12px 10px 12px;height:12px;width:40%;border-radius:6px}
+.bpp.stat::after{inset:10px 12px auto 12px;height:5px;width:60%}
+.bpp.stat2::before{inset:8px 52% 8px 6px;border-radius:8px}
+.bpp.stat2::after{inset:8px 6px 8px 52%;border-radius:8px}
+.bpp.bar::before{inset:auto 10px 12px 10px;height:8px;border-radius:5px}
+.bpp.bar::after{inset:12px 10px auto 10px;height:5px;width:50%}
+.bpp.bar.thin{height:20px}
+.bpp.chart::before{inset:auto 8px 6px 8px;height:14px;border-radius:3px 3px 0 0}
+.bpp.chart::after{inset:auto 40% 6px 60%;height:24px;background:var(--ac);border-radius:3px 3px 0 0;opacity:.9}
+.bpp.form::before{inset:8px 10px auto 10px;height:8px}
+.bpp.form::after{inset:auto 10px 8px 10px;height:13px;border-radius:8px}
+.bpp.acc2::before{inset:7px 10px auto 10px;height:10px;border-radius:7px}
+.bpp.acc2::after{inset:auto 10px 7px 10px;height:10px;border-radius:7px}
+.bpp.num2::before{inset:8px 40% auto 10px;height:6px}
+.bpp.num2::after{inset:auto 40% 8px 10px;height:6px}
+.bpp.chat::before{inset:10px 40% auto 10px;height:9px;border-radius:9px}
+.bpp.chat::after{inset:auto 10px 10px 45%;height:9px;border-radius:9px;background:var(--ac)}
+.bpp.grid7::before{inset:8px 8px 8px 8px;border-radius:6px}
+.bpp.grid7::after{inset:24px 8px 24px auto;width:30%;border-radius:6px}
+.bpp.circles::before{inset:8px auto 8px 8px;width:26px;border-radius:50%}
+.bpp.circles::after{inset:8px auto 8px 40px;width:26px;border-radius:50%;background:var(--ac)}
+.bpp.chips2::before{inset:14px 30% auto 10px;height:12px;border-radius:99px}
+.bpp.chips2::after{inset:14px 10px auto 62%;height:12px;border-radius:99px}
+.bpp.hr{height:6px}
+.bpp.hr::before{inset:auto 20% 2px 20%;height:2px;border-radius:2px}
+.bpp.hr::after{display:none}
+.sws.th12{display:grid;grid-template-columns:repeat(4,1fr)}
+.sws.th12 .sw{font-size:10.5px;padding:7px 2px}
+.bpick .cpx{position:absolute;top:4px;left:6px;font-style:normal;font-size:14px;color:var(--mut);z-index:2}
+.bpick .cpx:active{color:var(--bad)}
+#bp-q{margin-bottom:10px}
+
+/* ── نوار کجا کار می‌کنه + قاب رنگی و یادداشت بخش‌ها ── */
+.scopebar{position:absolute;top:8px;inset-inline-start:8px;z-index:6;display:flex;gap:5px;align-items:center;background:color-mix(in srgb,var(--sf) 80%,transparent);border-radius:99px;padding:4px 10px;box-shadow:inset 0 0 0 1px var(--line2);font-size:11px}
+.scopebar .sc3on{box-shadow:inset 0 0 0 1px var(--ac);color:var(--ac)}
+.stfr-red{outline:2px solid var(--bad);outline-offset:2px}
+.stfr-green{outline:2px solid var(--ok);outline-offset:2px}
+.stfr-blue{outline:2px solid #2F7CF6;outline-offset:2px}
+.stfr-amber{outline:2px solid var(--tok);outline-offset:2px}
+.stfr-violet{outline:2px solid var(--vio);outline-offset:2px}
+.stnote{display:block;font-size:10.5px;color:var(--tok);font-style:normal}
+
+/* چندانتخابی بخش‌ها در استودیو */
+.stc-card.sel{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 55%,transparent)}
+.stc-card.sel .stc-in{background:var(--ac)}
+#selbar{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:30;display:flex;gap:8px;align-items:center;
+  background:var(--sf);border:1.5px solid var(--line);border-radius:14px;padding:8px 12px;box-shadow:0 10px 24px rgba(0,0,0,.25)}
+#selbar b{font-size:12px}
+.studio.selsel .stc-card{cursor:crosshair}
+
+/* پیش‌نمایش زنده‌ی قالب‌های مینی‌اپ در گالری */
+.tpv{border-radius:14px;border:1.5px solid var(--line);overflow:hidden;background:var(--bg);margin-bottom:8px}
+.tpv-tb{height:18px;background:var(--ac);opacity:.85}
+.tpv-hero{padding:10px 10px 6px}
+.tpv-hero b{display:block;font-size:13px;color:var(--ink)}
+.tpv-hero span{font-size:11px;color:var(--ink);opacity:.6}
+.tpv-row{display:flex;align-items:center;gap:7px;padding:6px 10px;border-top:1px solid var(--line)}
+.tpv-row i{width:22px;height:22px;border-radius:7px;background:var(--ac);opacity:.75;flex:none}
+.tpv-row b{font-size:11.5px;color:var(--ink);flex:1}
+.tpv-row span{font-size:11px;color:var(--ink);opacity:.55}

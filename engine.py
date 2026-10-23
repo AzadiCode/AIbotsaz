@@ -26,9 +26,9 @@ engine.py — موتور اجرای ربات‌های ساخته‌شده (وا�
 """
 
 import html as _html
-import re, time, hashlib, random, threading
+import re, time, hashlib, random, threading, json
 from urllib.parse import quote, urlparse
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import requests
 from flask import request
@@ -40,13 +40,13 @@ from bson.errors import InvalidId
 from core import (
     AI_CHAT_MODEL, AI_NODE_MAX_TOKENS, ai_tick, app, balance, BASE_URL, BILLING, BOARD_SCAN, calc_cost,
     ADMIN_IDS, charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND,
-    MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, strip_fx_text, tehran_day, tg, tg_html, tg_media,
+    APP_URL, MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, strip_fx_text, tehran_day, tg, tg_html, tg_media,
     TOKEN_SCALE,
 )
 from ai import (
     BUILTINS, DICE_EMOJIS, EXT_API, EXT_API_DAILY, fmt_num, has_foreign, LANG_GUARD, llm_post,
     MAX_HOPS, MAX_REC_VAL, MAX_RECORDS_SHARED, MAX_RECORDS_USER, _mnum, MOD_LOCKS, PH_RE, _PRIV_HOST,
-    REC_BUILTINS, scrub_foreign, to_num, VAR_RE,
+    REC_BUILTINS, safe_calc, scrub_foreign, to_num, VAR_RE,
 )
 
 
@@ -92,6 +92,8 @@ class Env:
         self.refs = int(doc.get("refs", 0))
         self.ticket_no = str(doc.get("tk") or "")
         self._g = None                      # متغیرهای مشترکِ این ربات (تنبل بارگذاری می‌شه)
+        self._cv = None                     # متغیرهای دامنه‌ی همین گروه/چت (اکشن‌های cset/cadd/cclear)
+        self._cdirty = False
         self._px = None                     # مزایای اشتراکِ صاحب ربات (تنبل بارگذاری می‌شه)
         self.is_new = False
         self.dirty = False
@@ -137,6 +139,22 @@ class Env:
             return str(self.refs)
         if k == "ticket_no":
             return self.ticket_no
+        if k == "invite_link":
+            try:
+                import growth as _growth_mod
+                if _growth_mod.gconf(self.cfg):
+                    return _growth_mod.link_for(self.bot, self.token, self.uid)
+            except Exception:
+                log.exception("invite_link failed")
+            return ""
+        if k == "invites":
+            try:
+                import growth as _growth_mod
+                if _growth_mod.gconf(self.cfg):
+                    return str(_growth_mod.stats(self.bot_id, self.uid)[1])
+            except Exception:
+                log.exception("invites failed")
+            return "0"
         if k == "ref_link":
             return f"https://t.me/{self.bot['username']}?start=ref_{self.uid}" if self.bot.get("username") else ""
         n = self._now
@@ -189,6 +207,18 @@ class Env:
         except Exception:                   # مقدار قبلی عدد نبوده
             self.gset(k, fmt_num((to_num(self.gget(k)) or 0) + n))
 
+    def _cdoc(self):
+        if self._cv is None:
+            d = db.cvars.find_one({"bot": self.bot_id, "chat": str(self.chat_id)}) or {}
+            self._cv = {k: str(v) for k, v in (d.get("v") or {}).items()}
+        return self._cv
+
+    def csave(self):
+        if self._cdirty:
+            db.cvars.update_one({"bot": self.bot_id, "chat": str(self.chat_id)},
+                                {"$set": {"v": self._cdoc(), "t": now()}}, upsert=True)
+            self._cdirty = False
+
     def get(self, k):
         if k in BUILTINS:
             return self.builtin(k)
@@ -196,6 +226,9 @@ class Env:
             return self.gget(k)
         if k in self.vars:
             return self.vars[k]
+        cv = self._cdoc().get(k)                 # مقدار دامنه‌ی گروه: تا وقتی کاربر خودش چیزی ذخیره نکرده
+        if cv is not None:
+            return cv
         return str((self.cfg.get("vars") or {}).get(k, ""))
 
     def set(self, k, v):
@@ -218,6 +251,7 @@ class Env:
             self.dirty = True
 
     def save(self):
+        self.csave()
         if self.dirty:
             db.uvars.update_one({"_id": self._key},
                                 {"$set": {"v": self.vars, "visits": self.visits, "t": now(), "bot": self.bot_id,
@@ -256,7 +290,10 @@ def check(cond, env, depth=0):
         return any(check(c, env, depth + 1) for c in cond["any"])
     if "not" in cond:
         return not check(cond["not"], env, depth + 1)
-    a, op = env.get(cond.get("var", "")), cond.get("op", "==")
+    op = cond.get("op", "==")
+    if op == "sub":                      # اشتراک دوره‌ی کاربر فعال است؟
+        return sub_active(env.bot_id, env.uid, cond.get("plan") or "")
+    a = env.get(cond.get("var", ""))
     if op == "empty":
         return a.strip() == ""
     if op == "filled":
@@ -291,14 +328,120 @@ def act_dice(env, a):
     env.set(a["var"], str(val))
 
 
+def act_game_play(env, a):
+    """شروع یکی از بازی‌های مرکز بازی در همین چت (فقط وقتی games ربات روشنه)"""
+    try:
+        import games as _gm
+    except ImportError:
+        return
+    if not _gm.gcfg(env.cfg):
+        return
+    _gm.start_game(env.bot, env.token, env.chat_id, {"id": env.uid, "first_name": (env.user or {}).get("first_name")}, a.get("game") or "quiz")
+
+
 def act_pick(env, a):
     """انتخاب تصادفی یکی از گزینه‌های «|» جدا"""
     opts = [x.strip() for x in fill(a.get("value", ""), env).split("|") if x.strip()]
     env.set(a["var"], random.choice(opts) if opts else "")
 
 
+def _sys_var(env, k, v):
+    """نوشتن متغیر مشتق‌شده‌ی سیستمی (مثل {code_off}) — بی‌نیاز از تعریف در متغیرهای کانفیگ"""
+    env.vars[str(k)[:40]] = str(v)[:200]
+    env.dirty = True
+
+
+def act_disc(env, a):
+    """اعتبارسنجی کد تخفیف (جدول dcodes): {var}=کد واردشده، price=قیمت پایه.
+    خروجی: {var}_ok، {var}_off (قیمت پس از تخفیف)، {var}_save (سود)، {var}_err (دلیل رد)"""
+    name = a["var"]
+    code = re.sub(r"[\s\-]+", "", fill("{" + name + "}", env)).upper()[:24]
+    price = to_num(fill(a.get("price", "0"), env))
+    price = max(0.0, price) if price is not None else None
+    err, off = "", None
+    if price is None or not code:
+        err = "قیمت یا کد واردشده معتبر نیست"
+    else:
+        try:
+            d = db.dcodes.find_one({"_id": f"{env.bot_id}:{code}"})
+        except Exception:
+            log.exception("disc lookup failed")
+            d = None
+        if not d:
+            err = "این کد تخفیف پیدا نشد"
+        elif d.get("exp") and float(d["exp"]) < time.time():
+            err = "این کد منقضی شده"
+        else:
+            val = to_num(str(d.get("value", ""))) or 0.0
+            if str(d.get("kind") or "pct") == "pct":
+                off = price * max(0.0, min(100.0, val)) / 100.0
+            else:
+                off = min(max(0.0, val), price)
+            mx = int(d.get("max") or 0)
+            try:
+                q = {"_id": d["_id"]}
+                if mx > 0:
+                    q["used"] = {"$lt": mx}                    # مصرف همزمان از سقف نمی‌گذرد
+                r = db.dcodes.update_one(q, {"$inc": {"used": 1}})
+                if mx > 0 and (not r or r.modified_count == 0):
+                    err, off = "ظرفیت این کد پر شده", None
+            except Exception:
+                log.exception("disc inc failed")
+                err, off = "خطای سرور در ثبت کد", None
+    if off is None:
+        _sys_var(env, name + "_ok", "")
+        _sys_var(env, name + "_off", "" if price is None else fmt_num(price))
+        _sys_var(env, name + "_save", "0")
+        _sys_var(env, name + "_err", err or "کد اعمال نشد")
+    else:
+        _sys_var(env, name + "_ok", "1")
+        _sys_var(env, name + "_off", fmt_num(price - off))
+        _sys_var(env, name + "_save", fmt_num(off))
+        _sys_var(env, name + "_err", "")
+
+
+def sub_active(bot_id, uid, plan=""):
+    """اشتراک دوره‌ی کاربر فعال است؟ (plan خالی = هر پلنی)"""
+    q = {"bot": bot_id, "u": uid, "exp": {"$gt": time.time()}}
+    plan = re.sub(r"[^a-z0-9_]", "", str(plan or "").lower())[:16]
+    if plan:
+        q["plan"] = plan
+    try:
+        return bool(db.subs.find_one(q, {"_id": 1}))
+    except Exception:
+        return False
+
+
+def act_sub(env, a, grant=True):
+    """اشتراک دوره: sub_add پلن را n روز فعال/تمدید می‌کند (از انتهای دوره‌ی فعلی)، sub_del لغو می‌کند"""
+    plan = re.sub(r"[^a-z0-9_]", "", str(a.get("plan") or "vip").lower())[:16] or "vip"
+    name = str(a.get("var") or "").strip().lower()
+    if not grant:
+        try:
+            db.subs.delete_one({"_id": f"{env.bot_id}:{env.uid}:{plan}"})
+        except Exception:
+            log.exception("sub_del failed")
+        return
+    days = to_num(fill(str(a.get("days", 30)), env))
+    days = 30.0 if days is None or days <= 0 else min(days, 3650)
+    try:
+        old = db.subs.find_one({"_id": f"{env.bot_id}:{env.uid}:{plan}"})
+        base = max(time.time(), float((old or {}).get("exp", 0) or 0))
+        exp = base + days * 86400
+        db.subs.update_one({"_id": f"{env.bot_id}:{env.uid}:{plan}"},
+                           {"$set": {"bot": env.bot_id, "u": env.uid, "plan": plan, "exp": exp, "t": now()}},
+                           upsert=True)
+    except Exception:
+        log.exception("sub_add failed")
+        return
+    if VAR_RE.match(name) and name not in BUILTINS:
+        _sys_var(env, name, plan)
+        _sys_var(env, name + "_exp", datetime.fromtimestamp(exp).strftime("%Y/%m/%d"))
+
+
 def act_fetch(env, a):
-    """یه درخواست GET به یه API عمومی می‌زنه و خروجی (فیلد «pick») رو توی متغیر می‌ریزه؛ روزی EXT_API_DAILY بار برای هر ربات"""
+    """یه درخواست GET به یه API عمومی می‌زنه و خروجی (فیلد «pick») رو توی متغیر می‌ریزه؛ روزی EXT_API_DAILY بار برای هر ربات
+    sign=True: درخواست با امضای HMAC سرویس (وب‌هوک خروجی امضاشده) فرستاده می‌شه"""
     if not EXT_API:
         return
     key = f"fetch:{env.bot_id}:{tehran_day()}"
@@ -312,7 +455,12 @@ def act_fetch(env, a):
         host = (urlparse(url).hostname or "").lower()
         if not url.startswith("https://") or not host or _PRIV_HOST.match(host):
             return
-        r = requests.get(url, timeout=6, headers={"User-Agent": "TelegramBot"})
+        headers = {"User-Agent": "TelegramBot"}
+        if a.get("sign"):
+            import hmac as _hmac
+            from core import SECRET_KEY
+            headers["X-Signature"] = _hmac.new(SECRET_KEY.encode(), url.encode(), hashlib.sha256).hexdigest()[:32]
+        r = requests.get(url, timeout=8, headers=headers)
         if r.status_code != 200:
             return
         try:
@@ -473,6 +621,20 @@ def run_actions(acts, env):
                 env.set(name, fmt_num((to_num(env.get(name)) or 0) + amt))
         elif op == "clear":
             env.reset(name)
+        elif op == "cset":                       # ذخیره در دامنه‌ی همین گروه/چت
+            if VAR_RE.match(name):
+                env._cdoc()[name] = str(val)[:200]
+                env._cdirty = True
+        elif op == "cadd":                       # عدد گروهی (کف صفر)
+            if VAR_RE.match(name):
+                doc = env._cdoc()
+                cur = to_num(doc.get(name)) or 0
+                doc[name] = fmt_num(max(0, cur + (to_num(val) or 0)))
+                env._cdirty = True
+        elif op == "cclear":
+            if name in env._cdoc():
+                env._cdoc().pop(name)
+                env._cdirty = True
         elif op == "random":
             m = re.fullmatch(r"(\d+)-(\d+)", val.translate(_DIG).strip())
             if m and int(m.group(1)) <= int(m.group(2)):
@@ -485,6 +647,18 @@ def run_actions(acts, env):
             act_dice(env, a)
         elif op == "pick":
             act_pick(env, a)
+        elif op == "game_play":
+            act_game_play(env, a)
+        elif op == "calc":                   # عبارت حسابی امن (بدون eval)
+            v = safe_calc(val)
+            if v is not None:
+                env.set(name, v)
+        elif op == "disc":
+            act_disc(env, a)
+        elif op == "sub_add":
+            act_sub(env, a, True)
+        elif op == "sub_del":
+            act_sub(env, a, False)
         elif op.startswith("db_"):
             act_db(env, a)
         elif op == "fetch":
@@ -511,6 +685,22 @@ def fx_btn(d, b, env):
     return d
 
 
+_APP_ON = {}
+
+
+def _app_on(bot_id):
+    """مینی‌اپ این ربات منتشر شده؟ (کش ۳۰ ثانیه‌ای تا هر پیام دیتابیس نخواند)"""
+    hit = _APP_ON.get(bot_id)
+    t = time.time()
+    if hit and t - hit[1] < 30:
+        return hit[0]
+    on = bool(db.apps.find_one({"_id": bot_id, "pub": {"$exists": True, "$ne": None}}, {"_id": 1}))
+    if len(_APP_ON) > 500:
+        _APP_ON.clear()
+    _APP_ON[bot_id] = (on, t)
+    return on
+
+
 def keyboard(node, node_id, env):
     """دکمه‌های شیشه‌ای (زیر پیام)؛ دکمه‌هایی که kb=reply دارن اینجا نمیان"""
     kb = []
@@ -532,20 +722,62 @@ def keyboard(node, node_id, env):
                 r.append({"text": label, "copy_text": {"text": fill(b["copy"], env)[:256]}})
             elif "share" in b:
                 r.append({"text": label, "url": share_url(b["share"], env)})
+            elif "app" in b:
+                if _app_on(env.bot_id):      # اگه مینی‌اپ منتشر نشده باشه دکمه نمایش داده نمی‌شه
+                    sc = b.get("app")
+                    sc = f"?s={sc}" if isinstance(sc, str) and sc != "1" and re.fullmatch(r"[a-z0-9_]{1,30}", sc) else ""
+                    r.append({"text": label, "web_app": {"url": f"{BASE_URL}/a/{env.bot_id}{sc}"}})
             elif "pay" in b and PAYMENTS:
                 r.append({"text": label, "callback_data": f"y:{node_id}:{ri}:{ci}"})
+            elif "inline" in b:
+                r.append({"text": label, "switch_inline_query_current_chat": fill(b["inline"], env)[:64]})
             if len(r) > n0:
                 fx_btn(r[-1], b, env)
         if r:
             kb.append(r)
+    bl = node.get("btnlist")                      # دکمه‌های ساخته‌شده از یک لیست با صفحه‌بندی خودکار
+    if bl:
+        stt = db.states.find_one({"_id": env.sid}) or {}
+        page = int(stt.get("blp", 0)) if stt.get("bln") == node_id else 0
+        q = {"bot": env.bot_id, "t": bl["table"]}
+        if bl.get("scope") != "all":
+            q["u"] = env.uid
+        per = int(bl.get("per", 4))
+        try:
+            docs = list(db.recs.find(q).sort("n", 1).skip(page * per).limit(per + 1))
+        except Exception:
+            log.exception("btnlist failed")
+            docs = []
+        more = len(docs) > per
+        for d in docs[:per]:
+            lab = rec_line(env, d, "{" + bl.get("text_f", "text") + "}")[:64] or "·"
+            kb.append([{"text": lab, "callback_data": f"n:{bl['goto']}"}])
+        nav = []
+        if page > 0:
+            nav.append({"text": "›", "callback_data": f"blp:{node_id}:{page - 1}"})
+        if more:
+            nav.append({"text": "‹", "callback_data": f"blp:{node_id}:{page + 1}"})
+        if nav:
+            kb.append(nav)
     return kb
 
 
 def reply_markup(node, env):
-    """کیبورد زیر صفحه‌ی چت (Reply Keyboard)"""
-    rows = [[fx_btn({"text": fill(b["text"], env)[:64] or "·"}, b, env) for b in row
-             if b.get("kb") == "reply" and visible(b, env) and ("pay" not in b or PAYMENTS)] for row in node["buttons"]]
-    rows = [r for r in rows if r]
+    """کیبورد زیر صفحه‌ی چت (Reply Keyboard)؛ شامل دکمه‌های درخواست شماره و لوکیشن"""
+    rows = []
+    for row in node["buttons"]:
+        r = []
+        for b in row:
+            if b.get("kb") != "reply" or not visible(b, env) or ("pay" in b and not PAYMENTS):
+                continue
+            d = {"text": fill(b["text"], env)[:64] or "·"}
+            if b.get("contact"):
+                d["request_contact"] = True
+            elif b.get("location"):
+                d["request_location"] = True
+            r.append(fx_btn(d, b, env))
+        if r:
+            rows.append(r)
     return {"keyboard": rows, "resize_keyboard": True, "is_persistent": True} if rows else None
 
 
@@ -598,7 +830,8 @@ def send_node(env, node_id, edit=None, depth=0):
         send_gate(env.token, env.chat_id, cfg, nj, f"j:{node_id}")
         return
     bump_node(env, node_id)
-    run_actions(node.get("do"), env)                       # ۱) اکشن‌های ورود
+    if not node.get("fields"):                             # فرم چندسؤالی: اکشن‌ها بعد از پر شدن جواب‌ها اجرا می‌شوند
+        run_actions(node.get("do"), env)                   # ۱) اکشن‌های ورود
     if depth < MAX_HOPS:                                   # ۲) هدایت شرطی
         for rule in node.get("route", []):
             if rule["goto"] in cfg["nodes"] and check(rule["when"], env):
@@ -624,6 +857,10 @@ def send_node(env, node_id, edit=None, depth=0):
     else:
         markup, has = {"inline_keyboard": []}, False
     deliver(env, text, markup, node.get("media"), node.get("photo"), edit, has)
+    pl = node.get("poll")
+    if pl:
+        tg(env.token, "sendPoll", chat_id=env.chat_id, question=fill(pl["q"], env, True)[:255],
+           options=[fill(x, env)[:30] for x in pl["opts"]], is_anonymous=False)
     sid = env.sid
     if rk:
         if kb:      # تلگرام روی یک پیام فقط یک نوع کیبورد می‌ذاره؛ کیبورد پایین چت با یک پیام کوچک جدا می‌آد
@@ -822,6 +1059,16 @@ def run_sched_job(job):
     if not bot or not bot.get("active") or not bot.get("token_enc"):
         return
     token = dec(bot["token_enc"])
+    if job.get("kind") == "post":
+        cp = (bot.get("config") or {}).get("channelpost") or {}
+        mk = None
+        if cp.get("btn_text") and cp.get("btn_url"):
+            mk = {"inline_keyboard": [[{"text": cp["btn_text"][:24], "url": cp["btn_url"]}]]}
+        tg_html(token, "sendMessage", chat_id=job["chat"], text=job.get("text") or " ", **({"reply_markup": mk} if mk else {}))
+        if cp.get("poll_q") and cp.get("poll_opts"):
+            tg(token, "sendPoll", chat_id=job["chat"], question=cp["poll_q"][:255],
+               options=[x[:30] for x in cp["poll_opts"][:10]], is_anonymous=False)
+        return
     if job.get("kind"):
         return run_mod_job(job, token)
     if job.get("text"):
@@ -847,11 +1094,48 @@ def sched_tick():
             log.exception("sched job failed")
 
 
+_RSS_T = {}
+
+
+def rss_tick():
+    """چک منبع‌های RSS ربات‌ها (هر ربات طبق بازه‌ی خودش)؛ جدیدها به مقصد فرستاده می‌شوند"""
+    for bot in db.bots.find({"active": True, "config.rss.on": True}, {"token_enc": 1, "config": 1}).limit(50):
+        bot_id = str(bot["_id"])
+        rss = (bot.get("config") or {}).get("rss") or {}
+        last = _RSS_T.get(bot_id, 0)
+        if time.time() - last < int(rss.get("mins", 30)) * 60:
+            continue
+        _RSS_T[bot_id] = time.time()
+        st = db.rss.find_one({"bot": bot_id}) or {"seen": []}
+        try:
+            import requests as _rq
+            r = _rq.get(rss["url"], timeout=8, headers={"User-Agent": "TelegramBot"})
+            items = re.findall(r"<item[\s\S]*?</item>", r.text[:400_000])[:10]
+        except Exception:
+            continue
+        fresh = []
+        for it in items:
+            title = _html.unescape(re.search(r"<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</title>", it) or ["", ""])[1].strip()[:120]
+            link = (re.search(r"<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</link>", it) or ["", ""])[1].strip()[:200]
+            guid = (re.search(r"<guid[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</guid>", it) or [None, link or title])[1]
+            if not title or not link or guid in (st.get("seen") or []):
+                continue
+            fresh.append((guid, title, link))
+        for guid, title, link in fresh[:5]:
+            tg_html(dec(bot["token_enc"]), "sendMessage", chat_id=rss["chat"],
+                    text=f"📰 <b>{_html.escape(title, quote=False)}</b>\n{link}",
+                    reply_markup={"inline_keyboard": [[{"text": "مشاهده", "url": link}]]})
+        seen = [g for g, _, _ in fresh] + (st.get("seen") or [])
+        db.rss.update_one({"bot": bot_id}, {"$set": {"seen": seen[:60], "t": now()}}, upsert=True)
+
+
 def sched_loop():
     while True:
         time.sleep(20)
         try:
             sched_tick()
+            rss_tick()
+            digest_tick()
         except Exception:
             log.exception("sched_tick failed")
 
@@ -1072,6 +1356,16 @@ def mod_command(bot, bot_id, token, cfg, mod, msg, cmd, args, admin):
         say(("قفل «%s» فعال شد." if cmd == "lock" else "قفل «%s» برداشته شد.") % MOD_LOCKS[args[0]])
 
 
+def _glog(bot_id, chat, user, msg):
+    try:
+        x = (msg.get("text") or msg.get("caption") or "").strip()
+        if x:
+            db.glog.insert_one({"bot": bot_id, "chat": chat, "n": (user.get("first_name") or "")[:24],
+                                "x": x[:300], "t": now()})
+    except Exception:
+        pass
+
+
 def mod_group(bot, bot_id, token, cfg, msg):
     mod, chat, user = cfg["mod"], msg["chat"]["id"], msg.get("from") or {}
     uid = user.get("id", 0)
@@ -1148,6 +1442,38 @@ def norm_fa(s):
     return str(s or "").translate(_FA_NORM).translate(_DIG).casefold().strip()
 
 
+_DIG_H = {}
+
+
+def digest_tick():
+    """خلاصه‌ساز روزانه: پیام‌های ۲۴ ساعت گذشته گروه را عامل خلاصه می‌کند و در همان ساعت هر روز می‌فرستد"""
+    now_h = now() + timedelta(hours=3, minutes=30)
+    key = now_h.strftime("%Y-%m-%d")
+    for bot in db.bots.find({"active": True, "config.digest.on": True}, {"token_enc": 1, "config": 1}).limit(50):
+        bot_id = str(bot["_id"])
+        dg = (bot.get("config") or {}).get("digest") or {}
+        if _DIG_H.get(bot_id) == key or now_h.hour != int(dg.get("hour", 21)):
+            continue
+        _DIG_H[bot_id] = key
+        try:
+            since = naive(now() - timedelta(hours=24))
+            msgs = [f"{m.get('n') or 'کاربر'}: {m.get('x')}" for m in
+                    db.glog.find({"bot": bot_id, "chat": dg["chat"], "t": {"$gte": since}}).sort("t", 1).limit(120)]
+            if len(msgs) < 3:
+                continue
+            node = (bot.get("config") or {}).get("nodes", {}).get(dg.get("node") or "", {})
+            sysp = "تو خلاصه‌گوی گروهی. گفتگوی ۲۴ ساعت گذشته را در حداکثر ۶ خط فارسی خلاصه کن؛ نکته‌های مهم، تصمیم‌ها و کارهای باز. بدون اسم بردن از کسی که نخواسته."
+            from ai import llm_post, AI_CHAT_MODEL
+            r, _ = llm_post([{"role": "system", "content": sysp},
+                             {"role": "user", "content": "\n".join(msgs)[:9000]}], 500, temperature=0.4, timeout=90, model=AI_CHAT_MODEL)
+            if node.get("ai", {}).get("scope"):
+                r = r
+            tg_html(dec(bot["token_enc"]), "sendMessage", chat_id=dg["chat"],
+                    text="📋 <b>خلاصه‌ی ۲۴ ساعت گذشته:</b>\n" + (r or "").strip()[:1500])
+        except Exception:
+            log.exception("digest failed")
+
+
 def group_triggers(bot, bot_id, token, cfg, msg):
     """ماشه‌های گروه: اولین ماشه‌ای که با پیام می‌خونه اجرا می‌شه. اکشن‌ها روی متغیرهای همون عضو (یا عضوِ ریپلای‌شده) اجرا می‌شن"""
     trig = (cfg.get("group") or {}).get("triggers") or []
@@ -1172,6 +1498,8 @@ def group_triggers(bot, bot_id, token, cfg, msg):
             ok = low in words
         elif k == "starts":
             ok = any(w and low.startswith(w) for w in words)
+        elif k == "mention":
+            ok = ("@" + str(bot.get("username") or "")).lower() in low
         else:
             ok = any(w and w in low for w in words)
         if not ok:
@@ -1203,9 +1531,135 @@ def group_triggers(bot, bot_id, token, cfg, msg):
                         allow_sending_without_reply=True, disable_web_page_preview=True)
             if r.get("ok") and t.get("ttl"):
                 mod_later(bot_id, int(t["ttl"]), kind="del", chat=chat, mid=r["result"]["message_id"])
+        if t.get("ai"):
+            na = t["ai"]
+            if na in cfg.get("nodes", {}) and cfg["nodes"][na].get("ai"):
+                ai_chat(bot, bot_id, token, chat, tgt, na, text)
         if t.get("delete"):
             tg(token, "deleteMessage", chat_id=chat, message_id=msg["message_id"])
         return
+
+
+def handle_reaction(bot, bot_id, token, cfg, rc):
+    """ماشه‌ی ری‌اکشن: وقتی کسی به پیامی واکنش داد (ایموجی ماشه) — اکشن و پاسخ همان قانون"""
+    trig = (cfg.get("group") or {}).get("triggers") or []
+    rs = [t for t in trig if t.get("on") == "reaction"]
+    if not rs:
+        return
+    chat = (rc.get("chat") or {}).get("id")
+    user = rc.get("user") or {}
+    if not chat or not user.get("id") or user.get("is_bot"):
+        return
+    news = [e.get("emoji") for e in (rc.get("new_reaction") or []) if e.get("emoji")]
+    if not news:
+        return
+    env = Env(bot, token, chat, user)
+    for t in rs:
+        if not (set(t.get("words") or []) & set(news)):
+            continue
+        if t.get("when") and not check(t["when"], env):
+            continue
+        run_actions(t.get("do"), env)
+        rep = fill(t.get("reply") or "", env, True)[:1500]
+        if rep.strip():
+            tg_html(token, "sendMessage", chat_id=chat, text=rep)
+        env.save()
+        break
+
+
+def _inline_answer(bot, bot_id, token, cfg, iq):
+    """جستجوی اینلاین ربات: پاسخ از یک جدول (عنوان/توضیح/لینک) با کش کوتاه"""
+    inl = cfg.get("inline") or {}
+    if not inl.get("on"):
+        tg(token, "answerInlineQuery", inline_query_id=iq["id"], results=[], cache_time=10)
+        return
+    q = (iq.get("query") or "").strip()[:60]
+    try:
+        qf = {"bot": bot_id, "t": inl["table"]}
+        if q:
+            qf["d." + inl["title_f"]] = {"$regex": re.escape(q), "$options": "i"}
+        docs = list(db.recs.find(qf).sort("n", 1).limit(20))
+    except Exception:
+        log.exception("inline failed")
+        docs = []
+    res = []
+    for d in docs:
+        dd = d.get("d") or {}
+        title = str(dd.get(inl["title_f"]) or "بدون عنوان")[:60]
+        desc = str(dd.get(inl.get("desc_f") or "") or "")[:80]
+        url = str(dd.get(inl.get("url_f") or "") or "")[:200]
+        if url.startswith("https://"):
+            res.append({"type": "article", "id": str(d.get("n", len(res)))[:32], "title": title, "description": desc,
+                        "url": url, "hide_url": False,
+                        "input_message_content": {"message_text": f"<b>{_html.escape(title, quote=False)}</b>\n{url}", "parse_mode": "HTML"}})
+        else:
+            res.append({"type": "article", "id": str(d.get("n", len(res)))[:32], "title": title, "description": desc,
+                        "input_message_content": {"message_text": f"<b>{_html.escape(title, quote=False)}</b>" + (("\n" + _html.escape(desc, quote=False)) if desc else ""), "parse_mode": "HTML"}})
+    tg(token, "answerInlineQuery", inline_query_id=iq["id"], results=res[:20], cache_time=30)
+
+
+def _post_capture(bot, bot_id, token, cfg, msg):
+    """دستور /post برای مدیرها: متن بعد از دستور (یا پیام بعدی) به صف تأیید کانال می‌رود"""
+    cp = cfg.get("channelpost") or {}
+    text = (msg.get("text") or "")[5:].strip()
+    if not text:
+        db.states.replace_one({"_id": f"{bot_id}:{msg['chat']['id']}"}, {"_id": f"{bot_id}:{msg['chat']['id']}", "pmode": 1, "t": now()})
+        tg(token, "sendMessage", chat_id=msg["chat"]["id"], text="متن پست رو بفرست (تا ۳۵۰۰ حرف)؛ بعدش کارت تأیید می‌آد.")
+        return
+    _post_save(bot, bot_id, token, cfg, text)
+
+
+def _post_save(bot, bot_id, token, cfg, text):
+    n = int((db.spost.find_one({"bot": bot_id}, sort=[("n", -1)]) or {}).get("n", 0)) + 1
+    sp = {"bot": bot_id, "n": n, "text": text[:3500], "owner": bot["owner"], "t": now()}
+    db.spost.insert_one(sp)
+    kb = {"inline_keyboard": [
+        [{"text": "✅ تأیید و انتشار", "callback_data": f"sp:now:{n}"}, {"text": "⏰ +۱ ساعت", "callback_data": f"sp:1h:{n}"}],
+        [{"text": "📅 +۲۴ ساعت", "callback_data": f"sp:24h:{n}"}, {"text": "🗑 رد", "callback_data": f"sp:no:{n}"}]]}
+    tg_html(token, "sendMessage", chat_id=bot["owner"], text="📣 <b>پست در انتظار تأیید:</b>\n\n" + _html.escape(text[:3500], quote=False), reply_markup=kb)
+    for st in staff_ids(bot):
+        if st != bot["owner"]:
+            tg_html(token, "sendMessage", chat_id=st, text="📣 <b>پست در انتظار تأیید:</b>\n\n" + _html.escape(text[:3500], quote=False), reply_markup=kb)
+
+
+def _post_publish(bot, token, cfg, sp):
+    cp = cfg.get("channelpost") or {}
+    mk = None
+    if cp.get("btn_text") and cp.get("btn_url"):
+        mk = {"inline_keyboard": [[{"text": cp["btn_text"][:24], "url": cp["btn_url"]}]]}
+    r = tg_html(token, "sendMessage", chat_id=cp["chat"], text=sp["text"][:3500], **({"reply_markup": mk} if mk else {}))
+    pl = (cp.get("poll_q"), cp.get("poll_opts"))
+    if r.get("ok") and pl[0]:
+        tg(token, "sendPoll", chat_id=cp["chat"], question=pl[0][:255], options=[x[:30] for x in (pl[1] or [])[:10]], is_anonymous=False)
+
+
+def _post_cb(bot, bot_id, token, cfg, cq, data, user, m):
+    cp = cfg.get("channelpost") or {}
+    if not cp.get("on"):
+        return "ok"
+    if not is_staff(bot, user.get("id")):
+        tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="فقط مدیرها می‌توانند تأیید کنند.", show_alert=True)
+        return "ok"
+    try:
+        _, act, n = data.split(":")
+    except ValueError:
+        return "ok"
+    sp = db.spost.find_one({"bot": bot_id, "n": int(n)}) if n.isdigit() else None
+    if not sp:
+        tg(token, "answerCallbackQuery", callback_query_id=cq["id"], text="این پست دیگر معتبر نیست.")
+        return "ok"
+    if act == "no":
+        db.spost.delete_one({"_id": sp["_id"]})
+        tg(token, "editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"], text="🗑 پست رد شد.")
+    else:
+        hours = {"now": 0, "1h": 1, "24h": 24}.get(act, 0)
+        db.sched.insert_one({"bot": bot_id, "kind": "post", "chat": cp["chat"],
+                             "text": sp["text"], "due": naive(now() + timedelta(hours=hours))})
+        db.spost.delete_one({"_id": sp["_id"]})
+        tg(token, "editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"],
+           text="✅ تأیید شد؛ " + ("همین حالا منتشر می‌شود." if not hours else f"انتشار {hours} ساعت دیگر."))
+    tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+    return "ok"
 
 
 def mod_join(bot, bot_id, token, mod, msg, u):
@@ -1623,8 +2077,50 @@ def bot_paid(env, msg):
         send_node(env, p["goto"])
 
 
+def app_paid(env, msg):
+    """پرداخت موفقِ بلوک pay مینی‌اپ: payload = ap|<block_id>|<uid>؛ ثبت یک‌باره، اکشن‌ها، پیام تشکر و خبر به صاحب ربات"""
+    try:
+        sp = msg["successful_payment"]
+        parts = str(sp.get("invoice_payload") or "").split("|")
+        if len(parts) != 3 or parts[0] != "ap" or (parts[2] or "0") != str(env.uid):
+            log.warning("app payment payload mismatch: %s", sp.get("invoice_payload"))
+            return
+        doc = db.apps.find_one({"_id": env.bot_id, "pub": {"$exists": True, "$ne": None}}) or {}
+        blk = None
+        for s in ((doc.get("pub") or {}).get("screens") or {}).values():
+            for b in s.get("blocks") or []:
+                if b.get("id") == parts[1] and b.get("t") == "pay":
+                    blk = b
+                    break
+        if not blk or sp.get("currency") != "XTR" or int(sp.get("total_amount", 0)) != int(blk.get("stars", 0)):
+            log.warning("app payment mismatch: %s", sp.get("invoice_payload"))
+            return
+        charge = sp["telegram_payment_charge_id"]
+        try:
+            db.payments.insert_one({"bot": env.bot_id, "uid": env.uid, "name": (env.user.get("first_name") or "")[:40],
+                                    "stars": int(blk["stars"]), "title": blk.get("title") or "مینی‌اپ",
+                                    "charge": charge, "kind": "app", "t": now()})
+        except DuplicateKeyError:
+            return
+        run_actions(blk.get("do"), env)
+        try:
+            env.save()
+        except Exception:
+            log.exception("app paid env save failed")
+        tg_html(env.token, "sendMessage", chat_id=env.chat_id,
+                text=fill(blk.get("text") or "پرداخت انجام شد. ممنون!", env, True)[:4000])
+        to_owner(env, text=f"پرداخت مینی‌اپ — {blk.get('title') or ''}\n{blk['stars']} ستاره\n{who(env)}\nکد پیگیری: {charge}")
+        db.app_ev.update_one({"_id": f"{env.bot_id}:pay:{tehran_day()}"},
+                             {"$inc": {"n": 1}, "$setOnInsert": {"t": now()}}, upsert=True)
+    except Exception:
+        log.exception("app_paid failed")
+
+
 def allowed_updates(cfg):
     u = ["message", "callback_query", "pre_checkout_query"]
+    if cfg.get("growth"):
+        u += ["chat_member", "chat_join_request"]
+    u += ["message_reaction", "inline_query"]
     return u + ["channel_post", "my_chat_member"] if cfg.get("mod") else u
 
 
@@ -1633,13 +2129,14 @@ def ensure_webhook(bot, cfg):
     if not bot.get("active") or not bot.get("token_enc"):
         return
     mod = bool(cfg.get("mod"))
+    gr = bool(cfg.get("growth"))
     need_pay = PAYMENTS and not bot.get("wh_pay") and has_pay(cfg)
-    if not (need_pay or mod != bool(bot.get("wh_mod"))):
+    if not (need_pay or mod != bool(bot.get("wh_mod")) or gr != bool(bot.get("wh_gr"))):
         return
     r = tg(dec(bot["token_enc"]), "setWebhook", url=f"{BASE_URL}/hook/{bot['_id']}", secret_token=bot["secret"],
            allowed_updates=allowed_updates(cfg))
     if r.get("ok"):
-        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"wh_pay": True, "wh_mod": mod}})
+        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"wh_pay": True, "wh_mod": mod, "wh_gr": gr}})
 
 
 # ───────────────────────── گفتگوی هوشمند داخل ربات‌ها ─────────────────────────
@@ -1689,19 +2186,40 @@ def ai_chat(bot_id, token, chat_id, user, node_id, text):
             w = db.aiuse.find_one_and_update({"_id": f"{bot_id}:warn:{day}"}, {"$inc": {"n": 1}}, upsert=True,
                                              return_document=ReturnDocument.AFTER)
             if w["n"] == 1:
-                tg(MOTHER_TOKEN, "sendMessage", chat_id=owner, reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": BASE_URL}}]]},
+                tg(MOTHER_TOKEN, "sendMessage", chat_id=owner, reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": APP_URL}}]]},
                    text=f"توکن‌هات تموم شده و بخش هوش مصنوعی ربات «{cfg.get('name', '')}» فعلاً کار نمی‌کنه.")
+            return
+        if text.strip() in ("/forget", "فراموش کن", "فراموش"):
+            db.states.update_one({"_id": env.sid, "aichat": node_id}, {"$set": {"h": [], "t": now()}})
+            tg(token, "sendMessage", chat_id=chat_id, text="حافظه‌ی گفتگومون پاک شد ✅ از اول شروع کنیم.")
+            return
+        ckey = f"{bot_id}:{node_id}:{hashlib.sha1(text.strip().lower().encode()).hexdigest()}"   # کش پاسخ تکراری
+        hit = db.aicache.find_one({"_id": ckey})
+        if hit:
+            kb0 = keyboard(node, node_id, env)
+            tg(token, "sendMessage", chat_id=chat_id, text=hit["r"],
+               **({"reply_markup": {"inline_keyboard": kb0}} if kb0 else {}))
             return
         tg(token, "sendChatAction", chat_id=chat_id, action="typing")
         st = db.states.find_one({"_id": env.sid}) or {}
         mem = max(0, min(6, int(ai.get("memory", 3))))
         hist = (st.get("h") or [])[-mem * 2:] if (mem and st.get("aichat") == node_id) else []
         system = AI_CHILD_PROMPT.replace("{bot}", cfg.get("name", "")) + fill(ai["prompt"], env)
+        know = kb_search(bot_id, text, 2)
+        if know:
+            system += "\n\nدانش کسب‌وکار (فقط بر اساس این جواب بده و از دانش بیرون چیز نساز):\n" + \
+                "\n".join(f"- {t}: {x}" for t, x in know)
+        if ai.get("scope"):
+            system += "\n\nمحدوده‌ی موضوعی: فقط درباره‌ی موضوع‌های زیر جواب بده؛ اگر سؤال بیرون از این‌ها بود، مؤدبانه بگو خارج از حوزه‌ی توست: " + str(ai["scope"])
+        tools_block, tools = agent_tools_block(node, cfg)
+        if tools_block:
+            system += "\n\n" + tools_block
         guard = not (has_foreign(ai["prompt"]) or has_foreign(text))      # صاحب ربات و کاربر فارسی/لاتین نوشتن
         if guard:
             system += LANG_GUARD.replace("only in Persian (Farsi, Arabic script)", "in the user's language (default Persian)")
         reply, (pt, ct) = llm_post([{"role": "system", "content": system}, *hist, {"role": "user", "content": text[:1500]}],
                                    AI_NODE_MAX_TOKENS, temperature=0.6, timeout=60, model=AI_CHAT_MODEL)
+        reply, pt, ct = agent_tool_round(bot_id, system, hist, text, reply, pt, ct, tools, AI_NODE_MAX_TOKENS)
         if guard and has_foreign(reply):                                   # یک بار دوباره با تأکید؛ اگه باز نشد حذف می‌کنیم
             r2, (pt2, ct2) = llm_post([{"role": "system", "content": system}, *hist, {"role": "user", "content": text[:1500]},
                                        {"role": "assistant", "content": reply[:900]},
@@ -1715,9 +2233,99 @@ def ai_chat(bot_id, token, chat_id, user, node_id, text):
         db.states.update_one({"_id": env.sid, "aichat": node_id}, {"$set": {"h": hist, "t": now()}})
         kb = keyboard(node, node_id, env)
         tg(token, "sendMessage", chat_id=chat_id, text=reply, **({"reply_markup": {"inline_keyboard": kb}} if kb else {}))
+        try:
+            db.aicache.update_one({"_id": ckey}, {"$set": {"r": reply[:2000], "t": now()}}, upsert=True)
+        except Exception:
+            pass
     except Exception:
         log.exception("ai_chat failed")
         tg(token, "sendMessage", chat_id=chat_id, text="الان نتونستم جواب بدم. دوباره امتحان کن.")
+
+
+# ───────────────────────── دانش عامل هوشمند (BM25 خالص، بدون سرویس بیرونی) ─────────────────────────
+def agent_tools_block(node, cfg):
+    """پرومپت ابزارها: عامل می‌تواند پیش از جواب، در جدول‌های مجاز جستجو کند (فهرست سفید)"""
+    tools = (node.get("ai") or {}).get("tools") or []
+    if not tools:
+        return "", []
+    lines = []
+    for t in tools:
+        fs = (cfg.get("dbfields") or {}).get(t) or []
+        lines.append("جدول «" + t + "» فیلدها: " + (", ".join(fs) if fs else "(آزاد)"))
+    return ("TOOLS: You may search the bot's data tables before answering. To search, reply ONLY with one JSON object: "
+            '{"tool": "search_table", "table": "<table>", "query": "<query>"} — available: '
+            + "؛ ".join(lines) + ". If you do not need the data, answer normally in Persian."), tools
+
+
+def _try_tool_call(txt):
+    m = re.search(r"\{[\s\S]*\}", str(txt or ""))
+    if not m:
+        return None
+    try:
+        j = json.loads(m.group(0))
+    except Exception:
+        return None
+    return j if isinstance(j, dict) and j.get("tool") == "search_table" else None
+
+
+def agent_tool_search(bot_id, tools, table, query, limit=5):
+    """جستجوی واقعی در جدول (فقط جدول‌های فهرست سفید) → خط‌های خوانا"""
+    if table not in (tools or []):
+        return None
+    try:
+        docs = list(db.recs.find({"bot": bot_id, "t": table}).sort("n", -1).limit(200))
+    except Exception:
+        log.exception("agent_tool_search failed")
+        docs = []
+    qq = str(query or "").strip().casefold()
+    out = []
+    for d in docs:
+        dd = {k: v for k, v in (d.get("d") or {}).items() if str(v).strip()}
+        hay = " ".join(str(v) for v in dd.values()).casefold()
+        if qq and qq not in hay:
+            continue
+        out.append(" · ".join(f"{k}: {v}" for k, v in list(dd.items())[:6])[:200])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def agent_tool_round(bot_id, system, hist, text, reply, pt, ct, tools, max_tokens=600):
+    """اگر جواب مدل درخواست ابزار بود: جستجوی واقعی و مرحله‌ی دوم برای جواب نهایی"""
+    tc = _try_tool_call(reply)
+    if not tc or not tools:
+        return reply, pt, ct
+    rows = agent_tool_search(bot_id, tools, str(tc.get("table") or "")[:20], str(tc.get("query") or "")[:60])
+    tm = "نتیجه‌ی جستجوی داده‌های ربات:" + BSN + (BSN.join(rows) if rows else "(چیزی پیدا نشد)")
+    from ai import llm_post, AI_CHAT_MODEL
+    r2, (pt2, ct2) = llm_post([{"role": "system", "content": system}, *hist,
+                               {"role": "user", "content": text[:1500]},
+                               {"role": "assistant", "content": reply[:600]},
+                               {"role": "user", "content": tm + BSN + BSN + "حالا جواب نهایی را فارسی و کوتاه بده؛ فقط بر اساس این نتیجه‌ها و اگر کافی نیست صادقانه بگو."}],
+                              max_tokens, temperature=0.5, timeout=60, model=AI_CHAT_MODEL)
+    return r2, pt + pt2, ct + ct2
+
+
+def kb_for(bot_id):
+    try:
+        return [{"id": str(d["_id"]), "t": d.get("t") or "دانش", "x": d.get("x") or ""}
+                for d in db.kbdoc.find({"bot": bot_id}).limit(200)]
+    except Exception:
+        log.exception("kb_for failed")
+        return []
+
+
+def kb_search(bot_id, query, k=2):
+    """(عنوان، متن) نزدیک‌ترین قطعه‌های دانش به سؤال کاربر"""
+    docs = kb_for(bot_id)
+    if not docs or not (query or "").strip():
+        return []
+    try:
+        from ai import bm25_top
+        return bm25_top(query, docs, k)
+    except Exception:
+        log.exception("kb_search failed")
+        return []
 
 
 def child_referral(env):
@@ -1989,11 +2597,44 @@ def sub_hook(bot_id):
         if upd.get("my_chat_member"):                               # اضافه/حذف شدن ربات از گروه یا کانال
             mod_my_member(bot, bot_id, token, upd["my_chat_member"])
             return "ok"
+        if upd.get("chat_member") and cfg.get("growth"):            # عضویت/خروج واقعی با لینک دعوت (ربات رشد)
+            import growth as _growth_mod
+            _growth_mod.on_member(bot, token, cfg, upd["chat_member"])
+            return "ok"
+        if upd.get("chat_join_request") and cfg.get("growth"):      # درخواست عضویت: تأیید خودکار + پاداش
+            import growth as _growth_mod
+            _growth_mod.on_request(bot, token, cfg, upd["chat_join_request"])
+            return "ok"
+        if upd.get("message_reaction"):
+            handle_reaction(bot, bot_id, token, cfg, upd["message_reaction"])
+            return "ok"
+        if upd.get("inline_query"):
+            _inline_answer(bot, bot_id, token, cfg, upd["inline_query"])
+            return "ok"
         cq, msg = upd.get("callback_query"), upd.get("message")
+        if msg and not cq and msg["chat"]["type"] == "private" and (cfg.get("channelpost") or {}).get("on") \
+                and is_staff(bot, actor.get("id")):
+            st0 = db.states.find_one({"_id": f"{bot_id}:{msg['chat']['id']}"}) or {}
+            tx0 = str(msg.get("text") or "")
+            if st0.get("pmode") and not tx0.startswith("/"):
+                db.states.delete_one({"_id": f"{bot_id}:{msg['chat']['id']}"})
+                _post_save(bot, bot_id, token, cfg, tx0)
+                return "ok"
+            if tx0.startswith("/post"):
+                _post_capture(bot, bot_id, token, cfg, msg)
+                return "ok"
+        if msg and not cq and str(msg.get("text") or "").startswith("/"):
+            import games as _games_mod
+            _gc = _games_mod.gcfg(cfg)
+            if _gc and _games_mod.cmd(bot, token, cfg, msg["chat"]["id"], msg.get("from") or {}, msg.get("text") or ""):
+                return "ok"
+            if _gc and msg["chat"]["type"] == "private" and _games_mod.on_text(bot, token, cfg, msg["chat"]["id"], msg.get("from") or {}, str(msg.get("text") or "")):
+                return "ok"
         if msg and msg["chat"]["type"] in ("group", "supergroup") and not cq:       # گروه: مدیریت (mod) و ماشه‌های گروه (کلمه/دستور ← پاسخ و امتیاز)
             stop = mod_group(bot, bot_id, token, cfg, msg) if cfg.get("mod") else False
             if not stop and (cfg.get("group") or {}).get("triggers"):
                 group_triggers(bot, bot_id, token, cfg, msg)
+            _glog(bot_id, msg["chat"]["id"], msg.get("from") or {}, msg)
             return "ok"
         actor = (cq or msg or {}).get("from") or {}
         chat0 = (msg or {}).get("chat") or ((cq or {}).get("message") or {}).get("chat") or {}
@@ -2012,6 +2653,25 @@ def sub_hook(bot_id):
             data, user, m = cq.get("data", ""), cq.get("from", {}), cq.get("message") or {}
             chat_id = (m.get("chat") or {}).get("id")
             if not chat_id:
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                return "ok"
+            if data.startswith("sp:"):                                  # تأیید/رد پست کانال
+                r = _post_cb(bot, bot_id, token, cfg, cq, data, user, m)
+                if r:
+                    return r
+            if data.startswith("blp:"):                                 # صفحه‌بندی دکمه‌های لیستی
+                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                try:
+                    _, nid2, pg2 = data.split(":")
+                    db.states.update_one({"_id": env.sid}, {"$set": {"blp": max(0, int(pg2)), "bln": nid2, "t": now()}}, upsert=True)
+                    send_node(env, nid2 if nid2 in cfg["nodes"] else cfg["start"], edit=m)
+                except (ValueError, TypeError):
+                    pass
+                return "ok"
+            if data.startswith("g:"):                                   # مرکز بازی
+                import games as _games_mod
+                if _games_mod.gcfg(cfg):
+                    _games_mod.cb(bot, token, cfg, chat_id, user, data, m.get("message_id"))
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
                 return "ok"
             if data.startswith("cp:") and (m.get("chat") or {}).get("type") in ("group", "supergroup"):   # کپچای گروه
@@ -2124,7 +2784,10 @@ def sub_hook(bot_id):
         env = Env(bot, token, chat_id, user, text=text)
         env.is_new = is_new
         if msg.get("successful_payment"):                           # پرداخت موفق همیشه پردازش می‌شه (حتی بدون عضویت اجباری)
-            bot_paid(env, msg)
+            if str((msg.get("successful_payment") or {}).get("invoice_payload") or "").startswith("ap|"):
+                app_paid(env, msg)                                  # پرداخت بلوک pay مینی‌اپ
+            else:
+                bot_paid(env, msg)
             return "ok"
         if is_staff(bot, user.get("id")) and staff_message(bot, env, msg, text):
             return "ok"
@@ -2196,6 +2859,7 @@ def sub_hook(bot_id):
             else:
                 db.states.delete_one({"_id": sid})
                 body = "\n\n".join(f"{plain_html(q)}\n» {a}" for q, a in zip(fields, ans))
+                run_actions(node.get("do"), env)                # اکشن‌های فرم با جواب‌های پرشده (db_add، تخفیف، …)
                 if node.get("ticket"):                              # فرم تیکتی: شماره‌دار + دکمه‌ی پاسخ برای پشتیبان‌ها
                     if is_blocked(bot_id, env.uid):
                         tg(token, "sendMessage", chat_id=chat_id, text="ارتباط شما با پشتیبانی محدود شده.")

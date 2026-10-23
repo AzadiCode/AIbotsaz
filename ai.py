@@ -23,7 +23,7 @@ ai.py — هوش مصنوعیِ ساخت ربات (وابسته به core)
   TEMPLATES, to_num, typical_cost, VAR_RE
 """
 
-import os, re, json, time, math, threading
+import os, re, json, time, math, threading, ast
 from urllib.parse import urlparse
 
 import requests
@@ -297,6 +297,10 @@ PAYMENTS (Telegram Stars)
                  .replace("@@PAYLIM@@", "(only Telegram Stars)" if PAYMENTS else "of any kind")
                  .replace("@@PAYMAP@@", ", pay for Telegram Stars payments" if PAYMENTS else "")
                  .replace("@@DBMAP@@", ""))
+
+# رجیستری قابلیت‌ها به دستورالعمل چسبانده می‌شود تا AI فقط قابلیت‌های واقعی موتور را بسازد
+import caps as _caps_mod
+SYSTEM_PROMPT += "\n\nCAPABILITIES REGISTRY (single source of truth — build ONLY with these):\n" + _caps_mod.caps_ai_text()
 EXT_API = os.environ.get("EXT_API", "1").strip() != "0"     # اکشن fetch (اتصال به API بیرونی)؛ ۰ = خاموش
 EXT_API_DAILY = _int("EXT_API_DAILY", 200)                  # سقف روزانه‌ی fetch هر ربات
 if EXT_API:
@@ -320,10 +324,11 @@ MAX_HOPS = 5
 # متغیرهای آماده‌ی تلگرام (فقط‌خواندنی)
 BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner",
             "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday", "ticket_no")
-OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled")
+OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled", "sub")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 ACT_OPS = ("set", "add", "clear", "random", "notify", "remind",
-           "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch")
+           "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch", "game_play",
+           "calc", "disc", "sub_add", "sub_del")
 F_TYPES = ("text", "number", "phone", "email")
 
 
@@ -365,6 +370,64 @@ def fmt_num(x):
     return str(int(x)) if x == int(x) else ("%.6f" % x).rstrip("0").rstrip(".")
 
 
+# ───────────────────────── ارزیاب امنِ عبارت حسابی (بدون eval) ─────────────────────────
+_CALC_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+
+
+def safe_calc(expr):
+    """عبارت حسابی امن: فقط عدد، + - * / // % ** و پرانتز (بدون eval و بدون نام و تابع). خطا/حمله = None"""
+    def ev(n, d):
+        if d > 24:
+            return None
+        if isinstance(n, ast.Expression):
+            return ev(n.body, d + 1)
+        if isinstance(n, ast.Constant):
+            return n.value if isinstance(n.value, (int, float)) and not isinstance(n.value, bool) else None
+        if isinstance(n, ast.BinOp) and type(n.op) in _CALC_OPS:
+            x, y = ev(n.left, d + 1), ev(n.right, d + 1)
+            if x is None or y is None:
+                return None
+            try:
+                if type(n.op) in (ast.Div, ast.FloorDiv, ast.Mod) and y == 0:
+                    return None
+                if type(n.op) is ast.Pow and abs(y) > 64:
+                    return None
+                if type(n.op) is ast.Add:
+                    v = x + y
+                elif type(n.op) is ast.Sub:
+                    v = x - y
+                elif type(n.op) is ast.Mult:
+                    v = x * y
+                elif type(n.op) is ast.Div:
+                    v = x / y
+                elif type(n.op) is ast.FloorDiv:
+                    v = x // y
+                elif type(n.op) is ast.Mod:
+                    v = x % y
+                else:
+                    v = x ** y
+            except (OverflowError, ZeroDivisionError, ValueError):
+                return None
+            return v if math.isfinite(v) else None
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.UAdd, ast.USub)):
+            x = ev(n.operand, d + 1)
+            if x is None:
+                return None
+            return -x if isinstance(n.op, ast.USub) else x
+        return None
+
+    try:
+        tree = ast.parse(str(expr or "").strip(), mode="eval")
+    except (SyntaxError, ValueError, RecursionError):
+        return None
+    v = ev(tree, 0)
+    if v is None:
+        return None
+    if isinstance(v, float) and v.is_integer() and abs(v) <= 1e15:
+        v = int(v)
+    return fmt_num(v)
+
+
 def clean_cond(c, used, nums, bad, depth=0):
     """شرط رو پاک‌سازی می‌کنه؛ نامعتبر = None"""
     if not isinstance(c, dict) or depth > 3:
@@ -380,6 +443,8 @@ def clean_cond(c, used, nums, bad, depth=0):
     name = str(c.get("var") or "").strip().lower()
     op = str(c.get("op") or "==").strip()
     op = OP_ALIASES.get(op, op)
+    if op == "sub":                      # شرط اشتراک دوره: پلن لازم است، متغیر نه
+        return {"op": "sub", "plan": re.sub(r"[^a-z0-9_]", "", str(c.get("plan") or "").lower())[:16]}
     if not (name in BUILTINS or VAR_RE.match(name)):
         bad(f"نام متغیر «{name}» در شرط معتبر نیست (حروف انگلیسی کوچک، عدد و _)")
         return None
@@ -412,6 +477,9 @@ def clean_rec_cond(c, bad):
     f = str(c.get("var") or "").strip().lower()
     op = str(c.get("op") or "==").strip()
     op = OP_ALIASES.get(op, op)
+    if op == "sub":
+        bad("شرط «اشتراک دوره» فقط در «وقتی/اگه» جریان کار می‌کنه، نه در شرط جدول")
+        return None
     if not (VAR_RE.match(f) or f in REC_BUILTINS):
         bad(f"نام فیلد «{f}» در شرط جدول داده معتبر نیست")
         return None
@@ -453,6 +521,15 @@ def _clean_new_action(op, a, used, nums, bad, tables):
             return None
         used.add(name)
         return {"op": "pick", "var": name, "value": v}
+    if op == "game_play":
+        # شروع یکی از بازی‌های آماده (مرکز بازی)؛ فقط بازی‌های موجود در رجیستری
+        import caps as _caps_mod
+        gids = {g["k"] for g in _caps_mod.CAPS_GAMES}
+        gm = str(a.get("game") or "").strip().lower()
+        if gm not in gids:
+            bad("بازی «%s» وجود نداره؛ بازی‌های موجود: %s" % (gm or "؟", "، ".join(sorted(gids))))
+            return None
+        return {"op": "game_play", "game": gm}
     if op == "fetch":
         if not EXT_API:
             bad("اتصال به API بیرونی در این سرویس فعال نیست")
@@ -550,6 +627,47 @@ def clean_actions(lst, used, nums, bad, valid=None, tables=None):
             it = _clean_new_action(op, a, used, nums, bad, tables)
             if it:
                 out.append(it)
+            continue
+        if op == "calc":                     # محاسبه‌ی امن عبارت حسابی (بدون eval)
+            name = str(a.get("var") or "").strip().lower()
+            if not VAR_RE.match(name) or name in BUILTINS:
+                bad(f"نام متغیر «{name}» برای محاسبه معتبر نیست")
+                continue
+            v = str(a.get("value", "")).strip()[:80]
+            if not v or safe_calc(PH_RE.sub("1", v)) is None:
+                bad(f"عبارت محاسبه برای «{name}» معتبر نیست؛ فقط عدد، + - * / و پرانتز (متغیر با {{}})")
+                continue
+            used.add(name)
+            nums.add(name)
+            out.append({"op": "calc", "var": name, "value": v})
+            continue
+        if op == "disc":                     # بررسی کد تخفیف: {var}_off قیمت بعد تخفیف، {var}_save سود
+            name = str(a.get("var") or "").strip().lower()
+            if not VAR_RE.match(name) or name in BUILTINS:
+                bad(f"نام متغیر «{name}» برای کد تخفیف معتبر نیست")
+                continue
+            price = str(a.get("price", "")).strip()[:40]
+            if to_num(price) is None and not PH_RE.search(price):
+                bad("قیمت پایه‌ی کد تخفیف باید عدد یا متغیر (مثل {price}) باشه")
+                continue
+            used.add(name)
+            nums.add(name)
+            out.append({"op": "disc", "var": name, "price": price or "0"})
+            continue
+        if op in ("sub_add", "sub_del"):     # اشتراک دوره
+            plan = re.sub(r"[^a-z0-9_]", "", str(a.get("plan") or "vip").lower())[:16] or "vip"
+            item = {"op": op, "plan": plan}
+            name = str(a.get("var") or "").strip().lower()
+            if VAR_RE.match(name) and name not in BUILTINS:
+                item["var"] = name
+                if op == "sub_add":
+                    used.add(name)
+            if op == "sub_add":
+                days = str(a.get("days", 30)).strip()[:20]
+                if to_num(days) is None and not PH_RE.search(days):
+                    days = "30"
+                item["days"] = days or "30"
+            out.append(item)
             continue
         if op == "notify":
             v = str(a.get("value") or "").strip()[:500]
@@ -731,6 +849,7 @@ def clean_mod(m, bad):
 
 BTN_STYLES = ("primary", "success", "danger")   # آبی، سبز، قرمز
 GRP_ON = ("contains", "exact", "starts", "command")
+# reaction: واکنش ایموجی؛ mention: منشن‌کردن ربات — بعد از ماشه‌های معمولی اجرا می‌شوند
 MAX_TRIGGERS = 20
 
 
@@ -743,7 +862,7 @@ def clean_group(g, used, nums, bad, valid, tables, gl):
         if not isinstance(t, dict):
             continue
         k = str(t.get("on") or "contains").strip().lower()
-        k = k if k in GRP_ON else "contains"
+        k = k if k in GRP_ON + ("reaction", "mention") else "contains"
         raw = t.get("words") if isinstance(t.get("words"), list) else re.split(r"[,،\n]+", str(t.get("words") or ""))
         ws = []
         for w in raw[:10]:
@@ -752,7 +871,7 @@ def clean_group(g, used, nums, bad, valid, tables, gl):
                 w = re.sub(r"[^\w]", "", w.lstrip("/").lower())
             if w and w not in ws:
                 ws.append(w)
-        if not ws:
+        if not ws and k != "mention":          # منشن بدون کلمه هم معتبر است (منشن‌کردن خود ربات)
             bad("یکی از ماشه‌های گروه کلمه یا دستور نداره")
             continue
         o = {"on": k, "words": ws}
@@ -775,7 +894,13 @@ def clean_group(g, used, nums, bad, valid, tables, gl):
                     nums.add(bv)
             else:
                 bad("متغیر جدول برترین‌های یک ماشه‌ی گروه باید یه متغیر شخصیِ عددی باشه")
-        if not (o.get("reply") or o.get("do") or o.get("board")):
+        if t.get("ai"):
+            na = str(t.get("ai") or "")
+            if na in valid and valid[na][0].get("ai"):
+                o["ai"] = na
+            else:
+                bad("فراخوانی عاملِ یک ماشه باید به بخشِ گفتگوی هوشمند وصل باشد")
+        if not (o.get("reply") or o.get("do") or o.get("board") or o.get("ai")):
             bad("یکی از ماشه‌های گروه نه پاسخ داره نه اکشن")
             continue
         if t.get("when"):
@@ -796,15 +921,20 @@ def clean_group(g, used, nums, bad, valid, tables, gl):
     return {"triggers": out} if out else None
 
 
-def sanitize(cfg, strict=False, media=None, warns=None):
+def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
     """strict=True (ویرایش دستی): خطا می‌ده.  strict=False (خروجی AI): تا جای ممکن خودش درست می‌کنه.
-    media = مجموعه‌ی شناسه‌ی رسانه‌هایی که مال خود کاربره؛ بقیه بی‌صدا حذف می‌شن"""
+    media = مجموعه‌ی شناسه‌ی رسانه‌هایی که مال خود کاربره؛ بقیه بی‌صدا حذف می‌شن
+    nodes_cap = سقف بخش‌ها (پلن‌محور)؛ خالی = MAX_NODES"""
     media = media or set()
     if not isinstance(cfg, dict) or not isinstance(cfg.get("nodes"), dict):
         raise ValueError("ساختار خروجی معتبر نیست")
+    try:
+        cap_n = max(1, int(nodes_cap)) if nodes_cap else MAX_NODES
+    except (TypeError, ValueError):
+        cap_n = MAX_NODES
     nodes_in = cfg["nodes"]
-    if not (1 <= len(nodes_in) <= MAX_NODES):
-        raise ValueError(f"تعداد بخش‌ها باید بین ۱ تا {MAX_NODES} باشه")
+    if not (1 <= len(nodes_in) <= cap_n):
+        raise ValueError(f"تعداد بخش‌ها باید بین ۱ تا {cap_n} باشه")
 
     def bad(msg):
         if strict:
@@ -851,6 +981,19 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 g = str(b.get("goto") or "")
                 if isinstance(b.get("pay"), dict):
                     it = clean_pay(b["pay"], label, valid, bad)
+                elif str(b.get("contact") or ""):
+                    it = {"text": label, "contact": True, "kb": "reply"}       # تلگرام: فقط در کیبورد پایین چت
+                elif str(b.get("location") or ""):
+                    it = {"text": label, "location": True, "kb": "reply"}
+                elif str(b.get("inline") or "").strip():
+                    it = {"text": label, "inline": str(b["inline"]).strip()[:64]}
+                elif b.get("app") is not None:      # دکمه‌ی «باز کردن مینی‌اپ»؛ مقدار = صفحه‌ی شروع اختیاری
+                    ap = b.get("app")
+                    ap = "1" if ap in (True, 1, "1", "") else str(ap).strip()
+                    if ap and not ID_RE.match(ap):
+                        bad(f"صفحه‌ی دکمه‌ی «{label}» معتبر نیست (شناسه‌ی صفحه‌ی مینی‌اپ)")
+                        ap = "1"
+                    it = {"text": label, "app": ap or "1"}
                 elif g:
                     if g in valid:
                         it = {"text": label, "goto": g}
@@ -890,7 +1033,7 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                             it["do"] = acts
                     else:
                         bad(f"اکشن فقط روی دکمه‌های «رفتن به بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنه (دکمه‌ی «{label}»)")
-                if b.get("kb") == "reply" or n.get("kb") == "reply":      # n.kb = کانفیگ‌های قدیمی (نوع برای کل بخش)
+                if "app" not in it and (b.get("kb") == "reply" or n.get("kb") == "reply"):      # دکمه‌ی مینی‌اپ فقط شیشه‌ای می‌شود؛ کیبورد پایین چت web_app ندارد
                     it["kb"] = "reply"                                    # کیبورد پایین چت؛ بدونش = دکمه‌ی شیشه‌ای
                 bst = str(b.get("style") or "").strip().lower()           # رنگ دکمه و ایموجی پرمیوم (اشتراک پرمیوم/پرو)
                 if bst in BTN_STYLES:
@@ -961,6 +1104,17 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                 except (TypeError, ValueError):
                     mem = 3
                 node["ai"] = {"prompt": str(ai["prompt"]).strip()[:1500], "daily": max(1, min(100, dly)), "memory": mem}
+                sc = str(ai.get("scope") or "").strip()[:200]
+                if sc:
+                    node["ai"]["scope"] = sc          # گارد موضوعی: فقط این موضوع‌ها
+                tls = []                              # ابزارها: جستجو در همین جدول‌های ربات (حداکثر ۳)
+                for x in (ai.get("tools") if isinstance(ai.get("tools"), list) else [])[:3]:
+                    t2 = str(x).strip().lower()
+                    if TAB_RE.match(t2) and t2 not in tls:
+                        _reg_tab(tables, t2, [])
+                        tls.append(t2)
+                if tls:
+                    node["ai"]["tools"] = tls
         # تیکت: هر پیام/فرم این بخش یک تیکت شماره‌دار می‌شه با دکمه‌ی «پاسخ» برای صاحب ربات و پشتیبان‌ها
         tk = n.get("ticket")
         if tk:
@@ -971,6 +1125,40 @@ def sanitize(cfg, strict=False, media=None, warns=None):
                     node["tag"] = tag
             else:
                 bad(f"بخش «{nid}» تیکت می‌خواد ولی «دریافت پیام» (ask) یا فرم (fields) نداره")
+        # نظرسنجی خودکار بعد از پیام این بخش
+        pl = n.get("poll")
+        if isinstance(pl, dict) and str(pl.get("q") or "").strip():
+            opts = [str(x).strip()[:30] for x in (pl.get("opts") if isinstance(pl.get("opts"), list) else []) if str(x).strip()][:10]
+            if len(opts) >= 2:
+                node["poll"] = {"q": str(pl["q"]).strip()[:255], "opts": opts}
+            else:
+                bad(f"نظرسنجی بخش «{nid}» حداقل دو گزینه لازم دارد")
+        # دکمه‌ها از یک لیست (با صفحه‌بندی خودکار)
+        bl = n.get("btnlist")
+        if isinstance(bl, dict):
+            tab = str(bl.get("table") or "").strip().lower()
+            if not TAB_RE.match(tab):
+                bad(f"نام جدول دکمه‌های «{nid}» معتبر نیست")
+            else:
+                _reg_tab(tables, tab, [str(bl.get("text_f") or "text").lower()])
+                o = {"table": tab, "text_f": str(bl.get("text_f") or "text").lower(), "goto": str(bl.get("goto") or "")}
+                if o["goto"] not in valid:
+                    bad(f"دکمه‌های لیستی بخش «{nid}» باید به یک بخش معتبر وصل باشند")
+                else:
+                    if bl.get("scope") in ("all", "shared", True):
+                        o["scope"] = "all"
+                    try:
+                        o["per"] = max(2, min(5, int(float(str(bl.get("per", 4)).translate(_DIG)))))
+                    except (TypeError, ValueError):
+                        o["per"] = 4
+                    node["btnlist"] = o
+        # یادداشت خصوصی و قاب رنگی کارت (فقط داخل استودیو دیده می‌شود)
+        note = str(n.get("note") or "").strip()[:100]
+        if note:
+            node["note"] = note
+        frame = str(n.get("frame") or "").strip()
+        if frame in ("red", "green", "blue", "amber", "violet"):
+            node["frame"] = frame
         # جدول برترین‌ها زیر متن بخش
         bd = n.get("board")
         if isinstance(bd, dict):
@@ -1159,6 +1347,103 @@ def sanitize(cfg, strict=False, media=None, warns=None):
         if d:
             out["desk"] = d
 
+    # مرکز بازی (B1): روشن/خاموش، برچسب سکه، فهرست بازی‌ها، پاداش و فروشگاه سکه‌ای
+    gm = cfg.get("games")
+    if isinstance(gm, dict) and gm.get("on"):
+        import caps as _caps_mod
+        gids = {g["k"] for g in _caps_mod.CAPS_GAMES}
+        ls = [str(x) for x in (gm.get("list") if isinstance(gm.get("list"), list) else []) if str(x) in gids][:9]
+        try:
+            dly = max(0, min(1000, int(float(str(gm.get("daily", 15)).translate(_DIG)))))
+        except (TypeError, ValueError):
+            dly = 15
+        shop = []
+        for x in (gm.get("shop") if isinstance(gm.get("shop"), list) else [])[:12]:
+            if not isinstance(x, dict) or not str(x.get("id") or "").strip():
+                continue
+            try:
+                price = max(1, int(float(str(x.get("price", 10)).translate(_DIG))))
+            except (TypeError, ValueError):
+                price = 10
+            shop.append({"id": re.sub(r"[^a-z0-9_]", "", str(x["id"]).lower())[:20], "title": str(x.get("title") or x["id"])[:30],
+                         "price": price, "desc": str(x.get("desc") or "")[:60]})
+        rw = {}
+        for k, v in (gm.get("reward") or {}).items() if isinstance(gm.get("reward"), dict) else []:
+            try:
+                rw[str(k)[:10]] = max(0.2, min(20.0, float(v)))
+            except (TypeError, ValueError):
+                pass
+        out["games"] = {"on": True, "coin": str(gm.get("coin") or "سکه")[:12], "daily": dly,
+                        "list": ls, "shop": shop, "reward": rw}
+    # ربات رشد (B4): گروه هدف، پاداش، متغیر، سقف روزانه و کسر در خروج
+    gr = cfg.get("growth")
+    if isinstance(gr, dict) and gr.get("on"):
+        chat = str(gr.get("chat") or "").strip()
+        if not CHAN_RE.match(chat):
+            bad("برای رشد، شناسه‌ی گروه/کانال معتبر لازم است (@نام یا -100…)")
+        else:
+            var = str(gr.get("var") or "points").strip().lower()
+            if not VAR_RE.match(var) or var in BUILTINS:
+                var = "points"
+            used.add(var)
+            nums.add(var)
+            out["growth"] = {"on": True, "chat": chat, "var": var, "reward": _mnum(gr.get("reward"), 0, 1000, 10),
+                             "per_day": _mnum(gr.get("per_day"), 0, 200, 20),
+                             "clawback": gr.get("clawback", True) is not False,
+                             "wallet": bool(gr.get("wallet"))}
+    # پست کانال: مقصد، تأیید مدیریتی، دکمه و نظرسنجی خودکار زیر پست
+    cpst = cfg.get("channelpost")
+    if isinstance(cpst, dict) and cpst.get("on"):
+        chat = str(cpst.get("chat") or "").strip()
+        if not CHAN_RE.match(chat):
+            bad("برای پست کانال، شناسه‌ی کانال معتبر لازم است (@نام یا -100…)")
+        else:
+            o = {"on": True, "chat": chat, "approve": cpst.get("approve") is not False}
+            bu = norm_url(cpst.get("btn_url"))
+            if bu and str(cpst.get("btn_text") or "").strip():
+                o["btn_text"], o["btn_url"] = str(cpst["btn_text"]).strip()[:24], bu
+            if str(cpst.get("poll_q") or "").strip():
+                po = [str(x).strip()[:30] for x in (cpst.get("poll_opts") if isinstance(cpst.get("poll_opts"), list) else []) if str(x).strip()][:10]
+                if len(po) >= 2:
+                    o["poll_q"], o["poll_opts"] = str(cpst["poll_q"]).strip()[:255], po
+            out["channelpost"] = o
+    # RSS: منبع، مقصد و بازه‌ی چک
+    rss = cfg.get("rss")
+    if isinstance(rss, dict) and rss.get("on"):
+        u2 = norm_url(rss.get("url"))
+        chat = str(rss.get("chat") or "").strip()
+        if not u2 or not CHAN_RE.match(chat):
+            bad("برای RSS، آدرس https منبع و شناسه‌ی مقصد معتبر لازم است")
+        else:
+            out["rss"] = {"on": True, "url": u2, "chat": chat, "mins": _mnum(rss.get("mins"), 10, 1440, 30)}
+    # جستجوی اینلاین ربات: پاسخ از یک جدول (عنوان/توضیح/لینک)
+    inl = cfg.get("inline")
+    if isinstance(inl, dict) and inl.get("on"):
+        tab = str(inl.get("table") or "").strip().lower()
+        if not TAB_RE.match(tab):
+            bad("نام جدول جستجوی اینلاین معتبر نیست")
+        else:
+            _reg_tab(tables, tab, [str(inl.get("title_f") or "title").lower()])
+            out["inline"] = {"on": True, "table": tab, "title_f": str(inl.get("title_f") or "title").lower(),
+                             "desc_f": str(inl.get("desc_f") or "").lower()[:20], "url_f": str(inl.get("url_f") or "").lower()[:20]}
+    # وب‌هوک ورودی: هر رخداد بیرونی یک رکورد در جدول می‌شود (+ خبر اختیاری به صاحب)
+    wb = cfg.get("webin")
+    if isinstance(wb, dict) and wb.get("on"):
+        tab = str(wb.get("table") or "").strip().lower()
+        if not TAB_RE.match(tab):
+            bad("نام جدول وب‌هوک ورودی معتبر نیست")
+        else:
+            _reg_tab(tables, tab, ["event"])
+            out["webin"] = {"on": True, "table": tab, "notify": wb.get("notify") is not False}
+    # خلاصه‌ساز روزانه گروه: مقصد، ساعت و بخش عامل
+    dg = cfg.get("digest")
+    if isinstance(dg, dict) and dg.get("on"):
+        chat = str(dg.get("chat") or "").strip()
+        na = str(dg.get("node") or "")
+        if not CHAN_RE.match(chat) or na not in valid or not valid[na][0].get("ai"):
+            bad("خلاصه‌ی روزانه به مقصد معتبر و یک بخشِ گفتگوی هوشمند نیاز دارد")
+        else:
+            out["digest"] = {"on": True, "chat": chat, "node": na, "hour": _mnum(dg.get("hour"), 0, 23, 21)}
     jn = clean_join(cfg.get("join"), bad)
     if jn:
         out["join"] = jn
@@ -1170,6 +1455,37 @@ def sanitize(cfg, strict=False, media=None, warns=None):
     if dbf:
         out["dbfields"] = dbf
     return out
+
+
+def bm25_top(query, docs, k=2):
+    """جستجوی BM25 خالص پایتون روی قطعه‌های دانش؛ docs = [{"t": عنوان, "x": متن}] → [(عنوان، متن)]"""
+    import math as _math
+    toks = lambda s2: re.findall(r"[\w\u0600-\u06FF]{2,}", str(s2 or "").lower())  # noqa: E731
+    N = max(1, len(docs))
+    avg = (sum(len(d["x"].split()) for d in docs) / N) or 1
+    df, dts = {}, []
+    for d in docs:
+        ts = toks(d["t"] + " " + d["x"])
+        dts.append(ts)
+        for w in set(ts):
+            df[w] = df.get(w, 0) + 1
+    qt = toks(query)
+    out = []
+    for i, ts in enumerate(dts):
+        tf = {}
+        for w in ts:
+            tf[w] = tf.get(w, 0) + 1
+        dl = len(ts) or 1
+        sc = 0.0
+        for w in qt:
+            if w not in tf:
+                continue
+            idf = _math.log(1 + (N - df.get(w, 0) + 0.5) / (df.get(w, 0) + 0.5))
+            sc += idf * (tf[w] * 2.2) / (tf[w] + 1.2 * 0.25 + 0.75 * dl / avg)
+        if sc > 0:
+            out.append((sc, i))
+    out.sort(reverse=True)
+    return [(docs[i]["t"], docs[i]["x"][:400]) for _, i in out[:k]]
 
 
 # ───────────────────────── تشخیص زبان، ارتباط با مدل و ساخت/ارتقای کانفیگ ─────────────────────────
@@ -1490,7 +1806,7 @@ def _take_gaps(raw):
     return out
 
 
-def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False):
+def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, nodes_cap=None):
     txt, usage = llm_run([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
     cb = getattr(_prog, "cb", None)
@@ -1507,7 +1823,7 @@ def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False):
     cfg_foreign = guard and check_cfg and foreign_in(raw["config"])
     if guard:                                   # قبل از اعتبارسنجی پاک می‌کنیم تا دکمه/متن نیمه‌کاره نمونه
         raw["config"] = scrub_deep(raw["config"])
-    cfg = sanitize(raw["config"], media=media_ids, warns=warns)
+    cfg = sanitize(raw["config"], media=media_ids, warns=warns, nodes_cap=nodes_cap)
     thinking = str(raw.get("thinking") or "").strip()[:900]
     ideas = [str(x).strip()[:80] for x in (raw.get("ideas") if isinstance(raw.get("ideas"), list) else []) if str(x).strip()][:3]
     if lang == "fa":
@@ -1550,9 +1866,10 @@ def build_user(prompt, current, lang, media_items, note_extra=""):
     return "\n\n".join(parts)
 
 
-def ask_llm(prompt, current=None, media_items=(), acc=None):
+def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     """یک بار تلاش اول؛ اگه خروجی خراب بود، زبان توضیح اشتباه بود یا کانفیگ مشکل منطقی داشت، یک بار با بازخورد دوباره.
-    acc = فهرست مصرف (توکن ورودی/خروجی) هر فراخوانی؛ برای محاسبه‌ی هزینه‌ی واقعی"""
+    acc = فهرست مصرف (توکن ورودی/خروجی) هر فراخوانی؛ برای محاسبه‌ی هزینه‌ی واقعی
+    nodes_cap = سقف بخش‌های ربات (پلن‌محور)"""
     acc = [] if acc is None else acc
     lang = detect_lang(prompt)
     guard = lang == "fa" and not has_foreign(prompt)          # کاربر خودش متن غیرفارسی ننوشته → خروجی فقط فارسی
@@ -1566,7 +1883,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None):
         if cb:
             cb.attempt(attempt + 1)
         try:
-            thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc, guard, check_cfg)
+            thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc, guard, check_cfg, nodes_cap)
         except ThinkLang as e:
             best, last = best or ("", e.cfg, e.ideas), e
             feedback = "(Your previous answer used the wrong language or contained foreign-script characters (Chinese/Japanese/Korean/Russian...) in \"thinking\", \"ideas\", \"unsupported\" or node texts. Rewrite EVERYTHING in Persian only, with no foreign characters.)"

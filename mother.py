@@ -39,11 +39,11 @@ from core import (
     ADMIN_IDS, admin_only, age_sec, AI_CHAT_MODEL, AI_MSG_COST, AI_NODE_MAX_TOKENS, ai_per, app,
     authed, aware, balance, BASE_URL, BILLING, calc_cost, charge_up_to, claim_daily, credit, db, DEBUG,
     dec, _DIG, enc, ensure_user, FJ_CACHE, fj_chat, FJ_CONF, fj_conf, FJ_DEFAULT_TEXT, fj_missing,
-    fj_public, get_bot, get_media, hold, _int, is_block_err, JOB_TIMEOUT, link_referral, log, max_bots,
+    fj_public, get_bot, get_media, hold, _int, is_block_err, JOB_TIMEOUT, limits_of, link_referral, log, max_bots,
     MAX_PROMPT, MAX_VERSIONS, media_list, mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now,
     ONLINE_SECS, PACKS, parse_err, perks_of, plain_html, rate_ok, redeem, REF_INVITEE, REF_INVITER,
     REF_ON, request_user, send_rich, settle_referral, tehran_day, tg, tg_html, thash, touch_user,
-    wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID, PLAN_RANK, plan_of, PLANS,
+    APP_URL, wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID, PLAN_RANK, plan_of, PLANS,
 )
 from ai import (
     ask_llm, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
@@ -74,7 +74,7 @@ START_TEXT = (
 
 def start_keyboard():
     return {"inline_keyboard": [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
-                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": BASE_URL}, "style": "primary"}]]}
+                                [{"text": "ورود به مینی‌اپ حرفه‌ای🪄", "web_app": {"url": APP_URL}, "style": "primary"}]]}
 
 
 def start_media():
@@ -190,7 +190,7 @@ def mother_media(msg):
 
 def mother_keyboard(uid):
     rows = [[{"text": "Ai ساخت ربات در چت", "callback_data": "mk:new"}],
-            [{"text": "ساخت و مدیریت ربات", "web_app": {"url": BASE_URL}}]]
+            [{"text": "ساخت و مدیریت ربات", "web_app": {"url": APP_URL}}]]
     link = mother_link(uid)
     if link:
         share = "https://t.me/share/url?url=" + quote(link, safe="") + "&text=" + quote("با این ربات هر رباتی که بخوای رو با هوش مصنوعی بساز", safe="")
@@ -260,7 +260,7 @@ def mother_emoji(msg):
     cap = perks_of(uid)["emoji"]
     if not cap:
         say("ذخیره‌ی ایموجی پرمیوم برای اشتراک Premium و Pro فعاله. از تب «ارتقا» توی مینی‌اپ می‌تونی فعالش کنی.",
-            {"inline_keyboard": [[{"text": "اشتراک", "web_app": {"url": BASE_URL}}]]})
+            {"inline_keyboard": [[{"text": "اشتراک", "web_app": {"url": APP_URL}}]]})
         return True
     added, full = emoji_add(uid, items)
     if added:
@@ -349,7 +349,7 @@ def mk_btn(text, data):
 
 
 def mk_app(text, path=""):
-    return {"text": text, "web_app": {"url": BASE_URL + path}}
+    return {"text": text, "web_app": {"url": APP_URL + path}}
 
 
 def mk_kb(*rows):
@@ -429,11 +429,15 @@ def mk_view(uid, st, note=""):
     step, user = st.get("step"), f"@{hx(st.get('username'))}"
     tail = f"\n\n⚠️ {note}" if note else ""
     if step == "token":
-        return (f"{MK_TITLE}\nمرحله 1 از 3: دریافت توکن\n\n"
-                "1. در تلگرام به @BotFather مراجعه کنید.\n"
-                "2. دستور /newbot را ارسال کنید و نام ربات را مشخص کنید.\n"
-                "3. توکنی که دریافت می‌کنید را همین‌جا بفرستید.\n\n"
-                "توکن به‌صورت رمزنگاری‌شده ذخیره می‌شود و پیام شما بلافاصله از گفتگو حذف خواهد شد." + tail), MK_CANCEL
+        rows = mk_kb([{"text": "🤖 رفتن به BotFather", "url": "https://t.me/BotFather"},
+                      {"text": "باز کردن دستور /newbot", "url": "https://t.me/BotFather?start=/newbot"}],
+                     [mk_btn("انصراف", "mk:x")])
+        return (f"{MK_TITLE}\nمرحله 1 از 3: دریافت توکن (ویزارد قدم‌به‌قدم)\n\n"
+                "1. با دکمه‌ی زیر به @BotFather برو.\n"
+                "2. دستور /newbot را بفرست و یک اسم برای رباتت انتخاب کن.\n"
+                "3. یک آیدی (username) که به «bot» ختم می‌شود بده، مثل <code>my_shop_bot</code>.\n"
+                "4. BotFather یک توکن می‌فرستد (مثل <code>123456:ABC-xyz…</code>)؛ همان را کپی کن و همین‌جا بفرست.\n\n"
+                "توکن به‌صورت رمزنگاری‌شده ذخیره می‌شود و پیام تو بلافاصله از گفتگو پاک می‌شود." + tail), rows
     if step == "desc":
         return (f"{MK_TITLE}\nمرحله 2 از 3: توضیح ربات\nربات: {user}\n\n"
                 "بنویسید ربات باید چه کاری انجام دهد و چه بخش‌ها و دکمه‌هایی داشته باشد. "
@@ -737,7 +741,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
     _prog.cb = Progress(jid)
     try:
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
-        thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc)
+        thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc), uid=uid))
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return                                  # کار منقضی شده و توکن‌ها برگشته؛ نتیجه رو دور می‌ریزیم
@@ -873,7 +877,7 @@ def run_announce(text, admin, builders=True, audience=False, mid="", fmt="", ids
     sent_n = 0
     try:
         if builders:
-            kb = {"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": BASE_URL}}]]}
+            kb = {"inline_keyboard": [[{"text": "باز کردن ابر رباتساز", "web_app": {"url": APP_URL}}]]}
             targets = ids if ids is not None else [u["_id"] for u in db.users.find({}, {"_id": 1})]
             tot_b = len(targets)
             for u_id in targets:
@@ -1556,7 +1560,7 @@ def ub_ai_sync(owner, ubid, ai, name, hist):
         if db.aiuse.find_one_and_update({"_id": f"ub:{ubid}:warn:{tehran_day()}"}, {"$inc": {"n": 1}}, upsert=True,
                                          return_document=ReturnDocument.AFTER)["n"] == 1:
             tg(MOTHER_TOKEN, "sendMessage", chat_id=owner, text="توکن‌هات تموم شده و پاسخ هوشمند یوزربات فعلاً کار نمی‌کنه.",
-               reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": BASE_URL}}]]})
+               reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": APP_URL}}]]})
         return None
     sysm = ("You answer private Telegram messages on behalf of the account owner while they are away. Reply briefly (1-3 sentences), natural, polite, "
             "in the sender's language (default Persian). Never invent facts, prices, promises or appointments; if unsure say the owner will answer later. "

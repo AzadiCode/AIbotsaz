@@ -129,7 +129,8 @@ const LOGO = svg('<rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="a
 const KIND_FA = {photo:"عکس", video:"ویدیو", animation:"گیف", audio:"موسیقی", voice:"ویس", document:"فایل"};
 const why = {signup:"پاداش ثبت‌نام", gen:"ساخت ربات", edit:"ارتقای ربات", ai_chat:"پیام هوشمند داخل ربات‌ها", broadcast:"اطلاعیه به کل کاربران", daily:"کش بک روزانه",
   referral:"دعوت موفق", invited:"پاداش ناوگان", milestone:"پاداش ویژه‌ی ناوگان", buy:"شارژ توکن", card:"خرید کارت‌به‌کارت", refund:"برگشت توکن", admin:"هدیه‌ی مدیر",
-  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", levelup:"پاداش ارتقای سطح", plan:"هدیه‌ی اشتراک"};
+  enhance:"کامل‌تر کردن توضیح", coupon:"کد پاداش", template:"قالب آماده", task:"پاداش ماموریت", levelup:"پاداش ارتقای سطح", plan:"هدیه‌ی اشتراک",
+  app_gen:"ساخت مینی‌اپ با هوش مصنوعی", app_tpl:"قالب مینی‌اپ"};
 
 /* ═════════ هزینه‌ها ═════════ */
 const billingFixed = () => S.cfg.billing === "fixed";
@@ -173,7 +174,7 @@ async function load(){
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
 
-const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["media", "photo", "رسانه"], ["userbot", "person", "یوزربات"], ["account", "wallet", "حساب"]];
+const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["miniapp", "layers", "مینی‌اپ"], ["media", "photo", "رسانه"], ["userbot", "person", "یوزربات"], ["account", "wallet", "حساب"]];
 $("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}" aria-label="${t}" title="${t}">${IC[ic]}</button>`).join("");
 function setDock(on){ $("#dock").classList.toggle("open", on); $("#dscrim").classList.toggle("on", on); }
 document.addEventListener("click", e => {
@@ -211,6 +212,7 @@ function renderTop(){
 }
 function render(){
   renderTop();
+  if(S.view !== "studio" && typeof SIM !== "undefined" && SIM.on){ SIM.on = false; $("#simwrap")?.remove(); }   // شبیه‌ساز فقط داخل استودیو باز می‌ماند
   document.documentElement.classList.toggle("st-lock", S.view === "studio");
   VIEWS[S.view]();
   const cur = S.view === "bot" ? "bots" : S.view;
@@ -382,8 +384,69 @@ function renderCreate(){
       </div>
     </div>`}
     <div id="live"></div>
+    ${bpBlock()}
     ${tplBlock()}`;
   startTyper();
+  if(S.bps === undefined){
+    S.bps = null;
+    api("/api/blueprints").then(d => { S.bps = d.items || []; if(S.view === "create") render(); }).catch(() => { S.bps = []; });
+  }
+}
+
+/* ── چی می‌خوای بسازی؟ کارت‌های نقشه‌ی آماده (ربات + مینی‌اپ با هم؛ رایگان و در یک دقیقه) ── */
+function bpBlock(){
+  const bps = S.bps;
+  if(!bps || !bps.length || S.bots.length >= (S.cfg.max_bots || 10)) return "";
+  return `<div class="sec bphead"><h2>چی می‌خوای بسازی؟  <small>نقشه‌های آماده؛ در یک دقیقه شخصی و آماده‌ی انتشار</small></h2></div>
+    <div class="bpg">${bps.map(b => `<button class="bpc" data-a="bpopen" data-id="${esc(b.id)}">
+      <span class="bpi">${IC[b.icon] || IC.bot}</span>
+      <span class="bpt"><b>${esc(b.title)}</b><span>${esc(b.desc)}</span></span>
+      <span class="bpf">${(b.feats || []).slice(0, 3).map(f => `<span class="chip">${esc(f)}</span>`).join("")}</span></button>`).join("")}</div>`;
+}
+function archSheet(){
+  const b = D.bp, q = D.i || 0;
+  if(q < b.questions.length){
+    const qq = b.questions[q], a = D.answers[qq.k];
+    const body = qq.kind === "choice"
+      ? qq.opts.map(([v, l]) => `<button class="archopt${a === v ? " on" : ""}" data-a="archpick" data-v="${esc(v)}">${esc(l)}</button>`).join("")
+      : `<input class="fa" id="arch-txt" value="${esc(a ?? qq.def ?? "")}" maxlength="500" placeholder="${esc(qq.hint || "بنویس…")}">`;
+    return head("چی می‌خوای بسازی؟ · " + esc(b.title)) + `
+      <p class="muted">${N(q + 1)} از ${N(b.questions.length)} · ${esc(qq.fa)}</p>
+      <div class="fgap"></div>${body}
+      <div class="bar">${q > 0 ? `<button class="b o" data-a="archprev">قبلی</button>` : `<button class="b o" data-a="archx">بی‌خیال</button>`}
+        <button class="b" data-a="archnext">بعدی</button></div><div class="fgap"></div>`;
+  }
+  return head("آماده‌ی ساخت") + `
+    <div class="panel"><b>${esc(b.title)}</b>
+      <p class="muted mt">قابلیت‌هایی که دقیقاً ساخته می‌شوند، تک‌تک:</p>
+      ${(b.feats || []).map(f => `<div class="vdl">✅ ${digitsHTML(f)}</div>`).join("")}
+    </div>
+    ${(S.bps || []).filter(x => x.id !== b.id).length ? `<div class="sub"><span>ترکیب با نقشه‌های دیگر (اختیاری)</span></div>
+    <p class="muted">تا ۲ نقشه‌ی دیگر را هم انتخاب کن تا داخل همین ربات ادغام شوند؛ دکمه‌ی ورود هر بخش در «شروع» اضافه می‌شود.</p>
+    <div class="chips">${(S.bps || []).filter(x => x.id !== b.id).map(x => `<button type="button" class="chip${(D.extra || []).includes(x.id) ? " on" : ""}" data-a="archextra" data-id="${esc(x.id)}">${IC.plus}${esc(x.title)}</button>`).join("")}</div>` : ""}
+    <div class="bar"><button class="b" data-a="archgo">${IC.spark}بساز</button></div><div class="fgap"></div>`;
+}
+function archRead(){
+  const qq = (D.bp.questions || [])[D.i || 0];
+  if(!qq) return;
+  if(qq.kind === "choice") return;
+  const v = $("#arch-txt")?.value;
+  if(v != null) D.answers[qq.k] = v;
+}
+function archMade(d){
+  const b = D?.bp;
+  S.bots = [d.bot, ...S.bots.filter(x => x.id !== d.bot.id)];
+  if(d.wallet) S.wallet = d.wallet;
+  S.cur = d.bot; S.sbot = d.bot.id;
+  S.sheet = {kind: "info"};
+  const cards = (d.cards || []).map(x => `<div class="vdl">${digitsHTML(x)}</div>`).join("");
+  const steps = (d.steps || []).map(x => `<div class="steps2">← ${digitsHTML(x)}</div>`).join("");
+  showSheet(head("چی ساخته شد؟") + `
+    <div class="made"><h2>${esc(d.title || b?.title || "ربات ساخته شد")} آماده است ✅</h2>${cards}${steps}</div>
+    <p class="muted">${d.app ? "مینی‌اپ آن هم ساخته شد؛ از تب «مینی‌اپ» شخصی‌سازی و منتشرش کن." : "برای انتشار، تب «انتشار» توکن BotFather را بگذار."}</p>
+    <div class="bar"><button class="b" data-a="madetest">${IC.play}امتحانش کنم</button>
+      <button class="b o" data-a="madebot">رفتن به ربات</button></div><div class="fgap"></div>`);
+  haptic("ok"); bumpTokens();
 }
 /* متن نمونه که خودش تایپ می‌شود؛ تنها حرکت خودکار صفحه */
 function startTyper(){
@@ -417,7 +480,7 @@ function renderBots(){
 const CH_RE = /^https:\/\/t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/;
 const NAME_RE = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/;
 const titleOf = (cfg, id) => { const n = cfg.nodes[id]; return n ? (n.title || (n.text || "").replace(/\s+/g, " ").slice(0, 24) || id) : "؟"; };
-const kindOf = b => b.pay ? "pay" : b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.share !== undefined ? "share" : CH_RE.test(b.url || "") ? "channel" : "url";
+const kindOf = b => b.pay ? "pay" : b.app !== undefined ? "app" : b.goto !== undefined ? "goto" : b.alert !== undefined ? "alert" : b.copy !== undefined ? "copy" : b.share !== undefined ? "share" : CH_RE.test(b.url || "") ? "channel" : "url";
 
 function renderBot(){
   const b = S.cur;
@@ -449,7 +512,22 @@ function tabAI(b){
       <div style="flex:1;min-width:0"><b style="font-size:14px;display:block;line-height:1.6">استودیو</b><span class="muted" style="font-size:12px;line-height:1.7;display:block">ساختار ربات را روی یک نقشه ببین، بخش‌ها را با سیم به هم وصل کن و دکمه یا مسیر تازه بساز. هر تغییر همان لحظه در ربات اعمال می‌شود.</span></div>
       <button class="b sm" data-a="studio" style="flex:1 0 100%">ورود به استودیو</button></div>`;
   if(b.versions) h += `<button class="b t mt" id="undo" data-a="undo">برگشت به نسخه‌ی قبلی</button>`;
+  h += `<div class="panel mt"><b>تغییر با گفتگو</b><p class="muted mt">بگو چه چیزی عوض شود؛ تغییرها را به‌صورت کارت‌های فارسی می‌بینی و می‌توانی برگشتانی. (هزینه: ${costTxt(true)} توکن)</p>
+    <div class="fgap"></div><textarea id="arch-req" maxlength="1500" style="min-height:64px" placeholder="مثلاً: یک بخش سؤالات متداول اضافه کن و متن خوش‌آمد را کوتاه‌تر کن"></textarea>
+    <div class="fgap"></div><button class="b sm" data-a="archedgo">${IC.spark}اعمال تغییر</button></div>`;
   return h;
+}
+/* کارت‌های تغییر: خروجی معمار به‌صورت جمله‌های فارسی؛ برگشت کامل با یک دکمه */
+function archCards(d){
+  S.cur = d.bot; S.bots = S.bots.map(x => x.id === d.bot.id ? d.bot : x);
+  if(d.wallet) S.wallet = d.wallet;
+  S.sheet = {kind: "info"};
+  showSheet(head("تغییرها اعمال شد") + `
+    ${(d.cards || []).map(x => `<div class="vdl">${digitsHTML(x)}</div>`).join("")}
+    <p class="muted mt">اگر پشیمانی، کل این تغییر با یک ضربه برگشت می‌خورد.</p>
+    <div class="bar"><button class="b o" data-a="archrev">${IC.refresh}برگشت این تغییر</button>
+      <button class="b" data-a="archdone">تمام</button></div><div class="fgap"></div>`);
+  bumpTokens(); renderTop();
 }
 const statCells = rows => rows.map(([k, v]) => `<div class="stat"><div class="k">${k}</div>${N(v)}</div>`).join("");
 function tabStats(b){
@@ -561,6 +639,26 @@ function inviteCard(){
 function couponCard(){
   return `<div class="sec"><h2>کد هدیه</h2></div><div class="cpn"><input id="cpn" placeholder="CODE" autocomplete="off" aria-label="کد هدیه"><button class="b sm" data-a="coupon">ثبت</button></div>`;
 }
+function buildCard(){
+  const c = S.cfg, lim = c.limits || {};
+  const botsN = S.bots.length, botsMax = c.max_bots || 10;
+  const medN = S.media.length, medMax = c.max_media || 60;
+  const rows = [
+    ["ربات‌ها", botsN, botsMax],
+    ["بخش هر ربات", null, lim.nodes || 200],
+    ["بلوک مینی‌اپ", null, lim.blocks || 120],
+    ["جدول داده", null, lim.tables || 6],
+    ["فایل‌های رسانه", medN, medMax],
+  ];
+  const lims = rows.map(([k, v, m]) => `<div class="lim${v != null && v >= m ? " full" : ""}">${k} <span class="n">${v != null ? v + " / " + m : "تا " + m}</span>
+      <div class="lm-b"><i style="width:${v != null ? Math.min(100, Math.round(v / Math.max(1, m) * 100)) : 100}%"></i></div></div>`).join("");
+  const feats = Object.entries(c.features || {}).filter(([, on]) => on).map(([k]) => ({
+    blueprint: "نقشه‌های آماده", whenthen: "وقتی…آنگاه", simulator: "شبیه‌ساز", lists: "لیست‌ها", games: "مرکز بازی", doctor: "دکتر ربات", growth: "رشد واقعی", agent: "عامل هوشمند"}[k] || k));
+  return `<div class="panel"><h2>سقف‌ها و امکانات</h2>
+    <div class="lims">${lims}</div>
+    <div class="binfo"><span class="bdg">نسخه‌ی ${esc(c.build || "3.0.0")}</span>${feats.map(f => `<span>${esc(f)}</span>`).join(" · ")}</div>
+    <p class="muted mt">سقف‌ها با اشتراک Premium و Pro بزرگ‌تر می‌شوند. <button class="b t" data-a="goplan">دیدن اشتراک‌ها</button></p></div>`;
+}
 function tabWallet(){
   const w = S.wallet, c = S.cfg, per = costOf(false) || 6;
   return `<div class="wallet"><div class="big">${N(w.tokens)}<span>توکن</span></div>
@@ -569,6 +667,7 @@ function tabWallet(){
       <div class="costs">${billingFixed() ? `<div>ساخت ربات<span class="n">${c.gen}</span></div><div>ارتقا<span class="n">${c.edit}</span></div><div>${c.ai_per} پیام هوشمند<span class="n">1</span></div>`
         : `<div>ساخت یا ارتقا<span class="n">~${c.typical}</span></div><div>حداقل<span class="n">${c.min}</span></div><div>اطلاعیه ویژه<span class="n">1/${c.bc_per}</span></div>`}</div></div>
     ${dailyCard()}
+    ${buildCard()}
     <div class="sec"><h2>شارژ توکن  Ai</h2><span class="muted">با استارز تلگرام</span></div>
     <div class="group">${packRows() || '<div class="gi static"><span class="muted">فعلاً بسته‌ای تعریف نشده.</span></div>'}</div>
     ${couponCard()}`;
@@ -657,6 +756,48 @@ const A = {
   copyref: () => navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک دعوت کپی شد"), () => toast(S.ref.link)),
   shareref: () => openLink("https://t.me/share/url?url=" + encodeURIComponent(S.ref.link) + "&text=" + encodeURIComponent("با این ربات هر رباتی که بخوای رو با هوش مصنوعی بساز")),
 };
+
+Object.assign(A, {
+  bpopen: el => {
+    const b = (S.bps || []).find(x => x.id === el.dataset.id);
+    if(!b) return;
+    D = {bp: b, answers: {}, i: 0, extra: []};
+    S.sheet = {kind: "arch"}; renderSheet();
+  },
+  archextra: el => {
+    const id = el.dataset.id;
+    D.extra = D.extra || [];
+    const i = D.extra.indexOf(id);
+    if(i >= 0) D.extra.splice(i, 1); else if(D.extra.length < 2) D.extra.push(id); else return toast("حداکثر ۲ نقشه می‌توانی اضافه کنی");
+    renderSheet();
+  },
+  archpick: el => { const qq = D.bp.questions[D.i]; D.answers[qq.k] = el.dataset.v; A.archnext(); },
+  archnext: () => { archRead(); D.i = (D.i || 0) + 1; renderSheet(); },
+  archprev: () => { archRead(); D.i = Math.max(0, (D.i || 0) - 1); renderSheet(); },
+  archx: () => closeSheet(),
+  archgo: el => busy(el, async () => {
+    const d = await api("/api/arch/build", "POST", {bid: D.bp.id, answers: D.answers, extra: D.extra || []});
+    S.bots.length && sync();
+    archMade(d);
+  }),
+  madetest: () => { closeSheet(); const b = S.cur; S.view = "studio"; ST.botId = null; closeSheet(); render(); setTimeout(() => A.simopen(), 350); },
+  madebot: () => { closeSheet(); S.view = "bot"; S.btab = "ai"; render(); scrollTo(0, 0); },
+  archedgo: el => busy(el, async () => {
+    const req = ($("#arch-req")?.value || "").trim();
+    if(req.length < 4) return toast("تغییر موردنظر را بنویس");
+    const cost = needCost(true);
+    if(S.wallet.tokens < cost) return openBuy(`این تغییر حداقل ${cost} توکن می‌خواهد.`);
+    try{
+      const d = await api(`/api/bots/${S.cur.id}/archedit`, "POST", {request: req});
+      archCards(d);
+    }catch(e){ if(e.status === 402) openBuy(e.message); else toast(e.message); }
+  }),
+  archrev: el => busy(el, async () => {
+    const d = await api(`/api/bots/${S.cur.id}/undo`, "POST");
+    setBot(d.bot); closeSheet(); render(); toast("برگشت داده شد");
+  }),
+  archdone: () => { closeSheet(); render(); },
+});
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if(g) return goTo(g.dataset.go);
   const a = e.target.closest("[data-a]"); if(a) return A[a.dataset.a]?.(a);

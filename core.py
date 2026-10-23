@@ -61,7 +61,7 @@ AI_MODEL     = os.environ["AI_MODEL"]
 AI_CHAT_MODEL = os.environ.get("AI_CHAT_MODEL", "").strip() or AI_MODEL   # مدل گفتگوی داخل رباتا (می‌تونه سبک‌تر باشه)
 SECRET_KEY   = os.environ.get("SECRET_KEY", MOTHER_TOKEN)
 ADMIN_IDS    = {int(x) for x in re.findall(r"\d+", os.environ.get("ADMIN_IDS", ""))}
-ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "123456").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
+ADMIN_WEB_KEY = os.environ.get("ADMIN_WEB_KEY", "").strip()   # کلید ورود ادمین از مرورگر برای تست (خالی = خاموش)
 MOTHER_USERNAME = os.environ.get("MOTHER_USERNAME", "").strip().lstrip("@")   # اگه خالی باشه از getMe گرفته می‌شه
 
 
@@ -132,7 +132,7 @@ MAX_DISCOUNT = 20          # سقف کاهش نرخ مصرف توکن از را�
 
 MAX_PROMPT   = 4000
 MAX_VERSIONS = 6
-MAX_NODES    = 60
+MAX_NODES    = _int("MAX_NODES", 200)      # پایه‌ی سقف بخش‌ها؛ سقف واقعی هر کاربر پلن‌محور است (limits_of)
 JOB_TIMEOUT  = 240
 PAYMENTS     = os.environ.get("PAYMENTS", "1").strip() != "0"       # دکمه‌ی پرداخت با ستاره‌ی تلگرام داخل رباتا (۰ = خاموش)
 SCHED_ON     = os.environ.get("SCHED", "1").strip() != "0"          # پیام‌های زمان‌بندی‌شده (یادآور)
@@ -145,6 +145,8 @@ ONLINE_SECS  = 70           # کاربری که توی این بازه پینگ 
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("aibot")
+if ADMIN_WEB_KEY and len(ADMIN_WEB_KEY) < 8:
+    log.warning("ADMIN_WEB_KEY ضعیفه؛ برای ورود ادمین از مرورگر یه کلید بلندتر بذار یا خالی بذار (خاموش).")
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = (MEDIA_MAX_MB + 1) * 1024 * 1024
@@ -191,6 +193,20 @@ _index(db.groups, "bot")
 _index(db.modp, "t", expireAfterSeconds=3600)
 _index(db.recs, [("bot", 1), ("t", 1), ("u", 1), ("n", -1)])
 _index(db.recs, [("bot", 1), ("t", 1), ("n", -1)])
+_index(db.apps, "owner")                                  # مینی‌اپ‌ساز: سند هر ربات (پیش‌نویس + منتشرشده)
+_index(db.app_ev, "t", expireAfterSeconds=90 * 86400)     # شمارنده‌ی روزانه‌ی باز شدن/کلیک مینی‌اپ (۹۰ روز)
+_index(db.appai, "t", expireAfterSeconds=86400)           # حافظه‌ی گفتگوی هوشمند مینی‌اپ (یک روز)
+_index(db.invlink, [("bot", 1), ("u", 1)], unique=True)   # لینک دعوت اختصاصی هر کاربر (ربات رشد)
+_index(db.invlink, [("bot", 1), ("link", 1)])             # یافتن دعوت‌کننده از لینک
+_index(db.growth, [("bot", 1), ("by", 1), ("day", 1)])    # سقف روزانه و شمارش دعوت‌های فعال
+_index(db.kbdoc, "bot")                                   # دانش عامل هوشمند
+_index(db.cvars, [("bot", 1), ("chat", 1)], unique=True)  # متغیرهای دامنه‌ی گروه (هر چت یک سند)
+_index(db.aicache, "t", expireAfterSeconds=7 * 86400)     # کش پاسخ تکراری گفتگوی هوشمند
+_index(db.spost, "t", expireAfterSeconds=7 * 86400)       # پست‌های در انتظار تأیید کانال
+_index(db.glog, "t", expireAfterSeconds=2 * 86400)        # پیام‌های گروه برای خلاصه‌ی روزانه
+_index(db.subs, [("bot", 1), ("u", 1)])                   # اشتراک دوره‌ی کاربرها (اکشن sub_add / شرط sub)
+_index(db.dcodes, [("bot", 1), ("used", 1)])              # کدهای تخفیف (اکشن disc)
+_index(db.comps, "owner")                                 # قطعه‌های آماده‌ی مینی‌اپ (sync بین دستگاه‌ها)
 try:
     db.bots.update_many({"xp_on": {"$exists": True}}, {"$unset": {k: "" for k in (
         "xp_on", "xp_desc", "xp_v", "xp_l", "xp_s", "xp_since", "xp_hasav", "xp_avts", "xp_av", "xp_avct", "xp_hidden", "xp_rep")}})
@@ -207,7 +223,15 @@ MOTHER_SECRET = hashlib.sha256(("mother" + SECRET_KEY).encode()).hexdigest()[:32
 def tg(token, method, **data):
     try:
         r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=data, timeout=15)
-        return r.json()
+        j = r.json()
+        # محدودیت نرخ تلگرام: اگر تلگرام گفت کمی صبر کن (تا ۵ ثانیه)، همان یک بار دوباره تلاش می‌کنیم
+        if r.status_code == 429 and not j.get("ok"):
+            import time as _t
+            wait = min(5.0, float((j.get("parameters") or {}).get("retry_after", 0)) or 0.5)
+            _t.sleep(wait)
+            r = requests.post(f"https://api.telegram.org/bot{token}/{method}", json=data, timeout=15)
+            j = r.json()
+        return j
     except Exception as e:
         log.warning("tg %s failed: %s", method, e)
         return {"ok": False, "description": str(e)}
@@ -266,14 +290,15 @@ _DIG = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123
 
 
 # ───────────────────────── احراز هویت مینی‌اپ ─────────────────────────
-def verify_init_data(init_data):
+def verify_init_data(init_data, token=MOTHER_TOKEN):
+    """راستی‌آزمایی امضای initData تلگرام با توکنِ داده‌شده (پیش‌فرض: ربات مادر؛ رانتایم مینی‌اپ توکن همان ربات فرزند را می‌دهد)"""
     try:
         pairs = dict(parse_qsl(init_data, keep_blank_values=True))
         got = pairs.pop("hash", None)
         if not got:
             return None
         check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
-        key = hmac.new(b"WebAppData", MOTHER_TOKEN.encode(), hashlib.sha256).digest()
+        key = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
         calc = hmac.new(key, check.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calc, got):
             return None
@@ -511,12 +536,15 @@ def redeem(uid, code):
 #   free_enhance = «کامل‌ترش کن» رایگان
 PLAN_DAYS = max(1, _int("PLAN_DAYS", 30))
 T = TOKEN_SCALE
+# perks مینی‌اپ: apps = چند ربات می‌تونن مینی‌اپ داشته باشن، blocks = سقف کل بلوک‌های هر مینی‌اپ
 PLANS = [
     {"id": "free", "title": "Free", "stars": 0, "tokens": 0, "perks": {}},
     {"id": "premium", "title": "Premium", "stars": _int("PREMIUM_STARS", 80), "tokens": 300 * T,
-     "perks": {"bots": 3, "disc": 10, "daily": 2 * T, "mb": 60, "files": 40, "ver": 4, "bc": 5000, "ub": 1, "emoji": 30, "btn": True}},
+     "perks": {"bots": 3, "disc": 10, "daily": 2 * T, "mb": 60, "files": 40, "ver": 4, "bc": 5000, "ub": 1, "emoji": 30, "btn": True,
+               "apps": 3, "blocks": 100}},
     {"id": "pro", "title": "Pro", "stars": _int("PRO_STARS", 150), "tokens": 1000 * T,
-     "perks": {"bots": 8, "disc": 20, "daily": 5 * T, "mb": 200, "files": 120, "ver": 8, "bc": 20000, "ub": 2, "emoji": 200, "btn": True, "free_enhance": True}},
+     "perks": {"bots": 8, "disc": 20, "daily": 5 * T, "mb": 200, "files": 120, "ver": 8, "bc": 20000, "ub": 2, "emoji": 200, "btn": True, "free_enhance": True,
+               "apps": 8, "blocks": 150}},
 ]
 PLAN_BY_ID = {p["id"]: p for p in PLANS}
 PLAN_RANK = {p["id"]: i for i, p in enumerate(PLANS)}
@@ -542,6 +570,9 @@ TASKS = [
     {"id": "streak",   "icon": "flame",  "title": "استمرار",         "metric": "streak",   "text": "{n} روز متوالی دریافت پاداش روزانه ", "rich": True,
      "desc": "هر روز جایزه‌ی روزانه رو بگیر", "names": ["کسب اولین پاداش روزانه", "هفته‌ی طلایی", "باشگاه سی‌روزه"],
      "steps": [(3, 5), (7, 15), (30, 60)]},
+    {"id": "miniapp",  "icon": "layers", "title": "مینی‌اپ",          "metric": "apps",     "text": "برای {n} ربات مینی‌اپ منتشر کن",
+     "desc": "یک مینی‌اپ بساز، منتشر کن و با یک دکمه از داخل ربات بازش کن",
+     "steps": [(1, 15)]},
 ]
 
 
@@ -568,7 +599,8 @@ def plan_of(d):
 
 
 def perks_at(plan_id):
-    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0, "ub": 0, "emoji": 0, "btn": False, "free_enhance": False}
+    p = {"bots": 0, "disc": 0, "daily": 0, "mb": 0, "files": 0, "ver": 0, "bc": 0, "ub": 0, "emoji": 0, "btn": False, "free_enhance": False,
+         "apps": 1, "blocks": 30}
     for k, v in (PLAN_BY_ID.get(plan_id) or PLANS[0])["perks"].items():
         p[k] = v
     p["disc"] = min(p["disc"], MAX_DISCOUNT)
@@ -603,6 +635,8 @@ def perk_texts(p):
         out.append(f"سقف پیام همگانی +{p['bc']} نفر")
     if p.get("free_enhance"):
         out.append("«کامل‌ترش کن» رایگان")
+    if p.get("apps", 0) > 1:
+        out.append(f"مینی‌اپ برای {p['apps']} ربات (تا {p.get('blocks', 30)} بلوک)")
     return out
 
 
@@ -648,6 +682,71 @@ def plan_from_payload(payload, uid):
 
 def max_bots(uid):
     return MAX_BOTS + perks_of(uid)["bots"]
+
+
+# ───────────────────────── نسخه‌ی ساخت، قابلیت‌های روشن و سقف پلن‌محور ─────────────────────────
+# caps.py پایین‌ترین لایه است (هیچ importی ندارد)؛ رابط کاربری، استودیو و پرامپت AI همه از همین می‌سازند.
+from caps import BUILD, LIMITS, caps_public, limit_of   # noqa: E402
+APP_URL = BASE_URL + "/?v=" + BUILD                # دکمه‌ی مینی‌اپ با نسخه: کش چسبیده‌ی وب‌ویو را هم می‌شکند
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_ASSET_V = {}                                      # rel path -> (mtime, اثر انگشت ۸ رقمی)
+
+
+def asset_v(rel):
+    """اثر انگشت محتوای فایل استاتیک برای cache-bust خودکار؛ فایل جدید روی سرور = URL جدید، بدون دست بردن در BUILD"""
+    p = os.path.join(APP_DIR, rel.replace("/", os.sep))
+    try:
+        mt = os.path.getmtime(p)
+    except OSError:
+        return BUILD
+    c = _ASSET_V.get(rel)
+    if not c or c[0] != mt:
+        try:
+            with open(p, "rb") as f:
+                c = (mt, hashlib.sha1(f.read()).hexdigest()[:8])
+        except OSError:
+            return BUILD
+        _ASSET_V[rel] = c
+    return c[1]
+
+
+def assets_stamp():
+    """بزرگ‌ترین mtime بین index/mapp و فایل‌های static — کلید بازسازی کش HTML صفحه‌ها"""
+    st = []
+    for fn in ("index.html", "mapp.html"):
+        try:
+            st.append(os.path.getmtime(os.path.join(APP_DIR, fn)))
+        except OSError:
+            pass
+    try:
+        for fn in os.listdir(os.path.join(APP_DIR, "static")):
+            try:
+                st.append(os.path.getmtime(os.path.join(APP_DIR, "static", fn)))
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return max(st) if st else 0.0
+
+FEATURES_ON = {
+    "blueprint": True,     # صفحه‌ی «چی می‌خوای بسازی؟» + معمار هوشمند
+    "whenthen": True,      # سازنده‌ی «وقتی … آنگاه» در استودیو
+    "simulator": True,     # شبیه‌ساز چت (خصوصی و گروه)
+    "lists": True,         # ویرایشگر لیست‌ها شبیه اکسل
+    "games": True,         # مرکز بازی گروهی
+    "doctor": True,        # دکتر ربات
+    "growth": True,        # رشد واقعی با لینک دعوت تلگرام
+    "agent": True,         # استودیوی عامل هوشمند (دانش + تست)
+}
+
+
+def limits_of(uid):
+    """سقف‌های پلن‌محور کاربر: بخش‌های ربات، بلوک‌های مینی‌اپ، جدول‌ها و صفحه‌ها"""
+    if uid is None:
+        return {k: limit_of("free", k) for k in LIMITS}
+    d = db.users.find_one({"_id": uid}, {"plan": 1, "plan_exp": 1}) or {}
+    pid = plan_of(d)
+    return {k: limit_of(pid, k) for k in LIMITS}
 
 
 def cut(uid, n):
@@ -748,6 +847,7 @@ def task_metrics(uid, d):
         "refs": int(d.get("refs", 0)),
         "tpl": db.ledger.count_documents({"uid": uid, "why": "template"}),
         "forms": db.submissions.count_documents({"bot_id": {"$in": ids}}) if ids else 0,
+        "apps": db.apps.count_documents({"owner": uid, "pub": {"$exists": True, "$ne": None}}),
         "spent": int(d.get("spent", 0)),
     }
 
@@ -827,7 +927,7 @@ def low_balance_notice(owner):
         if balance(owner) > LOW_TOKENS:
             return
         db.aiuse.insert_one({"_id": f"low:{owner}:{tehran_day()}"})
-        tg(MOTHER_TOKEN, "sendMessage", chat_id=owner, reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": BASE_URL}}]]},
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=owner, reply_markup={"inline_keyboard": [[{"text": "شارژ توکن", "web_app": {"url": APP_URL}}]]},
            text="موجودی توکنت داره تموم می‌شه. وقتی تموم بشه بخش‌های هوشمند رباتات از کار می‌افتن.")
     except DuplicateKeyError:
         pass

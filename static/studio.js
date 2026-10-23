@@ -408,7 +408,7 @@ function stPath(a, b){
 }
 
 /* ── رندر بخش‌ها و سیم‌ها ── */
-const ST_KIND = {goto: ["رفتن به بخش", IC.go], pay: ["پرداخت", IC.coin], url: ["باز کردن لینک", IC.open], channel: ["کانال یا گروه", IC.open], alert: ["پیام پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["لینک دعوت", IC.users]};
+const ST_KIND = {goto: ["رفتن به بخش", IC.go], pay: ["پرداخت", IC.coin], url: ["باز کردن لینک", IC.open], channel: ["کانال یا گروه", IC.open], alert: ["پیام پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["لینک دعوت", IC.users], app: ["باز کردن مینی‌اپ", IC.layers]};
 const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", audio: "موسیقی", voice: "ویس", document: "فایل"};
 
 /* پیش‌نمایش رسانه‌ی بخش: عکس و گیف خودشان، بقیه آیکن + نام فایل */
@@ -638,7 +638,9 @@ function renderStudio(){
           <span class="tt"><b>${esc(bot.name)}</b><small id="stsub" class="${bot.active ? "ltr" : ""}">${bot.active ? "@" + esc(bot.username) : "غیرفعال"} · ${N(nodes)} بخش</small></span>
         </button>
         ${bot.versions ? `<button class="iconb" data-a="undo" aria-label="برگشت به نسخه‌ی قبلی" title="برگشت به نسخه‌ی قبلی">${IC.refresh}</button>` : ""}
-        <button class="iconb" data-a="health" aria-label="بررسی مسیرها" title="بررسی مسیرها">${IC.heal}</button>
+        <button class="iconb" data-a="simopen" aria-label="تست زنده (شبیه‌ساز)" title="تست زنده‌ی ربات بدون هزینه">${IC.play}</button>
+        <button class="iconb" data-a="dropen" aria-label="چرا کار نمی‌کند؟" title="دکتر ربات: چرا کار نمی‌کند؟">${S2IC.doctor}</button>
+        <button class="iconb" data-a="pbopen" aria-label="مشکل‌ها" title="مشکل‌ها و رفع یک‌ضربه‌ای">${IC.heal}</button>
         <button class="b sm" id="stadd" data-a="stadd">${IC.plus}بخش جدید</button>
       </div>
       <div class="st-canvas" id="stc">
@@ -654,6 +656,14 @@ function renderStudio(){
           <span class="sep"></span>
           <button class="tb" data-a="stfit" aria-label="نمایش همه‌ی بخش‌ها" title="نمایش همه‌ی بخش‌ها">${IC.fit}</button>
           <button class="tb lbl" data-a="stlay" aria-label="چیدمان خودکار" title="بخش‌ها را خودکار مرتب می‌کند">${IC.layers}<span>مرتب‌سازی</span></button>
+          <span class="sep"></span>
+          <button class="tb lbl" data-a="wtopen" title="سازنده‌ی وقتی…آنگاه">${S2IC.wt}<span>وقتی…آنگاه</span></button>
+          <button class="tb lbl" data-a="listsopen" title="لیست‌ها (شبیه اکسل)">${S2IC.table}<span>لیست‌ها</span></button>
+          <button class="tb lbl" data-a="vdopen" title="نسخه‌ها و تفاوت‌ها">${S2IC.diff}<span>نسخه‌ها</span></button>
+          <button class="tb lbl" data-a="growthopen" title="ربات رشد: لینک دعوت و پاداش">${IC.users}<span>رشد</span></button>
+          <button class="tb lbl" data-a="agentopen" title="استودیوی عامل هوشمند">${IC.bot}<span>عامل</span></button>
+          <button class="tb lbl" data-a="dcopen" title="کدهای تخفیف">${S2IC.doctor}<span>تخفیف</span></button>
+          <button class="tb lbl" data-a="selsel" title="انتخاب چند بخش برای کپی یا حذف">${IC.copy}<span>انتخاب</span></button>
         </div>
       </div>
     </div>`;
@@ -810,7 +820,7 @@ function stBindCanvas(){
       cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
       stHot(m.id, false);
       if(m.moved){ stSave(); stMini(true); stCull(); stPaintWires(); }
-      else if(Date.now() - m.t0 < 500) openNode(m.id);
+      else if(Date.now() - m.t0 < 500){ if(ST.selMode) stSelToggle(m.id); else openNode(m.id); }
     }
     else if(m.t === "pan"){
       cv.classList.remove("panning");
@@ -989,9 +999,10 @@ const nodeOpts = (cfg, cur, extra = "") => extra + Object.keys(cfg.nodes).map(i 
 const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div>`;
 
 /* ── منطق: متغیر، شرط و اکشن ── */
-const OPS = [["==","مساوی باشد با"],["!=","مساوی نباشد با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشد"],["empty","خالی باشد"],["filled","پر باشد"]];
-const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"],["remind","یادآوری بعد از چند دقیقه"]];
-const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود", remind:"متن یادآوری برای همین کاربر (اختیاری اگر بخش انتخاب کنی)"};
+const OPS = [["==","مساوی باشد با"],["!=","مساوی نباشد با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشد"],["empty","خالی باشد"],["filled","پر باشد"],["sub","اشتراک دوره‌اش فعال بود"]];
+const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"],["remind","یادآوری بعد از چند دقیقه"],["calc","عبارت حسابی را حساب کن"],["disc","کد تخفیف را بررسی کن"],["sub_add","اشتراک دوره فعال کن"],["sub_del","اشتراک دوره لغو کن"]];
+const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود", remind:"متن یادآوری برای همین کاربر (اختیاری اگر بخش انتخاب کنی)",
+  calc:"عبارت حسابی مثل {price} * {qty} یا (5+3)*2", disc:"قیمت پایه به عدد یا متغیر، مثل {price}", sub_add:"پلن اشتراک، مثل vip", sub_del:"پلن اشتراک، مثل vip"};
 const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
 const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
   ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],
@@ -1012,7 +1023,9 @@ const newRule = l => l === "do" ? {op:"set", var:"", value:""} : l === "route" ?
 const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...Object.keys(S.cur.config.globals || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
 
 function condHTML(c){
-  if(c && !simpleCond(c)) return `<div class="muted">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شود</div>`;
+  if(c && c.op !== "sub" && !simpleCond(c)) return `<div class="muted">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شود</div>`;
+  if(c && c.op === "sub") return `<div class="cmd"><select class="c-op" data-sh="re">${OPS.map(([v, l]) => `<option value="${v}"${v === c.op ? " selected" : ""}>${l}</option>`).join("")}</select>
+    <input class="fa c-plan ltr" value="${esc(c.plan || "")}" placeholder="پلن (مثل vip؛ خالی = هر پلنی)" maxlength="16" autocomplete="off"></div>`;
   const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
   return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
     <select class="c-op" data-sh="re">${OPS.map(([v, l]) => `<option value="${v}"${v === x.op ? " selected" : ""}>${l}</option>`).join("")}</select></div>
@@ -1022,10 +1035,12 @@ function ruleHTML(list, o, i, cfg){
   const del = `<button class="iconb sm" data-sh="delrl" data-l="${list}" data-i="${i}" aria-label="حذف">${IC.x}</button>`;
   let inner;
   if(list === "do"){
+    const noVar = o.op === "notify" || o.op === "remind" || o.op === "sub_add" || o.op === "sub_del";
     inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v, l]) => `<option value="${v}"${v === o.op ? " selected" : ""}>${l}</option>`).join("")}</select>
-      ${o.op === "notify" || o.op === "remind" ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
+      ${noVar ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
       ${o.op === "remind" ? `<div class="cmd"><input class="a-min" type="number" min="1" max="43200" value="${esc(o.minutes || 60)}" placeholder="چند دقیقه بعد؟"><select class="a-rg">${nodeOpts(cfg, o.goto || "", '<option value="">فقط پیام</option>')}</select></div>` : ""}
-      ${o.op === "clear" ? "" : `<input class="fa a-val" value="${esc(o.value || "")}" placeholder="${esc(APH[o.op])}" maxlength="${o.op === "notify" || o.op === "remind" ? 500 : 100}">`}`;
+      ${o.op === "sub_add" ? `<div class="cmd"><input class="fa a-days ltr" inputmode="numeric" value="${esc(o.days || "30")}" maxlength="20" placeholder="چند روز؟ مثل 30"></div>` : ""}
+      ${o.op === "clear" || o.op === "notify" || o.op === "remind" ? "" : `<input class="fa a-val" value="${esc(o.op === "sub_add" || o.op === "sub_del" ? (o.plan || "") : (o.value || ""))}" placeholder="${esc(APH[o.op])}" maxlength="${o.op === "notify" || o.op === "remind" ? 500 : 100}">`}`;
   } else {
     inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگر…"}</span>${del}</div>${condHTML(o.c)}`;
     if(list === "route") inner += `<span class="lbl">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
@@ -1043,13 +1058,20 @@ function readRl(list){
   if(!rows.length || !D[list]) return;
   D[list] = rows.map((r, i) => {
     const o = {...(D[list][i] || {})}, q = s => r.querySelector(s);
-    if(q(".c-var")) o.c = {var:cleanVar(q(".c-var").value), op:q(".c-op").value, value:q(".c-val")?.value ?? ""};
+    if(q(".c-op")?.value === "sub") o.c = {op:"sub", plan:cleanVar(q(".c-plan")?.value || "")};
+    else if(q(".c-var")) o.c = {var:cleanVar(q(".c-var").value), op:q(".c-op").value, value:q(".c-val")?.value ?? ""};
     if(q(".r-goto")) o.goto = q(".r-goto").value;
     if(q(".r-text")) o.text = q(".r-text").value;
     if(q(".a-op")){
       o.op = q(".a-op").value;
-      o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
-      o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
+      if(o.op === "sub_add" || o.op === "sub_del"){
+        o.plan = cleanVar(q(".a-val")?.value || o.plan || "") || "vip";
+        if(q(".a-days")) o.days = (q(".a-days").value || "30").trim();
+        delete o.var; delete o.value;
+      } else {
+        o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
+        o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
+      }
       if(q(".a-min")) o.minutes = parseInt(q(".a-min").value) || 0;
       if(q(".a-rg")) o.goto = q(".a-rg").value;
     }
@@ -1065,6 +1087,9 @@ function ruleErr(){
       if(!(mm >= 1 && mm <= 43200)) return "زمان یادآوری باید بین ۱ تا ۴۳۲۰۰ دقیقه (۳۰ روز) باشد";
       if(!(a.value || "").trim() && !a.goto) return "برای یادآوری، متن بنویس یا یک بخش انتخاب کن";
     }
+    else if(a.op === "calc"){ if(!a.var) return "اسم متغیرِ نتیجه‌ی محاسبه را بنویس"; if(!(a.value || "").trim()) return "عبارت حسابی اکشن «محاسبه» را بنویس"; }
+    else if(a.op === "disc"){ if(!a.var) return "اسم متغیری که کد کاربر در آن ذخیره می‌شود را بنویس"; if(!(a.value || "").trim()) return "قیمت پایه برای بررسی کد تخفیف را بنویس"; }
+    else if(a.op === "sub_add" || a.op === "sub_del"){ if(!(a.plan || "").trim()) return "پلن اشتراک را بنویس (مثل vip)"; }
     else if(!a.var) return "اسم متغیرِ اکشن را بنویس";
   }
   for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، اسم متغیرِ شرط را بنویس";
@@ -1075,7 +1100,16 @@ function ruleErr(){
   for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط را بنویس";
   return null;
 }
-const outActs = l => l.map(a => a.op === "remind" ? {op:"remind", minutes:Math.max(1, Math.min(43200, parseInt(a.minutes) || 60)), ...((a.value || "").trim() ? {value:a.value.trim()} : {}), ...(a.goto ? {goto:a.goto} : {}), ...(a.key ? {key:a.key} : {})} : a.op === "notify" ? {op:"notify", value:a.value || ""} : a.op === "clear" ? {op:"clear", var:a.var} : {op:a.op, var:a.var, value:a.value || ""});
+const outActs = l => l.map(a => {
+  if(a.op === "remind") return {op:"remind", minutes:Math.max(1, Math.min(43200, parseInt(a.minutes) || 60)), ...((a.value || "").trim() ? {value:a.value.trim()} : {}), ...(a.goto ? {goto:a.goto} : {}), ...(a.key ? {key:a.key} : {})};
+  if(a.op === "notify") return {op:"notify", value:a.value || ""};
+  if(a.op === "clear") return {op:"clear", var:a.var};
+  if(a.op === "calc") return {op:"calc", var:a.var, value:(a.value || "").trim()};
+  if(a.op === "disc") return {op:"disc", var:a.var, price:(a.value || "0").trim()};
+  if(a.op === "sub_add") return {op:"sub_add", plan:a.plan || "vip", days:String(a.days || "30").trim(), ...(a.var ? {var:a.var} : {})};
+  if(a.op === "sub_del") return {op:"sub_del", plan:a.plan || "vip"};
+  return {op:a.op, var:a.var, value:a.value || ""};
+});
 
 /* ── ویرایش بخش ── */
 function openNode(id){
@@ -1258,7 +1292,7 @@ function openBtn(nid, r, c){
   else {
     const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
     D = {text: b.text, kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
-         val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : b.url || b.alert || b.copy || b.share || "",
+         val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : k === "app" ? (["1", 1, true].includes(b.app) ? "" : String(b.app || "")) : b.url || b.alert || b.copy || b.share || "",
          when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
          jch: (b.join?.channels || []).map(c => "@" + c).join(" "), jtx: b.join?.text || "",
          stars: b.pay?.stars || 50, ptitle: b.pay?.title || "", pdesc: b.pay?.desc || "", ptext: b.pay?.text || "", pgoto: b.pay?.goto || "",
@@ -1268,7 +1302,7 @@ function openBtn(nid, r, c){
   if(needLoad) emjEnsure().then(() => { if(S.sheet?.kind === "btn" && $("#b-icons")){ readSheet(); renderSheet(); } });
   renderSheet();
 }
-const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"]];
+const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"], ["app", "باز کردن مینی‌اپ"]];
 function btnSheet(){
   const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
   const val = {
@@ -1283,7 +1317,9 @@ function btnSheet(){
       <span class="lbl">توضیح فاکتور (اختیاری)</span><input class="fa" id="b-pdesc" value="${esc(d.pdesc)}" maxlength="255">
       <span class="lbl">پیام بعد از پرداخت موفق</span><input class="fa" id="b-ptext" data-fmt value="${esc(d.ptext)}" maxlength="300" placeholder="پرداخت انجام شد، ممنون!">${fmtTools("b-ptext")}
       <span class="lbl">بعد از پرداخت کدام بخش نشان داده شود؟</span><select id="b-pgoto">${nodeOpts(cfg, d.pgoto, '<option value="">هیچ‌کدام</option>')}</select>
-      <p class="muted mt">ستاره‌ها به حساب تلگرامِ تو می‌رود. اکشن‌های این دکمه فقط بعد از پرداختِ موفق اجرا می‌شوند (مثلاً فعال کردن متغیر vip). پرداخت‌ها با /payments دیده می‌شوند و با /refund کد برگشت می‌خورند.</p>`
+      <p class="muted mt">ستاره‌ها به حساب تلگرامِ تو می‌رود. اکشن‌های این دکمه فقط بعد از پرداختِ موفق اجرا می‌شوند (مثلاً فعال کردن متغیر vip). پرداخت‌ها با /payments دیده می‌شوند و با /refund کد برگشت می‌خورند.</p>`,
+    app: `<span class="lbl">صفحه‌ی شروع مینی‌اپ (اختیاری)</span><input id="b-val" value="${esc(d.val)}" placeholder="home یا خالی برای صفحه‌ی اول" autocomplete="off">
+      <p class="muted mt">با لمس این دکمه، مینی‌اپ ربات باز می‌شود (فقط در چت خصوصی و وقتی منتشر شده باشد). برای ساختن یا انتشار مینی‌اپ، تب «مینی‌اپ» را باز کن.</p>`
   }[d.kind];
   const canDo = d.kind === "goto" || d.kind === "alert" || d.kind === "pay";
   const nn = cfg.nodes[S.sheet.n], kbOk = !(nn.ask || nn.fields || nn.ai);
@@ -1292,7 +1328,7 @@ function btnSheet(){
     <span class="lbl">با لمس دکمه چه شود؟</span>
     <select id="b-kind" data-sh="bkind">${KINDS.map(([v, l]) => `<option value="${v}"${v === d.kind ? " selected" : ""}>${l}</option>`).join("")}</select>
     ${val}
-    ${kbOk ? kbPicker(d.kb) : `<p class="muted mt">این بخش فرم، دریافت پیام یا هوش مصنوعی است؛ دکمه‌هایش فقط شیشه‌ای می‌شوند.</p>`}
+    ${kbOk && d.kind !== "app" ? kbPicker(d.kb) : `<p class="muted mt">${d.kind === "app" ? "دکمه‌ی مینی‌اپ فقط شیشه‌ای می‌شود." : "این بخش فرم، دریافت پیام یا هوش مصنوعی است؛ دکمه‌هایش فقط شیشه‌ای می‌شوند."}</p>`}
     ${btnLook(d)}
     <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اقدام‌ها (پیشرفته)</summary><div class="box">
       ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
@@ -1327,6 +1363,7 @@ function saveBtn(){
   const {n: nid, r, c} = S.sheet, d = D;
   if(!d.text.trim()) return toast("متن دکمه را بنویس");
   if(d.kind === "pay"){ const st = parseInt(d.stars); if(!(st >= 1 && st <= 10000)) return toast("قیمت باید عددی بین ۱ تا ۱۰٬۰۰۰ ستاره باشد"); }
+  else if(d.kind === "app"){ const v = d.val.trim(); if(v && !/^[a-z0-9_]{1,30}$/.test(v)) return toast("شناسه‌ی صفحه باید حروف انگلیسی کوچک، عدد و _ باشد"); }
   else if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه را وارد کن");
   const err = ruleErr(); if(err) return toast(err);
   const bj = (d.kind === "goto" || d.kind === "alert" || d.kind === "pay") ? chOut(d.jch, d.jtx) : null; if(typeof bj === "string") return toast(bj);
@@ -1341,11 +1378,12 @@ function saveBtn(){
     if(d.ptext.trim()) btn.pay.text = d.ptext.trim();
     if(d.pgoto) btn.pay.goto = d.pgoto;
   }
+  else if(d.kind === "app") btn.app = d.val.trim() || "1";
   else btn.url = d.val.trim();
   if(bj) btn.join = bj;
   if(d.style) btn.style = d.style;
   if(d.icon) btn.icon = d.icon;
-  { const nn = S.cur.config.nodes[nid]; if(d.kb === "reply" && !(nn.ask || nn.fields || nn.ai)) btn.kb = "reply"; }
+  { const nn = S.cur.config.nodes[nid]; if(d.kb === "reply" && d.kind !== "app" && !(nn.ask || nn.fields || nn.ai)) btn.kb = "reply"; }
   if(d.when.length) btn.when = d.when[0].c;
   if(d.do.length && (d.kind === "goto" || d.kind === "alert" || d.kind === "pay")) btn.do = outActs(d.do);
   busy($('[data-sh="save"]'), () => commit(cfg => {

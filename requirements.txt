@@ -1,6 +1,8 @@
-flask
+Flask
 gunicorn
-requests
 pymongo
-mongomock
+requests
 cryptography
+mongomock
+telethon
+Pillow
