@@ -1887,22 +1887,113 @@ function ubruleSheet(){
   return head(isNew ? "قانون جدید" : "ویرایش قانون") + `
     <span class="lbl">کلمه‌های کلیدی (با کاما جدا کن)</span><input id="ur-kw" maxlength="300" placeholder="قیمت، تعرفه، چنده" value="${esc(D.kw)}">
     <span class="lbl">شرط تطبیق</span><select id="ur-mode">${UB_MODE.map(([k, t]) => `<option value="${k}"${D.mode === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+    <span class="lbl">کجا کار کند؟</span><select id="ur-where">${UB_WHERE.map(([k, t]) => `<option value="${k}"${(D.where || "pm") === k ? " selected" : ""}>${t}</option>`).join("")}</select>
     <span class="lbl">متن پاسخ</span><textarea class="fa" id="ur-text" maxlength="1000" placeholder="متنی که فرستاده می‌شود">${esc(D.text)}</textarea>
     <p class="muted mt2">می‌توانی از <span class="ltr">{name}</span> و <span class="ltr">{time}</span> و <span class="ltr">{date}</span> استفاده کنی.</p>
     <label class="chk"><input type="checkbox" id="ur-on"${D.on ? " checked" : ""}> قانون فعال باشد</label>
     <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف</button>`}</div>`;
 }
-const ubruleRead = () => { D.kw = $("#ur-kw")?.value ?? D.kw; D.mode = $("#ur-mode")?.value ?? D.mode; D.text = $("#ur-text")?.value ?? D.text; D.on = $("#ur-on") ? $("#ur-on").checked : D.on; };
+const ubruleRead = () => { D.kw = $("#ur-kw")?.value ?? D.kw; D.mode = $("#ur-mode")?.value ?? D.mode; D.text = $("#ur-text")?.value ?? D.text; D.where = $("#ur-where")?.value ?? D.where; D.on = $("#ur-on") ? $("#ur-on").checked : D.on; };
 function ubruleSave(){
   const kw = D.kw.split(/[,،\n]/).map(s => s.trim()).filter(Boolean).slice(0, 8), text = D.text.trim();
   if(!kw.length) return toast("حداقل یک کلمه‌ی کلیدی بنویس");
   if(!text) return toast("متن پاسخ را بنویس");
-  const rule = {kw, mode: D.mode, text, on: D.on}, i = D.i;
+  const rule = {kw, mode: D.mode, text, on: D.on, where: D.where || "pm"}, i = D.i;
   busy($('[data-sh="save"]'), async () => { await ubCommit(cfg => { if(i === null) cfg.rules.push(rule); else cfg.rules[i] = rule; }, "قانون ذخیره شد"); closeSheet(); renderUserbot(); });
 }
 function ubruleDel(){
   const i = D.i;
   confirmQ("این قانون حذف شود؟", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.rules.splice(i, 1); }, "قانون حذف شد"); closeSheet(); renderUserbot(); }));
+}
+
+
+/* ── انتخاب گروه/کانال از اکانت ── */
+function openUbPick(){
+  ubRead();
+  if(S.ubCfg.chats.length >= 15) return toast("حداکثر ۱۵ گروه یا کانال می‌توانی اضافه کنی");
+  const x = ubItem(); if(!x) return;
+  if(x.status !== "running") return toast("اول یوزربات را روشن کن تا فهرست گروه‌ها خوانده شود");
+  S.sheet = {kind: "ubpick"}; D = {items: null, err: ""}; renderSheet();
+  const id = S.ubSel;
+  api(`/api/userbots/${id}/chats`).then(d => { if(S.sheet?.kind === "ubpick" && S.ubSel === id){ D.items = d.items || []; renderSheet(); } })
+    .catch(e => { if(S.sheet?.kind === "ubpick"){ D.items = []; D.err = e.message || "خطا در خواندن فهرست"; renderSheet(); } });
+}
+function ubpickSheet(){
+  if(D.items === null) return head("افزودن گروه یا کانال") + `<div class="gi static"><span class="muted">در حال خواندن چت‌های اکانت…</span></div>`;
+  const have = new Set(S.ubCfg.chats.map(h => h.id));
+  const rows = D.items.map(c => { const added = have.has(c.id), ok = c.can && !added;
+    return `<div class="gi ubpick${ok ? "" : " static"}"${ok ? ` role="button" tabindex="0" data-sh="ubpick" data-id="${c.id}"` : ""} data-t="${esc(c.title.toLowerCase())}" style="${ok ? "" : "opacity:.55"}"><span class="dot ${ok ? "on" : ""}"></span>
+      <span class="gt"><b>${esc(c.title)}</b><span>${c.kind === "channel" ? "کانال" : "گروه"}${c.own ? " · ادمین" : ""}${c.members ? ` · ${N(c.members)} عضو` : ""}${added ? " · اضافه شده" : !c.can ? " · اجازه‌ی ارسال نداری" : ""}</span></span></div>`; }).join("");
+  return head("افزودن گروه یا کانال") + (D.err ? `<p class="muted" style="color:var(--bad)">${esc(D.err)}</p>` : `<input id="ubp-q" placeholder="جستجوی نام…" autocomplete="off">`) +
+    `<div class="group sep mt2" style="max-height:52vh;overflow:auto">${rows || `<div class="gi static"><span class="muted">${D.err ? "" : "گروه یا کانالی پیدا نشد."}</span></div>`}</div>
+     <p class="muted mt2">فقط چت‌هایی که خودت عضو آن‌ها هستی نمایش داده می‌شود.</p>`;
+}
+
+/* ── شیت یک گروه/کانال ── */
+function ubchatSheet(){
+  const g = D.kind !== "channel";
+  return head(esc(D.title)) + `
+    ${D.err ? `<div class="panel" style="border-color:var(--bad)"><p class="muted" style="color:var(--bad);margin:0">متوقف شد: ${esc(D.err)}</p><button class="b o sm mt2" data-sh="ubcresume">ازسرگیری</button></div>` : ""}
+    ${g ? `<span class="lbl">پاسخ خودکار در این گروه</span><select id="uh-reply">${UB_REPLY.map(([k, t]) => `<option value="${k}"${D.reply === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+    <label class="chk"><input type="checkbox" id="uh-ai"${D.ai ? " checked" : ""}> پاسخ هوشمند هم فعال باشد (فقط وقتی منشن یا ریپلای شدم)</label>
+    <p class="muted mt2">قانون‌های کلیدواژه از تب «قانون‌ها» می‌آیند (گزینه‌ی «گروه‌ها» یا «هر دو»). پاسخ هوشمند از تب «قابلیت‌ها» روشن و هزینه‌اش از توکن کم می‌شود.</p>` : `<p class="muted">این یک کانال است؛ فقط به‌عنوان مقصد پیام زمان‌بندی‌شده استفاده می‌شود (باید ادمین با اجازه‌ی ارسال پست باشی).</p>`}
+    <label class="chk"><input type="checkbox" id="uh-on"${D.on ? " checked" : ""}> این چت فعال باشد</label>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button><button class="b r" data-sh="del">حذف از فهرست</button></div>`;
+}
+const ubchatRead = () => { if($("#uh-on")){ D.on = $("#uh-on").checked; if($("#uh-reply")){ D.reply = $("#uh-reply").value; D.ai = $("#uh-ai").checked; } } };
+function ubchatSave(){
+  const i = D.i, h = {id: D.id, title: D.title, kind: D.kind, on: D.on, reply: D.reply, ai: D.ai, err: D.err || ""};
+  busy($('[data-sh="save"]'), async () => { await ubCommit(cfg => { cfg.chats[i] = h; }, "ذخیره شد"); closeSheet(); renderUserbot(); });
+}
+function ubchatDel(){
+  const i = D.i;
+  confirmQ("این چت از فهرست حذف شود؟ اگر تنها مقصد یک پیام زمان‌بندی‌شده باشد، آن پیام هم حذف می‌شود.", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.chats.splice(i, 1); }, "حذف شد"); closeSheet(); renderUserbot(); }));
+}
+
+/* ── شیت پیام زمان‌بندی‌شده ── */
+function ubpostSheet(){
+  const hrs = (v, max) => Array.from({length: max + 1}, (_, h) => `<option value="${h}"${h === v ? " selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("");
+  const every = UB_EVERY.some(x => x[0] === D.every_min) ? UB_EVERY : [...UB_EVERY, [D.every_min, ubEveryT(D.every_min)]].sort((a, b) => a[0] - b[0]);
+  const isNew = D.i === null;
+  return head(isNew ? "پیام زمان‌بندی‌شده‌ی جدید" : "ویرایش پیام زمان‌بندی‌شده") + `
+    <span class="lbl">نام (برای خودت)</span><input id="up-name" maxlength="40" placeholder="مثلاً: تبلیغ صبحگاهی" value="${esc(D.name)}">
+    <span class="lbl">ارسال به</span>
+    <div class="group sep">${S.ubCfg.chats.map(h => `<label class="gi chk" style="margin:0"><input type="checkbox" class="up-c" value="${h.id}"${D.chats.includes(h.id) ? " checked" : ""}> <span class="gt"><b>${esc(h.title)}</b><span>${h.kind === "channel" ? "کانال" : "گروه"}${h.err ? " · متوقف" : ""}</span></span></label>`).join("")}</div>
+    <span class="lbl">متن پیام‌ها (تا ۵ متن؛ هر متن را با یک خط <span class="ltr">---</span> جدا کن)</span>
+    <textarea class="fa" id="up-text" rows="6" maxlength="16000" placeholder="متن اول&#10;---&#10;متن دوم">${esc(D.text)}</textarea>
+    <p class="muted mt2">می‌توانی از <span class="ltr">{chat}</span> (نام گروه/کانال)، <span class="ltr">{time}</span> و <span class="ltr">{date}</span> استفاده کنی. تکرار دقیقاً یک متن در چند گروه ریسک ریپورت دارد؛ چند متن متفاوت بنویس.</p>
+    <span class="lbl">ترتیب ارسال متن‌ها</span><select id="up-mode"><option value="seq"${D.mode === "seq" ? " selected" : ""}>به‌نوبت</option><option value="rand"${D.mode === "rand" ? " selected" : ""}>تصادفی</option></select>
+    <span class="lbl">هر چند وقت یک‌بار</span><select id="up-every">${every.map(([m, t]) => `<option value="${m}"${D.every_min === m ? " selected" : ""}>${t}</option>`).join("")}</select>
+    <span class="lbl">بازه‌ی مجاز ارسال (ساعت تهران؛ بیرون از آن ساکت می‌ماند)</span>
+    <div style="display:flex;gap:8px;align-items:center"><select id="up-from">${hrs(D.from_h, 23)}</select><span class="muted">تا</span><select id="up-to">${hrs(D.to_h, 24).replace(/<option value="0".*?<\/option>/, "")}</select></div>
+    <span class="lbl">حداکثر دفعه در روز</span><input id="up-daily" type="number" min="1" max="48" inputmode="numeric" value="${D.daily}">
+    <p class="muted mt2">فاصله‌ی واقعی هیچ‌وقت کمتر از حداقل «سطح ایمنی» نمی‌شود (در تب قابلیت‌ها).</p>
+    <label class="chk"><input type="checkbox" id="up-on"${D.on ? " checked" : ""}> فعال باشد</label>
+    <div class="bar" style="flex-direction:column"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b o" data-sh="ubpostnow">ذخیره و ارسال همین حالا</button><button class="b r" data-sh="del">حذف</button>`}</div>`;
+}
+const ubpostRead = () => {
+  if(!$("#up-name")) return;
+  D.name = $("#up-name").value; D.text = $("#up-text").value; D.mode = $("#up-mode").value; D.every_min = +$("#up-every").value || 360;
+  D.from_h = +$("#up-from").value; D.to_h = +$("#up-to").value || 24; D.daily = Math.max(1, Math.min(48, +$("#up-daily").value || 4)); D.on = $("#up-on").checked;
+  D.chats = [...document.querySelectorAll(".up-c:checked")].map(e => +e.value);
+};
+function ubpostBuild(){
+  const texts = D.text.split(/^\s*-{3,}\s*$/m).map(t => t.trim()).filter(Boolean).slice(0, 5);
+  if(!D.chats.length){ toast("حداقل یک مقصد انتخاب کن"); return null; }
+  if(!texts.length){ toast("متن پیام را بنویس"); return null; }
+  return {id: D.id, name: D.name.trim() || "پیام زمان‌بندی‌شده", chats: D.chats, texts, mode: D.mode, every_min: D.every_min, from_h: D.from_h, to_h: D.to_h, daily: D.daily, on: D.on};
+}
+function ubpostSave(after){
+  const p = ubpostBuild(); if(!p) return; const i = D.i;
+  busy($('[data-sh="save"]'), async () => {
+    await ubCommit(cfg => { if(i === null) cfg.posts.push(p); else cfg.posts[i] = p; }, "ذخیره شد");
+    if(after){ const saved = i === null ? S.ubCfg.posts[S.ubCfg.posts.length - 1] : S.ubCfg.posts[i]; if(saved) await after(saved.id); }
+    closeSheet(); renderUserbot();
+  });
+}
+function ubpostDel(){
+  const i = D.i;
+  confirmQ("این پیام زمان‌بندی‌شده حذف شود؟", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.posts.splice(i, 1); }, "حذف شد"); closeSheet(); renderUserbot(); }));
 }
 
 /* ── شیت اتصال اکانت: شماره ← کد ← (رمز دومرحله‌ای) ← تمام ── */
@@ -1939,6 +2030,13 @@ function ubDone(d){
   if(d.warn) toast(d.warn);
 }
 function ubAct(a, ds){
+  if(a === "ubpick"){
+    const c = D.items?.find(x => String(x.id) === ds.id); if(!c) return;
+    return busy(null, async () => { await ubCommit(cfg => { if(cfg.chats.length < 15 && !cfg.chats.some(h => h.id === c.id)) cfg.chats.push({id: c.id, title: c.title, kind: c.kind, on: true, reply: c.kind === "group" ? "mention" : "off", ai: false, err: ""}); }, "اضافه شد");
+      closeSheet(); S.ubTab = "chats"; renderUserbot(); });
+  }
+  if(a === "ubcresume"){ D.err = ""; D.on = true; return renderSheet(); }
+  if(a === "ubpostnow") return ubpostSave(async pid => { await api(`/api/userbots/${S.ubSel}/posts/${pid}/now`, "POST"); toast("در صف ارسال قرار گرفت؛ با مکث‌های ایمنی ارسال می‌شود"); });
   const fail = e => { if(e.data?.reset){ D.step = "phone"; renderSheet(); } toast(e.message); };
   const run = fn => busy($(`[data-sh="${a}"]`), async () => { try{ await fn(); }catch(e){ fail(e); } });
   if(a === "ubsend"){
@@ -1959,6 +2057,9 @@ function ubAct(a, ds){
 }
 SHEETS.ubrule = {html: ubruleSheet, read: ubruleRead, save: ubruleSave, del: ubruleDel};
 SHEETS.ubconn = {html: ubconnSheet, read: ubconnRead};
+SHEETS.ubpick = {html: ubpickSheet};
+SHEETS.ubchat = {html: ubchatSheet, read: ubchatRead, save: ubchatSave, del: ubchatDel};
+SHEETS.ubpost = {html: ubpostSheet, read: ubpostRead, save: () => ubpostSave(), del: ubpostDel};
 
 /* ثبت صفحه‌ی استودیو در جدول صفحه‌ها (VIEWS در app.js تعریف می‌شود) */
 VIEWS.studio = renderStudio;

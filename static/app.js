@@ -1491,6 +1491,16 @@ if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").cat
 
 /* ═════════════════ یوزربات (اتصال اکانت شخصی تلگرام) ═════════════════ */
 Object.assign(S, { ub: null, ubErr: "", ubSel: null, ubTab: "feat", ubCfg: null });
+const UB_SAFE = [["safe", "محتاط — کندتر و کم‌خطرتر (پیشنهادی)"], ["balanced", "متعادل"], ["fast", "سریع — برای اکانت‌های قدیمی و فعال"]];
+const UB_SAFE_T = {safe: "حداکثر ۱۲ ارسال زمان‌بندی‌شده در ساعت، حداقل ۱ ساعت فاصله بین دو پیام به یک چت، مکث ۳۰ تا ۹۰ ثانیه بین ارسال‌ها.",
+  balanced: "حداکثر ۲۴ ارسال در ساعت، حداقل ۳۰ دقیقه فاصله بین دو پیام به یک چت، مکث ۱۵ تا ۴۵ ثانیه بین ارسال‌ها.",
+  fast: "حداکثر ۴۰ ارسال در ساعت، حداقل ۱۵ دقیقه فاصله بین دو پیام به یک چت، مکث ۸ تا ۲۵ ثانیه بین ارسال‌ها."};
+const UB_REPLY = [["mention", "فقط وقتی منشن یا ریپلای شدم (ایمن‌تر)"], ["kw", "به کلمه‌های کلیدی در همه‌ی پیام‌ها"], ["off", "پاسخ خودکار نداشته باشد (فقط مقصد پیام زمان‌بندی‌شده)"]];
+const UB_REPLY_T = {mention: "پاسخ هنگام منشن/ریپلای", kw: "پاسخ به کلمه‌های کلیدی", off: "فقط مقصد ارسال"};
+const UB_WHERE = [["pm", "فقط چت خصوصی"], ["group", "فقط گروه‌های انتخاب‌شده"], ["both", "هر دو"]];
+const UB_EVERY = [[15, "هر ۱۵ دقیقه"], [30, "هر ۳۰ دقیقه"], [60, "هر ۱ ساعت"], [120, "هر ۲ ساعت"], [180, "هر ۳ ساعت"], [360, "هر ۶ ساعت"], [720, "هر ۱۲ ساعت"], [1440, "هر ۱ روز"], [2880, "هر ۲ روز"], [10080, "هر ۱ هفته"]];
+const ubEveryT = m => (UB_EVERY.find(x => x[0] === m) || [0, `هر ${m} دقیقه`])[1];
+const ubWhen = t => { try{ return t ? new Date(t * 1000).toLocaleString("fa-IR-u-nu-latn", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"}) : ""; }catch(_){ return ""; } };
 const UB_ST = { running: ["روشن", "on"], stopped: ["خاموش", ""], revoked: ["نیاز به اتصال دوباره", "bad"] };
 const UB_WHO = [["all", "همه‌ی پیام‌های خصوصی"], ["contacts", "فقط مخاطب‌های من"], ["others", "فقط افراد خارج از مخاطبین"]];
 const UB_MODE = [["has", "شامل این کلمه باشد"], ["start", "با این کلمه شروع شود"], ["exact", "دقیقاً همین باشد"]];
@@ -1526,7 +1536,7 @@ function renderUserbot(){
 
 function ubListHTML(){
   const u = S.ub, full = u.items.length >= u.max;
-  if(!u.max && !u.items.length) return `<div class="ph"><h1>یوزربات</h1></div><div class="empty"><div class="ib big">${IC.person}</div><h2>یوزربات با اشتراک فعال می‌شه</h2><p class="muted">اکانت شخصی تلگرامت رو وصل کن تا وقتی نیستی، پیام‌های خصوصی‌ات رو خودکار جواب بدهد. این بخش برای اشتراک Premium و Pro است.</p><button class="b sm" data-a="goplan">مشاهده‌ی اشتراک‌ها</button></div>`;
+  if(!u.max && !u.items.length) return `<div class="ph"><h1>یوزربات</h1></div><div class="empty"><div class="ib big">${IC.person}</div><h2>یوزربات با اشتراک فعال می‌شه</h2><p class="muted">اکانت شخصی تلگرامت رو وصل کن تا وقتی نیستی، پیام‌های خصوصی‌ات رو جواب بدهد، در گروه‌هایت پاسخ هوشمند بدهد و برای کانال و گروه‌هایت پیام زمان‌بندی‌شده بفرستد. این بخش برای اشتراک Premium و Pro است.</p><button class="b sm" data-a="goplan">مشاهده‌ی اشتراک‌ها</button></div>`;
   const rows = u.items.map(x => { const [t] = UB_ST[x.status] || UB_ST.stopped;
     return `<div class="gi ubrow" role="button" tabindex="0" data-a="ubopen" data-id="${esc(x.id)}"><span class="dot ${x.status === "running" ? "on" : ""}"></span>
       <span class="gt"><b>${esc(x.name || "اکانت تلگرام")}</b><span>${x.username ? `<bdi dir="ltr">@${esc(x.username)}</bdi> · ` : ""}${t}</span></span>${goIc}</div>`; }).join("");
@@ -1534,15 +1544,16 @@ function ubListHTML(){
     ${u.items.length ? `<div class="group sep">${rows}</div>${full ? "" : `<button class="b o sep-btn" data-a="ubnew">${IC.plus}اتصال اکانت دیگر</button>`}`
       : `<div class="empty"><div class="ib big">${IC.person}</div><h2>هنوز اکانتی وصل نکردی</h2><p class="muted">اکانت شخصی تلگرامت رو وصل کن تا وقتی نیستی، پیام‌های خصوصی‌ات رو خودکار جواب بدهد.</p><button class="b sm" data-a="ubnew">اتصال اکانت</button></div>`}
     <div class="panel mt"><h2>یوزربات چه کارهایی می‌کند؟</h2>
-      <p class="muted">پاسخ خودکار با کلمه‌ی کلیدی، پیام غیبت وقتی آنلاین نیستی، پاسخ هوشمند با هوش مصنوعی و دستورهای شخصی مثل <span class="ltr">.time</span> و <span class="ltr">.ping</span>. فقط در چت‌های خصوصی کار می‌کند.</p></div>
+      <p class="muted">پاسخ خودکار با کلمه‌ی کلیدی، پیام غیبت، پاسخ هوشمند با هوش مصنوعی و دستورهای شخصی مثل <span class="ltr">.time</span> و <span class="ltr">.ping</span> در چت‌های خصوصی؛ پاسخ خودکار در گروه‌هایی که خودت انتخاب می‌کنی؛ و پیام‌های زمان‌بندی‌شده با صف، ساعت سکوت و سقف روزانه برای گروه‌ها و کانال‌هایت.</p></div>
     <div class="panel mt2"><h2>امنیت و قوانین</h2>
-      <p class="muted">ورود فقط با کدی است که خود تلگرام به اکانتت می‌فرستد. رمز دومرحله‌ای ذخیره نمی‌شود و نشست (سشن) اکانت رمزنگاری می‌شود. هر وقت خواستی از همین‌جا قطع کن؛ نشست از خود تلگرام هم بسته می‌شود. این سرویس ارسال همگانی ندارد و پاسخ‌ها سقف ساعتی دارند تا اکانتت محدود نشود.</p></div>`;
+      <p class="muted">ورود فقط با کدی است که خود تلگرام به اکانتت می‌فرستد. رمز دومرحله‌ای ذخیره نمی‌شود و نشست (سشن) اکانت رمزنگاری می‌شود. هر وقت خواستی از همین‌جا قطع کن؛ نشست از خود تلگرام هم بسته می‌شود. ارسال فقط به گروه‌ها و کانال‌هایی است که خودت عضوشان هستی و انتخاب کرده‌ای (نه به کاربران ناشناس، نه جوین یا اد کردن). همه‌ی ارسال‌ها سقف ساعتی و روزانه، مکث تصادفی و مدیریت خودکار محدودیت‌های تلگرام (صبر و تلاش دوباره، توقف خودکار مقصد بسته‌شده) دارند تا اکانتت محدود نشود.</p></div>`;
 }
 
 function ubDetailHTML(x){
   const [st, sc] = UB_ST[x.status] || UB_ST.stopped, run = x.status === "running";
-  const tabs = tabsHTML([["feat", "قابلیت‌ها"], ["rules", "قانون‌ها" + (S.ubCfg?.rules?.length ? ` (${S.ubCfg.rules.length})` : "")], ["log", "گزارش"]], S.ubTab, "ubtab");
-  const body = ({feat: ubFeatHTML, rules: ubRulesHTML, log: ubLogHTML})[S.ubTab](x);
+  const cnt = a => a?.length ? ` (${a.length})` : "";
+  const tabs = tabsHTML([["feat", "قابلیت‌ها"], ["chats", "گروه‌ها و کانال‌ها" + cnt(S.ubCfg?.chats)], ["posts", "زمان‌بندی" + cnt(S.ubCfg?.posts)], ["rules", "قانون‌ها" + cnt(S.ubCfg?.rules)], ["log", "گزارش"]], S.ubTab, "ubtab");
+  const body = ({feat: ubFeatHTML, chats: ubChatsHTML, posts: ubPostsHTML, rules: ubRulesHTML, log: ubLogHTML})[S.ubTab](x);
   return `<div class="ubh"><button class="iconb" data-a="ubback" aria-label="بازگشت">${IC.back}</button>
       <div class="gt"><b>${esc(x.name || "اکانت تلگرام")}</b><span class="muted">${x.username ? `<bdi dir="ltr">@${esc(x.username)}</bdi> · ` : ""}<span class="n">${esc(x.phone)}</span></span></div>
       <span class="ubst ${sc}"><i class="dot ${sc === "on" ? "on" : ""}"></i>${st}</span></div>
@@ -1553,7 +1564,10 @@ function ubDetailHTML(x){
 function ubFeatHTML(x){
   const c = S.ubCfg, gaps = UB_GAPS.includes(c.away.gap_h) ? UB_GAPS : [...UB_GAPS, c.away.gap_h].sort((a, b) => a - b);
   const cost = billingFixed() ? `هر ${N(S.cfg.ai_per)} پاسخ هوشمند ${N(S.cfg.ai_cost)} توکن از موجودی‌ات کم می‌شود.` : "هزینه‌ی هر پاسخ هوشمند، بر اساس مصرف واقعی مدل از توکن‌هایت کم می‌شود.";
-  return `<div class="panel"><h2>پاسخ به چه کسانی؟</h2>
+  return `<div class="panel"><h2>سطح ایمنی ارسال</h2><p class="muted">تعیین می‌کند ارسال‌ها و پاسخ‌های خودکار چقدر آهسته و محتاطانه انجام شوند. برای اکانت اصلی‌ات «محتاط» را نگه دار.</p>
+      <select id="ub-safe">${UB_SAFE.map(([k, t]) => `<option value="${k}"${c.safe === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+      <p class="muted mt2">${UB_SAFE_T[c.safe] || ""}</p></div>
+    <div class="panel mt2"><h2>پاسخ به چه کسانی؟</h2>
       <select id="ub-who">${UB_WHO.map(([k, t]) => `<option value="${k}"${c.who === k ? " selected" : ""}>${t}</option>`).join("")}</select>
       <p class="muted mt2">ترتیب بررسی: قانون‌های کلمه‌ی کلیدی ← پاسخ هوشمند ← پیام غیبت. هر پیام حداکثر یک پاسخ می‌گیرد.</p></div>
     <div class="panel mt2"><h2>پیام غیبت</h2><p class="muted">وقتی کسی برایت می‌نویسد، این پیام را می‌فرستد؛ هر چت فقط یک‌بار در بازه‌ی انتخابی.</p>
@@ -1566,7 +1580,8 @@ function ubFeatHTML(x){
       <label class="chk"><input type="checkbox" id="ub-ai-on"${c.ai.on ? " checked" : ""}> پاسخ هوشمند فعال باشد</label>
       <span class="lbl">دستور برای دستیار (نقش، لحن، اطلاعات مجاز)</span>
       <textarea class="fa" id="ub-ai-prompt" maxlength="1500" placeholder="مثلاً: دستیار فروشگاه لوازم دیجیتال هستی. ساعت کاری ۹ تا ۱۸ است. قیمت و تخفیف نده، بگو خودم جواب می‌دهم.">${esc(c.ai.prompt)}</textarea>
-      <span class="lbl">سقف پاسخ هوشمند به هر نفر در روز</span><input id="ub-ai-daily" type="number" min="1" max="100" inputmode="numeric" value="${c.ai.daily}">
+      <span class="lbl">سقف پاسخ هوشمند به هر نفر در روز (چت خصوصی)</span><input id="ub-ai-daily" type="number" min="1" max="100" inputmode="numeric" value="${c.ai.daily}">
+      <span class="lbl">سقف پاسخ هوشمند در هر گروه در روز</span><input id="ub-ai-gdaily" type="number" min="1" max="300" inputmode="numeric" value="${c.ai.gdaily}">
       <label class="chk"><input type="checkbox" id="ub-ai-disc"${c.ai.disclose ? " checked" : ""}> در ابتدای هر پاسخ مشخص شود که خودکار است</label></div>
     <div class="panel mt2"><h2>دستورهای شخصی</h2><p class="muted">در هر چتی پیام خودت را با نقطه شروع کن تا همان پیام ویرایش شود: <span class="ltr">.ping</span> سرعت، <span class="ltr">.time</span> ساعت و تاریخ شمسی، <span class="ltr">.id</span> شناسه‌ی چت، <span class="ltr">.help</span> راهنما.</p>
       <label class="chk"><input type="checkbox" id="ub-cmds"${c.cmds.on ? " checked" : ""}> دستورهای شخصی فعال باشند</label></div>
@@ -1576,10 +1591,31 @@ function ubFeatHTML(x){
 function ubRulesHTML(){
   const rules = S.ubCfg.rules, full = rules.length >= 30;
   const list = rules.map((r, i) => `<div class="gi" role="button" tabindex="0" data-a="ubredit" data-i="${i}"><span class="dot ${r.on === false ? "" : "on"}"></span>
-      <span class="gt"><b>${r.kw.map(esc).join("، ")}</b><span>${esc(r.text.replace(/\s+/g, " "))}</span></span>${goIc}</div>`).join("");
-  return `<p class="muted" style="margin:0 2px 12px">وقتی پیام کسی شامل کلمه‌های کلیدی بود، متن تو را به‌عنوان پاسخ می‌فرستد. برای هر قانون یک مکث ۲۰ ثانیه‌ای هست تا پشت‌سرهم تکرار نشود.</p>
+      <span class="gt"><b>${r.kw.map(esc).join("، ")}</b><span>${(UB_WHERE.find(w => w[0] === (r.where || "pm")) || UB_WHERE[0])[1]} · ${esc(r.text.replace(/\s+/g, " "))}</span></span>${goIc}</div>`).join("");
+  return `<p class="muted" style="margin:0 2px 12px">وقتی پیام کسی شامل کلمه‌های کلیدی بود، متن تو را به‌عنوان پاسخ می‌فرستد. هر قانون را می‌توانی برای چت خصوصی، گروه‌های انتخاب‌شده یا هر دو تنظیم کنی. برای جلوگیری از تکرار، بین پاسخ‌ها مکث هست.</p>
     ${rules.length ? `<div class="group sep">${list}</div>` : `<div class="empty" style="padding:22px 16px"><p class="muted">هنوز قانونی نداری. مثلاً «قیمت» ← لیست قیمت‌ها.</p></div>`}
     <button class="b o sep-btn mt2" data-a="ubradd"${full ? " disabled" : ""}>${IC.plus}قانون جدید</button>`;
+}
+
+function ubChatsHTML(x){
+  const chats = S.ubCfg.chats, full = chats.length >= 15, run = x.status === "running";
+  const list = chats.map((h, i) => `<div class="gi" role="button" tabindex="0" data-a="ubcedit" data-i="${i}"><span class="dot ${h.on && !h.err ? "on" : ""}"></span>
+      <span class="gt"><b>${esc(h.title)}</b><span>${h.kind === "channel" ? "کانال" : "گروه"} · ${h.err ? `<span style="color:var(--bad)">${esc(h.err)}</span>` : h.on ? UB_REPLY_T[h.reply] + (h.ai && h.reply !== "off" ? " · هوشمند" : "") : "غیرفعال"}</span></span>${goIc}</div>`).join("");
+  return `<p class="muted" style="margin:0 2px 12px">گروه‌ها و کانال‌هایی را که یوزربات اجازه دارد در آن‌ها کار کند انتخاب کن. در گروه‌ها می‌تواند وقتی منشن یا ریپلای شدی (یا به کلمه‌های کلیدی) جواب بدهد؛ در کانال‌ها و گروه‌ها پیام زمان‌بندی‌شده می‌فرستد. فقط چت‌هایی که خودت عضوشان هستی و اجازه‌ی ارسال داری فهرست می‌شوند.</p>
+    ${chats.length ? `<div class="group sep">${list}</div>` : `<div class="empty" style="padding:22px 16px"><p class="muted">هنوز گروه یا کانالی اضافه نکرده‌ای.</p></div>`}
+    <button class="b o sep-btn mt2" data-a="ubcadd"${full ? " disabled" : ""}>${IC.plus}افزودن گروه یا کانال</button>
+    ${run ? "" : `<p class="muted mt2">برای خواندن فهرست گروه‌ها، اول یوزربات را روشن کن.</p>`}`;
+}
+
+function ubPostsHTML(x){
+  const posts = S.ubCfg.posts, full = posts.length >= 10, none = !S.ubCfg.chats.length;
+  const list = posts.map((p, i) => { const s = x.ps?.[p.id] || {};
+    const st = !p.on ? "غیرفعال" : s.pend ? "در صف ارسال…" : s.next ? `ارسال بعدی: ${ubWhen(s.next)}` : "منتظر زمان‌بندی";
+    return `<div class="gi" role="button" tabindex="0" data-a="ubpedit" data-i="${i}"><span class="dot ${p.on ? "on" : ""}"></span>
+      <span class="gt"><b>${esc(p.name)}</b><span>${N(p.chats.length)} مقصد · ${ubEveryT(p.every_min)} · ${st}</span></span>${goIc}</div>`; }).join("");
+  return `<p class="muted" style="margin:0 2px 12px">پیام‌هایی که خودکار و منظم به گروه‌ها و کانال‌های انتخابی ارسال می‌شوند. هر پیام می‌تواند چند متن داشته باشد که به‌نوبت یا تصادفی می‌رود، ساعت سکوت و سقف روزانه دارد و ارسال‌ها با مکث تصادفی و صف انجام می‌شود. اگر تلگرام صبر بخواهد (اسلو‌مود یا فلود)، یوزربات صبر می‌کند و دوباره تلاش می‌کند.</p>
+    ${posts.length ? `<div class="group sep">${list}</div>` : `<div class="empty" style="padding:22px 16px"><p class="muted">${none ? "اول از تب «گروه‌ها و کانال‌ها» مقصد اضافه کن." : "هنوز پیام زمان‌بندی‌شده‌ای نساخته‌ای."}</p></div>`}
+    <button class="b o sep-btn mt2" data-a="ubpadd"${full || none ? " disabled" : ""}>${IC.plus}پیام زمان‌بندی‌شده‌ی جدید</button>`;
 }
 
 function ubLogHTML(x){
@@ -1596,8 +1632,8 @@ function ubLogHTML(x){
 function ubRead(){
   if(!S.ubCfg || !$("#ub-who")) return;
   const c = S.ubCfg, v = id => $(id)?.value ?? "", k = id => !!$(id)?.checked;
-  c.who = v("#ub-who"); c.away.on = k("#ub-away-on"); c.away.text = v("#ub-away-text"); c.away.gap_h = +v("#ub-away-gap") || 6;
-  c.ai.on = k("#ub-ai-on"); c.ai.prompt = v("#ub-ai-prompt"); c.ai.daily = Math.max(1, Math.min(100, +v("#ub-ai-daily") || 20)); c.ai.disclose = k("#ub-ai-disc"); c.cmds.on = k("#ub-cmds");
+  c.safe = v("#ub-safe") || c.safe; c.who = v("#ub-who"); c.away.on = k("#ub-away-on"); c.away.text = v("#ub-away-text"); c.away.gap_h = +v("#ub-away-gap") || 6;
+  c.ai.on = k("#ub-ai-on"); c.ai.prompt = v("#ub-ai-prompt"); c.ai.daily = Math.max(1, Math.min(100, +v("#ub-ai-daily") || 20)); c.ai.gdaily = Math.max(1, Math.min(300, +v("#ub-ai-gdaily") || 30)); c.ai.disclose = k("#ub-ai-disc"); c.cmds.on = k("#ub-cmds");
 }
 async function ubCommit(fn, msg = "ذخیره شد"){
   ubRead();
@@ -1615,8 +1651,14 @@ Object.assign(A, {
   ubtab: el => { ubRead(); S.ubTab = el.dataset.k; renderUserbot(); },
   ubsave: el => busy(el, async () => { await ubCommit(null); renderUserbot(); }),
   ubnew: () => openUbConn(),
-  ubradd: () => { ubRead(); S.sheet = {kind: "ubrule"}; D = {i: null, kw: "", mode: "has", text: "", on: true}; renderSheet(); },
-  ubredit: el => { ubRead(); const i = +el.dataset.i, r = S.ubCfg.rules[i]; if(!r) return; S.sheet = {kind: "ubrule"}; D = {i, kw: r.kw.join("، "), mode: r.mode, text: r.text, on: r.on !== false}; renderSheet(); },
+  ubradd: () => { ubRead(); S.sheet = {kind: "ubrule"}; D = {i: null, kw: "", mode: "has", text: "", on: true, where: "pm"}; renderSheet(); },
+  ubredit: el => { ubRead(); const i = +el.dataset.i, r = S.ubCfg.rules[i]; if(!r) return; S.sheet = {kind: "ubrule"}; D = {i, kw: r.kw.join("، "), mode: r.mode, text: r.text, on: r.on !== false, where: r.where || "pm"}; renderSheet(); },
+  ubcadd: () => openUbPick(),
+  ubcedit: el => { ubRead(); const i = +el.dataset.i, h = S.ubCfg.chats[i]; if(!h) return; S.sheet = {kind: "ubchat"}; D = {...cp(h), i}; renderSheet(); },
+  ubpadd: () => { ubRead(); if(!S.ubCfg.chats.length) return toast("اول گروه یا کانال اضافه کن"); S.sheet = {kind: "ubpost"};
+    D = {i: null, id: "", name: "", chats: [], text: "", mode: "seq", every_min: 360, from_h: 8, to_h: 23, daily: 4, on: true}; renderSheet(); },
+  ubpedit: el => { ubRead(); const i = +el.dataset.i, p = S.ubCfg.posts[i]; if(!p) return; S.sheet = {kind: "ubpost"};
+    D = {i, id: p.id, name: p.name, chats: [...p.chats], text: p.texts.join("\n---\n"), mode: p.mode, every_min: p.every_min, from_h: p.from_h, to_h: p.to_h, daily: p.daily, on: p.on}; renderSheet(); },
   ubrefresh: el => busy(el, async () => { const d = await api(`/api/userbots/${S.ubSel}`); ubPut(d.item); renderUserbot(); }),
   ubpower: el => {
     const x = ubItem(); if(!x) return;
@@ -1628,6 +1670,9 @@ Object.assign(A, {
   },
   ubdel: () => confirmQ("یوزربات حذف شود و نشست این اکانت از تلگرام بسته شود؟", ok => { if(!ok) return;
     busy(null, async () => { await api(`/api/userbots/${S.ubSel}`, "DELETE"); S.ub.items = S.ub.items.filter(x => x.id !== S.ubSel); S.ubSel = null; S.ubCfg = null; renderUserbot(); scrollTo(0, 0); toast("اتصال قطع شد"); }); }),
+});
+document.addEventListener("input", e => {
+  if(e.target.id === "ubp-q"){ const q = e.target.value.trim().toLowerCase(); document.querySelectorAll(".ubpick").forEach(r => { r.style.display = !q || r.dataset.t.includes(q) ? "" : "none"; }); }
 });
 document.addEventListener("keydown", e => {
   if(e.key === "Enter" || e.key === " "){ const r = e.target.closest?.(".ubrow"); if(r){ e.preventDefault(); A.ubopen(r); } }
