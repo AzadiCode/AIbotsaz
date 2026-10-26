@@ -1,0 +1,2099 @@
+/* ═══════════════════════════════════════════════════════════════
+   studio.js — ویرایشگر ربات: استودیوی گرافیکی (بخش‌ها و سیم‌ها) + شیت‌های ویرایش (بخش، دکمه،
+   منطق، تنظیمات ربات، مدیریت گروه و کانال، رسانه و پیام همگانی) + شیت‌های یوزربات.
+   بعد از app.js بارگذاری می‌شود و به وضعیت و ابزارهای آن (S، $، api، IC، …) تکیه دارد.
+   ═══════════════════════════════════════════════════════════════ */
+/* ═════════════════ استودیو گرافیکی: بخش + سیم + انرژی ═════════════════ */
+const ST = { botId: null, cam: null, pos: {}, ptr: new Map(), mode: null, wires: new Map(), drop: null, dropAt: null, _la: null, size: {}, po: {}, pi: {} };
+const ST_W = 268, ST_GAP = 124;
+let OP_FA = null;                       // بعد از تعریف OPS پر می‌شود
+const condTxt = w => {
+  if(!w) return "…";
+  if(!OP_FA) OP_FA = Object.fromEntries(OPS);
+  return simpleCond(w) ? `${w.var} ${OP_FA[w.op] || w.op}${w.op === "empty" || w.op === "filled" ? "" : " " + (w.value ?? "")}` : "شرط ترکیبی";
+};
+
+function stKey(){ return "azadi.studio." + (S.cur?.id || ""); }
+function stLoad(){
+  ST.pos = {}; ST.cam = null;
+  try{
+    const d = JSON.parse(localStorage.getItem(stKey()) || "null");
+    if(d && d.p) for(const [k, v] of Object.entries(d.p)) if(Array.isArray(v)) ST.pos[k] = {x: +v[0] || 0, y: +v[1] || 0};
+    if(d && Array.isArray(d.cam)) ST.cam = {x: +d.cam[0] || 0, y: +d.cam[1] || 0, z: Math.min(1.5, Math.max(.16, +d.cam[2] || 1))};
+  }catch(_){}
+}
+function stSaveNow(){
+  if(!S.cur) return;
+  const p = {};
+  for(const id of Object.keys(S.cur.config.nodes)) if(ST.pos[id]) p[id] = [Math.round(ST.pos[id].x), Math.round(ST.pos[id].y)];
+  const c = ST.cam || {x: 0, y: 0, z: 1};
+  try{ localStorage.setItem(stKey(), JSON.stringify({p, cam: [Math.round(c.x), Math.round(c.y), +c.z.toFixed(3)]})); }catch(_){}
+}
+let stSaveT = null;
+function stSave(){ clearTimeout(stSaveT); stSaveT = setTimeout(stSaveNow, 400); }
+addEventListener("pagehide", () => { if(S.view === "studio") stSaveNow(); });
+
+function stNextId(){
+  const cfg = S.cur.config;
+  let k = Object.keys(cfg.nodes).length + 1;
+  while(cfg.nodes["page_" + k]) k++;
+  return "page_" + k;
+}
+const stNodeIcon = n => n.ai ? IC.spark : n.fields ? IC.form : n.ask ? IC.inbox : n.board ? IC.medal : IC.bot;
+
+/* همه‌ی سیم‌های ربات: هر goto یک سیم است */
+function stEdges(){
+  const cfg = S.cur.config, out = [];
+  for(const [id, n] of Object.entries(cfg.nodes)){
+    (n.buttons || []).forEach((row, r) => row.forEach((b, c) => {
+      if(b.goto !== undefined) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.goto, kind: "btn", n: id, r, c});
+      else if(b.pay?.goto) out.push({key: `b|${id}|${r}|${c}`, from: id, to: b.pay.goto, kind: "pay", n: id, r, c});
+    }));
+    (n.route || []).forEach((ru, i) => out.push({key: `r|${id}|${i}`, from: id, to: ru.goto, kind: "route", n: id, ri: i}));
+    if(n.next) out.push({key: `x|${id}`, from: id, to: n.next, kind: "next", n: id});
+  }
+  return out;
+}
+function stParsePort(p){
+  const t = p.split("|");
+  return t[0] === "b" ? {t: "btn", n: t[1], r: +t[2], c: +t[3]} : t[0] === "r" ? {t: "route", n: t[1], ri: +t[2]} : {t: "next", n: t[1]};
+}
+/* اعمال یک اتصال روی کانفیگ */
+function stWireIn(cfg, src, tid){
+  const n = cfg.nodes[src.n];
+  if(!n || !cfg.nodes[tid]) return;
+  if(src.t === "btn"){ const b = n.buttons[src.r]?.[src.c]; if(!b) return; if(b.pay) b.pay.goto = tid; else b.goto = tid; }
+  else if(src.t === "route"){ const ru = n.route?.[src.ri]; if(ru) ru.goto = tid; }
+  else if(src.t === "next"){ n.next = tid; }
+  else if(src.t === "new"){
+    n.buttons = (n.buttons || []).filter(r => r.length);
+    const row = n.buttons.find(r => r.length < 3);
+    if(row) row.push({text: "دکمه‌ی جدید", goto: tid});
+    else if(n.buttons.length < 6) n.buttons.push([{text: "دکمه‌ی جدید", goto: tid}]);
+  }
+}
+/* بخش‌های قابل دسترس از شروع/ناشناس/دستورها */
+function stReach(){
+  const cfg = S.cur.config, seen = new Set(), st = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})];
+  while(st.length){
+    const i = st.pop();
+    if(seen.has(i) || !cfg.nodes[i]) continue;
+    seen.add(i);
+    const n = cfg.nodes[i];
+    for(const row of n.buttons || []) for(const b of row){ if(b.goto) st.push(b.goto); if(b.pay?.goto) st.push(b.pay.goto); }
+    for(const ru of n.route || []) st.push(ru.goto);
+    if(n.next) st.push(n.next);
+  }
+  return seen;
+}
+/* چیدمان لایه‌ای از راست (شروع) به چپ */
+/* چیدمان لایه‌ای از راست (شروع) به چپ؛ هر بخش نزدیکِ میانگینِ بخش‌هایی قرار می‌گیرد که به آن می‌رسند تا سیم‌ها کوتاه و کم‌تقاطع باشند */
+const stH = id => (ST.size[id] ? ST.size[id].h : stCardH(S.cur.config.nodes[id]));
+function stAutoLayout(save){
+  const cfg = S.cur.config, ids = Object.keys(cfg.nodes), col = {}, q = [];
+  const roots = [cfg.start, cfg.fallback, ...Object.values(cfg.commands || {})].filter((r, i, a) => cfg.nodes[r] && a.indexOf(r) === i);
+  const edges = stEdges(), out = {};
+  for(const e of edges) (out[e.from] = out[e.from] || []).push(e.to);
+  for(const r of roots){ col[r] = 0; q.push(r); }
+  while(q.length){
+    const id = q.shift();
+    for(const t of out[id] || []) if(cfg.nodes[t] && col[t] === undefined){ col[t] = col[id] + 1; q.push(t); }
+  }
+  for(const id of ids) if(col[id] === undefined) col[id] = -1;      // بخش‌های بی‌اتصال کنار شروع می‌روند، نه ته نقشه
+  const parents = {};
+  for(const e of edges) if(cfg.nodes[e.to] && col[e.from] < col[e.to]) (parents[e.to] = parents[e.to] || []).push(e.from);
+  const cols = {};
+  for(const id of [...new Set([...roots, ...ids])]) (cols[col[id]] = cols[col[id]] || []).push(id);
+  /* دنیای بی‌نهایت ممنوع: هر ستونِ بلند به چند ستونِ کوتاه (حداکثر PER بخش) شکسته می‌شود و اگر ستون‌ها از MAXL بیشتر شدند،
+     نقشه مثل خط‌های متن به نوار بعدی (زیر نوار قبلی) می‌پیچد. نتیجه: نقشه‌ی جمع‌وجور، قابل نمایش و سبک حتی با ۶۰ بخش */
+  const DW = ST_W + ST_GAP, GAP = 52, PER = 5, MAXL = 6;
+  const cmp = (a, b) => ((a.b === null) - (b.b === null)) || ((a.b ?? 0) - (b.b ?? 0)) || (a.i - b.i);
+  const order = Object.keys(cols).map(Number).sort((a, b) => a - b), minC = order.length ? order[0] : 0;
+  const cy = {}, band = {};
+  let lane = minC, curBand = 0, bandTop = 40, maxBottom = 40;
+  for(const c of order){
+    const raw = cols[c].map((id, i) => {
+      const ps = (parents[id] || []).filter(p => cy[p] !== undefined);
+      return {id, i, b: ps.length ? ps.reduce((a, p) => a + cy[p], 0) / ps.length : null};
+    });
+    raw.sort(cmp);
+    const k = Math.max(1, Math.ceil(raw.length / PER)), size = Math.max(1, Math.ceil(raw.length / k));
+    for(let s0 = 0; s0 < raw.length; s0 += size, lane++){
+      const L = lane - minC, bd = Math.floor(L / MAXL);
+      if(bd !== curBand){ curBand = bd; bandTop = maxBottom + 150; }
+      const chunk = raw.slice(s0, s0 + size).map(it => {
+        const ps = (parents[it.id] || []).filter(p => cy[p] !== undefined && band[p] === bd);
+        return {id: it.id, i: it.i, b: ps.length ? ps.reduce((a, p) => a + cy[p], 0) / ps.length : null};
+      });
+      chunk.sort(cmp);
+      let cur = bandTop;
+      for(const it of chunk){
+        const h = stH(it.id), y = it.b === null ? cur : Math.max(cur, it.b - h / 2);
+        ST.pos[it.id] = {x: -(minC + (L % MAXL)) * DW, y: Math.round(y)};
+        cy[it.id] = y + h / 2; band[it.id] = bd; cur = y + h + GAP; maxBottom = Math.max(maxBottom, cur);
+      }
+    }
+  }
+  let minY = 1e9;
+  for(const id of ids) minY = Math.min(minY, ST.pos[id].y);
+  for(const id of ids) ST.pos[id].y += 40 - minY;
+  if(save) stSave();
+}
+/* جای بخش‌های بدون مختصات ذخیره‌شده */
+/* جای بخش‌های بدون مختصات ذخیره‌شده؛ اگر همه تازه بودند true برمی‌گرداند */
+function stEnsurePositions(){
+  const ids = Object.keys(S.cur.config.nodes);
+  const missing = ids.filter(id => !ST.pos[id]);
+  if(!missing.length) return false;
+  const keep = {...ST.pos};
+  stAutoLayout(false);
+  for(const id of ids) if(keep[id]) ST.pos[id] = keep[id];
+  for(const id of missing){
+    let p = {...(ST.pos[id] || {x: 0, y: 0})}, guard = 0, hit;
+    const find = () => ids.find(o => o !== id && ST.pos[o] && o !== id && Math.abs(ST.pos[o].x - p.x) < ST_W + 24 && p.y < ST.pos[o].y + stH(o) + 24 && ST.pos[o].y < p.y + stH(id) + 24);
+    while((hit = find()) && guard++ < 40) p = {x: p.x, y: ST.pos[hit].y + stH(hit) + 40};
+    ST.pos[id] = p;
+  }
+  stSave();
+  return missing.length === ids.length;
+}
+
+/* ── دوربین ── */
+/* در حین حرکت دوربین، کلاس st-moving روی html می‌نشیند تا انیمیشن‌ها و بلورِ پس‌زمینه موقتاً بخوابند و تمام توان صرف حرکت نرم شود */
+function stMovePulse(){
+  ST._mat = performance.now();
+  if(ST._mv) return;
+  ST._mv = 1; document.documentElement.classList.add("st-moving");
+  ST._mt = setTimeout(stMoveChk, 200);
+}
+function stMoveChk(){
+  if(performance.now() - ST._mat < 180){ ST._mt = setTimeout(stMoveChk, 100); return; }
+  ST._mv = 0; document.documentElement.classList.remove("st-moving");
+}
+function stApply(glide){
+  const c = ST.cam || {x: 40, y: 40, z: 1}, w = (ST.w && ST.w.isConnected) ? ST.w : (ST.w = $("#stw"));
+  if(w){
+    if(glide && !reduced()){ w.classList.add("glide"); clearTimeout(ST._gt); ST._gt = setTimeout(() => w.classList.remove("glide"), 460); }
+    else if(w.classList.contains("glide")){ w.classList.remove("glide"); clearTimeout(ST._gt); }
+    w.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.z})`;
+    const was = w.classList.contains("far"), far = was ? c.z < .5 : c.z < .42;     // فاصله‌ی دو آستانه: دیگر روی مرز زوم پرپر نمی‌زند
+    if(far !== was) w.classList.toggle("far", far);
+  }
+  const zt = Math.round(c.z * 100) + "%", z = $("#stz"); if(z && z.textContent !== zt) z.textContent = zt;
+  stMovePulse();
+  if(!ST._mr) ST._mr = requestAnimationFrame(() => { ST._mr = 0; stMini(); stCull(); });
+}
+/* عکس‌های بزرگ (چند مگاپیکسل) نباید برای ۲۵+ کارت هم‌زمان decode شوند؛ حافظه‌ی WebView تلگرام پر می‌شود و برنامه کرش می‌کند.
+   هر عکس فقط یک‌بار (پشت‌سرهم) به نسخه‌ی ۶۴۰پیکسلی تبدیل می‌شود و فقط کارت‌های دیده‌شده (با زوم خوانا) آن را نشان می‌دهند. */
+const ST_TH = new Map(), ST_THQ = []; let ST_THN = 0;
+function stThumb(url){
+  let p = ST_TH.get(url); if(p) return p;
+  p = new Promise(res => { ST_THQ.push([url, res]); stThumbPump(); });
+  ST_TH.set(url, p); return p;
+}
+function stThumbPump(){
+  while(ST_THN < 2 && ST_THQ.length){
+    const [url, res] = ST_THQ.shift(); ST_THN++;
+    (async () => {
+      try{
+        const r = await fetch(url); if(!r.ok) throw 0;
+        const bm = await createImageBitmap(await r.blob(), {resizeWidth: 640, resizeQuality: "medium"});
+        const cv = document.createElement("canvas"); cv.width = bm.width; cv.height = bm.height;
+        cv.getContext("2d").drawImage(bm, 0, 0); bm.close?.();
+        const b = await new Promise(ok => cv.toBlob(ok, "image/jpeg", .82));
+        cv.width = cv.height = 0;
+        res(b ? URL.createObjectURL(b) : url);
+      }catch(_){ res(url); }        // نشد: همان آدرس اصلی (باز هم فقط برای کارت‌های دیده‌شده)
+      finally{ ST_THN--; stThumbPump(); }
+    })();
+  }
+}
+function stImgSet(el, on){
+  el.querySelectorAll("img[data-src]").forEach(im => {
+    if(on){
+      if(im._on) return; im._on = 1;
+      stThumb(im.dataset.src).then(u => { if(im._on && im.isConnected && im.getAttribute("src") !== u) im.src = u; });
+    }else if(im._on){ im._on = 0; im.removeAttribute("src"); }
+  });
+}
+/* فقط بخش‌هایی که در کادر دید (به‌علاوه‌ی حاشیه) هستند کشیده می‌شوند؛ بقیه visibility:hidden می‌شوند و هزینه‌ی رسم ندارند */
+function stCull(){
+  if(!ST.els || !S.cur) return;
+  const many = ST.els.size > 8, c = ST.cam || {x: 40, y: 40, z: 1}, m = 380, sharp = c.z >= .45;
+  const vw = ST.vw || innerWidth, vh = ST.vh || innerHeight;
+  const x1 = (-m - c.x) / c.z, x2 = (vw + m - c.x) / c.z, y1 = (-m - c.y) / c.z, y2 = (vh + m - c.y) / c.z;
+  for(const [id, el] of ST.els){
+    const p = ST.pos[id]; if(!p) continue;
+    let hide = false;
+    if(many && !(ST.mode && ST.mode.id === id)){
+      const z = ST.size[id], w = z ? z.w : ST_W, h = z ? z.h : stCardH(S.cur.config.nodes[id] || {});
+      hide = !(p.x < x2 && p.x + w > x1 && p.y < y2 && p.y + h > y1);
+    }
+    if(el._cv !== hide){ el._cv = hide; el.classList.toggle("cv", hide); }
+    const want = !hide && sharp;
+    if(el._im !== want){ el._im = want; stImgSet(el, want); }
+  }
+}
+function stZoomAt(px, py, f, glide){
+  const c = ST.cam || {x: 40, y: 40, z: 1};
+  const z = Math.min(1.5, Math.max(.16, c.z * f));
+  ST.cam = {z, x: px - (px - c.x) * z / c.z, y: py - (py - c.y) * z / c.z};
+  stApply(glide); stSave();
+}
+function stFit(glide){
+  const cv = $("#stc"), ids = Object.keys(S.cur?.config.nodes || {});
+  if(!cv || !ids.length) return;
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  for(const id of ids){
+    const p = ST.pos[id]; if(!p) continue;
+    const zs = ST.size[id], w = zs ? zs.w : ST_W, h = zs ? zs.h : stCardH(S.cur.config.nodes[id]);
+    x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + w); y2 = Math.max(y2, p.y + h);
+  }
+  if(x1 > x2) return;
+  const cw = cv.clientWidth, ch = cv.clientHeight, bw = x2 - x1, bh = y2 - y1;
+  const z = Math.min(1.25, Math.max(.16, Math.min((cw - 70) / Math.max(1, bw), (ch - 150) / Math.max(1, bh))));
+  ST.cam = {z, x: (cw - bw * z) / 2 - x1 * z, y: (ch - bh * z) / 2 - y1 * z + 8};
+  stApply(glide); stSave();
+}
+function stCenter(id){
+  const cv = $("#stc"), el = cv?.querySelector(`.stc-card[data-id="${id}"]`);
+  if(!cv || !el || !ST.pos[id]) return;
+  const c = ST.cam || {x: 40, y: 40, z: 1};
+  ST.cam = {...c, x: cv.clientWidth / 2 - (ST.pos[id].x + el.offsetWidth / 2) * c.z, y: cv.clientHeight / 2 - (ST.pos[id].y + el.offsetHeight / 2) * c.z};
+  stApply(true); stSave();
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+}
+
+/* ── هندسه‌ی سیم ── */
+/* مختصات مرکز یک عنصر داخل بخش، در دنیای بوم */
+function stWorldOf(el){
+  const card = el.closest(".stc-card"), p = (card && ST.pos[card.dataset.id]) || {x: 0, y: 0};
+  let x = card ? card.clientLeft : 0, y = card ? card.clientTop : 0, n = el;
+  while(n && n !== card){ x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+  return {x: p.x + x + el.offsetWidth / 2, y: p.y + y + el.offsetHeight / 2};
+}
+/* سیم‌کشی هوشمند: سیم از لبه‌ی چپ بخش مبدأ خارج و از لبه‌ی راست بخش مقصد وارد می‌شود، با زاویه‌ی قائم و بدون عبور از روی بخش‌ها */
+const stRects = () => { const r = []; for(const id of Object.keys(S.cur.config.nodes)){ const p = ST.pos[id], z = ST.size[id]; if(p && z) r.push({id, x: p.x, y: p.y, w: z.w, h: z.h}); } return r; };
+const stHit = (r, x1, y1, x2, y2, m = 10) => Math.min(x1, x2) < r.x + r.w + m && Math.max(x1, x2) > r.x - m && Math.min(y1, y2) < r.y + r.h + m && Math.max(y1, y2) > r.y - m;
+const stPortPos = key => { const o = ST.po[key], p = o && ST.pos[o.id]; return o && p ? {x: p.x + o.x, y: p.y + o.y} : null; };
+const stInPos = id => { const o = ST.pi[id], p = ST.pos[id]; return o && p ? {x: p.x + o.x, y: p.y + o.y} : null; };
+/* مسیریاب: راهروهای عمودیِ همیشه‌خالی (فاصله‌ی بین ستون‌های بخش‌ها) + کانال‌های افقیِ خالی بین بخش‌ها.
+   روی این شبکه کوتاه‌ترین مسیر با کمترین پیچ (Dijkstra) پیدا می‌شود؛ پس سیم هیچ‌وقت روی بخشی نمی‌افتد، حتی با ۱۰۰ بخش. */
+function stRouterBuild(rects){
+  const M = 14, iv = rects.map(r => [r.x - M, r.x + r.w + M]).sort((a, b) => a[0] - b[0]), mg = [];
+  for(const v of iv){ const l = mg[mg.length - 1]; if(l && v[0] <= l[1]) l[1] = Math.max(l[1], v[1]); else mg.push([v[0], v[1]]); }
+  if(!mg.length) return null;
+  const cx = [mg[0][0] - 34], hw = [30];
+  for(let i = 0; i + 1 < mg.length; i++){ const w = mg[i + 1][0] - mg[i][1]; if(w >= 18){ cx.push((mg[i][1] + mg[i + 1][0]) / 2); hw.push(w / 2); } }
+  cx.push(mg[mg.length - 1][1] + 34); hw.push(30);
+  const base = new Set();
+  for(const r of rects){ base.add(Math.round(r.y - 26)); base.add(Math.round(r.y + r.h + 26)); }
+  const seg = [];
+  for(let k = 0; k + 1 < cx.length; k++) seg.push(rects.filter(r => r.x + r.w > cx[k] && r.x < cx[k + 1]));
+  return {cx, hw, base: [...base], seg};
+}
+function stHeapPush(h, it){ h.push(it); let i = h.length - 1; while(i > 0){ const p = (i - 1) >> 1; if(h[p][0] <= h[i][0]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } }
+function stHeapPop(h){
+  const top = h[0], last = h.pop();
+  if(h.length){ h[0] = last; let i = 0; for(;;){ let l = 2 * i + 1, r = l + 1, m = i; if(l < h.length && h[l][0] < h[m][0]) m = l; if(r < h.length && h[r][0] < h[m][0]) m = r; if(m === i) break; [h[m], h[i]] = [h[i], h[m]]; i = m; } }
+  return top;
+}
+function stRoute(e, idx, rects){
+  const A = stPortPos(e.key), B = stInPos(e.to);
+  if(!A || !B) return null;
+  const rt = rects.rt || (rects.rt = stRouterBuild(rects));
+  if(!rt) return null;
+  const {cx, hw, seg} = rt, C = cx.length, TURN = 46;
+  const ys = [...new Set([...rt.base, Math.round(A.y), Math.round(B.y)])].sort((a, b) => a - b), Y = ys.length;
+  const iA = ys.indexOf(Math.round(A.y)), iB = ys.indexOf(Math.round(B.y));
+  const free = (k, y, skip) => { for(const r of seg[k]) if(r.id !== skip[0] && r.id !== skip[1] && y > r.y - 10 && y < r.y + r.h + 10) return false; return true; };
+  const memo = new Map();
+  const hfree = (k, yi) => { const key = k * Y + yi; let v = memo.get(key); if(v === undefined){ v = free(k, ys[yi], [null, null]); memo.set(key, v); } return v; };
+  /* خروج از لبه‌ی چپِ مبدأ: نزدیک‌ترین راهروی سمت چپ که مسیر افقی تا آن خالی باشد */
+  let s = -1; for(let c = C - 1; c >= 0; c--){ if(cx[c] < A.x - 4){ let ok = true; for(let k = c; k < C - 1 && cx[k] < A.x; k++) if(!free(k, A.y, [e.from, null])){ ok = false; break; } if(ok){ s = c; break; } } }
+  /* ورود از لبه‌ی راستِ مقصد: نزدیک‌ترین راهروی سمت راست */
+  let t = -1; for(let c = 0; c < C; c++){ if(cx[c] > B.x + 4){ let ok = true; for(let k = c - 1; k >= 0 && cx[k + 1] > B.x; k--) if(!free(k, B.y, [e.to, null])){ ok = false; break; } if(ok){ t = c; break; } } }
+  if(s < 0 || t < 0) return null;
+  const N = C * Y * 2, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), heap = [];
+  const id = (c, y, d) => (c * Y + y) * 2 + d;
+  const st0 = id(s, iA, 1); dist[st0] = A.x - cx[s]; stHeapPush(heap, [dist[st0], st0]);
+  let goal = -1;
+  while(heap.length){
+    const [dd, u] = stHeapPop(heap);
+    if(dd > dist[u]) continue;
+    const d = u & 1, cy = (u >> 1), c = (cy / Y) | 0, y = cy % Y;
+    if(c === t && y === iB){ goal = u; break; }
+    const relax = (v, w) => { if(dd + w < dist[v]){ dist[v] = dd + w; prev[v] = u; stHeapPush(heap, [dist[v], v]); } };
+    if(y > 0) relax(id(c, y - 1, 0), ys[y] - ys[y - 1] + (d === 1 ? TURN : 0));
+    if(y < Y - 1) relax(id(c, y + 1, 0), ys[y + 1] - ys[y] + (d === 1 ? TURN : 0));
+    if(c > 0 && hfree(c - 1, y)) relax(id(c - 1, y, 1), cx[c] - cx[c - 1] + 30 + (d === 0 ? TURN : 0));
+    if(c < C - 1 && hfree(c, y)) relax(id(c + 1, y, 1), cx[c + 1] - cx[c] + 30 + (d === 0 ? TURN : 0));
+  }
+  if(goal < 0) return null;
+  const path = []; for(let u = goal; u >= 0; u = prev[u]) path.push(u); path.reverse();
+  /* فاصله‌ی موازی: هر سیم کمی در راهرو و کانال جابه‌جا می‌شود تا سیم‌های هم‌مسیر روی هم نیفتند */
+  const off = c => ((idx % 7) - 3) * Math.min(9, Math.max(0, (hw[c] - 10) / 3));
+  const yo = ((idx % 5) - 2) * 3;
+  const pts = [A];
+  const P = u => { const cy = u >> 1, c = (cy / Y) | 0, y = cy % Y; return {x: cx[c] + off(c), y: ys[y] + (y === iA || y === iB ? 0 : yo)}; };
+  for(const u of path) pts.push(P(u));
+  pts.push(B);
+  return {pts, back: B.x > A.x - 30};
+}
+function stPoly(pts){
+  const p = [pts[0]];
+  for(let i = 1; i < pts.length; i++){ const q = pts[i], l = p[p.length - 1]; if(Math.abs(q.x - l.x) > .5 || Math.abs(q.y - l.y) > .5) p.push(q); }
+  if(p.length < 2) return "";
+  const f = v => v.toFixed(1);
+  let d = `M${f(p[0].x)} ${f(p[0].y)}`;
+  for(let i = 1; i < p.length - 1; i++){
+    const a = p[i - 1], c = p[i], b = p[i + 1];
+    const l1 = Math.hypot(c.x - a.x, c.y - a.y), l2 = Math.hypot(b.x - c.x, b.y - c.y), r = Math.min(10, l1 / 2, l2 / 2);
+    d += `L${f(c.x + (a.x - c.x) / l1 * r)} ${f(c.y + (a.y - c.y) / l1 * r)}Q${f(c.x)} ${f(c.y)} ${f(c.x + (b.x - c.x) / l2 * r)} ${f(c.y + (b.y - c.y) / l2 * r)}`;
+  }
+  const e = p[p.length - 1];
+  return d + `L${f(e.x)} ${f(e.y)}`;
+}
+function stEdgeGeom(e, idx, rects){
+  const r = stRoute(e, idx, rects);
+  if(r) return {d: stPoly(r.pts), back: r.back};
+  const A = stPortPos(e.key), B = stInPos(e.to);
+  return A && B ? {d: stPath(A, B), back: B.x > A.x - 30} : null;
+}
+/* اندازه‌ی واقعی بخش‌ها و جای دقیق دایره‌های ورودی/خروجی را یک بار اندازه می‌گیرد */
+function stMeasure(){
+  const cv = $("#stc"); if(!cv) return;
+  ST.size = {}; ST.po = {}; ST.pi = {};
+  cv.querySelectorAll(".stc-card").forEach(card => {
+    const id = card.dataset.id;
+    ST.size[id] = {w: card.offsetWidth, h: card.offsetHeight};
+    const rel = el => { let x = card.clientLeft, y = card.clientTop, n = el; while(n && n !== card){ x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; } return {x: x + el.offsetWidth / 2, y: y + el.offsetHeight / 2}; };
+    card.querySelectorAll(".p-out").forEach(po => { if(po.dataset.port !== "+") ST.po[po.dataset.port] = {id, ...rel(po)}; });
+    const inn = card.querySelector(".stc-in"); if(inn) ST.pi[id] = rel(inn);
+  });
+}
+/* دایره‌های خروجی روی لبه‌ی چپ بخش، هم‌تراز با دکمه‌شان؛ اگر چند دکمه در یک ردیف باشند کمی بالا و پایین می‌روند */
+/* دایره‌های خروجی روی لبه‌ی چپ بخش، هم‌تراز با دکمه‌شان؛ اگر چند دکمه در یک ردیف باشند کمی بالا و پایین می‌روند.
+   اول از همه‌ی کارت‌ها می‌خواند، بعد می‌نویسد: فقط یک reflow به‌جای یکی برای هر کارت */
+function stPlacePorts(cards){
+  const plan = [];
+  for(const card of cards){
+    const groups = new Map();
+    card.querySelectorAll(".pa").forEach(a => {
+      let y = 0, n = a;
+      while(n && n !== card){ y += n.offsetTop; n = n.offsetParent; }
+      const g = a.closest(".stk-row") || a;
+      if(!groups.has(g)) groups.set(g, []);
+      groups.get(g).push({a, cy: y + a.offsetHeight / 2});
+    });
+    let h = "";
+    for(const list of groups.values()) list.forEach((it, i) => {
+      const d = it.a.dataset, off = (i - (list.length - 1) / 2) * 13;
+      h += `<span class="p-out" data-port="${esc(d.pa)}" data-n="${esc(d.n)}"${d.r !== undefined ? ` data-r="${d.r}" data-c="${d.c}"` : ""} style="top:${(it.cy + off).toFixed(1)}px;--pc:${d.pc}"></span>`;
+    });
+    plan.push([card, h]);
+  }
+  for(const [card, h] of plan){
+    card.querySelectorAll(".p-out").forEach(po => po.remove());
+    if(h) card.insertAdjacentHTML("beforeend", h);
+  }
+}
+function stPlaceCards(){
+  const cv = $("#stc"); if(!cv) return;
+  cv.querySelectorAll(".stc-card").forEach(el => { const p = ST.pos[el.dataset.id]; if(p) el.style.transform = `translate(${p.x}px,${p.y}px)`; });
+}
+function stPath(a, b){
+  const d = Math.max(46, Math.min(170, Math.abs(a.x - b.x) * .55));
+  return `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} C ${(a.x - d).toFixed(1)} ${a.y.toFixed(1)}, ${(b.x + d).toFixed(1)} ${b.y.toFixed(1)}, ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+}
+
+/* ── رندر بخش‌ها و سیم‌ها ── */
+const ST_KIND = {goto: ["رفتن به بخش", IC.go], pay: ["پرداخت", IC.coin], url: ["باز کردن لینک", IC.open], channel: ["کانال یا گروه", IC.open], alert: ["پیام پاپ‌آپ", IC.mega], copy: ["کپی متن", IC.copy], share: ["لینک دعوت", IC.users], app: ["باز کردن مینی‌اپ", IC.layers]};
+const ST_MEDIA = {photo: "عکس", animation: "گیف", video: "ویدیو", audio: "موسیقی", voice: "ویس", document: "فایل"};
+
+/* پیش‌نمایش رسانه‌ی بخش: عکس و گیف خودشان، بقیه آیکن + نام فایل */
+function stMediaHTML(n){
+  const m = n.media ? mediaById(n.media) : null;
+  if(m && (m.kind === "photo" || m.kind === "animation") && m.url)
+    return `<div class="stc-media"><img data-src="${API_BASE + esc(m.url)}" alt="" draggable="false" decoding="async"><span class="mk">${ST_MEDIA[m.kind]}</span></div>`;
+  if(m) return `<div class="stc-media ico">${IC[m.kind] || IC.document}<b>${esc(m.name || "")}</b><span class="mk">${ST_MEDIA[m.kind] || "فایل"}</span></div>`;
+  if(n.media) return `<div class="stc-media ico bad">${IC.document}<b>رسانه از کتابخانه حذف شده</b></div>`;
+  if(n.photo && /^https?:\/\//i.test(n.photo)) return `<div class="stc-media"><img data-src="${esc(n.photo)}" alt="" draggable="false" decoding="async" referrerpolicy="no-referrer"><span class="mk">عکس لینکی</span></div>`;
+  return "";
+}
+/* یک دکمه‌ی شیشه‌ای (یا کلیدِ کیبورد پایین چت) با دایره‌ی خروجیِ سیم */
+function stBtnCell(id, r, c, b, cfg){
+  const k = kindOf(b), [lab, ic] = ST_KIND[k] || ST_KIND.url;
+  const tgt = k === "pay" ? b.pay?.goto : b.goto, wired = k === "goto" || (k === "pay" && !!b.pay?.goto);
+  const broken = wired && !cfg.nodes[tgt];
+  const tip = k === "goto" ? "رفتن به: " + titleOf(cfg, tgt) : k === "pay" ? `پرداخت ${b.pay.stars} ستاره` : lab;
+  const anchor = wired ? `<span class="pa" data-pa="b|${id}|${r}|${c}" data-n="${esc(id)}" data-r="${r}" data-c="${c}" data-pc="${k === "pay" ? "var(--tok)" : "var(--ac)"}"></span>` : "";
+  return `<div class="stk-cell"><button class="stk-btn k-${k}${broken ? " bad" : ""}${b.when ? " cond" : ""}" data-a="strow" data-n="${esc(id)}" data-r="${r}" data-c="${c}" title="${esc(tip)}"><span class="ki">${ic}</span><span class="kt">${esc(b.text)}</span></button>${anchor}</div>`;
+}
+function stCardH(n){
+  const gr = [false, true].map(x => (n.buttons || []).filter(row => row.some(b => (b.kb === "reply") === x)).length), rows = gr[0] + gr[1], caps = (gr[0] ? 1 : 0) + (gr[1] ? 1 : 0), lg = (n.route?.length || 0) + (n.next ? 1 : 0);
+  const lines = Math.min(5, Math.ceil(((n.text || "").length || 1) / 34));
+  return 196 + ((n.media || n.photo) ? 118 : 0) + lines * 21 + (rows ? 24 * caps + rows * 39 : 0) + (lg ? 22 + lg * 30 : 0);
+}
+function stCardHTML(id, dead){
+  const cfg = S.cur.config, n = cfg.nodes[id], p = ST.pos[id] || {x: 0, y: 0};
+  const isStart = id === cfg.start, isFb = id === cfg.fallback && id !== cfg.start;
+  const inc = (ST.inc || {})[id] || 0, btns = n.buttons || [];
+  const tags = [];
+  if(isStart) tags.push('<span class="tag st">شروع ربات</span>');
+  if(isFb) tags.push('<span class="tag">پاسخ پیش‌فرض</span>');
+  if(n.ai) tags.push('<span class="tag ai">هوش مصنوعی</span>');
+  if(n.fields) tags.push('<span class="tag">فرم</span>'); else if(n.ask) tags.push('<span class="tag">دریافت پیام</span>');
+  if(n.ticket) tags.push('<span class="tag">تیکت</span>');
+  if(n.do?.length || n.route?.length || n.alt?.length) tags.push('<span class="tag">شرط و متغیر</span>');
+  if(inc) tags.push(`<span class="tag cnt">${fa(inc)} ورودی</span>`);
+  if(dead) tags.push('<span class="tag warn" title="هیچ دکمه یا مسیری به این بخش نمی‌رسد">بدون ورودی</span>');
+  if(!btns.length && !n.ask && !n.fields && !n.ai && !n.next && !n.route?.length) tags.push('<span class="tag warn" title="بعد از این بخش، کاربر راهی برای ادامه ندارد">بدون ادامه</span>');
+  const txt = stripTags(n.text).trim();
+  const bub = `<div class="stc-bub">${stMediaHTML(n)}<div class="tx${txt ? "" : " empty"}">${txt ? esc(txt.slice(0, 170)) + (txt.length > 170 ? "…" : "") : "هنوز متنی نوشته نشده"}</div></div>`;
+  const grp = isRk => {
+    const keys = btns.map((row, r) => { const cells = row.map((b, c) => (b.kb === "reply") === isRk ? stBtnCell(id, r, c, b, cfg) : "").join(""); return cells ? `<div class="stk-row">${cells}</div>` : ""; }).join("");
+    return keys ? `<div class="stk${isRk ? " rk" : ""}"><div class="stk-cap">${isRk ? "کیبورد پایین چت" : "دکمه‌های شیشه‌ای زیر پیام"}</div>${keys}</div>` : "";
+  };
+  const kb = grp(false) + grp(true);
+  let logic = "";
+  (n.route || []).forEach((ru, i) => { logic += `<div class="stc-row"><span class="pa" data-pa="r|${id}|${i}" data-n="${esc(id)}" data-pc="var(--vio)"></span><span class="ric">${IC.go}</span><span class="rlb">${esc(condTxt(ru.when))} <small>· مسیر شرطی</small></span></div>`; });
+  if(n.next) logic += `<div class="stc-row"><span class="pa" data-pa="x|${id}" data-n="${esc(id)}" data-pc="var(--ok)"></span><span class="ric">${IC.go}</span><span class="rlb">بعد از ثبت پاسخ <small>· رفتن به بخش بعدی</small></span></div>`;
+  return `<div class="stc-card${isStart ? " start" : ""}${dead ? " dead" : ""}" data-id="${esc(id)}">
+    <span class="stc-in${inc ? " has" : ""}" data-in="${esc(id)}"></span>
+    <div class="stc-h"><span class="stc-ic">${stNodeIcon(n)}</span>
+      <div class="stc-t"><b>${esc(titleOf(cfg, id))}</b><span class="ids">${esc(id)}</span></div>
+      <button class="stc-menu" data-a="stmenu" data-n="${esc(id)}" aria-label="گزینه‌های بخش">⋮</button></div>
+    ${tags.length ? `<div class="stc-badges">${tags.join("")}</div>` : ""}
+    ${bub}${kb}
+    ${logic ? `<div class="stc-sec">مسیرهای شرطی و خودکار</div>${logic}` : ""}
+    <div class="stc-row plus"><span class="pa" data-pa="+" data-n="${esc(id)}" data-pc="var(--ac)"></span><span class="ric">${IC.plus}</span><span class="rlb">سیم بکش تا دکمه‌ی تازه بسازی</span></div>
+    <div class="stc-act"><button data-a="stbtn" data-n="${esc(id)}">${IC.plus}دکمه‌ی جدید</button><button data-a="stkm" data-n="${esc(id)}">${IC.layers}مدیریت دکمه‌ها</button></div>
+  </div>`;
+}
+function stPaintWires(){
+  const svg = $("#stsvg"), cv = $("#stc");
+  if(!svg || !cv) return;
+  ST.wires.clear();
+  let h = "", i = 0;
+  const edges = stEdges(), rects = stRects(), flow = !!S.cur?.active && !reduced() && edges.length <= 8, glow = edges.length <= 20;
+  ST.fast = edges.length > 80 || rects.length > 28;
+  for(const e of edges){
+    const g = stEdgeGeom(e, i, rects);
+    if(!g) continue;
+    const dot = flow ? `<circle class="w-dot" r="3.2"><animateMotion dur="${(2 + (i % 5) * .4).toFixed(1)}s" begin="-${(i * .43).toFixed(2)}s" repeatCount="indefinite" path="${g.d}"/></circle>` : "";
+    h += `<g class="wire k-${e.kind}${g.back ? " back" : ""}" data-w="${e.key}">${glow ? `<path class="w-glow" d="${g.d}"/>` : ""}<path class="w-line" d="${g.d}"/><path class="w-hit" d="${g.d}"/>${dot}</g>`;
+    e.i = i; ST.wires.set(e.key, e); i++;
+  }
+  /* کادر مشخص + contain:paint: بدونش Chromium برای هر سیمِ بلند یک لایه‌ی GPU جدا می‌سازد (صدها لایه‌ی غول‌پیکر → بوم سفید/کرش) */
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  for(const r of rects){ x1 = Math.min(x1, r.x); y1 = Math.min(y1, r.y); x2 = Math.max(x2, r.x + r.w); y2 = Math.max(y2, r.y + r.h); }
+  if(x1 > x2){ x1 = y1 = 0; x2 = y2 = 400; }
+  const PAD = 500, bx = Math.floor(x1 - PAD), by = Math.floor(y1 - PAD), bw = Math.ceil(x2 - x1 + 2 * PAD), bh = Math.ceil(y2 - y1 + 2 * PAD);
+  svg.setAttribute("viewBox", `${bx} ${by} ${bw} ${bh}`); svg.setAttribute("width", bw); svg.setAttribute("height", bh);
+  svg.style.left = bx + "px"; svg.style.top = by + "px"; svg.style.width = bw + "px"; svg.style.height = bh + "px";
+  svg.innerHTML = h + `<path class="w-tmp" id="sttmp" d=""/>`;
+}
+function stUpdateWiresFor(id){
+  const svg = $("#stsvg");
+  if(!svg) return;
+  const rects = stRects();
+  for(const [key, e] of ST.wires){
+    if(e.from !== id && e.to !== id) continue;
+    const g = svg.querySelector(`.wire[data-w="${key}"]`), geo = g && stEdgeGeom(e, e.i || 0, rects);
+    if(!g || !geo) continue;
+    g.querySelectorAll("path").forEach(pp => pp.setAttribute("d", geo.d));
+    g.classList.toggle("back", geo.back);
+    g.querySelector("animateMotion")?.setAttribute("path", geo.d);
+  }
+}
+function stHot(id, on){
+  const sv = $("#stsvg"); if(!sv) return;
+  for(const [k, e] of ST.wires) if(e.from === id || e.to === id) sv.querySelector(`.wire[data-w="${k}"]`)?.classList.toggle("hot", on);
+}
+/* نقشه‌ی کوچک: چیدمان کل گراف + کادر دید فعلی؛ لمس/کشیدن روی آن دوربین را جابه‌جا می‌کند */
+function stMini(full){
+  const mm = $("#stmm"), cv = $("#stc"); if(!mm || !cv || !S.cur) return;
+  if(full || !ST.mini){
+    const cfg = S.cur.config, r = []; let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+    for(const id of Object.keys(cfg.nodes)){
+      const p = ST.pos[id]; if(!p) continue;
+      const h = stH(id); r.push([id, p.x, p.y, h]);
+      x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y); x2 = Math.max(x2, p.x + ST_W); y2 = Math.max(y2, p.y + h);
+    }
+    if(!r.length) return;
+    x1 -= 140; y1 -= 140; x2 += 140; y2 += 140;
+    const W = 96, H = 72, sc = Math.min(W / (x2 - x1), H / (y2 - y1));
+    const m = ST.mini = {x1, y1, s: sc, ox: (W - (x2 - x1) * sc) / 2, oy: (H - (y2 - y1) * sc) / 2};
+    mm.innerHTML = r.map(([id, x, y, h]) => `<i${id === cfg.start ? ' class="s"' : ""} style="left:${(m.ox + (x - x1) * sc).toFixed(1)}px;top:${(m.oy + (y - y1) * sc).toFixed(1)}px;width:${(ST_W * sc).toFixed(1)}px;height:${(h * sc).toFixed(1)}px"></i>`).join("") + '<b id="stmv"></b>';
+  }
+  const m = ST.mini, v = $("#stmv"); if(!m || !v) return;
+  const c = ST.cam || {x: 40, y: 40, z: 1};
+  v.style.left = (m.ox + (-c.x / c.z - m.x1) * m.s) + "px"; v.style.top = (m.oy + (-c.y / c.z - m.y1) * m.s) + "px";
+  v.style.width = (cv.clientWidth / c.z * m.s) + "px"; v.style.height = (cv.clientHeight / c.z * m.s) + "px";
+}
+/* دید اولیه: اگر نمایش کل گراف خیلی ریز شود، روی بخش شروع با زوم خوانا باز می‌شود */
+function stHome(){
+  const cv = $("#stc"), cfg = S.cur?.config; if(!cv || !cfg) return;
+  stFit();
+  const c = ST.cam; if(!c || c.z >= .62) return;
+  const p = ST.pos[cfg.start], el = cv.querySelector(`.stc-card[data-id="${cfg.start}"]`);
+  if(!p || !el) return;
+  const z = .85;
+  ST.cam = {z, x: cv.clientWidth - (p.x + el.offsetWidth) * z - 16, y: 136 - p.y * z};
+  stApply(); stSave();
+}
+/* اگر داده‌ی یک بخش خراب باشد، فقط همان کارت خطا نشان می‌دهد و بقیه‌ی نقشه باز می‌شود */
+function stCardSafe(id, dead){
+  try{ return stCardHTML(id, dead); }
+  catch(err){
+    console.error("studio card", id, err);
+    return `<div class="stc-card dead" data-id="${esc(id)}"><span class="stc-in" data-in="${esc(id)}"></span><div class="stc-h"><span class="stc-ic">${IC.bot}</span><div class="stc-t"><b>${esc(id)}</b><span class="ids">خطا در نمایش این بخش</span></div><button class="stc-menu" data-a="stmenu" data-n="${esc(id)}" aria-label="گزینه‌های بخش">⋮</button></div></div>`;
+  }
+}
+function stGridFallback(){
+  Object.keys(S.cur.config.nodes).forEach((id, i) => { if(!ST.pos[id]) ST.pos[id] = {x: -(i % 4) * 330, y: 40 + Math.floor(i / 4) * 520}; });
+}
+function stSearchApply(center){
+  const cv = $("#stc"), q = $("#stq"); if(!cv || !S.cur) return;
+  const v = (q ? q.value : ST.q || "").trim().toLowerCase(); ST.q = v;
+  let first = null;
+  cv.querySelectorAll(".stc-card").forEach(el => {
+    const n = S.cur.config.nodes[el.dataset.id] || {};
+    const hit = !v || el.dataset.id.includes(v) || (n.title || "").toLowerCase().includes(v) || (n.text || "").toLowerCase().includes(v);
+    el.classList.toggle("dim", !!v && !hit);
+    if(v && hit && !first) first = el.dataset.id;
+  });
+  cv.querySelectorAll(".wire").forEach(w => w.classList.toggle("dim", !!v));
+  if(center && v && first) stCenter(first);
+}
+/* رسم نقشه به‌صورت تفاضلی: کارتی که تغییری نکرده دست نمی‌خورد (نه پرپر، نه دوباره‌لود عکس، نه ازدست‌رفتن لمس) */
+function stPaintWorld(){
+  const wr = $("#stw"), cv = $("#stc");
+  if(!wr || !cv || !S.cur) return;
+  let fresh = false;
+  try{ fresh = stEnsurePositions(); }catch(err){ console.error("studio layout", err); stGridFallback(); }
+  const ids = Object.keys(S.cur.config.nodes), seen = stReach();
+  const _ed = stEdges(); ST.inc = {}; for(const e of _ed) ST.inc[e.to] = (ST.inc[e.to] || 0) + 1;
+  $("#stu")?.classList.toggle("many", _ed.length > 8 || ids.length > 10);
+  $("#stu")?.classList.toggle("big", ids.length > 14);      // نقشه‌ی بزرگ: لایه‌ی GPU غول‌پیکر نساز (جلوگیری از بوم سفید)
+  if(!wr.querySelector("#stsvg")) wr.insertAdjacentHTML("afterbegin", `<svg id="stsvg" xmlns="http://www.w3.org/2000/svg" width="2" height="2" aria-hidden="true"><path class="w-tmp" id="sttmp" d=""/></svg>`);
+  const old = new Map();
+  for(const el of wr.children) if(el.classList.contains("stc-card")) old.set(el.dataset.id, el);
+  ST.sig = ST.sig || {}; ST.els = new Map();
+  const added = [], tpl = document.createElement("template");
+  for(const id of ids){
+    const html = stCardSafe(id, !seen.has(id)), prev = old.get(id);
+    if(prev && ST.sig[id] === html){ old.delete(id); ST.els.set(id, prev); continue; }
+    tpl.innerHTML = html.trim();
+    const el = tpl.content.firstElementChild;
+    if(prev){ prev.replaceWith(el); old.delete(id); } else wr.appendChild(el);
+    ST.sig[id] = html; ST.els.set(id, el); added.push(el);
+  }
+  for(const [id, el] of old){ el.remove(); delete ST.sig[id]; }
+  stPlaceCards();
+  stPlacePorts(added);
+  stMeasure();
+  if(fresh){ stAutoLayout(false); stPlaceCards(); stSave(); }      // بار اول: با اندازه‌ی واقعی بخش‌ها دوباره بچین
+  stPaintWires();
+  if(ST.q) stSearchApply(false);
+  stMini(true);
+  stApply();
+  if(document.fonts?.ready && !ST._fw){            // بعد از آمدن فونت، ارتفاع‌ها عوض می‌شود؛ جای دایره‌ها را دوباره بسنج
+    ST._fw = 1;
+    document.fonts.ready.then(() => {
+      ST._fw = 0;
+      const c2 = $("#stc");
+      if(S.view === "studio" && c2){ stPlacePorts([...c2.querySelectorAll(".stc-card")]); stMeasure(); stPaintWires(); stMini(true); stCull(); }
+    });
+  }
+}
+
+/* ── ورود به استودیو ── */
+function stHintHTML(){
+  try{ if(localStorage.getItem("azadi.studio.hint") === "1") return ""; }catch(_){}
+  return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
+}
+function renderStudio(){
+  if(!S.bots.length){
+    $("#app").innerHTML = `<div class="empty" style="padding-top:70px"><div class="ib big">${IC.studio}</div><h2>استودیو</h2><p class="muted">اول یک ربات بساز؛ بعد اینجا بخش‌هایش را ویرایش می‌کنی و به هم وصل می‌کنی.</p><button class="b sm" data-go="create">ساخت ربات</button></div>`;
+    return;
+  }
+  let bot = S.cur && S.bots.find(b => b.id === S.cur.id) ? S.cur : (S.sbot ? S.bots.find(b => b.id === S.sbot) : null);
+  if(!bot){
+    $("#app").innerHTML = `<div class="st-picker"><div class="ph"><h1>استودیو</h1></div>
+      <p class="muted" style="margin:-4px 4px 14px">رباتی را که می‌خواهی ویرایش کنی انتخاب کن. بخش‌هایش را می‌بینی، تغییر می‌دهی و با سیم به هم وصل می‌کنی.</p>
+      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} بخش</span></span>${goIc}</button>`).join("")}</div></div>`;
+    return;
+  }
+  S.cur = bot; S.sbot = bot.id;
+  if(ST.botId !== bot.id){ ST.botId = bot.id; stLoad(); }
+  const nodes = Object.keys(bot.config.nodes).length;
+  $("#app").innerHTML = `
+    <div class="studio${bot.active ? " live" : ""}" id="stu">
+      <div class="st-bar">
+        <button class="iconb" data-a="stback" aria-label="بازگشت">${IC.back}</button>
+        <button class="st-title" data-a="stbots" aria-label="تغییر ربات">
+          <span class="dot ${bot.active ? "on" : ""}"></span>
+          <span class="tt"><b>${esc(bot.name)}</b><small id="stsub" class="${bot.active ? "ltr" : ""}">${bot.active ? "@" + esc(bot.username) : "غیرفعال"} · ${N(nodes)} بخش</small></span>
+        </button>
+        ${bot.versions ? `<button class="iconb" data-a="undo" aria-label="برگشت به نسخه‌ی قبلی" title="برگشت به نسخه‌ی قبلی">${IC.refresh}</button>` : ""}
+        <button class="iconb" data-a="simopen" aria-label="تست زنده (شبیه‌ساز)" title="تست زنده‌ی ربات بدون هزینه">${IC.play}</button>
+        <button class="iconb" data-a="dropen" aria-label="چرا کار نمی‌کند؟" title="دکتر ربات: چرا کار نمی‌کند؟">${S2IC.doctor}</button>
+        <button class="iconb" data-a="pbopen" aria-label="مشکل‌ها" title="مشکل‌ها و رفع یک‌ضربه‌ای">${IC.heal}</button>
+        <button class="b sm" id="stadd" data-a="stadd">${IC.plus}بخش جدید</button>
+      </div>
+      <div class="st-canvas" id="stc">
+        <div class="st-world" id="stw"></div>
+        <div class="st-mini" id="stmini" aria-hidden="true"><div class="mm" id="stmm"></div></div>
+        <div class="st-search"><input id="stq" placeholder="جستجوی بخش…" autocomplete="off" aria-label="جستجوی بخش"></div>
+        <button class="st-energy${bot.active ? " live" : ""}" data-a="stenergy">${IC.bolt}${bot.active ? "ربات روشن است" : "ربات خاموش است"}</button>
+        ${stHintHTML()}
+        <div class="st-tools">
+          <button class="tb" data-a="stzout" aria-label="کوچک‌نمایی">${IC.minus}</button>
+          <span class="st-z n" id="stz">100%</span>
+          <button class="tb" data-a="stzin" aria-label="بزرگ‌نمایی">${IC.plus}</button>
+          <span class="sep"></span>
+          <button class="tb" data-a="stfit" aria-label="نمایش همه‌ی بخش‌ها" title="نمایش همه‌ی بخش‌ها">${IC.fit}</button>
+          <button class="tb lbl" data-a="stlay" aria-label="چیدمان خودکار" title="بخش‌ها را خودکار مرتب می‌کند">${IC.layers}<span>مرتب‌سازی</span></button>
+          <span class="sep"></span>
+          <button class="tb lbl" data-a="wtopen" title="سازنده‌ی وقتی…آنگاه">${S2IC.wt}<span>وقتی…آنگاه</span></button>
+          <button class="tb lbl" data-a="listsopen" title="لیست‌ها (شبیه اکسل)">${S2IC.table}<span>لیست‌ها</span></button>
+          <button class="tb lbl" data-a="vdopen" title="نسخه‌ها و تفاوت‌ها">${S2IC.diff}<span>نسخه‌ها</span></button>
+          <button class="tb lbl" data-a="growthopen" title="ربات رشد: لینک دعوت و پاداش">${IC.users}<span>رشد</span></button>
+          <button class="tb lbl" data-a="agentopen" title="استودیوی عامل هوشمند">${IC.bot}<span>عامل</span></button>
+          <button class="tb lbl" data-a="dcopen" title="کدهای تخفیف">${S2IC.doctor}<span>تخفیف</span></button>
+          <button class="tb lbl" data-a="selsel" title="انتخاب چند بخش برای کپی یا حذف">${IC.copy}<span>انتخاب</span></button>
+        </div>
+      </div>
+    </div>`;
+  ST.sig = {}; ST.els = new Map(); ST.q = ""; ST.w = null; ST.rect = null;
+  const cv0 = $("#stc");
+  ST.vw = cv0.clientWidth; ST.vh = cv0.clientHeight;
+  ST._ro?.disconnect();
+  if(window.ResizeObserver){
+    ST._ro = new ResizeObserver(() => { ST.vw = cv0.clientWidth; ST.vh = cv0.clientHeight; ST.rect = null; if(S.view === "studio" && cv0.isConnected){ stMini(); stCull(); } });
+    ST._ro.observe(cv0);
+  }
+  try{ stPaintWorld(); }
+  catch(err){ console.error("studio paint", err); toast("نقشه درست نمایش داده نشد؛ یک بار از استودیو خارج شو و دوباره وارد شو"); }
+  if(!ST.cam) requestAnimationFrame(stHome);
+  stBindCanvas();
+  $("#stq")?.addEventListener("input", () => stSearchApply(true));
+}
+function refreshStudio(){
+  if(S.view !== "studio" || !S.cur) return;
+  if(!$("#stc")) return renderStudio();
+  stPaintWorld();
+  const t = $("#stsub"), b = S.cur;
+  if(t) t.textContent = `${b.active ? "@" + b.username : "غیرفعال"} · ${fa(Object.keys(b.config.nodes).length)} بخش`;
+}
+
+/* ── لمس و ماوس: پن، پینچ، درگ بخش، کشیدن سیم ── */
+function stClosePop(){ $("#stpop")?.remove(); }
+function stTmpWireTo(wp){ const tp = $("#sttmp"); if(tp && ST._la) tp.setAttribute("d", stPath(ST._la, wp)); }
+/* لغزشِ نرم بعد از رها کردن بوم */
+function stInertia(vx, vy){
+  cancelAnimationFrame(ST._in);
+  let last = performance.now();
+  const step = t => {
+    const dt = Math.min(32, t - last); last = t;
+    const f = Math.pow(.93, dt / 16); vx *= f; vy *= f;
+    const c = ST.cam || {x: 40, y: 40, z: 1};
+    ST.cam = {...c, x: c.x + vx * dt, y: c.y + vy * dt};
+    stApply();
+    if(Math.hypot(vx, vy) > .04) ST._in = requestAnimationFrame(step); else { ST._in = 0; stSave(); }
+  };
+  ST._in = requestAnimationFrame(step);
+}
+const stBtnOf = po => (po && po.dataset.r !== undefined) ? $(`#stc .stk-btn[data-n="${CSS.escape(po.dataset.n)}"][data-r="${po.dataset.r}"][data-c="${po.dataset.c}"]`) : null;
+const stDist = P => { const v = [...P.values()]; return Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); };
+const stMid = P => { const v = [...P.values()]; return {x: (v[0].x + v[1].x) / 2, y: (v[0].y + v[1].y) / 2}; };
+function stTap(e){
+  const now = Date.now(), cv = $("#stc");
+  if(stTap.last && now - stTap.last < 320 && Math.hypot(e.clientX - (stTap.x || 0), e.clientY - (stTap.y || 0)) < 44){
+    stTap.last = 0;
+    const c = ST.cam;
+    if(c && cv){ if(c.z < .85) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / c.z); else stFit(); }
+    return;
+  }
+  stTap.last = now; stTap.x = e.clientX; stTap.y = e.clientY;
+}
+function stBindCanvas(){
+  const cv = $("#stc"); if(!cv) return;
+  const P = ST.ptr;
+  const w2p = e => {
+    const r = ST.rect || (ST.rect = cv.getBoundingClientRect()), c = ST.cam || {x: 40, y: 40, z: 1};
+    return {x: (e.clientX - r.left - c.x) / c.z, y: (e.clientY - r.top - c.y) / c.z};
+  };
+  cv.addEventListener("pointerdown", e => {
+    if(e.pointerType === "mouse" && e.button !== 0) return;
+    if(e.target.closest(".st-tools,.st-search,.st-hint,.st-energy,.st-pop,.st-mini,.stc-menu")) return;   // دکمه‌های روی بوم: بدون capture تا کلیکشان به خودشان برسد
+    stClosePop();
+    ST.rect = cv.getBoundingClientRect();
+    cancelAnimationFrame(ST._in); $("#stw")?.classList.remove("glide");
+    P.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    const port = e.target.closest(".p-out"), card = e.target.closest(".stc-card");
+    if(P.size >= 2){
+      if(ST.mode?.t === "card") cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
+      if(ST.mode?.t === "link"){ $("#stu")?.classList.remove("linking"); const tp = $("#sttmp"); if(tp) tp.setAttribute("d", ""); }
+      ST.mode = {t: "pinch", d0: stDist(P), z0: (ST.cam || {z: 1}).z, m0: stMid(P), c0: {...(ST.cam || {x: 40, y: 40, z: 1})}};
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      return;
+    }
+    if(port){
+      ST.mode = {t: "link", n: port.dataset.n, p: port.dataset.port, moved: false};
+      ST._la = stWorldOf(port);
+      stBtnOf(port)?.classList.add("hl");
+      $("#stu")?.classList.add("linking");
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      stTmpWireTo(w2p(e));
+      return;
+    }
+    if(card && !e.target.closest("button,[data-a],.stc-in")){
+      const wp = w2p(e), id = card.dataset.id, p0 = ST.pos[id] || {x: 0, y: 0};
+      ST.mode = {t: "card", id, dx: wp.x - p0.x, dy: wp.y - p0.y, sx: e.clientX, sy: e.clientY, moved: false, t0: Date.now()};
+      card.classList.add("drag"); stHot(id, true);
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+      return;
+    }
+    ST.mode = {t: "pan", sx: e.clientX, sy: e.clientY, c0: {...(ST.cam || {x: 40, y: 40, z: 1})}, moved: false, t0: Date.now()};
+    cv.classList.add("panning");
+    if(!e.target.closest("[data-a]")) try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  cv.addEventListener("pointermove", e => {
+    const m = ST.mode;
+    if(!m || !P.has(e.pointerId)) return;
+    P.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if(m.t === "pan"){
+      if(Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 6) m.moved = true;
+      const now = performance.now();
+      if(m.lt){ const dt = Math.max(1, now - m.lt); m.vx = .75 * (m.vx || 0) + .25 * (e.clientX - m.lx) / dt; m.vy = .75 * (m.vy || 0) + .25 * (e.clientY - m.ly) / dt; }
+      m.lt = now; m.lx = e.clientX; m.ly = e.clientY;
+      ST.cam = {z: m.c0.z, x: m.c0.x + (e.clientX - m.sx), y: m.c0.y + (e.clientY - m.sy)};
+      stApply();
+    }
+    else if(m.t === "pinch"){
+      if(P.size < 2) return;
+      const d = stDist(P), md = stMid(P), r = ST.rect || (ST.rect = cv.getBoundingClientRect());
+      const z = Math.min(1.5, Math.max(.16, m.z0 * d / Math.max(20, m.d0)));
+      const wx = (m.m0.x - r.left - m.c0.x) / m.z0, wy = (m.m0.y - r.top - m.c0.y) / m.z0;
+      ST.cam = {z, x: (md.x - r.left) - wx * z, y: (md.y - r.top) - wy * z};
+      stApply();
+    }
+    else if(m.t === "card"){
+      if(Math.hypot(e.clientX - m.sx, e.clientY - m.sy) > 6) m.moved = true;
+      if(m.moved){
+        const wp = w2p(e), p = ST.pos[m.id] || (ST.pos[m.id] = {x: 0, y: 0});
+        p.x = Math.round(wp.x - m.dx);
+        p.y = Math.round(wp.y - m.dy);
+        m.el = m.el || cv.querySelector(`.stc-card[data-id="${m.id}"]`);
+        if(m.el) m.el.style.transform = `translate(${p.x}px,${p.y}px)`;
+        if(!ST._wr){ ST._wr = requestAnimationFrame(() => { ST._wr = 0; if(ST.mode?.t === "card") stUpdateWiresFor(ST.mode.id); }); }
+      }
+    }
+    else if(m.t === "link"){
+      m.moved = true;
+      stTmpWireTo(w2p(e));
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest(".stc-card");
+      cv.querySelectorAll(".stc-card.tgt").forEach(c => c.classList.remove("tgt"));
+      if(el && el.dataset.id !== m.n) el.classList.add("tgt");
+    }
+  });
+  const finish = e => {
+    const m = ST.mode;
+    P.delete(e.pointerId);
+    cv.querySelectorAll(".stc-card.tgt").forEach(c => c.classList.remove("tgt"));
+    if(!m) return;
+    if(m.t === "link"){
+      cv.querySelectorAll(".stk-btn.hl").forEach(b => b.classList.remove("hl"));
+      $("#stu")?.classList.remove("linking");
+      const tp = $("#sttmp"); if(tp) tp.setAttribute("d", "");
+      const tid = document.elementFromPoint(e.clientX, e.clientY)?.closest(".stc-card")?.dataset.id;
+      ST.noClick = Date.now();
+      if(tid && tid !== m.n) stConnect(m, tid);
+      else if(m.moved && !tid) stDropNew(m, e);
+      else if(m.moved) toast("سیم را به یک بخش دیگر وصل کن");
+      haptic();
+    }
+    else if(m.t === "card"){
+      cv.querySelectorAll(".stc-card.drag").forEach(c => c.classList.remove("drag"));
+      stHot(m.id, false);
+      if(m.moved){ stSave(); stMini(true); stCull(); stPaintWires(); }
+      else if(Date.now() - m.t0 < 500){ if(ST.selMode) stSelToggle(m.id); else openNode(m.id); }
+    }
+    else if(m.t === "pan"){
+      cv.classList.remove("panning");
+      if(m.moved){
+        stSave(); ST.noClick = Date.now();
+        const sp = Math.hypot(m.vx || 0, m.vy || 0);
+        if(!reduced() && performance.now() - (m.lt || 0) < 90 && sp > .3) stInertia(m.vx, m.vy);
+      }
+      else stTap(e);
+    }
+    if(P.size === 0) ST.mode = null;
+    else if(P.size === 1 && m.t === "pinch"){
+      const rem = [...P.values()][0];
+      ST.mode = {t: "pan", sx: rem.x, sy: rem.y, c0: {...(ST.cam || {x: 40, y: 40, z: 1})}, moved: true, t0: 0};
+    }
+  };
+  cv.addEventListener("pointerup", finish);
+  cv.addEventListener("pointercancel", e => {
+    P.delete(e.pointerId);
+    cv.classList.remove("panning");
+    cv.querySelectorAll(".stc-card.drag,.stc-card.tgt").forEach(c => c.classList.remove("drag", "tgt"));
+    $("#stsvg")?.querySelectorAll(".wire.hot").forEach(w => w.classList.remove("hot"));
+    $("#stu")?.classList.remove("linking");
+    const tp = $("#sttmp"); if(tp) tp.setAttribute("d", "");
+    if(!P.size) ST.mode = null;
+  });
+  cv.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    stZoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * .0016));
+  }, {passive: false});
+  cv.addEventListener("dblclick", e => { if(!e.target.closest(".stc-card,.st-tools,.st-pop,.st-search,.st-hint")) stFit(); });
+  cv.addEventListener("click", e => {
+    if(!e.target.closest("#stpop") && Date.now() - (ST.popT || 0) > 450) stClosePop();
+    if(Date.now() - (ST.noClick || 0) < 350) return;
+    if(e.target.closest(".stc-card,.st-tools,.st-pop,.st-search,.st-hint,.st-energy,.st-mini")) return;
+    const ed = stWireAt(e);
+    if(ed) stWireMenu(ed);
+  });
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  cv.addEventListener("pointerover", e => { const po = e.target.closest?.(".p-out"); if(po) stBtnOf(po)?.classList.add("hl"); });
+  cv.addEventListener("pointerout", e => { const po = e.target.closest?.(".p-out"); if(po && !ST.mode) stBtnOf(po)?.classList.remove("hl"); });
+  const mini = $("#stmini");
+  if(mini){
+    const jump = e => {
+      const m = ST.mini; if(!m) return;
+      const r = mini.getBoundingClientRect(), c = ST.cam || {x: 40, y: 40, z: 1};
+      const wx = (e.clientX - r.left - m.ox) / m.s + m.x1, wy = (e.clientY - r.top - m.oy) / m.s + m.y1;
+      ST.cam = {z: c.z, x: cv.clientWidth / 2 - wx * c.z, y: cv.clientHeight / 2 - wy * c.z}; stApply();
+    };
+    mini.addEventListener("pointerdown", e => { e.stopPropagation(); try{ mini.setPointerCapture(e.pointerId); }catch(_){} mini._d = true; jump(e); });
+    mini.addEventListener("pointermove", e => { if(mini._d) jump(e); });
+    const end = () => { if(mini._d){ mini._d = false; stSave(); } };
+    mini.addEventListener("pointerup", end); mini.addEventListener("pointercancel", end);
+  }
+}
+
+/* ── اتصال و ساخت ── */
+function stConnect(m, tid){
+  const t = titleOf(S.cur.config, tid);
+  let src;
+  if(m.p === "+"){
+    const rows = S.cur.config.nodes[m.n]?.buttons || [];
+    if(rows.length >= 6 && rows.every(r => r.length >= 3)) return toast("این بخش به حداکثر تعداد دکمه رسیده");
+    if(rows.some(r => r.some(b => b.goto === tid))) return toast("این بخش از قبل دکمه‌ای به همان مقصد دارد");
+    src = {t: "new", n: m.n};
+  } else src = stParsePort(m.p);
+  busy(null, () => commit(cfg => stWireIn(cfg, src, tid), `سیم به «${t}» وصل شد`));
+}
+function stDropNew(m, e){
+  stClosePop();
+  const cv = $("#stc"); if(!cv) return;
+  const r = cv.getBoundingClientRect(), c = ST.cam || {x: 40, y: 40, z: 1};
+  ST.popT = Date.now();
+  ST.drop = m;
+  ST.dropAt = {x: (e.clientX - r.left - c.x) / c.z - 110, y: (e.clientY - r.top - c.y) / c.z - 40};
+  const pop = document.createElement("div");
+  pop.className = "st-pop"; pop.id = "stpop";
+  pop.style.left = Math.min(cv.clientWidth - 190, Math.max(6, e.clientX - r.left)) + "px";
+  pop.style.top = Math.min(cv.clientHeight - 96, Math.max(6, e.clientY - r.top)) + "px";
+  pop.innerHTML = `<button data-a="stnew">${IC.plus}<span>ساخت بخش جدید و اتصال</span></button><button data-a="stpopx">${IC.x}<span>انصراف</span></button>`;
+  cv.appendChild(pop);
+}
+function stCreateConnected(){
+  const m = ST.drop, at = ST.dropAt;
+  ST.drop = null; ST.dropAt = null;
+  if(!m || !at || !S.cur) return;
+  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیده‌ای؛ برای ادامه، اشتراکت را ارتقا بده");
+  const id = stNextId();
+  ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
+  const src = m.p === "+" ? {t: "new", n: m.n} : stParsePort(m.p);
+  busy(null, async () => {
+    await commit(cfg => {
+      cfg.nodes[id] = {title: "بخش جدید", text: "متنِ این بخش را اینجا بنویس…", ask: false, buttons: []};
+      stWireIn(cfg, src, id);
+    }, "بخش ساخته و وصل شد");
+    stCenter(id);
+    openNode(id);
+  });
+}
+function stCopy(id){
+  if(Object.keys(S.cur.config.nodes).length >= (S.cfg.max_nodes || 60)) return toast("به سقف تعداد بخش‌ها رسیده‌ای؛ برای ادامه، اشتراکت را ارتقا بده");
+  const nid = stNextId(), p = ST.pos[id] || {x: 0, y: 0};
+  ST.pos[nid] = {x: p.x + 40, y: p.y + 80};
+  busy(null, () => commit(cfg => {
+    const n = cp(cfg.nodes[id]);
+    if(n.title) n.title = (n.title + " (کپی)").slice(0, 30);
+    cfg.nodes[nid] = n;
+  }, "بخش کپی شد"));
+}
+
+/* ── منوها ── */
+const stBadIc = ic => `<span class="ib" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)">${ic}</span>`;
+function stCardMenu(id){
+  const cfg = S.cur.config, isRoot = id === cfg.start || id === cfg.fallback;
+  S.sheet = {kind: "info"};
+  showSheet(head("بخشِ «" + esc(titleOf(cfg, id)) + "»") + `<div class="group" style="margin-top:10px">
+    <button class="gi" data-sh="stedit" data-n="${esc(id)}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش بخش</b><span>متن، عکس، فرم، هوش مصنوعی و شرط‌ها</span></span>${goIc}</button>
+    <button class="gi" data-sh="stkm" data-n="${esc(id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>افزودن، ویرایش، ترتیب و نوع نمایش</span></span>${goIc}</button>
+    <button class="gi" data-sh="stcopy" data-n="${esc(id)}"><span class="ib">${IC.copy}</span><span class="gt"><b>کپی بخش</b><span>با همه‌ی دکمه‌ها و تنظیماتش</span></span>${goIc}</button>
+    <button class="gi" data-sh="stcenter" data-n="${esc(id)}"><span class="ib">${IC.fit}</span><span class="gt"><b>نمایش در وسط صفحه</b><span>نقشه روی همین بخش می‌آید</span></span>${goIc}</button>
+    ${id === cfg.start ? "" : `<button class="gi" data-sh="stsetstart" data-n="${esc(id)}"><span class="ib">${IC.bolt}</span><span class="gt"><b>شروع ربات از این بخش</b><span>کاربر بعد از زدن /start اول همین بخش را می‌بیند</span></span>${goIc}</button>`}
+    ${isRoot ? "" : `<button class="gi" data-sh="stdel" data-n="${esc(id)}">${stBadIc(IC.trash)}<span class="gt"><b>حذف بخش</b><span>دکمه‌هایی که به این بخش می‌رسند هم برداشته می‌شوند</span></span>${goIc}</button>`}
+  </div><div class="fgap"></div>`);
+}
+function stWireMenu(ed){
+  const cfg = S.cur.config;
+  let title, body;
+  if(ed.kind === "btn" || ed.kind === "pay"){
+    const b = cfg.nodes[ed.n]?.buttons[ed.r]?.[ed.c] || {};
+    title = `سیمِ دکمه‌ی «${esc(b.text || "")}»`;
+    body = `<button class="gi" data-sh="stwe" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش دکمه</b><span>متن، نوع و مقصد</span></span>${goIc}</button>
+      <button class="gi" data-sh="stwx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>حذف دکمه</b><span>دکمه و سیمش برداشته می‌شود</span></span>${goIc}</button>`;
+  } else if(ed.kind === "route"){
+    title = "سیمِ هدایت شرطی";
+    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش شرط</b><span>از قسمت «منطق پیشرفته» در ویرایش بخش</span></span>${goIc}</button>
+      <button class="gi" data-sh="stwrx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>حذف شرط</b><span>این مسیر شرطی برداشته می‌شود</span></span>${goIc}</button>`;
+  } else {
+    title = "سیمِ ادامه بعد از ثبت";
+    body = `<button class="gi" data-sh="stwr" data-k="${ed.key}"><span class="ib">${IC.gear}</span><span class="gt"><b>ویرایش بخش</b><span>مقصد بعد از ثبت پاسخ را عوض کن</span></span>${goIc}</button>
+      <button class="gi" data-sh="stnx" data-k="${ed.key}">${stBadIc(IC.trash)}<span class="gt"><b>قطع این مسیر</b><span>بعد از ثبت پاسخ، کاربر به بخش شروع برمی‌گردد</span></span>${goIc}</button>`;
+  }
+  S.sheet = {kind: "info"};
+  showSheet(head(title) + `<div class="group" style="margin-top:10px">${body}</div><div class="fgap"></div>`);
+}
+
+
+/* ═════════════════ شیت پایین: زیرساخت ═════════════════ */
+async function commit(fn, msg = "ذخیره شد"){
+  const cfg = cp(S.cur.config); fn(cfg);
+  const d = await api(`/api/bots/${S.cur.id}/config`, "PUT", {config: cfg});
+  setBot(d.bot);
+  stSheetDirty.touched = false;   // همین فرم ذخیره شد؛ هشدار تغییرات لازم نیست
+  closeSheet();
+  if(S.view === "studio") refreshStudio(); else renderBot();
+  toast(msg); haptic("ok");
+}
+function closeSheet(){ if(S.sheet?.kind === "ubconn" && D && (D.step === "code" || D.step === "password")) api("/api/userbots/login/cancel", "POST").catch(() => {}); clearInterval(window.__ut); clearInterval(window.__at); clearTimeout(window.__ut); clearTimeout(window.__at); $("#sheet").classList.remove("show"); $("#sheet").innerHTML = ""; S.sheet = null; D = null; stSheetDirty.touched = false; }
+function showSheet(html){
+  const sh = $("#sheet"), keep = sh.querySelector(".sp")?.scrollTop || 0;
+  sh.innerHTML = `<div class="sb" data-x="close"></div><div class="sp" role="dialog" aria-modal="true">${html}</div>`;
+  sh.classList.add("show"); sh.querySelector(".sp").scrollTop = keep;
+  stSheetDirty.touched = false;
+}
+/* اگر در استودیو فرمِ ویرایشِ بخش/دکمه چیزی عوض شده باشد، بستنِ ناگهانی با تایید همراه می‌شود */
+document.addEventListener("input", e => { if(S.sheet && $("#sheet")?.contains(e.target)) stSheetDirty.touched = true; });
+document.addEventListener("change", e => { if(S.sheet && $("#sheet")?.contains(e.target)) stSheetDirty.touched = true; });
+function stSheetDirty(){
+  return !!(stSheetDirty.touched && S.view === "studio" && S.sheet && (S.sheet.kind === "node" || S.sheet.kind === "btn"));
+}
+function stGuardClose(go){
+  if(!stSheetDirty()) return go();
+  confirmQ("تغییرهای این فرم هنوز ذخیره نشده‌اند. بسته شود؟", ok => { if(ok) go(); });
+}
+const nodeOpts = (cfg, cur, extra = "") => extra + Object.keys(cfg.nodes).map(i => `<option value="${esc(i)}"${i === cur ? " selected" : ""}>${esc(titleOf(cfg, i))}</option>`).join("");
+const head = t => `<div class="grab"></div><div class="sh"><h2>${t}</h2><button class="iconb sm" data-x="close" aria-label="بستن">${IC.x}</button></div>`;
+
+/* ── منطق: متغیر، شرط و اکشن ── */
+const OPS = [["==","مساوی باشد با"],["!=","مساوی نباشد با"],[">","بزرگ‌تر از"],[">=","بزرگ‌تر یا مساوی"],["<","کوچک‌تر از"],["<=","کوچک‌تر یا مساوی"],["contains","شامل باشد"],["empty","خالی باشد"],["filled","پر باشد"],["sub","اشتراک دوره‌اش فعال بود"]];
+const ACTS = [["set","مقدار بده"],["add","جمع کن / کم کن"],["clear","پاک کن"],["random","عدد تصادفی"],["notify","به من خبر بده"],["remind","یادآوری بعد از چند دقیقه"],["calc","عبارت حسابی را حساب کن"],["disc","کد تخفیف را بررسی کن"],["sub_add","اشتراک دوره فعال کن"],["sub_del","اشتراک دوره لغو کن"]];
+const APH = {set:"مقدار (می‌توانی {متغیر} بگذاری)", add:"عدد، مثلاً 5 یا -3", random:"بازه، مثلاً 1-6", notify:"متنی که برای خودت فرستاده می‌شود", remind:"متن یادآوری برای همین کاربر (اختیاری اگر بخش انتخاب کنی)",
+  calc:"عبارت حسابی مثل {price} * {qty} یا (5+3)*2", disc:"قیمت پایه به عدد یا متغیر، مثل {price}", sub_add:"پلن اشتراک، مثل vip", sub_del:"پلن اشتراک، مثل vip"};
+const TYPES = [["text","متن"],["number","عدد"],["phone","شماره تماس"],["email","ایمیل"]];
+const BUILTIN_HELP = [["name","اسم کاربر"],["first_name","اسم (بدون جایگزین)"],["last_name","فامیلی"],["full_name","اسم کامل"],["username","@آیدی کاربر"],["id","آیدی عددی"],
+  ["lang","زبان تلگرام (fa, en…)"],["premium","پریمیوم؟ 1 یا 0"],["is_owner","صاحب ربات؟ 1 یا 0"],["visits","تعداد استارت‌های کاربر"],["refs","تعداد دعوت‌های موفق کاربر"],["ref_link","لینک دعوت شخصی کاربر"],["text","آخرین پیام کاربر"],
+  ["param","پارامتر لینک /start"],["date","تاریخ شمسی"],["time","ساعت تهران"],["hour","ساعت (0 تا 23)"],["weekday","روز هفته"],["ticket_no","شماره‌ی آخرین تیکت کاربر"],["bot_name","نام ربات"],["bot_username","آیدی ربات"]];
+const BUILTIN = BUILTIN_HELP.map(x => x[0]);
+const chList = v => String(v || "").split(/[\s,،]+/).filter(Boolean).map(x => x.replace(/^(https?:\/\/)?(t\.me|telegram\.me)\//i, "").replace(/^@/, ""));
+const chOut = (v, text) => { const l = chList(v); if(l.length > 3) return "حداکثر ۳ کانال"; if(l.some(c => !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(c))) return "آیدی کانال معتبر نیست (مثل @channel_id)"; return l.length ? {channels: l, text: (text || "").trim()} : null; };
+const joinBox = (d, what) => `<details class="adv jn"${d.jch ? " open" : ""}><summary>عضویت اجباری در کانال</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">${what} فقط وقتی کاربر عضو این کانال‌ها باشد کار می‌کند؛ وگرنه پیام عضویت می‌بیند و بعد از عضو شدن مستقیم به همین‌جا می‌رسد. ربات باید در کانال ادمین باشد. خالی یعنی غیرفعال.</p>
+      <span class="lbl">کانال‌ها (تا ${N(3)} تا، با فاصله)</span><input class="ltr" id="j-ch" value="${esc(d.jch)}" placeholder="@channel1 @channel2" autocomplete="off">
+      <span class="lbl">پیام درخواست عضویت</span><input class="fa" id="j-tx" data-fmt value="${esc(d.jtx)}" maxlength="500" placeholder="برای ادامه اول عضو کانال شو.">${fmtTools("j-tx")}
+    </div></details>`;
+const readJoin = () => { if($("#j-ch")){ D.jch = $("#j-ch").value; D.jtx = $("#j-tx").value; } };
+const cleanVar = v => String(v || "").toLowerCase().replace(/[^a-z0-9_]/g, "").replace(/^[0-9_]+/, "").slice(0, 20);
+const simpleCond = c => !!c && typeof c.var === "string" && !c.all && !c.any && !c.not;
+const blankCond = () => ({var:"", op:"==", value:""});
+const newRule = l => l === "do" ? {op:"set", var:"", value:""} : l === "route" ? {c:blankCond(), goto:S.cur.config.start} : l === "alt" ? {c:blankCond(), text:""} : {c:blankCond()};
+const dlist = () => `<datalist id="vdl">${[...Object.keys(S.cur.config.vars || {}), ...Object.keys(S.cur.config.globals || {}), ...BUILTIN].map(v => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
+
+function condHTML(c){
+  if(c && c.op !== "sub" && !simpleCond(c)) return `<div class="muted">شرط ترکیبی؛ فقط با هوش مصنوعی عوض می‌شود</div>`;
+  if(c && c.op === "sub") return `<div class="cmd"><select class="c-op" data-sh="re">${OPS.map(([v, l]) => `<option value="${v}"${v === c.op ? " selected" : ""}>${l}</option>`).join("")}</select>
+    <input class="fa c-plan ltr" value="${esc(c.plan || "")}" placeholder="پلن (مثل vip؛ خالی = هر پلنی)" maxlength="16" autocomplete="off"></div>`;
+  const x = c || blankCond(), nov = x.op === "empty" || x.op === "filled";
+  return `<div class="cmd"><input class="c-var" list="vdl" value="${esc(x.var)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off">
+    <select class="c-op" data-sh="re">${OPS.map(([v, l]) => `<option value="${v}"${v === x.op ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+    ${nov ? "" : `<input class="fa c-val" value="${esc(x.value || "")}" placeholder="مقدار" maxlength="100">`}`;
+}
+function ruleHTML(list, o, i, cfg){
+  const del = `<button class="iconb sm" data-sh="delrl" data-l="${list}" data-i="${i}" aria-label="حذف">${IC.x}</button>`;
+  let inner;
+  if(list === "do"){
+    const noVar = o.op === "notify" || o.op === "remind" || o.op === "sub_add" || o.op === "sub_del";
+    inner = `<div class="cmd"><select class="a-op" data-sh="re">${ACTS.map(([v, l]) => `<option value="${v}"${v === o.op ? " selected" : ""}>${l}</option>`).join("")}</select>
+      ${noVar ? "" : `<input class="a-var" list="vdl" value="${esc(o.var || "")}" placeholder="نام متغیر" maxlength="20" autocomplete="off">`}${del}</div>
+      ${o.op === "remind" ? `<div class="cmd"><input class="a-min" type="number" min="1" max="43200" value="${esc(o.minutes || 60)}" placeholder="چند دقیقه بعد؟"><select class="a-rg">${nodeOpts(cfg, o.goto || "", '<option value="">فقط پیام</option>')}</select></div>` : ""}
+      ${o.op === "sub_add" ? `<div class="cmd"><input class="fa a-days ltr" inputmode="numeric" value="${esc(o.days || "30")}" maxlength="20" placeholder="چند روز؟ مثل 30"></div>` : ""}
+      ${o.op === "clear" || o.op === "notify" || o.op === "remind" ? "" : `<input class="fa a-val" value="${esc(o.op === "sub_add" || o.op === "sub_del" ? (o.plan || "") : (o.value || ""))}" placeholder="${esc(APH[o.op])}" maxlength="${o.op === "notify" || o.op === "remind" ? 500 : 100}">`}`;
+  } else {
+    inner = `<div class="cmd" style="justify-content:space-between"><span class="muted">${list === "when" ? "فقط وقتی…" : "اگر…"}</span>${del}</div>${condHTML(o.c)}`;
+    if(list === "route") inner += `<span class="lbl">بعدش برو به</span><select class="r-goto">${nodeOpts(cfg, o.goto)}</select>`;
+    if(list === "alt") inner += `<div class="fgap"></div><textarea class="fa r-text" data-fmt maxlength="3500" placeholder="متن جایگزین">${esc(o.text || "")}</textarea>${fmtTools("@last")}`;
+  }
+  return `<div class="rl" data-list="${list}" data-i="${i}">${inner}</div>`;
+}
+function ruleSection(title, hint, list, cfg, max){
+  const arr = D[list];
+  return `<div class="sub"><span>${title}</span>${arr.length < max ? `<button class="iconb sm" data-sh="addrl" data-l="${list}" aria-label="افزودن">${IC.plus}</button>` : ""}</div>
+    ${hint ? `<p class="muted" style="margin:-3px 0 8px">${hint}</p>` : ""}${arr.map((o, i) => ruleHTML(list, o, i, cfg)).join("")}`;
+}
+function readRl(list){
+  const rows = [...document.querySelectorAll(`.rl[data-list="${list}"]`)];
+  if(!rows.length || !D[list]) return;
+  D[list] = rows.map((r, i) => {
+    const o = {...(D[list][i] || {})}, q = s => r.querySelector(s);
+    if(q(".c-op")?.value === "sub") o.c = {op:"sub", plan:cleanVar(q(".c-plan")?.value || "")};
+    else if(q(".c-var")) o.c = {var:cleanVar(q(".c-var").value), op:q(".c-op").value, value:q(".c-val")?.value ?? ""};
+    if(q(".r-goto")) o.goto = q(".r-goto").value;
+    if(q(".r-text")) o.text = q(".r-text").value;
+    if(q(".a-op")){
+      o.op = q(".a-op").value;
+      if(o.op === "sub_add" || o.op === "sub_del"){
+        o.plan = cleanVar(q(".a-val")?.value || o.plan || "") || "vip";
+        if(q(".a-days")) o.days = (q(".a-days").value || "30").trim();
+        delete o.var; delete o.value;
+      } else {
+        o.var = q(".a-var") ? cleanVar(q(".a-var").value) : (o.var || "");
+        o.value = q(".a-val") ? q(".a-val").value : (o.value || "");
+      }
+      if(q(".a-min")) o.minutes = parseInt(q(".a-min").value) || 0;
+      if(q(".a-rg")) o.goto = q(".a-rg").value;
+    }
+    return o;
+  });
+}
+function ruleErr(){
+  const empty = c => c && simpleCond(c) && !c.var;
+  for(const a of D.do || []){
+    if(a.op === "notify"){ if(!(a.value || "").trim()) return "متن اعلانِ اکشن «به من خبر بده» را بنویس"; }
+    else if(a.op === "remind"){
+      const mm = a.minutes === undefined ? 60 : +a.minutes;
+      if(!(mm >= 1 && mm <= 43200)) return "زمان یادآوری باید بین ۱ تا ۴۳۲۰۰ دقیقه (۳۰ روز) باشد";
+      if(!(a.value || "").trim() && !a.goto) return "برای یادآوری، متن بنویس یا یک بخش انتخاب کن";
+    }
+    else if(a.op === "calc"){ if(!a.var) return "اسم متغیرِ نتیجه‌ی محاسبه را بنویس"; if(!(a.value || "").trim()) return "عبارت حسابی اکشن «محاسبه» را بنویس"; }
+    else if(a.op === "disc"){ if(!a.var) return "اسم متغیری که کد کاربر در آن ذخیره می‌شود را بنویس"; if(!(a.value || "").trim()) return "قیمت پایه برای بررسی کد تخفیف را بنویس"; }
+    else if(a.op === "sub_add" || a.op === "sub_del"){ if(!(a.plan || "").trim()) return "پلن اشتراک را بنویس (مثل vip)"; }
+    else if(!a.var) return "اسم متغیرِ اکشن را بنویس";
+  }
+  for(const r of D.route || []) if(empty(r.c)) return "برای هدایت شرطی، اسم متغیرِ شرط را بنویس";
+  for(const r of D.alt || []){
+    if(empty(r.c)) return "برای متن جایگزین، اسم متغیرِ شرط را بنویس";
+    if(!(r.text || "").trim()) return "متن جایگزین نباید خالی باشد";
+  }
+  for(const r of D.when || []) if(empty(r.c)) return "برای نمایش شرطیِ دکمه، اسم متغیرِ شرط را بنویس";
+  return null;
+}
+const outActs = l => l.map(a => {
+  if(a.op === "remind") return {op:"remind", minutes:Math.max(1, Math.min(43200, parseInt(a.minutes) || 60)), ...((a.value || "").trim() ? {value:a.value.trim()} : {}), ...(a.goto ? {goto:a.goto} : {}), ...(a.key ? {key:a.key} : {})};
+  if(a.op === "notify") return {op:"notify", value:a.value || ""};
+  if(a.op === "clear") return {op:"clear", var:a.var};
+  if(a.op === "calc") return {op:"calc", var:a.var, value:(a.value || "").trim()};
+  if(a.op === "disc") return {op:"disc", var:a.var, price:(a.value || "0").trim()};
+  if(a.op === "sub_add") return {op:"sub_add", plan:a.plan || "vip", days:String(a.days || "30").trim(), ...(a.var ? {var:a.var} : {})};
+  if(a.op === "sub_del") return {op:"sub_del", plan:a.plan || "vip"};
+  return {op:a.op, var:a.var, value:a.value || ""};
+});
+
+/* ── ویرایش بخش ── */
+function openNode(id){
+  const cfg = S.cur.config, n = cfg.nodes[id];
+  S.sheet = {kind: "node", id};
+  D = { title: n.title || "", text: n.text, photo: n.photo || "", media: n.media || "", doneMedia: n.done_media || "", done: n.done || "", next: n.next || "",
+        fields: n.fields ? n.fields.map((q, i) => ({q, v: (n.save || [])[i] || "", t: (n.types || [])[i] || "text"})) : [{q: "", v: "", t: "text"}],
+        silent: !!n.silent, mode: n.fields ? "form" : n.ask ? "ask" : n.ai ? "ai" : "show",
+        aip: n.ai?.prompt || "", aid: n.ai?.daily || 15, aim: n.ai?.memory ?? 3,
+        start: id === cfg.start, fb: id === cfg.fallback,
+        jch: (n.join?.channels || []).map(c => "@" + c).join(" "), jtx: n.join?.text || "",
+        ticket: !!n.ticket, tag: n.tag || "", bvar: n.board?.var || "", btop: n.board?.top || 10,
+        do: cp(n.do || []), route: (n.route || []).map(r => ({c: cp(r.when), goto: r.goto})), alt: (n.alt || []).map(r => ({c: cp(r.when), text: r.text})), adv: false };
+  renderSheet();
+}
+function kbSummary(n){
+  const all = (n.buttons || []).flat(), rk = all.filter(b => b.kb === "reply").length, gl = all.length - rk;
+  return [gl ? N(gl) + " شیشه‌ای" : "", rk ? N(rk) + " کیبورد چت" : ""].filter(Boolean).join(" · ") || "بدون دکمه";
+}
+function kbPicker(cur){
+  const inl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="3" width="40" height="17" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="4.7" y="24" width="23" height="8" rx="3.5"/><rect x="30.7" y="24" width="23" height="8" rx="3.5"/><rect x="4.7" y="34.5" width="49" height="7" rx="3.5"/></svg>`;
+  const rpl = `<svg viewBox="0 0 58 44" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="2" width="40" height="15" rx="6" fill="currentColor" fill-opacity=".14" stroke="none"/><rect x="1" y="24" width="56" height="19" rx="4" fill="currentColor" fill-opacity=".1" stroke="none"/><rect x="4" y="27" width="15" height="6" rx="2"/><rect x="21.5" y="27" width="15" height="6" rx="2"/><rect x="39" y="27" width="15" height="6" rx="2"/><rect x="4" y="35" width="50" height="5" rx="2"/></svg>`;
+  return `<span class="lbl">نوع این دکمه</span>
+    <div class="seg">
+      <button class="${cur !== "reply" ? "on" : ""}" data-sh="kbt" data-v="inline">${inl}<b>شیشه‌ای</b><small>زیر پیام، چسبیده به آن</small></button>
+      <button class="${cur === "reply" ? "on" : ""}" data-sh="kbt" data-v="reply">${rpl}<b>کیبورد</b><small>پایین چت، مثل منوی ثابت</small></button>
+    </div>
+    ${cur === "reply" ? `<p class="muted mt">دکمه‌های کیبورد، همراه یک پیام کوچک، پایین چت نشان داده می‌شوند. در هر بخش می‌توانی هم دکمه‌ی شیشه‌ای داشته باشی، هم کیبورد.</p>` : ""} : ""}`;
+}
+let FMT_LAST = null;
+document.addEventListener("focusin", e => { if(e.target.matches?.("[data-fmt]")) FMT_LAST = e.target; });
+const fmtTools = tid => `<div class="fmtbar" title="قالب HTML تلگرام">${FMT_TAGS.map((t, i) => `<button type="button" data-a="fmtb" data-t="${tid}" data-i="${i}" aria-label="${t[1]}">${t[0]}</button>`).join("")}<button type="button" class="fx" data-a="emjbar" data-t="${tid}" aria-label="ایموجی پرمیوم" title="ایموجی پرمیوم">${IC.spark}</button></div>`;
+function fmtInsert(t, i){
+  const tg_ = FMT_TAGS[i], o = tg_[2], c = tg_[3], a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a, sel = t.value.slice(a, b) || "متن";
+  t.value = t.value.slice(0, a) + o + sel + c + t.value.slice(b); t.focus(); t.setSelectionRange(a + o.length, a + o.length + sel.length); t.dispatchEvent(new Event("input", {bubbles: true}));
+}
+function nodeSheet(){
+  const cfg = S.cur.config, d = D;
+  const advOpen = d.adv || d.do.length || d.route.length || d.alt.length || d.bvar;
+  return head("ویرایش بخش") + `
+    <span class="lbl">نام بخش (فقط برای خودت)</span><input class="fa" id="f-title" value="${esc(d.title)}" maxlength="30" placeholder="مثلاً: منوی اصلی">
+    <span class="lbl">متن پیام</span><textarea class="fa" id="f-text" data-fmt maxlength="3500">${esc(d.text)}</textarea>${fmtTools("f-text")}
+    <p class="muted mt">برای شخصی‌سازی پیام از متغیر استفاده کن؛ مثل <b dir="ltr">{name}</b> برای اسم کاربر یا <b dir="ltr">{coins}</b> برای متغیر خودت. فهرست کامل در تنظیمات ربات است.</p>
+    <span class="lbl">رسانه (عکس، ویدیو، گیف، موسیقی، ویس یا فایل)</span>${mediaPicker("media", d.media)}
+    ${d.media ? `<p class="muted">متن بخش همراه رسانه، به‌عنوان توضیحِ زیر آن فرستاده می‌شود.</p>` : `<span class="lbl">یا لینک مستقیم عکس (اختیاری)</span><input id="f-photo" value="${esc(d.photo)}" placeholder="https://.../photo.jpg" autocomplete="off">`}
+    <span class="lbl">این بخش چه کاری انجام بدهد؟</span>
+    <select id="f-mode" data-sh="mode">
+      <option value="show"${d.mode === "show" ? " selected" : ""}>نمایش پیام (با دکمه)</option>
+      <option value="ai"${d.mode === "ai" ? " selected" : ""}>گفتگو با هوش مصنوعی</option>
+      <option value="ask"${d.mode === "ask" ? " selected" : ""}>گرفتن یک پیام از کاربر</option>
+      <option value="form"${d.mode === "form" ? " selected" : ""}>فرم چندمرحله‌ای</option>
+    </select>
+    ${d.mode === "ai" ? `<span class="lbl">دستور دستیار (نقش، لحن، اطلاعات کسب‌وکار)</span>
+      <textarea class="fa" id="f-aip" maxlength="1500" style="min-height:140px" placeholder="مثلاً: تو دستیار فروشگاه موبایل «نوید» هستی. محترم و کوتاه جواب بده. ساعت کاری ۹ تا ۲۱ است.">${esc(d.aip)}</textarea>
+      <span class="lbl">سقف پیام هر کاربر در روز</span><input id="f-aid" type="number" min="1" max="100" value="${esc(d.aid)}">
+      <span class="lbl">حافظه‌ی گفتگو (چند پیام قبلی، 0 تا 6)</span><input id="f-aim" type="number" min="0" max="6" value="${esc(d.aim)}">
+      <div class="aibox">${billingFixed() ? `هر ${N(S.cfg.ai_per)} پیام هوشمند، ${N(1)} توکن` : "هزینه‌ی هر پیام هوشمند از روی مصرف واقعی حساب می‌شود (کسری از یک توکن تا ۱ توکن)؛"} از حساب تو کم می‌شود. موجودی تو ${N(S.wallet.tokens)} توکن است و با تمام شدنش این بخش برای کاربرها غیرفعال می‌شود. حتماً یک دکمه‌ی بازگشت به این بخش اضافه کن.</div>` : ""}
+    ${d.mode === "form" ? `<span class="lbl">سؤال‌ها به ترتیب</span>
+      ${d.fields.map((f, i) => `<div class="rl fq"><div class="cmd"><input class="fa fld" data-fmt value="${esc(f.q)}" placeholder="مثلاً: اسمت چیست؟" maxlength="200"><button class="iconb sm" data-sh="delfld" data-i="${i}" aria-label="حذف سؤال">${IC.x}</button></div>
+        <div class="cmd"><input class="fv" list="vdl" value="${esc(f.v)}" placeholder="ذخیره در متغیر (اختیاری)" maxlength="20" autocomplete="off">
+        <select class="ft">${TYPES.map(([v, l]) => `<option value="${v}"${v === f.t ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>`).join("")}
+      ${fmtTools("@last")}
+      ${d.fields.length < 6 ? `<button class="b o sm" data-sh="addfld">${IC.plus}سؤال</button>` : ""}
+      <label class="chk"><input type="checkbox" id="f-silent"${d.silent ? " checked" : ""}> نتیجه‌ی فرم برای من فرستاده نشود</label>` : ""}
+    ${d.mode === "ask" || d.mode === "form" ? `<span class="lbl">پیام تشکر بعد از ثبت</span><input class="fa" id="f-done" data-fmt value="${esc(d.done)}" maxlength="500" placeholder="ثبت شد، ممنون!">${fmtTools("f-done")}
+      <span class="lbl">رسانه‌ی پیام تشکر (اختیاری)</span>${mediaPicker("doneMedia", d.doneMedia)}
+      <span class="lbl">بعد از ثبت پاسخ، کدام بخش نمایش داده شود؟</span><select id="f-next">${nodeOpts(cfg, d.next, '<option value="">منوی شروع</option>')}</select>
+      <label class="chk"><input type="checkbox" id="f-ticket"${d.ticket ? " checked" : ""}> هر پیام یک تیکت شماره‌دار شود (دکمه‌ی «پاسخ» برای من و پشتیبان‌ها)</label>
+      ${d.ticket ? `<span class="lbl">برچسب تیکت (اختیاری، مثلاً فروش یا فنی)</span><input class="fa" id="f-tag" value="${esc(d.tag)}" maxlength="20">` : ""}
+      <p class="muted mt">${d.ticket ? "پیام کاربر با شماره‌ی تیکت برایت می‌آید و زیرش دکمه‌های پاسخ، سابقه، بستن و مسدود کردن است. با /tickets تیکت‌های باز را می‌بینی." : "پیام کاربرها برای تو فرستاده می‌شود. داخل ربات با Reply روی هر کدام، جوابت به خودش می‌رسد."}</p>` : ""}
+    <div class="sub"><span>دکمه‌ها</span></div>
+    <div class="group"><button class="gi" data-sh="stkm" data-n="${esc(S.sheet.id)}"><span class="ib">${IC.layers}</span><span class="gt"><b>دکمه‌ها و کیبورد</b><span>${N((cfg.nodes[S.sheet.id].buttons || []).reduce((a, r) => a + r.length, 0))} دکمه · ${kbSummary(cfg.nodes[S.sheet.id])}</span></span>${goIc}</button></div>
+    <details class="adv"${advOpen ? " open" : ""}><summary>منطق پیشرفته: متغیر و شرط</summary><div class="box">
+      ${ruleSection("وقتی کاربر وارد این بخش شد…", "مثلاً امتیاز جمع کن، مقداری ذخیره کن یا به خودت خبر بده", "do", cfg, 6)}
+      ${ruleSection("هدایت شرطی", "اولین شرطِ درست، کاربر را به بخش دیگری می‌فرستد (مثل قفل، سطح، ساعت کاری)", "route", cfg, 5)}
+      ${ruleSection("متن جایگزین شرطی", "اگر شرط درست بود، به‌جای متن اصلی نشان داده می‌شود", "alt", cfg, 4)}
+      <div class="sub"><span>جدول برترین‌ها</span></div><p class="muted" style="margin:-3px 0 8px">زیر متن این بخش رتبه‌بندی کاربرها بر اساس یک متغیر عددی (یا refs برای دعوت‌ها) نشان داده می‌شود. خالی یعنی غیرفعال.</p>
+      <div class="cmd"><input class="ltr" id="f-bvar" list="vdl" value="${esc(d.bvar)}" placeholder="متغیر عددی، مثلاً coins" maxlength="20" autocomplete="off"><input id="f-btop" type="number" min="3" max="20" value="${esc(d.btop)}" placeholder="چند نفر؟"></div>
+    </div></details>${joinBox(d, "این بخش")}${dlist()}
+    <label class="chk"><input type="checkbox" id="f-start"${d.start ? " checked disabled" : ""}> بخش شروع ربات (/start)</label>
+    <label class="chk"><input type="checkbox" id="f-fb"${d.fb ? " checked disabled" : ""}> پاسخ به پیام‌هایی که ربات متوجه‌شان نمی‌شود</label>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button>${d.start || d.fb ? "" : `<button class="b r" data-sh="del">حذف بخش</button>`}</div>`;
+}
+function readNode(){
+  const g = s => $(s)?.value ?? null;
+  D.title = g("#f-title") ?? D.title; D.text = g("#f-text") ?? D.text; D.photo = g("#f-photo") ?? D.photo;
+  D.mode = g("#f-mode") ?? D.mode;
+  D.aip = g("#f-aip") ?? D.aip; D.aid = g("#f-aid") ?? D.aid; D.aim = g("#f-aim") ?? D.aim;
+  const fq = [...document.querySelectorAll(".fq")];
+  if(fq.length) D.fields = fq.map(r => ({q: r.querySelector(".fld").value, v: cleanVar(r.querySelector(".fv").value), t: r.querySelector(".ft").value}));
+  if($("#f-silent")) D.silent = $("#f-silent").checked;
+  if($("#f-ticket")) D.ticket = $("#f-ticket").checked;
+  if($("#f-tag")) D.tag = $("#f-tag").value;
+  if($("#f-bvar")){ D.bvar = cleanVar($("#f-bvar").value); D.btop = $("#f-btop").value; }
+  if($("#f-done")){ D.done = g("#f-done"); D.next = g("#f-next"); }
+  if($("#f-start") && !$("#f-start").disabled) D.start = $("#f-start").checked;
+  if($("#f-fb") && !$("#f-fb").disabled) D.fb = $("#f-fb").checked;
+  for(const l of ["do", "route", "alt"]) readRl(l);
+  readJoin();
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
+}
+function saveNode(){
+  const id = S.sheet.id, node = S.cur.config.nodes[id];
+  if(!D.text.trim()) return toast("متن پیام نباید خالی باشد");
+  if(D.mode === "form" && !D.fields.some(f => f.q.trim())) return toast("حداقل یک سؤال برای فرم بنویس");
+  if(D.mode === "ai"){
+    if(!D.aip.trim()) return toast("دستور دستیار را بنویس");
+    if(!node.buttons.length) return toast("برای خروج کاربر از گفتگو، اول یک دکمه‌ی بازگشت به این بخش اضافه کن");
+  }
+  const err = ruleErr(); if(err) return toast(err);
+  const nj = chOut(D.jch, D.jtx); if(typeof nj === "string") return toast(nj);
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    const n = cfg.nodes[id], ob = n.board;
+    if(D.mode !== "show") (n.buttons || []).forEach(r => r.forEach(b => { delete b.kb; }));
+    for(const k of ["title", "photo", "media", "done_media", "ai", "ask", "fields", "save", "types", "silent", "done", "next", "kb", "do", "route", "alt", "ticket", "tag", "board", "join"]) delete n[k];
+    if(nj) n.join = nj;
+    if(D.bvar) n.board = {var: D.bvar, top: Math.max(3, Math.min(20, parseInt(D.btop) || 10)), ...(ob?.label ? {label: ob.label} : {})};
+    n.text = D.text.trim();
+    if(D.title.trim()) n.title = D.title.trim();
+    if(D.media && mediaById(D.media)) n.media = D.media;
+    else if(D.photo.trim()) n.photo = D.photo.trim();
+    if(D.mode === "ask") n.ask = true;
+    if(D.mode === "ai") n.ai = {prompt: D.aip.trim(), daily: Math.max(1, Math.min(100, parseInt(D.aid) || 15)), memory: Math.max(0, Math.min(6, isNaN(parseInt(D.aim)) ? 3 : parseInt(D.aim)))};
+    if(D.mode === "form"){
+      const fl = D.fields.filter(f => f.q.trim());
+      n.fields = fl.map(f => f.q.trim());
+      if(fl.some(f => f.v)) n.save = fl.map(f => f.v);
+      if(fl.some(f => f.t !== "text")) n.types = fl.map(f => f.t);
+      if(D.silent) n.silent = true;
+    }
+    if(D.mode === "ask" || D.mode === "form"){
+      if(D.ticket){ n.ticket = true; if((D.tag || "").trim()) n.tag = D.tag.trim(); }
+      if(D.done.trim()) n.done = D.done.trim();
+      if(D.doneMedia && mediaById(D.doneMedia)) n.done_media = D.doneMedia;
+      if(D.next) n.next = D.next;
+    }
+    if(D.do.length) n.do = outActs(D.do);
+    if(D.route.length) n.route = D.route.map(r => ({when: r.c, goto: r.goto}));
+    if(D.alt.length) n.alt = D.alt.map(r => ({when: r.c, text: r.text.trim()}));
+    if(D.start) cfg.start = id;
+    if(D.fb) cfg.fallback = id;
+  }));
+}
+function delNode(){
+  const id = S.sheet.id;
+  const go = ok => ok && busy($('[data-sh="del"]'), () => commit(cfg => {
+    delete cfg.nodes[id];
+    for(const n of Object.values(cfg.nodes)){
+      n.buttons = n.buttons.map(r => r.map(b => { if(b.pay?.goto === id){ const c = {...b}; delete c.pay.goto; return c; } return b; })
+        .filter(b => b.goto !== id)).filter(r => r.length);
+      if(n.next === id) delete n.next;
+      if(n.route){ n.route = n.route.filter(r => r.goto !== id); if(!n.route.length) delete n.route; }
+    }
+    for(const k of Object.keys(cfg.commands || {})) if(cfg.commands[k] === id) delete cfg.commands[k];
+    delete ST.pos[id];
+  }, "بخش حذف شد"));
+  confirmQ("این بخش و دکمه‌هایی که به آن وصل‌اند حذف شوند؟", go);
+}
+function addNode(at){
+  const cfg = S.cur.config, ids = Object.keys(cfg.nodes), max = S.cfg.max_nodes || 60;
+  if(ids.length >= max) return toast(`حداکثر ${max} بخش`);
+  const id = stNextId();
+  if(!at){
+    const cv = $("#stc"), c = ST.cam || {x: 40, y: 40, z: 1};
+    at = cv ? {x: (cv.clientWidth / 2 - c.x) / c.z - 110, y: (cv.clientHeight / 2 - c.y) / c.z - 60} : {x: 40, y: 40};
+  }
+  ST.pos[id] = {x: Math.round(at.x / 8) * 8, y: Math.round(at.y / 8) * 8};
+  busy($("#stadd"), async () => {
+    await commit(c => { c.nodes[id] = {title: "بخش جدید", text: "متنِ این بخش را اینجا بنویس…", ask: false, buttons: [[{text: "منوی اصلی", goto: c.start}]]}; }, "بخش اضافه شد");
+    stCenter(id);
+    openNode(id);
+  });
+}
+
+/* ── ویرایش دکمه ── */
+function openBtn(nid, r, c){
+  const cfg = S.cur.config;
+  S.sheet = {kind: "btn", n: nid, r, c};
+  if(c === null) D = {text: "دکمه‌ی جدید", kb: "inline", kind: "goto", goto: cfg.start, val: "", when: [], do: [], jch: "", jtx: "", adv: false, stars: 50, ptitle: "", pdesc: "", ptext: "", pgoto: "", style: "", icon: ""};
+  else {
+    const b = cfg.nodes[nid].buttons[r][c], k = kindOf(b);
+    D = {text: b.text, kind: k, kb: b.kb === "reply" ? "reply" : "inline", goto: b.goto || cfg.start,
+         val: k === "channel" ? "@" + CH_RE.exec(b.url)[1] : k === "app" ? (["1", 1, true].includes(b.app) ? "" : String(b.app || "")) : b.url || b.alert || b.copy || b.share || "",
+         when: b.when ? [{c: cp(b.when)}] : [], do: cp(b.do || []), adv: false,
+         jch: (b.join?.channels || []).map(c => "@" + c).join(" "), jtx: b.join?.text || "",
+         stars: b.pay?.stars || 50, ptitle: b.pay?.title || "", pdesc: b.pay?.desc || "", ptext: b.pay?.text || "", pgoto: b.pay?.goto || "",
+         style: b.style || "", icon: b.icon || ""};
+  }
+  const needLoad = S.cfg.emoji_max && S.emojis == null;
+  if(needLoad) emjEnsure().then(() => { if(S.sheet?.kind === "btn" && $("#b-icons")){ readSheet(); renderSheet(); } });
+  renderSheet();
+}
+const KINDS = [["goto", "رفتن به یک بخش"], ["channel", "کانال یا گروه تلگرام"], ["url", "لینک وب"], ["alert", "پیام پاپ‌آپ"], ["copy", "کپی کردن متن"], ["share", "اشتراک‌گذاری لینک دعوت"], ["pay", "پرداخت با ستاره‌ی تلگرام"], ["app", "باز کردن مینی‌اپ"]];
+function btnSheet(){
+  const cfg = S.cur.config, d = D, isNew = S.sheet.c === null;
+  const val = {
+    goto: `<span class="lbl">به کدام بخش برود؟</span><select id="b-goto">${nodeOpts(cfg, d.goto)}</select>`,
+    channel: `<span class="lbl">آیدی کانال یا گروه</span><input id="b-val" value="${esc(d.val)}" placeholder="@channel_id" autocomplete="off">`,
+    url: `<span class="lbl">آدرس لینک</span><input id="b-val" value="${esc(d.val)}" placeholder="https://..." autocomplete="off">`,
+    alert: `<span class="lbl">متنی که کاربر در پاپ‌آپ می‌بیند</span><textarea class="fa" id="b-val" maxlength="200">${esc(d.val)}</textarea><p class="muted">می‌توانی از <b dir="ltr">{coins}</b> یا هر متغیر دیگری استفاده کنی؛ بعد از اجرای اکشن‌ها محاسبه می‌شود.</p>`,
+    copy: `<span class="lbl">متنی که با لمس دکمه کپی می‌شود</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="256" placeholder="مثلاً شماره کارت یا کد تخفیف">`,
+    share: `<span class="lbl">متنی که همراه لینک دعوت فرستاده می‌شود</span><input class="fa" id="b-val" value="${esc(d.val)}" maxlength="200" placeholder="بیا این ربات را ببین"><p class="muted">با لمس این دکمه، پنجره‌ی ارسال تلگرام با لینک دعوت شخصیِ همان کاربر باز می‌شود. برای پاداش دعوت، در تنظیمات ربات «پاداش دعوت» را پر کن.</p>`,
+    pay: `<span class="lbl">قیمت (ستاره‌ی تلگرام، ۱ تا ۱۰٬۰۰۰)</span><input id="b-stars" type="number" min="1" max="10000" value="${esc(d.stars)}">
+      <span class="lbl">عنوان فاکتور</span><input class="fa" id="b-ptitle" value="${esc(d.ptitle)}" maxlength="32" placeholder="مثلاً اشتراک ویژه">
+      <span class="lbl">توضیح فاکتور (اختیاری)</span><input class="fa" id="b-pdesc" value="${esc(d.pdesc)}" maxlength="255">
+      <span class="lbl">پیام بعد از پرداخت موفق</span><input class="fa" id="b-ptext" data-fmt value="${esc(d.ptext)}" maxlength="300" placeholder="پرداخت انجام شد، ممنون!">${fmtTools("b-ptext")}
+      <span class="lbl">بعد از پرداخت کدام بخش نشان داده شود؟</span><select id="b-pgoto">${nodeOpts(cfg, d.pgoto, '<option value="">هیچ‌کدام</option>')}</select>
+      <p class="muted mt">ستاره‌ها به حساب تلگرامِ تو می‌رود. اکشن‌های این دکمه فقط بعد از پرداختِ موفق اجرا می‌شوند (مثلاً فعال کردن متغیر vip). پرداخت‌ها با /payments دیده می‌شوند و با /refund کد برگشت می‌خورند.</p>`,
+    app: `<span class="lbl">صفحه‌ی شروع مینی‌اپ (اختیاری)</span><input id="b-val" value="${esc(d.val)}" placeholder="home یا خالی برای صفحه‌ی اول" autocomplete="off">
+      <p class="muted mt">با لمس این دکمه، مینی‌اپ ربات باز می‌شود (فقط در چت خصوصی و وقتی منتشر شده باشد). برای ساختن یا انتشار مینی‌اپ، تب «مینی‌اپ» را باز کن.</p>`
+  }[d.kind];
+  const canDo = d.kind === "goto" || d.kind === "alert" || d.kind === "pay";
+  const nn = cfg.nodes[S.sheet.n], kbOk = !(nn.ask || nn.fields || nn.ai);
+  return head(isNew ? "دکمه‌ی جدید" : "ویرایش دکمه") + `
+    <span class="lbl">متن روی دکمه</span><input class="fa" id="b-text" value="${esc(d.text)}" maxlength="40">
+    <span class="lbl">با لمس دکمه چه شود؟</span>
+    <select id="b-kind" data-sh="bkind">${KINDS.map(([v, l]) => `<option value="${v}"${v === d.kind ? " selected" : ""}>${l}</option>`).join("")}</select>
+    ${val}
+    ${kbOk && d.kind !== "app" ? kbPicker(d.kb) : `<p class="muted mt">${d.kind === "app" ? "دکمه‌ی مینی‌اپ فقط شیشه‌ای می‌شود." : "این بخش فرم، دریافت پیام یا هوش مصنوعی است؛ دکمه‌هایش فقط شیشه‌ای می‌شوند."}</p>`}
+    ${btnLook(d)}
+    <details class="adv"${d.adv || d.when.length || d.do.length ? " open" : ""}><summary>شرط و اقدام‌ها (پیشرفته)</summary><div class="box">
+      ${ruleSection("نمایش دکمه فقط در این شرایط", "مثلاً فقط برای صاحب ربات، یا وقتی امتیاز کافی است", "when", cfg, 1)}
+      ${canDo ? ruleSection("وقتی دکمه لمس شد…", "قبل از رفتن به بخش یا نشان دادن پیام اجرا می‌شوند", "do", cfg, 6)
+              : `<p class="muted">اقدام‌ها فقط برای دکمه‌های «رفتن به یک بخش»، «پیام پاپ‌آپ» و «پرداخت» کار می‌کنند.</p>`}
+    </div></details>${canDo ? joinBox(d, "این دکمه") : ""}${dlist()}
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف دکمه</button>`}</div>`;
+}
+const BTN_STYLES = [["", "پیش‌فرض"], ["primary", "آبی"], ["success", "سبز"], ["danger", "قرمز"]];
+function btnLook(d){
+  const okS = S.cfg.btn_fx, okE = S.cfg.emoji_max, list = S.emojis || [];
+  const lock = ok => ok ? "" : `<i class="pro">Premium / Pro</i>`;
+  const sw = BTN_STYLES.map(([v, l]) => `<button type="button" class="sw ${v || "def"}${d.style === v ? " on" : ""}" data-sh="bstyle" data-v="${v}">${l}</button>`).join("");
+  const cur = list.find(e => e.id === d.icon);
+  const picks = [`<button type="button" class="${d.icon ? "" : "on"}" data-sh="bicon" data-v="">بدون</button>`,
+    ...list.map(e => `<button type="button" class="${d.icon === e.id ? "on" : ""}" data-sh="bicon" data-v="${esc(e.id)}" aria-label="${esc(e.char)}">${emjImg(e)}</button>`)].join("");
+  return `<span class="lbl">رنگ دکمه ${lock(okS)}</span><div class="sws${okS ? "" : " lock"}">${sw}</div>
+    <span class="lbl">ایموجی پرمیوم کنار متن دکمه ${lock(okE)}</span>
+    ${okE ? `<div class="emjpick" id="b-icons">${list.length ? picks : '<span class="muted">کتابخانه‌ی ایموجی‌هایت خالی است. ایموجی پرمیوم را برای ربات مادر بفرست.</span>'}</div>${d.icon && !cur && list.length ? `<p class="muted">این ایموجی دیگر در کتابخانه‌ات نیست، ولی روی دکمه می‌ماند.</p>` : ""}`
+      : `<div class="sws lock"><button type="button" class="sw def" data-sh="bplan">دریافت اشتراک</button></div>`}
+    <p class="muted mt">رنگ دکمه‌ها همه‌جا کار می‌کند. ایموجی پرمیوم فقط وقتی نشان داده می‌شود که حسابِ تلگرامِ سازنده‌ی ربات در BotFather، اشتراک پرمیوم تلگرام داشته باشد.</p>`;
+}
+function readBtn(){
+  D.text = $("#b-text")?.value ?? D.text; D.kind = $("#b-kind")?.value ?? D.kind;
+  if($("#b-goto")) D.goto = $("#b-goto").value;
+  if($("#b-val")) D.val = $("#b-val").value;
+  if($("#b-stars")){ D.stars = $("#b-stars").value; D.ptitle = $("#b-ptitle").value; D.pdesc = $("#b-pdesc").value; D.ptext = $("#b-ptext").value; D.pgoto = $("#b-pgoto").value; }
+  readRl("when"); readRl("do"); readJoin();
+  const ad = document.querySelector("details.adv"); if(ad) D.adv = ad.open;
+}
+function saveBtn(){
+  const {n: nid, r, c} = S.sheet, d = D;
+  if(!d.text.trim()) return toast("متن دکمه را بنویس");
+  if(d.kind === "pay"){ const st = parseInt(d.stars); if(!(st >= 1 && st <= 10000)) return toast("قیمت باید عددی بین ۱ تا ۱۰٬۰۰۰ ستاره باشد"); }
+  else if(d.kind === "app"){ const v = d.val.trim(); if(v && !/^[a-z0-9_]{1,30}$/.test(v)) return toast("شناسه‌ی صفحه باید حروف انگلیسی کوچک، عدد و _ باشد"); }
+  else if(d.kind !== "goto" && d.kind !== "share" && !d.val.trim()) return toast("مقصد دکمه را وارد کن");
+  const err = ruleErr(); if(err) return toast(err);
+  const bj = (d.kind === "goto" || d.kind === "alert" || d.kind === "pay") ? chOut(d.jch, d.jtx) : null; if(typeof bj === "string") return toast(bj);
+  const btn = {text: d.text.trim()};
+  if(d.kind === "goto") btn.goto = d.goto;
+  else if(d.kind === "alert") btn.alert = d.val.trim();
+  else if(d.kind === "copy") btn.copy = d.val.trim();
+  else if(d.kind === "share") btn.share = d.val.trim() || "بیا این ربات را ببین";
+  else if(d.kind === "pay"){
+    btn.pay = {stars: parseInt(d.stars), title: (d.ptitle.trim() || d.text.trim()).slice(0, 32)};
+    if(d.pdesc.trim()) btn.pay.desc = d.pdesc.trim();
+    if(d.ptext.trim()) btn.pay.text = d.ptext.trim();
+    if(d.pgoto) btn.pay.goto = d.pgoto;
+  }
+  else if(d.kind === "app") btn.app = d.val.trim() || "1";
+  else btn.url = d.val.trim();
+  if(bj) btn.join = bj;
+  if(d.style) btn.style = d.style;
+  if(d.icon) btn.icon = d.icon;
+  { const nn = S.cur.config.nodes[nid]; if(d.kb === "reply" && d.kind !== "app" && !(nn.ask || nn.fields || nn.ai)) btn.kb = "reply"; }
+  if(d.when.length) btn.when = d.when[0].c;
+  if(d.do.length && (d.kind === "goto" || d.kind === "alert" || d.kind === "pay")) btn.do = outActs(d.do);
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    const rows = cfg.nodes[nid].buttons;
+    if(c !== null) rows[r][c] = btn;
+    else if(r !== null && rows[r]) rows[r].push(btn);
+    else rows.push([btn]);
+  }));
+}
+function delBtn(){
+  const {n: nid, r, c} = S.sheet;
+  busy($('[data-sh="del"]'), () => commit(cfg => {
+    const rows = cfg.nodes[nid].buttons; rows[r].splice(c, 1); if(!rows[r].length) rows.splice(r, 1);
+  }, "دکمه حذف شد"));
+}
+
+/* ── تنظیمات کلی ربات ── */
+/* ═════════════════ مدیریت گروه و کانال ═════════════════ */
+const MOD_LK = {link: "لینک", forward: "فوروارد", photo: "عکس", video: "ویدیو", sticker: "استیکر", voice: "ویس", document: "فایل", contact: "مخاطب",
+  mention: "منشن @", animation: "گیف", audio: "موزیک", poll: "نظرسنجی", location: "موقعیت", via_bot: "ربات اینلاین"};
+const MOD_CL = {join: "پیام ورود", leave: "پیام خروج", pin: "پیام سنجاق", title: "تغییر نام و عکس گروه"};
+const MOD_DEF = () => ({welcome: "", welcome_del: 60, goodbye: "", rules: "", captcha: {on: true, mins: 3}, lock: ["link", "forward"], words: [], flood: {n: 6, secs: 8},
+  action: "warn", warns: {max: 3, then: "mute", mins: 60}, clean: ["join", "leave"], report: true, channel: {}});
+function openMod(){
+  const m = S.cur.config.mod;
+  S.sheet = {kind: "mod"};
+  D = {on: !!m, m: Object.assign(MOD_DEF(), m ? JSON.parse(JSON.stringify(m)) : {})};
+  renderSheet();
+}
+function modSheet(){
+  const m = D.m, ch = m.channel || {}, bt = ch.button || {}, w = m.warns || {}, sel = (v, o) => Object.entries(o).map(([k, t]) => `<option value="${k}"${v === k ? " selected" : ""}>${t}</option>`).join("");
+  const box = (cls, key, on) => `<label class="chk" style="display:inline-flex;margin:0 0 6px 12px"><input type="checkbox" class="${cls}" value="${key}"${on ? " checked" : ""}> ${(cls === "m-lk" ? MOD_LK : MOD_CL)[key]}</label>`;
+  return head("مدیریت گروه و کانال") + `
+    <p class="muted">ربات را به گروه یا کانال اضافه کن و <b>ادمین</b> کن (حذف پیام، محدود کردن کاربران، سنجاق؛ در کانال: ارسال و ویرایش پیام). بدون ادمین بودن، تلگرام پیام‌ها را به ربات نشان نمی‌دهد. وقتی ربات اضافه شود در چت ربات خبرت می‌کند.</p>
+    <label class="chk"><input type="checkbox" id="m-on"${D.on ? " checked" : ""}> مدیریت فعال باشد</label>
+    <details class="adv" open><summary>خوش‌آمد و قوانین</summary><div class="box">
+      <span class="lbl">پیام خوش‌آمد (قالب HTML؛ {name} و {group})</span><textarea class="fa" id="m-w" data-fmt maxlength="1000" style="min-height:70px">${esc(m.welcome)}</textarea>${fmtTools("m-w")}
+      <span class="lbl">حذف خودکار خوش‌آمد بعد از (ثانیه، ۰ = نگه دار)</span><input class="ltr" id="m-wd" inputmode="numeric" value="${esc(m.welcome_del ?? 60)}">
+      <span class="lbl">پیام خداحافظی (اختیاری)</span><input class="fa" id="m-g" maxlength="500" value="${esc(m.goodbye)}">
+      <span class="lbl">قوانین گروه (با /rules نمایش داده می‌شود)</span><textarea class="fa" id="m-r" maxlength="2000" style="min-height:70px">${esc(m.rules)}</textarea>
+    </div></details>
+    <details class="adv" open><summary>امنیت ورود (کپچا)</summary><div class="box">
+      <label class="chk"><input type="checkbox" id="m-cp"${m.captcha?.on ? " checked" : ""}> عضو جدید تا زدن دکمه ساکت باشد</label>
+      <span class="lbl">مهلت (دقیقه؛ بعدش اخراج می‌شود)</span><input class="ltr" id="m-cpm" inputmode="numeric" value="${esc(m.captcha?.mins ?? 3)}">
+    </div></details>
+    <details class="adv" open><summary>قفل‌ها و ممنوعیت‌ها</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">این نوع پیام‌ها از اعضای عادی پاک می‌شود. مدیرها همیشه آزادند.</p>
+      ${Object.keys(MOD_LK).map(k => box("m-lk", k, (m.lock || []).includes(k))).join("")}
+      <span class="lbl">کلمات ممنوع (با خط جدید یا ویرگول جدا کن)</span><textarea class="fa" id="m-wo" maxlength="2000" style="min-height:60px">${esc((m.words || []).join("\n"))}</textarea>
+      <span class="lbl">ضد اسپم: بیشتر از (تعداد) پیام در (ثانیه)؛ تعداد ۰ = خاموش</span>
+      <div class="cmd"><input class="ltr" id="m-fn" inputmode="numeric" value="${esc(m.flood?.n ?? 0)}" aria-label="تعداد پیام"><input class="ltr" id="m-fs" inputmode="numeric" value="${esc(m.flood?.secs ?? 8)}" aria-label="ثانیه"></div>
+    </div></details>
+    <details class="adv"><summary>مجازات و اخطار</summary><div class="box">
+      <span class="lbl">وقتی عضوی قفل یا کلمه‌ی ممنوع را رعایت نکند</span>
+      <select id="m-ac">${sel(m.action || "warn", {warn: "پیام پاک شود و اخطار بگیرد", mute: "پیام پاک شود و ساکت شود", delete: "فقط پیام پاک شود"})}</select>
+      <span class="lbl">حداکثر اخطار</span><input class="ltr" id="m-wm" inputmode="numeric" value="${esc(w.max ?? 3)}">
+      <span class="lbl">بعد از رسیدن به سقف</span><select id="m-wt">${sel(w.then || "mute", {mute: "ساکت شود", ban: "بن شود", kick: "اخراج شود"})}</select>
+      <span class="lbl">مدت سکوت (دقیقه)</span><input class="ltr" id="m-wmin" inputmode="numeric" value="${esc(w.mins ?? 60)}">
+    </div></details>
+    <details class="adv"><summary>تمیزکاری</summary><div class="box">
+      ${Object.keys(MOD_CL).map(k => box("m-cl", k, (m.clean || []).includes(k))).join("")}
+      <label class="chk"><input type="checkbox" id="m-rp"${m.report !== false ? " checked" : ""}> اعضا بتوانند با /report پیام را به مدیران گزارش بدهند</label>
+    </div></details>
+    <details class="adv"${ch.id ? " open" : ""}><summary>کانال</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">ربات باید ادمین کانال باشد. زیر هر پست جدید دکمه می‌گذارد و واکنش می‌زند. برای انتشار از خود ربات: در چت ربات روی هر پیام ریپلای کن و <b dir="ltr">/post</b> یا <b dir="ltr">/post 30</b> (۳۰ دقیقه‌ی بعد) بنویس.</p>
+      <span class="lbl">آیدی کانال</span><input class="ltr" id="m-ci" value="${esc(ch.id || "")}" placeholder="@mychannel یا -1001234567890" autocomplete="off">
+      <span class="lbl">دکمه‌ی زیر پست‌ها (متن و لینک؛ اختیاری)</span>
+      <div class="cmd"><input class="fa" id="m-bt" maxlength="30" value="${esc(bt.text || "")}" placeholder="متن دکمه"><input class="ltr" id="m-bu" value="${esc(bt.url || "")}" placeholder="https://t.me/..." autocomplete="off"></div>
+      <span class="lbl">واکنش خودکار (یک ایموجی؛ اختیاری)</span><input class="ltr" id="m-re" maxlength="8" value="${esc(ch.react || "")}" placeholder="👍">
+    </div></details>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
+}
+function readMod(){
+  if(!$("#m-on")) return;
+  const g = id => $("#" + id)?.value ?? "", n = id => parseInt(String(g(id)).replace(/[۰-۹]/g, c => "۰۱۲۳۴۵۶۷۸۹".indexOf(c)), 10);
+  D.on = $("#m-on").checked;
+  D.m = {welcome: g("m-w").trim(), welcome_del: n("m-wd") || 0, goodbye: g("m-g").trim(), rules: g("m-r").trim(),
+    captcha: $("#m-cp").checked ? {on: true, mins: n("m-cpm") || 3} : undefined,
+    lock: [...document.querySelectorAll(".m-lk:checked")].map(x => x.value),
+    words: g("m-wo").split(/[\n,،]+/).map(x => x.trim()).filter(Boolean),
+    flood: n("m-fn") >= 2 ? {n: n("m-fn"), secs: n("m-fs") || 8} : undefined,
+    action: g("m-ac"), warns: {max: n("m-wm") || 3, then: g("m-wt"), mins: n("m-wmin") || 60},
+    clean: [...document.querySelectorAll(".m-cl:checked")].map(x => x.value), report: $("#m-rp").checked,
+    channel: {id: g("m-ci").trim(), button: {text: g("m-bt").trim(), url: g("m-bu").trim()}, react: g("m-re").trim()}};
+}
+function saveMod(){
+  const d = D;
+  busy($('[data-sh="save"]'), () => commit(cfg => { if(d.on) cfg.mod = d.m; else delete cfg.mod; }, d.on ? "مدیریت گروه و کانال ذخیره شد" : "مدیریت خاموش شد"));
+}
+/* ── ماشه‌های گروه: کلمه یا دستور داخل گروه ← پاسخ و اکشن (امتیاز، رندوم، جدول برترین‌ها) ── */
+const GRP_KINDS = [["contains", "شامل این کلمه باشد"], ["exact", "دقیقاً همین کلمه"], ["starts", "با این کلمه شروع شود"], ["command", "دستور (مثل /roll)"]];
+const GRP_OPS = [["", "فقط پاسخ بده"], ["add", "اضافه کن به (عدد یا بازه مثل 1-10)"], ["set", "بگذار روی"]];
+function grpDraft(t){
+  const a = (t.do || [])[0], simple = !a || a.op === "add" || a.op === "set";
+  return {raw: cp(t), on: t.on || "contains", words: (t.words || []).join("، "), reply: t.reply || "", op: simple ? (a?.op || "") : "_",
+    var: simple ? (a?.var || "") : "", val: simple ? (a?.value ?? "") : "", cd: t.cooldown || 0, to: t.to === "replied", del: !!t.delete, bvar: t.board?.var || ""};
+}
+const GRP_BLANK = () => ({raw: {}, on: "exact", words: "", reply: "", op: "add", var: "points", val: "1-10", cd: 0, to: false, del: false, bvar: ""});
+function openGrp(){
+  S.sheet = {kind: "grp"};
+  D = {t: (S.cur.config.group?.triggers || []).map(grpDraft)};
+  renderSheet();
+}
+function grpSheet(){
+  const sel = (v, o) => o.map(([k, t]) => `<option value="${k}"${v === k ? " selected" : ""}>${t}</option>`).join("");
+  const rows = D.t.map((t, i) => `<div class="rl gtr" data-i="${i}">
+      <div class="cmd" style="justify-content:space-between"><b>ماشه‌ی ${N(i + 1)}</b><button class="iconb sm" data-sh="delgt" data-i="${i}" aria-label="حذف">${IC.x}</button></div>
+      <span class="lbl">وقتی عضوی در گروه…</span><select class="g-on">${sel(t.on, GRP_KINDS)}</select>
+      <input class="fa g-words" value="${esc(t.words)}" placeholder="کلمه‌ها با ویرگول جدا شوند؛ مثلاً رندوم، شانس" maxlength="300">
+      <span class="lbl">پاسخ ربات در گروه (می‌توانی از {name} و {points} استفاده کنی)</span>
+      <textarea class="fa g-reply" data-fmt maxlength="1500" style="min-height:64px">${esc(t.reply)}</textarea>${fmtTools("@last")}
+      <span class="lbl">اکشن روی متغیرِ عضو</span>
+      ${t.op === "_" ? `<p class="muted">این ماشه اکشن پیشرفته دارد (با هوش مصنوعی ساخته شده) و بدون تغییر می‌ماند.</p><input type="hidden" class="g-op" value="_">`
+        : `<div class="cmd"><select class="g-op">${sel(t.op, GRP_OPS)}</select><input class="g-var" list="vdl" value="${esc(t.var)}" placeholder="متغیر (مثلاً points)" maxlength="20" autocomplete="off"></div>
+           <input class="fa g-val" value="${esc(t.val)}" placeholder="مقدار؛ برای امتیاز تصادفی مثل 1-10" maxlength="100">`}
+      <span class="lbl">جدول برترین‌ها زیر پاسخ (نام متغیر عددی؛ اختیاری)</span><input class="g-bvar" list="vdl" value="${esc(t.bvar)}" placeholder="points" maxlength="20" autocomplete="off">
+      <div class="cmd"><input class="ltr g-cd" inputmode="numeric" value="${esc(t.cd)}" aria-label="فاصله‌ی مجاز (ثانیه)" placeholder="۰"><span class="muted">ثانیه فاصله بین دو بار استفاده‌ی هر عضو (۰ = بدون محدودیت)</span></div>
+      <label class="chk"><input type="checkbox" class="g-to"${t.to ? " checked" : ""}> روی عضوی که به پیامش ریپلای شده اعمال شود</label>
+      <label class="chk"><input type="checkbox" class="g-del"${t.del ? " checked" : ""}> پیام خودِ عضو پاک شود</label></div>`).join("");
+  return head("ماشه‌های گروه") + `
+    <p class="muted">وقتی عضوی در گروه کلمه یا دستور خاصی بفرستد، ربات جواب می‌دهد و امتیاز می‌دهد. برای بازی‌ها و پاسخ خودکار گروه. ربات را به گروه اضافه و <b>ادمین</b> کن (یا در BotFather گزینه‌ی Group Privacy را خاموش کن)، وگرنه تلگرام پیام‌های عادی را به ربات نشان نمی‌دهد. برای هر پیام فقط اولین ماشه‌ی مطابق اجرا می‌شود.</p>
+    <div class="rowh"><span class="lbl">ماشه‌ها</span>${D.t.length < 20 ? `<button class="b o sm" data-sh="addgt">${IC.plus}ماشه</button>` : ""}</div>
+    <div id="g-list">${rows || '<p class="muted">هنوز ماشه‌ای نداری.</p>'}</div>${dlist()}
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
+}
+function readGrp(){
+  if(!$("#g-list")) return;
+  D.t = [...document.querySelectorAll("#g-list .gtr")].map((r, i) => {
+    const q = s => r.querySelector(s), o = {...(D.t[i] || GRP_BLANK())};
+    o.on = q(".g-on").value; o.words = q(".g-words").value; o.reply = q(".g-reply").value; o.op = q(".g-op").value;
+    o.var = q(".g-var") ? cleanVar(q(".g-var").value) : o.var; o.val = q(".g-val") ? q(".g-val").value : o.val;
+    o.bvar = cleanVar(q(".g-bvar").value); o.cd = parseInt(q(".g-cd").value) || 0; o.to = q(".g-to").checked; o.del = q(".g-del").checked;
+    return o;
+  });
+}
+function saveGrp(){
+  const list = [];
+  for(const t of D.t){
+    const words = t.words.split(/[,،\n]+/).map(x => x.trim()).filter(Boolean);
+    if(!words.length) return toast("برای هر ماشه حداقل یک کلمه یا دستور بنویس");
+    if((t.op === "add" || t.op === "set") && !t.var) return toast("اسم متغیرِ اکشن را بنویس");
+    if(!t.reply.trim() && !t.op && !t.bvar) return toast("هر ماشه باید پاسخ یا اکشن داشته باشد");
+    const o = {...t.raw, on: t.on, words};
+    if(t.reply.trim()) o.reply = t.reply.trim(); else delete o.reply;
+    if(t.op === "add" || t.op === "set") o.do = [{op: t.op, var: t.var, value: String(t.val ?? "").trim() || (t.op === "add" ? "1" : "")}, ...(t.raw.do || []).slice(1)];
+    else if(t.op === "") delete o.do;
+    if(t.bvar) o.board = {...(t.raw.board || {}), var: t.bvar, top: t.raw.board?.top || 10}; else delete o.board;
+    if(t.cd > 0) o.cooldown = t.cd; else delete o.cooldown;
+    if(t.to) o.to = "replied"; else delete o.to;
+    if(t.del) o.delete = true; else delete o.delete;
+    list.push(o);
+  }
+  busy($('[data-sh="save"]'), () => commit(cfg => { if(list.length) cfg.group = {triggers: list}; else delete cfg.group; }, "ماشه‌های گروه ذخیره شد"));
+}
+function openBot(){
+  const cfg = S.cur.config, ref = cfg.on_ref?.find(a => a.op === "add");
+  S.sheet = {kind: "bot"};
+  D = { name: cfg.name, channels: (cfg.join?.channels || []).map(c => "@" + c).join(" "), jtext: cfg.join?.text || "",
+        cmds: Object.entries(cfg.commands || {}), vars: Object.entries(cfg.vars || {}), globs: Object.entries(cfg.globals || {}),
+        staff: (cfg.desk?.staff || []).join(" "), dclosed: cfg.desk?.closed || "", drbtn: cfg.desk?.reply_btn || "",
+        refVar: ref?.var || "", refAmt: ref?.value || "", refText: cfg.ref_text || "" };
+  renderSheet();
+}
+function botSheet(){
+  const cfg = S.cur.config, d = D;
+  return head("تنظیمات ربات") + `
+    <span class="lbl">نام ربات</span><input class="fa" id="s-name" value="${esc(d.name)}" maxlength="50">
+    ${d.channels ? `<span class="lbl">عضویت اجباری کل ربات</span>
+    <input id="s-chs" value="${esc(d.channels)}" placeholder="@channel1 @channel2" autocomplete="off">
+    <p class="muted mt">این قفلِ کل ربات است. برای قفل کردن فقط یک بخش یا دکمه، از ویرایش همان بخش یا دکمه استفاده کن. خالی کردن این فیلد قفل را برمی‌دارد.</p>
+    <span class="lbl">پیام درخواست عضویت</span><textarea class="fa" id="s-jtext" data-fmt maxlength="500">${esc(d.jtext)}</textarea>${fmtTools("s-jtext")}` : ""}
+    <div class="rowh"><span class="lbl">دستورها (مثل /help)</span>${d.cmds.length < 10 ? `<button class="b o sm" data-sh="addcmd">${IC.plus}دستور</button>` : ""}</div>
+    <div class="fgap"></div>
+    ${d.cmds.map(([k, v], i) => `<div class="cmd"><span>/</span><input class="cmdn" value="${esc(k)}" placeholder="help" maxlength="30" autocomplete="off"><select class="cmdv">${nodeOpts(cfg, v)}</select><button class="iconb sm" data-sh="delcmd" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">دستور اضافه‌ای نداری.</p>'}
+    <div class="rowh"><span class="lbl">متغیرهای ربات</span>${d.vars.length < 40 ? `<button class="b o sm" data-sh="addvar">${IC.plus}متغیر</button>` : ""}</div>
+    <p class="muted" style="margin:2px 0 8px">هر کاربر مقدار مخصوص خودش را دارد (مثل امتیاز یا شهر). اسم انگلیسی بده و مقدار شروع را بنویس.</p>
+    ${d.vars.map(([k, v], i) => `<div class="cmd"><input class="vn" value="${esc(k)}" placeholder="coins" maxlength="20" autocomplete="off"><input class="fa vd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="iconb sm" data-sh="delvar" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">متغیری تعریف نشده.</p>'}
+    <div class="rowh"><span class="lbl">متغیرهای مشترک (بین همه‌ی کاربرها)</span>${d.globs.length < 20 ? `<button class="b o sm" data-sh="addglob">${IC.plus}مشترک</button>` : ""}</div>
+    <p class="muted" style="margin:2px 0 8px">یک مقدار برای کل ربات: شمارنده‌ی رأی‌ها، موجودی محدود، هدف جمعیِ جامعه. مثل متغیر عادی در متن‌ها و اکشن‌ها استفاده می‌شود.</p>
+    ${d.globs.map(([k, v], i) => `<div class="cmd"><input class="gn" value="${esc(k)}" placeholder="stock" maxlength="20" autocomplete="off"><input class="fa gd" value="${esc(v)}" placeholder="مقدار شروع" maxlength="100"><button class="iconb sm" data-sh="delglob" data-i="${i}" aria-label="حذف">${IC.x}</button></div>`).join("") || '<p class="muted">متغیر مشترکی تعریف نشده.</p>'}
+    <details class="adv"${d.staff || d.dclosed || d.drbtn ? " open" : ""}><summary>پشتیبانی و تیکت</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">تیکت‌ها همیشه برای خودت می‌آیند. اگه می‌خوای همکارها هم ببینند و جواب بدهند، آیدی عددی تلگرامشان را بنویس (تا ${N(5)} نفر، با فاصله).</p>
+      <span class="lbl">آیدی عددی پشتیبان‌ها</span><input class="ltr" id="s-staff" value="${esc(d.staff)}" placeholder="123456789 987654321" inputmode="numeric" autocomplete="off">
+      <span class="lbl">پیام بسته شدن تیکت (می‌تواند {ticket_no} داشته باشد)</span><input class="fa" id="s-dclosed" value="${esc(d.dclosed)}" maxlength="300" placeholder="تیکت #{ticket_no} بسته شد.">
+      <span class="lbl">متن دکمه‌ی پاسخ کاربر</span><input class="fa" id="s-drbtn" value="${esc(d.drbtn)}" maxlength="30" placeholder="پاسخ به پشتیبانی">
+    </div></details>
+    <details class="adv"${d.refVar ? " open" : ""}><summary>پاداش دعوت</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">وقتی کسی با لینک دعوتِ یکی از کاربرهای ربات تو وارد شود، آن کاربر (دعوت‌کننده) این مقدار را می‌گیرد. لینک و تعداد دعوت‌ها با <b dir="ltr">{ref_link}</b> و <b dir="ltr">{refs}</b> در متن‌ها قابل نمایش است.</p>
+      <div class="cmd"><input class="ltr" id="s-rv" list="vdl" value="${esc(d.refVar)}" placeholder="متغیر (مثلاً coins)" maxlength="20" autocomplete="off"><input id="s-ra" value="${esc(d.refAmt)}" placeholder="مقدار (مثلاً 5)" maxlength="10" inputmode="numeric"></div>
+      <span class="lbl">پیام برای دعوت‌کننده (اختیاری)</span><input class="fa" id="s-rt" data-fmt value="${esc(d.refText)}" maxlength="500" placeholder="یک نفر با لینک تو آمد. سکه‌های تو: {coins}">${fmtTools("s-rt")}
+      <p class="muted mt">برای هر کاربر فقط وقتی حساب می‌شود که برای اولین بار ربات را استارت کند.</p>
+    </div></details>
+    <details class="adv"><summary>متغیرهای آماده‌ی تلگرام</summary><div class="box">
+      <p class="muted" style="margin-bottom:8px">در متن‌ها و شرط‌ها قابل استفاده‌اند؛ مثلاً <b dir="ltr">{name}</b>. اگر خالی بود می‌توانی جایگزین بگذاری: <b dir="ltr">{username|بدون آیدی}</b></p>
+      ${BUILTIN_HELP.map(([k, l]) => `<div class="kvr"><code dir="ltr">{${k}}</code><span>${l}</span></div>`).join("")}
+    </div></details>${dlist()}
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button></div>`;
+}
+function readBot(){
+  D.name = $("#s-name")?.value ?? D.name; D.channels = $("#s-chs")?.value ?? D.channels; D.jtext = $("#s-jtext")?.value ?? D.jtext;
+  const ns = [...document.querySelectorAll(".cmdn")], vs = [...document.querySelectorAll(".cmdv")];
+  if(ns.length || document.querySelector("#s-name")) D.cmds = ns.map((n, i) => [n.value, vs[i].value]);
+  if(document.querySelector("#s-name")){
+    const vn = [...document.querySelectorAll(".vn")], vd = [...document.querySelectorAll(".vd")];
+    D.vars = vn.map((n, i) => [cleanVar(n.value), vd[i].value]);
+    D.globs = [...document.querySelectorAll(".gn")].map((n, i) => [cleanVar(n.value), document.querySelectorAll(".gd")[i].value]);
+    D.staff = $("#s-staff")?.value ?? D.staff; D.dclosed = $("#s-dclosed")?.value ?? D.dclosed; D.drbtn = $("#s-drbtn")?.value ?? D.drbtn;
+    D.refVar = cleanVar($("#s-rv")?.value ?? D.refVar); D.refAmt = $("#s-ra")?.value ?? D.refAmt; D.refText = $("#s-rt")?.value ?? D.refText;
+  }
+}
+function saveBot(){
+  const d = D, chs = d.channels.split(/[\s,،]+/).filter(Boolean);
+  const amt = String(d.refAmt).trim();
+  if(d.refVar && !/^-?\d+(\.\d+)?$/.test(amt)) return toast("مقدار پاداش دعوت باید عدد باشد");
+  const staff = d.staff.split(/[\s,،]+/).filter(Boolean).map(x => x.replace(/[۰-۹]/g, c => "۰۱۲۳۴۵۶۷۸۹".indexOf(c)));
+  if(staff.some(x => !/^\d{5,15}$/.test(x)) || staff.length > 5) return toast("آیدی پشتیبان‌ها باید عددی باشد (حداکثر ۵ نفر)");
+  const gnames = d.globs.map(g => g[0]).filter(Boolean);
+  if(new Set(gnames).size !== gnames.length || gnames.some(g => d.vars.some(v => v[0] === g) || BUILTIN.includes(g))) return toast("اسم متغیر مشترک نباید تکراری یا هم‌نام متغیرهای دیگر باشد");
+  busy($('[data-sh="save"]'), () => commit(cfg => {
+    cfg.name = d.name.trim() || "ربات من";
+    if(chs.length) cfg.join = {channels: chs, text: d.jtext.trim()}; else delete cfg.join;
+    cfg.commands = {};
+    d.cmds.forEach(([k, v]) => { k = k.trim().replace(/^\//, "").toLowerCase(); if(k) cfg.commands[k] = v; });
+    const vars = {};
+    d.vars.forEach(([k, v]) => { if(k) vars[k] = v.trim(); });
+    if(d.refVar && !(d.refVar in vars)) vars[d.refVar] = "0";
+    if(Object.keys(vars).length) cfg.vars = vars; else delete cfg.vars;
+    const gl = {}; d.globs.forEach(([k, v]) => { if(k) gl[k] = v.trim(); });
+    if(Object.keys(gl).length) cfg.globals = gl; else delete cfg.globals;
+    const dk = {}; if(staff.length) dk.staff = staff.map(Number); if(d.dclosed.trim()) dk.closed = d.dclosed.trim(); if(d.drbtn.trim()) dk.reply_btn = d.drbtn.trim();
+    if(Object.keys(dk).length) cfg.desk = dk; else delete cfg.desk;
+    if(d.refVar){ cfg.on_ref = [{op: "add", var: d.refVar, value: amt}]; } else delete cfg.on_ref;
+    if(d.refText.trim()) cfg.ref_text = d.refText.trim(); else delete cfg.ref_text;
+  }));
+}
+
+/* ── رسانه، پیام همگانی و خرید ── */
+function openMedia(id){ const m = mediaById(id); if(!m) return; S.sheet = {kind: "media", id}; D = {name: m.name}; renderSheet(); }
+function mediaSheet(){
+  const m = mediaById(S.sheet.id);
+  return head("رسانه") + ((m.kind === "photo" || m.kind === "animation") ? `<img class="prev" src="${API_BASE + esc(m.url)}" alt="">` : `<div class="prevbox">${IC[m.kind] || IC.document}</div>`) + `
+    <span class="muted">${KIND_FA[m.kind]}، ${sizeHTML(m.size)}</span>
+    <span class="lbl">اسم فایل (هوش مصنوعی از روی اسم می‌فهمد کجا بگذارتش)</span><input class="fa" id="m-name" value="${esc(D.name)}" maxlength="80">
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button><button class="b r" data-sh="del">حذف</button></div>`;
+}
+const readMedia = () => { D.name = $("#m-name")?.value ?? D.name; };
+function saveMedia(){
+  const id = S.sheet.id;
+  if(!D.name.trim()) return toast("اسم فایل نباید خالی باشد");
+  busy($('[data-sh="save"]'), async () => { const d = await api(`/api/media/${id}`, "PUT", {name: D.name.trim()}); Object.assign(mediaById(id), d.item); closeSheet(); render(); toast("ذخیره شد"); });
+}
+function delMedia(){
+  const id = S.sheet.id, q = "این فایل برای همیشه پاک شود؟ بخش‌هایی که از آن استفاده می‌کنند بدون رسانه نمایش داده می‌شوند.";
+  const go = ok => ok && busy($('[data-sh="del"]'), async () => { const d = await api(`/api/media/${id}`, "DELETE"); S.media = S.media.filter(m => m.id !== id); S.used = d.used; closeSheet(); render(); toast("فایل پاک شد"); });
+  confirmQ(q, go);
+}
+function openBc(){ S.sheet = {kind: "bc"}; D = {text: "", media: "", fmt: "html"}; renderSheet(); }
+function bcSheet(){
+  const live = S.stats ? Math.max(0, S.stats.users - S.stats.blocked) : 0, per = S.cfg.bc_per, cost = Math.max(1, Math.ceil(live / per));
+  return head("پیام همگانی") + `<p class="muted">این پیام برای همه‌ی کاربرهای ربات فرستاده می‌شود. الان ${N(live)} مخاطب فعال داری.</p>
+    <span class="lbl">متن پیام</span><textarea class="fa" id="bc-text" maxlength="3500" placeholder="متن اطلاعیه">${esc(D.text)}</textarea>
+    <div style="display:flex;margin-top:6px">${cpFmtSel("bc", D.fmt)}</div>${cpTools("bc", D.fmt === "html")}
+    <span class="lbl">رسانه (اختیاری)</span>${mediaPicker("media", D.media)}
+    <p class="muted mt">هزینه: ${N(cost)} توکن (هر ${N(per)} نفر ${N(1)} توکن). موجودی تو ${N(S.wallet.tokens)} توکن است.</p>
+    <div class="bar"><button class="b" data-sh="save">${IC.mega}ارسال</button></div>`;
+}
+const readBc = () => { D.text = $("#bc-text")?.value ?? D.text; D.fmt = $("#bc-fmt")?.value ?? D.fmt; };
+function saveBc(){
+  if(!D.text.trim() && !D.media) return toast("متن یا رسانه‌ی پیام را وارد کن");
+  const go = ok => ok && busy($('[data-sh="save"]'), async () => {
+    try{
+      const d = await api(`/api/bots/${S.cur.id}/broadcast`, "POST", {text: D.text.trim(), media: D.media, fmt: D.fmt === "html" ? "html" : "text"});
+      S.wallet = d.wallet; renderTop(); closeSheet(); toast(`ارسال برای ${d.queued} نفر شروع شد. وقتی تمام شود خبرت می‌کنم`); haptic("ok");
+    }catch(e){ if(e.status === 402){ closeSheet(); openBuy(e.message); } else throw e; }
+  });
+  confirmQ("این پیام برای همه‌ی کاربرها فرستاده شود؟", go);
+}
+function buySheet(){
+  const m = S.sheet.msg, w = S.wallet, c = S.cfg;
+  return head("توکن بیشتر") + `${m ? `<p class="muted" style="margin-bottom:12px">${digitsHTML(m)}</p>` : ""}
+    ${w.can_claim ? `<div class="daily" style="margin:0 0 12px"><div class="dt"><b>پاداش امروزتو نگرفتی ! است</b>${N("+" + w.next_reward)} توکن</div><button class="b amber sm" data-a="daily">دریافت</button></div>` : ""}
+    <div class="group">${packRows() || '<div class="gi static"><span class="muted">فعلاً بسته‌ای تعریف نشده.</span></div>'}</div>
+    ${S.ref.link ? `<button class="b o mt" data-a="shareref">${IC.users}دعوت دوستان، ${N("+" + c.ref_inviter)} توکن برای هر نفر</button>` : ""}
+    <div class="fgap"></div>`;
+}
+function cardSheet(){
+  const o = S.sheet.o, row = (l, v, raw) => `<div class="cdrow"><div><span class="muted">${l}</span><div class="cdv">${v}</div></div>${raw ? `<button class="b o sm" data-a="cardcopy" data-v="${esc(raw)}">کپی</button>` : ""}</div>`;
+  return head("پرداخت کارت‌به‌کارت") + `<div class="cardbox">
+    ${row("مبلغ قابل پرداخت", N(Number(o.toman).toLocaleString("en")) + " تومان", String(o.toman))}
+    ${row("شماره کارت", esc(o.number), o.raw)}
+    ${o.holder ? row("به نام", esc(o.holder)) : ""}${o.bank ? row("بانک", esc(o.bank)) : ""}
+  </div>
+  <div class="fjt cdnote">${tgHtml(o.text)}</div>
+  <button class="b" data-a="cardrcpt">ارسال رسید</button>
+  <p class="muted mt">سفارش ${N("#" + o.order)} · ${o.plan ? "اشتراک " + esc(o.plan) : N(o.tokens) + " توکن"}</p><div class="fgap"></div>`;
+}
+function openBuy(msg){ S.sheet = {kind: "buy", msg}; D = null; renderSheet(); }
+async function refreshWallet(waitInc){
+  const t0 = S.wallet.tokens;
+  for(let i = 0; i < (waitInc ? 8 : 1); i++){
+    await sleep(i ? 1500 : 700);
+    try{ const d = await api("/api/me"); S.wallet = d.wallet; S.ref = d.ref; }catch(_){}
+    renderTop();
+    if(!waitInc || S.wallet.tokens > t0) break;
+  }
+  if(S.sheet?.kind === "buy") closeSheet();
+  if(S.view === "create" || S.view === "account") render();
+}
+async function buyPack(id, btn){
+  busy(btn, async () => {
+    const d = await api("/api/buy", "POST", { pack: id });
+    if(tg?.openInvoice) tg.openInvoice(d.url, st => {
+      if(st === "paid"){ toast("پرداخت انجام شد"); refreshWallet(true); }
+      else if(st === "failed") toast("پرداخت ناموفق بود");
+    }); else window.open(d.url, "_blank");
+  });
+}
+
+async function buyPlan(id, btn){
+  busy(btn, async () => {
+    const d = await api("/api/plan/buy", "POST", { plan: id });
+    const done = async () => { toast("پرداخت انجام شد"); for(let i = 0; i < 6; i++){ await sleep(i ? 1500 : 800); if(await sync() && S.plan?.id === id) break; } render(); bumpTokens(); };
+    if(tg?.openInvoice) tg.openInvoice(d.url, st => {
+      if(st === "paid") done();
+      else if(st === "failed") toast("پرداخت ناموفق بود");
+    }); else window.open(d.url, "_blank");
+  });
+}
+
+/* ── هماهنگی شیت‌ها ── */
+const SHEETS = {
+  node:  {html: nodeSheet,  read: readNode,  save: saveNode,  del: delNode},
+  btn:   {html: btnSheet,   read: readBtn,   save: saveBtn,   del: delBtn},
+  bot:   {html: botSheet,   read: readBot,   save: saveBot},
+  mod:   {html: modSheet,   read: readMod,   save: saveMod},
+  media: {html: mediaSheet, read: readMedia, save: saveMedia, del: delMedia},
+  bc:    {html: bcSheet,    read: readBc,    save: saveBc},
+  buy:   {html: buySheet},
+  card:  {html: cardSheet},
+  km:    {html: kmSheet},
+  grp:   {html: grpSheet,   read: readGrp,   save: saveGrp},
+};
+function renderSheet(){ if(S.sheet.kind === "bot" && !D) return openBot();   /* محافظ: شیت تنظیمات بدون داده‌ی اولیه باز نشود */
+  showSheet(SHEETS[S.sheet.kind].html()); }
+function readSheet(){ SHEETS[S.sheet?.kind]?.read?.(); }
+
+function shAction(a, ds){
+  if(!S.sheet) return;
+  const prev = D?.kind;
+  readSheet();
+  if(a.startsWith("km")) return kmAct(a, ds);
+  if(a.startsWith("ub")) return ubAct(a, ds);
+  if(a === "stkm"){ const n = ds.n; return stGuardClose(() => { closeSheet(); openKm(n); }); }
+  if(a === "stsetstart"){ const n = ds.n; closeSheet(); return busy(null, () => commit(cfg => { cfg.start = n; }, "حالا ربات از این بخش شروع می‌شود")); }
+  if(a === "save"){
+    const sh = SHEETS[S.sheet.kind];
+    if(!sh?.save) return toast("چیزی برای ذخیره نیست");
+    return sh.save();
+  }
+  if(a === "del") return SHEETS[S.sheet.kind].del();
+  if(a === "upmedia"){ S.pickKey = ds.k; return $("#fileIn").click(); }
+  if(a === "stedit"){ const n = ds.n; closeSheet(); openNode(n); return; }
+  if(a === "stcopy"){ closeSheet(); return stCopy(ds.n); }
+  if(a === "stcenter"){ closeSheet(); return stCenter(ds.n); }
+  if(a === "stdel"){ const n = ds.n; closeSheet(); S.sheet = {kind: "node", id: n}; return delNode(); }
+  if(a === "stwe" || a === "stwr"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return; return ed.kind === "route" || ed.kind === "next" ? openNode(ed.n) : openBtn(ed.n, ed.r, ed.c); }
+  if(a === "stwx"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return; S.sheet = {kind: "btn", n: ed.n, r: ed.r, c: ed.c}; return delBtn(); }
+  if(a === "stwrx"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return;
+    return busy(null, () => commit(cfg => { const n = cfg.nodes[ed.n]; if(n?.route){ n.route.splice(ed.ri, 1); if(!n.route.length) delete n.route; } }, "قانون حذف شد")); }
+  if(a === "stnx"){ const ed = ST.wires.get(ds.k); closeSheet(); if(!ed) return;
+    return busy(null, () => commit(cfg => { const n = cfg.nodes[ed.n]; if(n) delete n.next; }, "ادامه قطع شد")); }
+  if(a === "pickmedia") D[ds.k] = ds.v;
+  else if(a === "bkind"){
+    const k = D.kind, wasText = prev === "channel" || prev === "url";
+    if(k === "channel"){ const m = CH_RE.exec(D.val) || NAME_RE.exec(D.val); D.val = m ? "@" + m[1] : ""; }
+    else if(k === "url"){ D.val = NAME_RE.test(D.val) ? "https://t.me/" + D.val.replace("@", "") : (wasText ? D.val : ""); }
+    else if(k !== "goto" && prev !== k) D.val = "";
+  }
+  else if(a === "kbt") D.kb = ds.v;
+  else if(a === "addgt") D.t.push(GRP_BLANK());
+  else if(a === "delgt") D.t.splice(+ds.i, 1);
+  else if(a === "bstyle"){ if(!S.cfg.btn_fx) return emjNeedPlan(); D.style = ds.v; }
+  else if(a === "bicon"){ if(!S.cfg.emoji_max) return emjNeedPlan(); D.icon = ds.v; }
+  else if(a === "bplan") return emjNeedPlan();
+  else if(a === "addfld") D.fields.push({q: "", v: "", t: "text"});
+  else if(a === "delfld") D.fields.splice(+ds.i, 1), D.fields.length || D.fields.push({q: "", v: "", t: "text"});
+  else if(a === "addcmd") D.cmds.push(["help", S.cur.config.start]);
+  else if(a === "delcmd") D.cmds.splice(+ds.i, 1);
+  else if(a === "addvar") D.vars.push(["", ""]);
+  else if(a === "delvar") D.vars.splice(+ds.i, 1);
+  else if(a === "addglob") D.globs.push(["", ""]);
+  else if(a === "delglob") D.globs.splice(+ds.i, 1);
+  else if(a === "addrl"){ D[ds.l].push(newRule(ds.l)); D.adv = true; }
+  else if(a === "delrl"){ D[ds.l].splice(+ds.i, 1); D.adv = true; }
+  renderSheet();
+}
+
+/* ═════════ استودیو: ابزارهای تازه ═════════ */
+/* کدام سیم زیر نقطه‌ی لمس است؟ (سیم‌ها بالای بخش‌ها رسم می‌شوند و لمس را نمی‌گیرند؛ تشخیص با هندسه) */
+function stWireAt(e){
+  const svg = $("#stsvg"); if(!svg || !svg.getScreenCTM) return null;
+  const ctm = svg.getScreenCTM(); if(!ctm) return null;
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(ctm.inverse());
+  for(const g of svg.querySelectorAll(".wire")){
+    const h = g.querySelector(".w-hit");
+    try{ if(h && h.isPointInStroke(p)) return ST.wires.get(g.dataset.w) || null; }catch(_){}
+  }
+  return null;
+}
+document.addEventListener("error", e => {
+  const t = e.target, box = t && t.tagName === "IMG" && t.closest ? t.closest(".stc-media") : null;
+  if(box) box.classList.add("bad");
+}, true);
+
+/* ── مدیریت دکمه‌ها و نوع کیبورد ── */
+function openKm(id){ if(!S.cur?.config.nodes[id]) return; S.sheet = {kind: "km", id}; D = null; renderSheet(); }
+function kmBtn(cfg, b, r, c, len){
+  const k = kindOf(b), [lab, ic] = ST_KIND[k] || ST_KIND.url, tgt = k === "pay" ? b.pay?.goto : b.goto;
+  const sub = k === "goto" ? "← " + esc(titleOf(cfg, tgt)) : k === "pay" ? `پرداخت ${N(b.pay.stars)} ستاره` + (tgt ? " ← " + esc(titleOf(cfg, tgt)) : "") : lab;
+  const op = (act, ch, aria, off) => `<button class="iconb sm" data-sh="${act}" data-r="${r}" data-c="${c}" aria-label="${aria}"${off ? " disabled" : ""}>${ch}</button>`;
+  return `<div class="km-b"><button class="km-t" data-sh="kmedit" data-r="${r}" data-c="${c}"><span class="ki">${ic}</span><span class="tt"><b>${esc(b.text)}</b><small>${sub}${b.kb === "reply" ? " · کیبورد" : " · شیشه‌ای"}${b.when ? " · شرطی" : ""}</small></span></button>
+    <div class="km-ops">${op("kmr", "→", "یک جا جلوتر", c === 0)}${op("kml", "←", "یک جا عقب‌تر", c === len - 1)}${op("kmu", "↑", "به ردیف بالا", false)}${op("kmd", "↓", "به ردیف پایین", false)}${op("kmdel", IC.trash, "حذف دکمه", false)}</div></div>`;
+}
+function kmSheet(){
+  const cfg = S.cur.config, id = S.sheet.id, n = cfg.nodes[id], rows = n.buttons || [];
+  const total = rows.reduce((a, r) => a + r.length, 0), full = rows.length >= 6 && rows[rows.length - 1].length >= 3;
+  const list = rows.length ? rows.map((row, r) => `<div class="km-row"><div class="km-cap">ردیف ${N(r + 1)}</div>${row.map((b, c) => kmBtn(cfg, b, r, c, row.length)).join("")}</div>`).join("")
+    : `<div class="km-empty">این بخش هنوز دکمه‌ای ندارد.</div>`;
+  return head("دکمه‌های «" + esc(titleOf(cfg, id)) + "»") + `
+    <p class="muted" style="margin-bottom:4px">هر ردیف تا ${N(3)} دکمه و هر بخش تا ${N(6)} ردیف دارد. روی هر دکمه بزن تا ویرایشش کنی و با فلش‌ها جابه‌جایش کن.</p>
+    <div class="sub"><span>${N(total)} دکمه</span><button class="b sm" data-sh="kmadd"${full ? " disabled" : ""}>${IC.plus}دکمه‌ی تازه</button></div>
+    ${list}<div class="fgap"></div>`;
+}
+function kmMove(rows, r, c, dir){
+  const tr = r + dir, alone = rows[r].length === 1;
+  if(alone && (tr < 0 || tr >= rows.length)) return false;
+  const b = rows[r][c];
+  if(tr >= 0 && tr < rows.length){ if(rows[tr].length >= 3) return false; rows[r].splice(c, 1); rows[tr].push(b); }
+  else { if(rows.length >= 6) return false; rows[r].splice(c, 1); if(dir < 0) rows.unshift([b]); else rows.push([b]); }
+  for(let i = rows.length - 1; i >= 0; i--) if(!rows[i].length) rows.splice(i, 1);
+  return true;
+}
+function kmAct(a, ds){
+  const id = S.sheet.id, r = +ds.r, c = +ds.c, n = S.cur.config.nodes[id];
+  const run = (fn, msg) => busy(null, async () => { await commit(fn, msg); openKm(id); });
+  if(a === "kmadd"){ closeSheet(); return A.stbtn({dataset: {n: id}}); }
+  if(a === "kmedit"){ closeSheet(); return openBtn(id, r, c); }
+  if(a === "kmdel") return run(cfg => { const rows = cfg.nodes[id].buttons; rows[r].splice(c, 1); if(!rows[r].length) rows.splice(r, 1); }, "دکمه حذف شد");
+  if(a === "kmr" || a === "kml"){
+    const to = a === "kmr" ? c - 1 : c + 1;
+    return run(cfg => { const row = cfg.nodes[id].buttons[r]; [row[c], row[to]] = [row[to], row[c]]; }, "جابه‌جا شد");
+  }
+  if(a === "kmu" || a === "kmd"){
+    const dir = a === "kmu" ? -1 : 1;
+    if(!kmMove(cp(n.buttons), r, c, dir)) return toast("آن طرف جا نیست؛ ردیف‌ها حداکثر ۳ دکمه دارند");
+    return run(cfg => { kmMove(cfg.nodes[id].buttons, r, c, dir); }, "جابه‌جا شد");
+  }
+}
+
+/* ── ایموجی پرمیوم و رنگ دکمه داخل ادیتور ── */
+async function emjEnsure(){
+  if(S.emojis == null){ try{ S.emojis = (await api("/api/emojis")).items; }catch(_){ S.emojis = []; } }
+  return S.emojis || [];
+}
+function emjNeedPlan(){
+  confirmQ("ایموجی پرمیوم و دکمه‌ی رنگی با اشتراک Premium یا Pro فعال می‌شوند. صفحه‌ی اشتراک باز شود؟", ok => { if(ok) stGuardClose(() => { closeSheet(); A.goplan(); }); });
+}
+Object.assign(A, {
+  emjbar: async el => {
+    if(!S.cfg.emoji_max) return emjNeedPlan();
+    const bar = el.closest(".fmtbar"), nxt = bar.nextElementSibling;
+    if(nxt?.classList.contains("emjpick")){ nxt.remove(); return; }
+    document.querySelectorAll(".fmtbar + .emjpick").forEach(x => x.remove());
+    const list = await emjEnsure();
+    const html = list.length ? list.map(e => `<button type="button" data-a="emjins" data-t="${esc(el.dataset.t)}" data-id="${esc(e.id)}" data-ch="${esc(e.char)}" aria-label="${esc(e.char)}">${emjImg(e)}</button>`).join("")
+      : `<span class="muted">کتابخانه‌ی ایموجی‌هایت خالی است. ایموجی پرمیوم را برای ربات مادر بفرست.</span>`;
+    if(bar.isConnected) bar.insertAdjacentHTML("afterend", `<div class="emjpick">${html}</div>`);
+  },
+  emjins: el => {
+    const t = el.dataset.t === "@last" ? FMT_LAST : $("#" + el.dataset.t);
+    if(!t || !t.isConnected) return toast("اول روی کادر متن بزن، بعد ایموجی را انتخاب کن");
+    const tag = `<tg-emoji emoji-id="${el.dataset.id}">${el.dataset.ch}</tg-emoji>`, a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
+    t.value = t.value.slice(0, a) + tag + t.value.slice(b); t.focus(); t.setSelectionRange(a + tag.length, a + tag.length);
+    t.dispatchEvent(new Event("input", {bubbles: true}));
+  },
+});
+Object.assign(A, {
+  stbtn: el => {
+    if(!$("#stc")) return;
+    const id = el.dataset.n, n = S.cur.config.nodes[id]; if(!n) return;
+    const rows = n.buttons || [], last = rows.length - 1;
+    if(rows.length >= 6 && rows[last].length >= 3) return toast("این بخش به حداکثر تعداد دکمه رسیده (۶ ردیف، هر ردیف ۳ دکمه)");
+    openBtn(id, rows.length && rows[last].length < 3 ? last : null, null);
+  },
+  stkm: el => openKm(el.dataset.n),
+});
+/* ── شیت قانون ── */
+function ubruleSheet(){
+  const isNew = D.i === null;
+  return head(isNew ? "قانون جدید" : "ویرایش قانون") + `
+    <span class="lbl">کلمه‌های کلیدی (با کاما جدا کن)</span><input id="ur-kw" maxlength="300" placeholder="قیمت، تعرفه، چنده" value="${esc(D.kw)}">
+    <span class="lbl">شرط تطبیق</span><select id="ur-mode">${UB_MODE.map(([k, t]) => `<option value="${k}"${D.mode === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+    <span class="lbl">کجا کار کند؟</span><select id="ur-where">${UB_WHERE.map(([k, t]) => `<option value="${k}"${(D.where || "pm") === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+    ${ubL("متن پاسخ", "می‌توانی از {name} (نام فرستنده)، {time} و {date} استفاده کنی.")}<textarea class="fa" id="ur-text" maxlength="1000" placeholder="متنی که فرستاده می‌شود">${esc(D.text)}</textarea>
+    <label class="chk"><input type="checkbox" id="ur-on"${D.on ? " checked" : ""}> قانون فعال باشد</label>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b r" data-sh="del">حذف</button>`}</div>`;
+}
+const ubruleRead = () => { D.kw = $("#ur-kw")?.value ?? D.kw; D.mode = $("#ur-mode")?.value ?? D.mode; D.text = $("#ur-text")?.value ?? D.text; D.where = $("#ur-where")?.value ?? D.where; D.on = $("#ur-on") ? $("#ur-on").checked : D.on; };
+function ubruleSave(){
+  const kw = D.kw.split(/[,،\n]/).map(s => s.trim()).filter(Boolean).slice(0, 8), text = D.text.trim();
+  if(!kw.length) return toast("حداقل یک کلمه‌ی کلیدی بنویس");
+  if(!text) return toast("متن پاسخ را بنویس");
+  const rule = {kw, mode: D.mode, text, on: D.on, where: D.where || "pm"}, i = D.i;
+  busy($('[data-sh="save"]'), async () => { await ubCommit(cfg => { if(i === null) cfg.rules.push(rule); else cfg.rules[i] = rule; }, "قانون ذخیره شد"); closeSheet(); renderUserbot(); });
+}
+function ubruleDel(){
+  const i = D.i;
+  confirmQ("این قانون حذف شود؟", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.rules.splice(i, 1); }, "قانون حذف شد"); closeSheet(); renderUserbot(); }));
+}
+
+
+/* ── انتخاب گروه/کانال از اکانت ── */
+function openUbPick(){
+  ubRead();
+  const x = ubItem(); if(!x) return;
+  const mx = x.lim?.chats || 60;
+  if(S.ubCfg.chats.length >= mx) return toast(`حداکثر ${mx} گروه یا کانال می‌توانی اضافه کنی`);
+  if(x.status !== "running") return toast("اول یوزربات را روشن کن تا فهرست گروه‌ها خوانده شود");
+  S.sheet = {kind: "ubpick"}; D = {items: null, err: ""}; renderSheet();
+  const id = S.ubSel;
+  api(`/api/userbots/${id}/chats`).then(d => { if(S.sheet?.kind === "ubpick" && S.ubSel === id){ D.items = d.items || []; D.scanned = d.scanned || 0; D.who = d.who || null; renderSheet(); } })
+    .catch(e => { if(S.sheet?.kind === "ubpick"){ D.items = []; D.err = e.message || "خطا در خواندن فهرست"; renderSheet(); } });
+}
+function ubpickSheet(){
+  if(D.items === null) return head("افزودن گروه یا کانال") + `<div class="gi static"><span class="muted">در حال خواندن چت‌های اکانت…</span></div>`;
+  const have = new Set(S.ubCfg.chats.map(h => h.id));
+  const rows = D.items.map(c => { const added = have.has(c.id), ok = !added;
+    return `<div class="gi ubpick${ok ? "" : " static"}"${ok ? ` role="button" tabindex="0" data-sh="ubpick" data-id="${c.id}"` : ""} data-t="${esc(c.title.toLowerCase())}" style="${ok ? (c.can ? "" : "opacity:.7") : "opacity:.55"}"><span class="dot ${ok && c.can ? "on" : ""}"></span>
+      <span class="gt"><b>${esc(c.title)}</b><span>${c.kind === "channel" ? "کانال" : "گروه"}${c.own ? " · ادمین" : ""}${c.members ? ` · ${N(c.members)} عضو` : ""}${added ? " · اضافه شده" : !c.can ? " · شاید اجازه‌ی ارسال نداشته باشی" : ""}</span></span></div>`; }).join("");
+  const who = D.who ? `<div class="ubchip" style="margin:0 0 10px">${esc(D.who.name || "-")}${D.who.user ? ` · <bdi dir="ltr">@${esc(D.who.user)}</bdi>` : ""} · <bdi dir="ltr">${esc(D.who.phone)}</bdi></div>` : "";
+  return head("افزودن گروه یا کانال") + who + (D.err ? `<p class="muted" style="color:var(--bad)">${esc(D.err)}</p>` : `<input id="ubp-q" placeholder="جستجوی نام…" autocomplete="off">`) +
+    `<div class="panel mt2">${ubL("افزودن مستقیم", "یوزرنیم (@name)، لینک عمومی (t.me/name) یا آیدی عددی گروه/کانال. گروه یا کانال خصوصی را فقط وقتی پیدا می‌کند که اکانت وصل‌شده عضوش باشد. اگر گروه‌هایت در فهرست نیست، شاید با شماره‌ی دیگری وصل شده‌ای.")}<input id="ubp-ref" dir="ltr" autocomplete="off" placeholder="@username · t.me/xxx · -1001234567890" value="${esc(D.ref || "")}">
+      <button class="b o sm mt2" data-sh="ubresolve">پیدا کن و اضافه کن</button></div>
+     <div class="group sep mt2" style="max-height:44vh;overflow:auto">${rows || `<div class="gi static"><span class="muted">${D.err ? "" : "گروه یا کانالی پیدا نشد."}</span></div>`}</div>
+     ${D.scanned ? `<small class="muted">${N(D.scanned)} چت بررسی شد · ${N(D.items.length)} گروه/کانال</small>` : ""}`;
+}
+
+/* ── شیت یک گروه/کانال ── */
+function ubchatSheet(){
+  const g = D.kind !== "channel";
+  return head(esc(D.title)) + `
+    ${D.err ? `<div class="panel" style="border-color:var(--bad)"><p class="muted" style="color:var(--bad);margin:0">متوقف شد: ${esc(D.err)}</p><button class="b o sm mt2" data-sh="ubcresume">ازسرگیری</button></div>` : ""}
+    ${g ? `${ubL("پاسخ خودکار در این گروه", "«فقط منشن/ریپلای» ایمن‌تر است. «کلمه‌های کلیدی» به قانون‌های تب قانون‌ها (گزینه‌ی گروه‌ها یا هر دو) روی همه‌ی پیام‌ها جواب می‌دهد. پاسخ هوشمند را از تب قابلیت‌ها روشن کن؛ هزینه‌اش از توکن کم می‌شود.")}<select id="uh-reply">${UB_REPLY.map(([k, t]) => `<option value="${k}"${D.reply === k ? " selected" : ""}>${t}</option>`).join("")}</select>
+    <label class="chk"><input type="checkbox" id="uh-ai"${D.ai ? " checked" : ""}> پاسخ هوشمند (فقط هنگام منشن یا ریپلای)</label>` : `<div class="ubchip">کانال — فقط مقصد پیام زمان‌بندی‌شده ${ubI("باید ادمین با اجازه‌ی ارسال پست باشی.")}</div>`}
+    ${g ? `${ubL("محافظ هوشمند رسانه/لینک", "«خاموش» یعنی در این چت هیچ‌وقت متن یا رسانه‌ی پیام زمان‌بندی‌شده تغییر نکند (حتی اگر در پیام فعال باشد).")}<select id="uh-guard"><option value="auto"${D.guard !== "off" ? " selected" : ""}>طبق تنظیم هر پیام</option><option value="off"${D.guard === "off" ? " selected" : ""}>خاموش (بدون هیچ تغییری)</option></select>` : ""}
+    <label class="chk"><input type="checkbox" id="uh-on"${D.on ? " checked" : ""}> این چت فعال باشد</label>
+    <div class="bar"><button class="b" data-sh="save">ذخیره</button><button class="b r" data-sh="del">حذف از فهرست</button></div>`;
+}
+const ubchatRead = () => { if($("#uh-on")){ D.on = $("#uh-on").checked; if($("#uh-reply")){ D.reply = $("#uh-reply").value; D.ai = $("#uh-ai").checked; D.guard = $("#uh-guard")?.value || "auto"; } } };
+function ubchatSave(){
+  const i = D.i, h = {id: D.id, title: D.title, kind: D.kind, on: D.on, reply: D.reply, ai: D.ai, err: D.err || "", guard: D.guard === "off" ? "off" : "auto"};
+  busy($('[data-sh="save"]'), async () => { await ubCommit(cfg => { cfg.chats[i] = h; }, "ذخیره شد"); closeSheet(); renderUserbot(); });
+}
+function ubchatDel(){
+  const i = D.i;
+  confirmQ("این چت از فهرست حذف شود؟ اگر تنها مقصد یک پیام زمان‌بندی‌شده باشد، آن پیام هم حذف می‌شود.", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.chats.splice(i, 1); }, "حذف شد"); closeSheet(); renderUserbot(); }));
+}
+
+/* ── شیت پیام زمان‌بندی‌شده ── */
+const ubSw = (id, on, label, sub, hint) => `<label class="chk"><input type="checkbox" id="${id}" class="ub-tg"${on ? " checked" : ""}> ${label}</label>${hint ? `<p class="muted" style="margin:2px 0 6px;font-size:12px">${hint}</p>` : ""}${sub ? `<div class="ub-sub" data-for="${id}" style="${on ? "" : "display:none;"}margin:4px 0 8px;padding-inline-start:10px;border-inline-start:2px solid rgba(120,140,160,.35)">${sub}</div>` : ""}`;
+document.addEventListener("change", e => {
+  const t = e.target; if(!t || !t.classList || !t.classList.contains("ub-tg")) return;
+  const sub = document.querySelector(`.ub-sub[data-for="${t.id}"]`); if(sub) sub.style.display = t.checked ? "" : "none";
+  const fb = document.getElementById("ub-fbbox"); if(fb) fb.style.display = (document.getElementById("up-mg")?.checked || document.getElementById("up-lg")?.checked) ? "" : "none";
+});
+function ubpostSheet(){
+  const hrs = (v, max) => Array.from({length: max + 1}, (_, h) => `<option value="${h}"${h === v ? " selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("");
+  const every = UB_EVERY.some(x => x[0] === D.every_min) ? UB_EVERY : [...UB_EVERY, [D.every_min, ubEveryT(D.every_min)]].sort((a, b) => a[0] - b[0]);
+  const isNew = D.i === null, g = {test: 3, safe: 60, balanced: 30, fast: 15}[S.ubCfg.safe] || 30;
+  return head(isNew ? "زمان‌بندی جدید" : "ویرایش زمان‌بندی") + `
+    ${ubL("نام")}<input id="up-name" maxlength="40" placeholder="مثلاً: تبلیغ صبحگاهی" value="${esc(D.name)}">
+    ${ubL("ارسال به")}
+    <div class="group sep">${S.ubCfg.chats.map(h => `<label class="gi chk" style="margin:0"><input type="checkbox" class="up-c" value="${h.id}"${D.chats.includes(h.id) ? " checked" : ""}> <span class="gt"><b>${esc(h.title)}</b><span>${h.kind === "channel" ? "کانال" : "گروه"}${h.err ? " · متوقف" : ""}${((ubItem()?.rs || {})[h.id] || []).map(k => k === "links" ? " · لینک/آیدی محدود" : " · رسانه محدود").join("")}</span></span></label>`).join("")}</div>
+    ${ubL("متن‌ها", "تا ۵ متن؛ هر متن را با یک خط --- جدا کن. می‌توانی از {chat} (نام گروه/کانال)، {time} و {date} استفاده کنی. تکرار دقیقاً یک متن در چند گروه ریسک ریپورت دارد؛ چند متن متفاوت بنویس. اگر متن از ۱۰۰۰ نویسه بلندتر باشد، فایل جدا و متن بعد از آن می‌رود.")}
+    <textarea class="fa" id="up-text" data-fmt rows="6" maxlength="16000" placeholder="متن اول&#10;---&#10;متن دوم">${esc(D.text)}</textarea>${fmtTools("up-text")}
+    <div class="row2"><div>${ubL("قالب")}<select id="up-fmt"><option value="html"${D.fmt === "html" ? " selected" : ""}>HTML</option><option value="text"${D.fmt !== "html" ? " selected" : ""}>متن ساده</option></select></div>
+      <div>${ubL("ترتیب متن‌ها")}<select id="up-mode"><option value="seq"${D.mode === "seq" ? " selected" : ""}>به‌نوبت</option><option value="rand"${D.mode === "rand" ? " selected" : ""}>تصادفی</option></select></div></div>
+    ${ubL("عکس یا فایل (اختیاری)", "با همه‌ی متن‌های این زمان‌بندی ارسال می‌شود. فقط فایل بدون متن هم مجاز است.")}${mediaPicker("media", D.media)}
+    ${ubSw("up-rp", D.rp, "ریپلای روی پیام کاربر فعال اخیر (به‌جای پست ساده)",
+      `${ubL("پیام چه بازه‌ای باشد")}<select id="up-rwin">${[[10, "۱۰ دقیقه اخیر"], [30, "۳۰ دقیقه اخیر"], [60, "۱ ساعت اخیر"], [180, "۳ ساعت اخیر"], [720, "۱۲ ساعت اخیر"]].map(([v, t]) => `<option value="${v}"${(+D.rwin || 30) === v ? " selected" : ""}>${t}</option>`).join("")}</select>
+       ${ubL("اگر در آن بازه کاربر فعالی نبود")}<select id="up-rnone"><option value="plain"${D.rnone !== "skip" ? " selected" : ""}>پست ساده بفرست</option><option value="skip"${D.rnone === "skip" ? " selected" : ""}>آن گروه را رد کن</option></select>`,
+      "فعال‌ترین کاربران چند دقیقه‌ی اخیر انتخاب می‌شوند؛ ربات‌ها و پیام‌های خودت نادیده گرفته می‌شوند. در کانال‌ها اعمال نمی‌شود.")}
+    ${ubSw("up-nl", D.nl, "اگر آخرین پیام گروه مال خودم است، ارسال نکن", "", "جلوگیری از پشت‌سرهم گذاشتن پیام در گروه‌های کم‌تحرک (ریسک ریپورت)")}
+    ${ubSw("up-mg", D.mg, "تشخیص هوشمند محدودیت عکس و فایل", "", "حق‌های گروه برای اکانت تو بررسی می‌شود و اگر ارسال رسانه بسته بود، جایگزین زیر اجرا می‌شود. اگر خاموش باشد، رسانه‌ی ممنوع فقط رد می‌شود و چت متوقف نمی‌شود.")}
+    ${ubSw("up-lg", D.lg, "تشخیص ربات آنتی‌لینک (حذف پیام دارای لینک/آیدی)",
+      `${ubL("هنگام جایگزین، چه چیزی حذف شود")}<select id="up-lgs"><option value="both"${D.lgs !== "links" && D.lgs !== "ids" ? " selected" : ""}>لینک و آیدی</option><option value="links"${D.lgs === "links" ? " selected" : ""}>فقط لینک</option><option value="ids"${D.lgs === "ids" ? " selected" : ""}>فقط آیدی (@username)</option></select>`,
+      "بعد از ارسالِ پیام دارای لینک/آیدی، چند ثانیه صبر می‌کند؛ اگر ربات گروه پیام را پاک کرد، جایگزین را می‌فرستد و تا ۲۴ ساعت آن گروه را لینک‌ممنوع به یاد می‌آورد.")}
+    <div id="ub-fbbox" style="${D.mg || D.lg ? "" : "display:none"}">${ubL("جایگزین وقتی محدودیت تشخیص داده شد")}
+      <select id="up-fb"><option value="text"${D.fb !== "fwd" && D.fb !== "skip" ? " selected" : ""}>فقط متن بفرست (بدون رسانه/لینک ممنوع)</option><option value="fwd"${D.fb === "fwd" ? " selected" : ""}>فوروارد یک پست از کانال</option><option value="skip"${D.fb === "skip" ? " selected" : ""}>آن گروه را رد کن</option></select>
+      <input id="up-fwd" dir="ltr" autocomplete="off" placeholder="https://t.me/channel/123 (فقط برای حالت فوروارد)" value="${esc(D.fwd || "")}" style="margin-top:6px"></div>
+    ${ubL("هر چند وقت", D.every_min < g ? `⚠️ سطح ایمنی فعلی حداقل ${g} دقیقه بین دو پیام به یک چت می‌گذارد، پس فاصله‌ی واقعی ${g} دقیقه می‌شود. برای تست کوتاه‌تر، سطح ایمنی را روی «آزمایشی» بگذار.` : `فاصله‌ی واقعی هیچ‌وقت کمتر از حداقل سطح ایمنی (${g} دقیقه) نمی‌شود.`)}<select id="up-every">${every.map(([m, t]) => `<option value="${m}"${D.every_min === m ? " selected" : ""}>${t}</option>`).join("")}</select>
+    ${ubL("بازه‌ی مجاز ارسال", "ساعت تهران. بیرون از این بازه ساکت می‌ماند.")}
+    <div style="display:flex;gap:8px;align-items:center"><select id="up-from">${hrs(D.from_h, 23)}</select><span class="muted">تا</span><select id="up-to">${hrs(D.to_h, 24).replace(/<option value="0".*?<\/option>/, "")}</select></div>
+    ${ubL("حداکثر دفعه در روز")}<input id="up-daily" type="number" min="1" max="300" inputmode="numeric" value="${D.daily}">
+    <label class="chk"><input type="checkbox" id="up-on"${D.on ? " checked" : ""}> فعال باشد</label>
+    <div class="bar" style="flex-direction:column"><button class="b" data-sh="save">ذخیره</button>${isNew ? "" : `<button class="b o" data-sh="ubpostnow">ذخیره و ارسال همین حالا</button><button class="b r" data-sh="del">حذف</button>`}</div>`;
+}
+const ubpostRead = () => {
+  if(!$("#up-name")) return;
+  D.name = $("#up-name").value; D.text = $("#up-text").value; D.mode = $("#up-mode").value; D.fmt = $("#up-fmt")?.value || D.fmt; D.every_min = +$("#up-every").value || 360;
+  D.rp = !!$("#up-rp")?.checked; D.rwin = +($("#up-rwin")?.value || D.rwin || 30); D.rnone = $("#up-rnone")?.value || D.rnone || "plain"; D.nl = !!$("#up-nl")?.checked; D.mg = !!$("#up-mg")?.checked; D.lg = !!$("#up-lg")?.checked; D.lgs = $("#up-lgs")?.value || D.lgs || "both"; D.fb = $("#up-fb")?.value || D.fb || "text"; D.fwd = ($("#up-fwd")?.value ?? D.fwd ?? "").trim(); D.from_h = +$("#up-from").value; D.to_h = +$("#up-to").value || 24; D.daily = Math.max(1, Math.min(300, +$("#up-daily").value || 4)); D.on = $("#up-on").checked;
+  D.chats = [...document.querySelectorAll(".up-c:checked")].map(e => +e.value);
+};
+function ubpostBuild(){
+  const texts = D.text.split(/^\s*-{3,}\s*$/m).map(t => t.trim()).filter(Boolean).slice(0, 5);
+  if(!D.chats.length){ toast("حداقل یک مقصد انتخاب کن"); return null; }
+  if(!texts.length && !D.media){ toast("متن یا فایل پیوست را مشخص کن"); return null; }
+  if((D.mg || D.lg) && D.fb === "fwd" && !/t\.me\/(c\/\d+|[A-Za-z]\w{3,})\/\d+/.test(D.fwd || "")){ toast("برای فوروارد، لینک یک پست کانال را بنویس؛ مثل https://t.me/channel/123"); return null; }
+  return {id: D.id, name: D.name.trim() || "پیام زمان‌بندی‌شده", chats: D.chats, texts, media: D.media || "", fmt: D.fmt || "html", mode: D.mode, every_min: D.every_min, from_h: D.from_h, to_h: D.to_h, daily: D.daily, on: D.on, rp: !!D.rp, rwin: D.rwin || 30, rnone: D.rnone || "plain", nl: !!D.nl, mg: !!D.mg, lg: !!D.lg, lgs: D.lgs || "both", fb: D.fb || "text", fwd: D.fwd || ""};
+}
+function ubpostSave(after){
+  const p = ubpostBuild(); if(!p) return; const i = D.i;
+  busy($('[data-sh="save"]'), async () => {
+    await ubCommit(cfg => { if(i === null) cfg.posts.push(p); else cfg.posts[i] = p; }, "ذخیره شد");
+    if(after){ const saved = i === null ? S.ubCfg.posts[S.ubCfg.posts.length - 1] : S.ubCfg.posts[i]; if(saved) await after(saved.id); }
+    closeSheet(); renderUserbot();
+  });
+}
+function ubpostDel(){
+  const i = D.i;
+  confirmQ("این پیام زمان‌بندی‌شده حذف شود؟", ok => ok && busy($('[data-sh="del"]'), async () => { await ubCommit(cfg => { cfg.posts.splice(i, 1); }, "حذف شد"); closeSheet(); renderUserbot(); }));
+}
+
+/* ── شیت اتصال اکانت: شماره ← کد ← (رمز دومرحله‌ای) ← تمام ── */
+function openUbConn(){
+  if(S.ub && S.ub.items.length >= S.ub.max && !S.ub.items.some(x => x.status === "revoked")) return toast(`حداکثر ${S.ub.max} یوزربات می‌توانی داشته باشی`);
+  S.sheet = {kind: "ubconn"}; D = {step: "phone", phone: "", code: "", pw: "", aid: "", ah: "", item: null}; renderSheet();
+}
+function ubconnSheet(){
+  const own = !!S.ub?.own_api;
+  if(D.step === "phone") return head("اتصال اکانت تلگرام") + `
+    <p class="muted">شماره‌ی اکانتی که می‌خواهی یوزربات رویش کار کند را با کد کشور بنویس. تلگرام یک کد ورود داخل خود اپ برایت می‌فرستد.</p>
+    <span class="lbl">شماره‌ی تلفن</span><input id="uc-phone" dir="ltr" inputmode="tel" autocomplete="off" placeholder="+989121234567" value="${esc(D.phone)}">
+    ${own ? `<span class="lbl">API ID</span><input id="uc-aid" dir="ltr" inputmode="numeric" autocomplete="off" value="${esc(D.aid)}">
+      <span class="lbl">API Hash</span><input id="uc-ah" dir="ltr" autocomplete="off" value="${esc(D.ah)}">
+      <p class="muted mt2">این دو مورد را از <span class="ltr">my.telegram.org</span> ← API development tools بگیر.</p>` : ""}
+    <p class="muted mt2">اگر تلگرام نشان می‌دهد «ورود جدید» با نام <span class="ltr">Azadi Userbot</span>، همان خودِ توست. هر زمان بخواهی می‌توانی آن را ببندی.</p>
+    <div class="bar" style="flex-direction:column"><button class="b" data-sh="ubsend">ارسال کد</button>${S.ub?.pending ? `<button class="b o" data-sh="ubresume">کد فرستاده شده را دارم</button>` : ""}</div>`;
+  if(D.step === "code") return head("کد تلگرام") + `
+    <p class="muted">کدی که تلگرام فرستاد (پیام رسمی «Telegram» توی اپ) را وارد کن. اگر مینی‌اپ بسته شد، دوباره باز کن؛ ورود تا ۱۰ دقیقه معتبر است. <b>این کد را برای هیچ‌کس نفرست.</b></p>
+    <span class="lbl">کد ورود</span><input id="uc-code" dir="ltr" inputmode="numeric" maxlength="8" autocomplete="one-time-code" value="${esc(D.code)}">
+    <div class="bar" style="flex-direction:column"><button class="b" data-sh="ubverify">تأیید</button><button class="b o" data-sh="ubstepback">شماره‌ی دیگر / ارسال دوباره</button></div>`;
+  if(D.step === "password") return head("رمز دومرحله‌ای") + `
+    <p class="muted">این اکانت رمز دومرحله‌ای دارد. رمز ذخیره نمی‌شود و فقط برای همین ورود استفاده می‌شود.</p>
+    <span class="lbl">رمز</span><input id="uc-pw" type="password" autocomplete="off" value="">
+    <div class="bar"><button class="b" data-sh="ubpwgo">ورود</button></div>`;
+  const x = D.item;
+  return head("اکانت وصل شد") + `<div class="empty" style="padding:18px 8px"><div class="ib big">${IC.check}</div><h2>${esc(x?.name || "اکانت تلگرام")}</h2>
+    <p class="muted">یوزربات روشن است. حالا قابلیت‌هایش را تنظیم کن.</p><button class="b sm" data-sh="ubfinish">تنظیم یوزربات</button></div>`;
+}
+const ubconnRead = () => { if(D.step === "phone"){ D.phone = $("#uc-phone")?.value ?? D.phone; D.aid = $("#uc-aid")?.value ?? D.aid; D.ah = $("#uc-ah")?.value ?? D.ah; }
+  if(D.step === "code") D.code = $("#uc-code")?.value ?? D.code; if(D.step === "password") D.pw = $("#uc-pw")?.value ?? D.pw; };
+function ubDone(d){
+  ubPut(d.item); S.ub.pending = false; D.step = "done"; D.item = d.item; renderSheet(); haptic("ok");
+  if(d.warn) toast(d.warn);
+}
+function ubAct(a, ds){
+  if(a === "ubpick"){
+    const c = D.items?.find(x => String(x.id) === ds.id); if(!c) return;
+    const mx = ubItem()?.lim?.chats || 60; if(S.ubCfg.chats.length >= mx) return toast(`حداکثر ${mx} گروه یا کانال می‌توانی اضافه کنی`);
+    return busy(null, async () => { await ubCommit(cfg => { if(!cfg.chats.some(h => h.id === c.id)) cfg.chats.push({id: c.id, title: c.title, kind: c.kind, on: true, reply: c.kind === "group" ? "mention" : "off", ai: false, err: ""}); }, "اضافه شد");
+      closeSheet(); S.ubTab = "chats"; renderUserbot(); });
+  }
+  if(a === "ubresolve"){
+    const q = (D.ref || "").trim(); if(!q) return toast("یوزرنیم، لینک یا آیدی را بنویس");
+    return busy($('[data-sh="ubresolve"]'), async () => {
+      let c; try{ c = (await api(`/api/userbots/${S.ubSel}/chats/resolve`, "POST", {q})).item; }catch(e){ return toast(e.message); }
+      if(S.ubCfg.chats.some(h => h.id === c.id)) return toast("این چت قبلاً اضافه شده");
+      if(!c.can) toast("اضافه شد، ولی ممکن است اکانت اجازه‌ی ارسال نداشته باشد؛ در صورت خطا خودکار متوقف می‌شود");
+      if(S.ubCfg.chats.length >= (ubItem()?.lim?.chats || 60)) return toast("به سقف تعداد گروه/کانال رسیده‌ای");
+      await ubCommit(cfg => { cfg.chats.push({id: c.id, title: c.title, kind: c.kind, on: true, reply: c.kind === "group" ? "mention" : "off", ai: false, err: ""}); }, "اضافه شد");
+      closeSheet(); S.ubTab = "chats"; renderUserbot();
+    });
+  }
+  if(a === "ubcresume"){ D.err = ""; D.on = true; return renderSheet(); }
+  if(a === "ubpostnow") return ubpostSave(async pid => { await api(`/api/userbots/${S.ubSel}/posts/${pid}/now`, "POST"); toast("در صف ارسال قرار گرفت؛ با مکث‌های ایمنی ارسال می‌شود"); });
+  const fail = e => { if(e.data?.reset){ D.step = "phone"; renderSheet(); } toast(e.message); };
+  const run = fn => busy($(`[data-sh="${a}"]`), async () => { try{ await fn(); }catch(e){ fail(e); } });
+  if(a === "ubsend"){
+    if(!D.phone.trim()) return toast("شماره‌ی تلفن را بنویس");
+    return run(async () => { await api("/api/userbots/login/start", "POST", {phone: D.phone, api_id: D.aid, api_hash: D.ah}); S.ub.pending = true; D.step = "code"; D.code = ""; renderSheet(); });
+  }
+  if(a === "ubresume"){ D.step = "code"; return renderSheet(); }
+  if(a === "ubverify"){
+    if(!D.code.trim()) return toast("کد را وارد کن");
+    return run(async () => { const d = await api("/api/userbots/login/code", "POST", {code: D.code}); if(d.step === "password"){ D.step = "password"; renderSheet(); } else ubDone(d); });
+  }
+  if(a === "ubpwgo"){
+    if(!D.pw) return toast("رمز را وارد کن");
+    return run(async () => { const d = await api("/api/userbots/login/password", "POST", {password: D.pw}); ubDone(d); });
+  }
+  if(a === "ubstepback"){ api("/api/userbots/login/cancel", "POST").catch(() => {}); S.ub.pending = false; D.step = "phone"; return renderSheet(); }
+  if(a === "ubfinish"){ const id = D.item?.id; closeSheet(); S.view = "userbot"; if(id) ubOpen(id); else renderUserbot(); return; }
+}
+SHEETS.ubrule = {html: ubruleSheet, read: ubruleRead, save: ubruleSave, del: ubruleDel};
+SHEETS.ubconn = {html: ubconnSheet, read: ubconnRead};
+SHEETS.ubpick = {html: ubpickSheet, read: () => { if($("#ubp-ref")) D.ref = $("#ubp-ref").value; }};
+SHEETS.ubchat = {html: ubchatSheet, read: ubchatRead, save: ubchatSave, del: ubchatDel};
+SHEETS.ubpost = {html: ubpostSheet, read: ubpostRead, save: () => ubpostSave(), del: ubpostDel};
+
+/* ثبت صفحه‌ی استودیو در جدول صفحه‌ها (VIEWS در app.js تعریف می‌شود) */
+VIEWS.studio = renderStudio;

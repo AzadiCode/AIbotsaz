@@ -1,0 +1,8 @@
+Flask
+gunicorn
+pymongo
+requests
+cryptography
+mongomock
+telethon
+Pillow

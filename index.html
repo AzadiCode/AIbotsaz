@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>ابر رباتساز</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@600;700;800&family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="splash" aria-hidden="true"><div class="sp-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="11" rx="3.5"/><g class="ant"><path d="M12 8V4.6"/><circle cx="12" cy="3.5" r="1.1"/></g><g class="eyes"><circle class="eye" cx="9" cy="13.6" r="1.35" fill="currentColor" stroke="none"/><circle class="eye" cx="15" cy="13.6" r="1.35" fill="currentColor" stroke="none"/></g></svg></div><div class="sp-name"><b>A</b>zad<b>i</b></div><div class="sp-bar"><i></i></div></div>
+<script>
+(function(){
+  var t0 = Date.now(), done = false;
+  function hide(){ if(done) return; done = true; var el = document.getElementById("splash"); if(!el) return; el.classList.add("out"); setTimeout(function(){ el.remove(); }, 800); }
+  function go(){ setTimeout(hide, Math.max(0, 4200 - (Date.now() - t0))); }
+  if(document.readyState === "complete") go(); else window.addEventListener("load", go);
+  setTimeout(hide, 7000);
+})();
+</script>
+<header class="top" id="top"></header>
+<main id="app"></main>
+<div id="sheet" class="sheet"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileIn" multiple>
+<div class="dscrim" id="dscrim"></div>
+<nav class="dock" id="dock" aria-label="ناوبری اصلی"><div class="dpanel" id="dpanel"></div></nav>
+
+<script>
+/* اگر هر خطایی در رابط رخ داد، همین‌جا روی صفحه دیده می‌شود (به‌جای صفحه‌ی خالی) */
+window.onerror = function(msg, src, line){
+  var b = document.getElementById("errbar");
+  if(!b){ b = document.createElement("div"); b.id = "errbar";
+    b.style.cssText = "position:fixed;top:calc(8px + env(safe-area-inset-top));left:8px;right:8px;z-index:99999;background:#CC3547;color:#fff;font:11px/1.6 Tahoma;padding:6px 10px;border-radius:10px;direction:rtl;white-space:pre-wrap;opacity:.94";
+    b.addEventListener("click", function(){ b.remove(); });
+    document.body.appendChild(b); }
+  clearTimeout(b._t); b._t = setTimeout(function(){ b.remove(); }, 7000);
+  b.textContent = "خطای رابط: " + msg + " — " + String(src || "").split("/").pop() + ":" + line + " (نسخه __BUILD__)";
+};
+window.addEventListener("unhandledrejection", function(e){
+  var r = e && e.reason;
+  window.onerror((r && (r.message || r)) || "خطای ناشناخته‌ی شبکه", "", 0);
+});
+</script>
+<script src="static/app.js"></script>
+<script src="static/studio.js"></script>
+<script src="static/builder.js"></script>
+<script src="static/studio2.js"></script>
+<script src="static/studio3.js"></script>
+<script src="static/builder2.js"></script>
+<script src="static/builder3.js"></script>
+<script>load();</script>
+</body>
+</html>
