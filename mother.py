@@ -1430,7 +1430,7 @@ UB_MAX_POSTS = _int("UB_MAX_POSTS", 20)     # حداکثر پیام زمان‌�
 #   post_h = سقف ارسال زمان‌بندی‌شده در ساعت (کل اکانت)   gap = حداقل فاصله‌ی دو پیام به یک چت (ثانیه)
 #   dmin/dmax = مکث تصادفی بین دو ارسال (ثانیه)   g_h = سقف پاسخ در گروه‌ها در ساعت برای هر گروه   g_cd/u_cd = مکث پاسخ به گروه/هر نفر
 UB_PROF = {
-    "test":     dict(post_h=30, gap=180,  dmin=4,  dmax=12, g_h=40, g_cd=10, u_cd=20),     # فقط برای تست؛ ریسک محدود شدن اکانت
+    "test":     dict(post_h=350, gap=180,  dmin=6,  dmax=14, g_h=40, g_cd=10, u_cd=20),     # فقط برای تست؛ ریسک محدود شدن اکانت
     "safe":     dict(post_h=12, gap=3600, dmin=30, dmax=90, g_h=10, g_cd=60, u_cd=180),
     "balanced": dict(post_h=24, gap=1800, dmin=15, dmax=45, g_h=20, g_cd=30, u_cd=90),
     "fast":     dict(post_h=40, gap=900,  dmin=8,  dmax=25, g_h=40, g_cd=15, u_cd=45),
