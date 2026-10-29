@@ -1743,10 +1743,12 @@ def _usable_models(preferred=None):
     models = _model_candidates(preferred)
     cb = getattr(_prog, "cb", None)
     rejected = set(getattr(cb, "rejected_models", set()) or set()) if cb else set()
+    soft = set(getattr(cb, "soft_rejected", set()) or set()) if cb else set()
     available = [m for m in models if m.casefold() not in rejected]
+    available = [m for m in available if m.casefold() not in soft] + [m for m in available if m.casefold() in soft]
     # Never silently retry providers whose output was already rejected in this job/task.
     # Callers that begin a genuinely new phase may explicitly clear the rejection set.
-    return available if rejected else models
+    return available if (rejected or soft) else models
 
 
 def _extract_json_object(text):
@@ -1998,7 +2000,7 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
             log.warning("AI model failed (%s/%s): %s", idx, len(models), errors[-1])
-    raise RuntimeError("همه مدل‌های پیکربندی‌شده ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "هیچ مدل فعالی باقی نمانده بود: همهٔ مدل‌ها در همین کار قبلاً خروجی نامعتبر داده یا خطا گرفته و کنار گذاشته شده‌اند"))
+    raise RuntimeError("همه مدل‌های پیکربندی‌شده ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "همهٔ مدل‌ها در این کار خطا گرفتند و کنار رفتند"))
 
 
 AI_STREAM = _int("AI_STREAM", 1)         # ۱ = ساخت ربات با استریم و پیشرفت زنده؛ ۰ = مثل قبل (یک درخواست بدون استریم)
@@ -2049,6 +2051,7 @@ class Progress:
         self.phase = "generate"
         self.last_model = None
         self.rejected_models = set()
+        self.soft_rejected = set()   # خروجی نامعتبر داده؛ حذف نمی‌شود، فقط به انتهای صف می‌رود
         self.task_i = 0
         self.task_n = 0
         self.task_title = ""
@@ -2109,7 +2112,7 @@ class Progress:
 
     def reject_last_model(self):
         if self.last_model:
-            self.rejected_models.add(str(self.last_model).casefold())
+            self.soft_rejected.add(str(self.last_model).casefold())
             log.warning("Model output rejected by JSON/config validation; it will be moved behind other candidates: %s", self.last_model)
             self.last_model = None
 
@@ -2285,7 +2288,7 @@ def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
             log.warning("generation model failed (%s/%s): %s", idx, len(models), errors[-1])
-    raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "هیچ مدل فعالی باقی نمانده بود: همهٔ مدل‌ها در همین کار قبلاً خروجی نامعتبر داده یا خطا گرفته و کنار گذاشته شده‌اند"))
+    raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "همهٔ مدل‌ها در این کار خطا گرفتند و کنار رفتند"))
 
 
 _gap = threading.local()          # گزارش «چیزی که ربات‌ساز نتونست»؛ هر کار پس‌زمینه در ترد خودش می‌خونه
@@ -3171,6 +3174,7 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
     if cb:
         cb.last_model = None
         cb.rejected_models.clear()
+        cb.soft_rejected.clear()
         cb.set_task(task_index + 1, len(plan), task.get("title") or task.get("id"))
     started = time.monotonic()
     task_budget = max(20.0, min(300.0, float(_int("AI_TASK_BUDGET", 170))))
@@ -3240,9 +3244,9 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
                         total_timeout=max(1.0, min(task_budget - (time.monotonic() - started), _job_remaining(task_model_timeout * 2))))
                     _record_usage(acc, usage)
                 except Exception as second_exc:
-                    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:350]} || ردشدن‌های قبلی همین وظیفه: {' ; '.join(parse_history)[:600] or 'ندارد'}") from second_exc
+                    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:200]} || JSON: {' ; '.join(parse_history)[:500] or '-'}") from second_exc
             else:
-                raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(exc).__name__}: {str(exc)[:350]} || ردشدن‌های قبلی همین وظیفه: {' ; '.join(parse_history)[:600] or 'ندارد'}") from exc
+                raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(exc).__name__}: {str(exc)[:200]} || JSON: {' ; '.join(parse_history)[:500] or '-'}") from exc
         try:
             raw, repaired_json = _loads_json_with_safe_repairs(text)
             if not isinstance(raw, dict):
