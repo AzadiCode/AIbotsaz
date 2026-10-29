@@ -26,7 +26,7 @@ from bson.errors import InvalidId
 from core import (
     AI_MAX_TOKENS, app, asset_v, assets_stamp, authed, aware, BASE_URL, BILLING, BUILD, calc_cost, charge_up_to, cut, db, _DIG,
     est_tokens, get_bot, hold, _int, JOB_TIMEOUT, log, MAX_STARS, MAX_VERSIONS, media_list, naive, now, PAYMENTS,
-    perks_of, rate_ok, refund, spend, tehran_day, tg, TOKEN_MIN_COST, TOKEN_SCALE, touch_user,
+    perks_of, rate_ok, refund, spend, tehran_day, tg, TOKEN_MIN_COST, TOKEN_SCALE, touch_user, MAX_PROMPT,
     verify_init_data, dec, wallet_info,
 )
 from ai import (
@@ -1955,7 +1955,7 @@ def api_app_generate(uid, bot_id):
     bot = get_bot(bot_id, uid)
     if not bot:
         return jsonify(error="ربات پیدا نشد"), 404
-    prompt = str((request.get_json(silent=True) or {}).get("prompt", "")).strip()[:4000]
+    prompt = str((request.get_json(silent=True) or {}).get("prompt", "")).strip()[:MAX_PROMPT]
     if len(prompt) < 5:
         return jsonify(error="توضیح خیلی کوتاهه"), 400
     if not rate_ok(f"appgen:{uid}", 6, 60):

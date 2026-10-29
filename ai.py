@@ -1928,7 +1928,7 @@ ENHANCE_PROMPT = ("You are a product designer who briefs a Telegram-bot builder.
                   "in the SAME language as the idea (Persian stays Persian). Structure it in plain sentences: purpose, sections/menus, forms or data to collect, "
                   "smart features worth adding (AI assistant, points, invites, forced channel join, media) only if they fit. "
                   "Keep every fact the user gave (names, prices, links). Never invent prices, phone numbers or links; use placeholders like [قیمت]. "
-                  "Max 900 characters. No markdown, no headings, no lists with symbols. Output only the brief.")
+                  "Max 2500 characters. No markdown, no headings, no lists with symbols. Preserve all specific requirements and output only the brief.")
 
 
 def enhance_prompt(prompt):
@@ -1938,7 +1938,7 @@ def enhance_prompt(prompt):
     txt = (scrub_foreign(txt) if guard else txt).strip().strip('"').strip()
     if len(txt) < 10:
         raise ValueError("empty enhance")
-    return txt[:MAX_PROMPT]
+    return txt[:min(MAX_PROMPT, 12000)]
 
 
 # ───────────────────────── برآورد هزینه‌ی ساخت ─────────────────────────

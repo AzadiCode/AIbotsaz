@@ -899,6 +899,7 @@ def gap_admin_message(msg):
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: تا پایان کار چیزی از موجودی کم نمی‌شه؛ در پایان فقط هزینه‌ی واقعی (حداکثر سقف رزرو) کسر می‌شه"""
     acc = []
+    bot = None
     _gap.items = []
     _prog.cb = Progress(jid)
     try:
@@ -935,7 +936,19 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             report_gaps(uid, bot, prompt, gaps)
     except Exception as e:
         log.exception("generate failed")
-        msg = "ساخت ربات ناموفق بود و چیزی از توکن‌هات کم نشد. دوباره امتحان کن یا توضیح رو ساده‌تر بنویس."
+        # اگر مدل محدودیتی را گزارش کرده بود ولی مرحله‌ی بعدی خطا داد، گزارش را از دست نده.
+        try:
+            pending_gaps = list(getattr(_gap, "items", []) or [])
+            if not pending_gaps:
+                pending_gaps = [{
+                    "want": "فرایند ساخت درخواست به نتیجه نرسید",
+                    "why": f"خطای فنی در زمان ساخت: {type(e).__name__}: {str(e)[:450]}",
+                    "upgrade": "بررسی گزارش و لاگ فنی، سپس اصلاح مسیر ساخت یا اعتبارسنجی مربوطه"
+                }]
+            report_gaps(uid, bot, prompt, pending_gaps)
+        except Exception:
+            log.exception("failed to deliver fallback gap report")
+        msg = "ساخت کامل نشد و هیچ توکنی کسر نشد. گزارش خطا برای بررسی ثبت شد. لطفاً دوباره تلاش کن یا درخواستت را کوتاه‌تر و واضح‌تر بنویس."
         if DEBUG:
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}})

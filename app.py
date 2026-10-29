@@ -471,7 +471,55 @@ def api_job(uid, jid):
         out.update(bot=public(b) if b else None, ideas=j.get("ideas", []), cost=j.get("cost", 0))
     elif j["status"] == "error":
         out["error"] = j.get("error", "ناموفق بود")
+    elif j["status"] == "review":
+        out.update(gaps=j.get("gaps", []), cost=int(j.get("cost") or 0), prompt=j.get("prompt", ""))
+    elif j["status"] == "cancelled":
+        out["message"] = "درخواست لغو شد؛ توکنی کسر نشد."
     return jsonify(out)
+
+
+@app.post("/api/jobs/<jid>/review")
+@authed
+def api_job_review(uid, jid):
+    """اجازه‌ی ساخت نسخه‌ی محدودشده فقط پس از تأیید صریح کاربر؛ لغو بدون هزینه."""
+    body = request.get_json(silent=True) or {}
+    decision = str(body.get("decision") or "").lower()
+    job = db.jobs.find_one({"_id": jid, "uid": uid, "status": "review"})
+    if not job:
+        return jsonify(error="این درخواست منقضی شده یا قبلاً بررسی شده است."), 409
+    if decision == "no":
+        changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
+                                               {"$set": {"status": "cancelled", "cancelled_at": now()}})
+        if not changed:
+            return jsonify(error="وضعیت درخواست تغییر کرده است."), 409
+        return jsonify(status="cancelled", wallet=wallet_info(uid))
+    if decision != "yes":
+        return jsonify(error="انتخاب نامعتبر است."), 400
+    if not isinstance(job.get("cfg"), dict) or not job["cfg"].get("nodes"):
+        return jsonify(error="پیش‌نویس معتبر پیدا نشد؛ هیچ هزینه‌ای کسر نشد."), 409
+    changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
+                                           {"$set": {"status": "saving", "approved_at": now()}})
+    if not changed:
+        return jsonify(error="این درخواست قبلاً پردازش شده است."), 409
+    cost = max(0, int(job.get("cost") or 0))
+    charged = False
+    try:
+        if cost and not spend(uid, cost, "gen"):
+            db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "review"}, "$unset": {"approved_at": ""}})
+            return jsonify(error=f"موجودی کافی نیست؛ برای این نسخه {cost} توکن لازم است. هیچ رباتی ساخته نشد.", need=cost, wallet=wallet_info(uid)), 402
+        charged = cost > 0
+        bot = new_bot_doc(uid, job["cfg"], job.get("thinking") or "")
+        db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "done", "bot": str(bot["_id"]), "cost": cost, "approved_at": now()}})
+        if REF_ON == "create":
+            settle_referral(uid)
+        fresh = get_bot(str(bot["_id"]), uid)
+        return jsonify(status="done", bot=public(fresh) if fresh else None, ideas=job.get("ideas", []), cost=cost, wallet=wallet_info(uid))
+    except Exception:
+        log.exception("approved partial build failed in mini app")
+        if charged:
+            refund(uid, cost, "gen_rollback")
+        db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "review", "error": "ذخیره‌سازی ناموفق بود"}, "$unset": {"approved_at": ""}})
+        return jsonify(error="ذخیره‌سازی ناموفق بود؛ هزینه برگشت داده شد و رباتی تحویل نشد."), 500
 
 
 @app.post("/api/enhance")

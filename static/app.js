@@ -319,12 +319,20 @@ async function runJob(prompt, botId){
       const r = await api(`/api/jobs/${d.job}`);
       const before = S.wallet?.tokens; S.wallet = r.wallet; if(r.wallet?.tokens !== before) renderTop();
       if(r.status === "done"){ liveDone(); await sleep(reduced() ? 0 : 500); return r; }
+      if(r.status === "review"){ liveDone(); return {...r, job: d.job}; }
+      if(r.status === "cancelled") throw new Error("درخواست لغو شد؛ رباتی ساخته نشد و توکنی کسر نشد.");
       if(r.status === "error") throw new Error(r.error);
       liveUpdate(r.prog);
     }
     throw new Error("ساخت بیش از حد طول کشید، دوباره امتحان کن");
   } finally { stopLive(); }
 }
+function showBuildReview(r){
+  const gaps = (r.gaps || []).slice(0, 8).map((g, i) => `<div class="sub2"><b>${i + 1}. ${esc(g.want || "محدودیت شناسایی‌شده")}</b><p class="muted">${esc(g.why || "این بخش نیاز به بررسی بیشتری دارد.")}</p>${g.upgrade ? `<p class="muted">راهکار: ${esc(g.upgrade)}</p>` : ""}</div>`).join("");
+  S.pendingReview = r.job; S.sheet = {kind: "info"};
+  showSheet(head("قبل از ساخت، انتخاب با توست") + `<p>بررسی نهایی نشان داد بعضی بخش‌های درخواستت ممکن است دقیقاً اجرا نشده باشند. برای جلوگیری از تحویل بی‌اطلاع نسخه‌ی ناقص، هنوز رباتی ذخیره نشده و هیچ توکنی کم نشده است.</p>${gaps || `<p class="muted">جزئیات محدودیت در گزارش بررسی ثبت شده است.</p>`}<div class="sub"><b>هزینه در صورت تأیید: ${N(r.cost || 0)} توکن</b></div><div class="bar"><button class="b" data-a="reviewyes" data-id="${esc(r.job)}">ساخت نسخه با این محدودیت‌ها</button><button class="b o" data-a="reviewno" data-id="${esc(r.job)}">لغو درخواست — بدون کسر توکن</button></div><div class="fgap"></div>`);
+}
+
 function submitPrompt(){
   const ta = $("#prompt"), p = ta.value.trim(), botId = S.cur?.id || null;
   if(p.length < 5) return toast("توضیح بیشتری بنویس");
@@ -334,6 +342,7 @@ function submitPrompt(){
     ta.readOnly = true;
     try{
       const r = await runJob(p, botId);
+      if(r.status === "review"){ showBuildReview(r); return; }
       const was = !!botId;
       S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
       S.cur = r.bot; S.view = "bot"; S.btab = "ai"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null;
@@ -725,6 +734,18 @@ const VIEWS = { create: renderCreate, bots: renderBots, bot: renderBot, media: r
 const setBot = bot => { S.cur = bot; S.bots = S.bots.map(b => b.id === bot.id ? bot : b); };
 const A = {
   gen: () => submitPrompt(),
+  reviewyes: el => busy(el, async () => {
+    const d = await api(`/api/jobs/${encodeURIComponent(el.dataset.id)}/review`, "POST", {decision: "yes"});
+    closeSheet();
+    if(!d.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
+    S.wallet = d.wallet || S.wallet; S.bots = [d.bot, ...S.bots.filter(b => b.id !== d.bot.id)];
+    S.cur = d.bot; S.view = "bot"; S.btab = "ai"; S.sbot = d.bot.id; S.fresh = true; S.ideas = d.ideas || []; S.stats = null;
+    render(); bumpTokens(); toast(`نسخه‌ی تأییدشده ساخته شد${d.cost ? `، ${d.cost} توکن` : ""}`); haptic("ok"); scrollTo(0, 0);
+  }),
+  reviewno: el => busy(el, async () => {
+    await api(`/api/jobs/${encodeURIComponent(el.dataset.id)}/review`, "POST", {decision: "no"});
+    closeSheet(); await sync(); render(); toast("درخواست لغو شد؛ توکنی کسر نشد.");
+  }),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
   idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
   open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "bot"; S.btab = "ai"; S.sbot = S.cur.id; S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
