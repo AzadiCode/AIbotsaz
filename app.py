@@ -73,7 +73,7 @@ from core import (
     activate_plan, ADMIN_IDS, admin_only, age_sec, AI_MSG_COST, AI_MSGS_PER_TOKEN, ai_per, app, asset_v, assets_stamp, authed, aware, BASE_URL, dec,
     balance, BILLING, BROADCAST_MAX, BROADCAST_PER_TOKEN, BUILD, caps_public, charge_up_to, CHUNK, claim_daily, credit,
     cut, DAILY_BONUS, db, _DIG, EDIT_COST, ENHANCE_COST, ensure_user, est_tokens, FEATURES_ON,
-    emoji_image, emoji_list, emoji_sig, fj_chat, GEN_COST, get_bot, get_media, hold, JOB_TIMEOUT, log, limits_of, MAX_BOTS,
+    emoji_image, emoji_list, emoji_sig, fj_chat, GEN_COST, get_bot, get_media, hold, JOB_TIMEOUT, BOT_BUILD_TIMEOUT, log, limits_of, MAX_BOTS,
     max_bots, MAX_MEDIA, MAX_NODES, MAX_PROMPT, MAX_VERSIONS, media_bytes, media_delete, media_kind,
     media_list, MEDIA_MAX_MB, MEDIA_QUOTA_MB, media_sig, MONGO_URI, mother_link, MOTHER_TOKEN, naive,
     now, ONLINE_SECS, PACKS, PLAN_BY_ID, PLAN_DAYS, PLAN_RANK, plan_info, plan_of, plans_public, perks_of, public, public_media, rate_ok, redeem, REF_INVITEE, REF_INVITER,
@@ -439,7 +439,7 @@ def api_generate(uid):
     if not rate_ok(f"gen:{uid}", 10, 60):
         return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
     for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}}):
-        if age_sec(j["t"]) < JOB_TIMEOUT:
+        if age_sec(j["t"]) < BOT_BUILD_TIMEOUT:
             return jsonify(error="یه کار دیگه‌ات هنوز در حال انجامه، چند لحظه صبر کن"), 409
     ensure_user(uid)
     reserve = reserve_cost(prompt, bot["config"] if bot else None, uid)
@@ -459,7 +459,7 @@ def api_job(uid, jid):
     j = db.jobs.find_one({"_id": jid, "uid": uid})
     if not j:
         return jsonify(error="کار پیدا نشد"), 404
-    if j["status"] == "running" and age_sec(j["t"]) > JOB_TIMEOUT:
+    if j["status"] == "running" and age_sec(j["t"]) > BOT_BUILD_TIMEOUT:
         db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "error", "error": "ساخت بیش از حد طول کشید و چیزی از توکن‌هات کم نشد. دوباره امتحان کن."}})
         j = db.jobs.find_one({"_id": jid})

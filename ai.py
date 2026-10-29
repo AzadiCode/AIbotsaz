@@ -1875,60 +1875,206 @@ def build_user(prompt, current, lang, media_items, note_extra=""):
     return "\n\n".join(parts)
 
 
+def _qa_trim(value, max_string=420):
+    """برای بازبینی مستقل، کل ساختار را نگه می‌دارد اما متن‌های خیلی بلند را کوتاه می‌کند."""
+    if isinstance(value, str):
+        return value if len(value) <= max_string else value[:max_string] + " …[ادامه متن کوتاه شد]"
+    if isinstance(value, list):
+        return [_qa_trim(v, max_string) for v in value]
+    if isinstance(value, dict):
+        return {k: _qa_trim(v, max_string) for k, v in value.items()}
+    return value
+
+
+def audit_requirements(prompt, cfg, acc):
+    """ممیزی مستقلِ تطابق کانفیگ با درخواست؛ خطای ممیزی نباید به‌عنوان موفقیت پنهان شود."""
+    view = _qa_trim(cfg, 420)
+    encoded = json.dumps(view, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded) > 56000:
+        view = _qa_trim(cfg, 180)
+        encoded = json.dumps(view, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded) > 56000:
+        raise RuntimeError("ممیزی کیفیت به‌دلیل بزرگی بیش از حد کانفیگ کامل نشد؛ ساخت برای جلوگیری از تحویل خروجی بررسی‌نشده متوقف شد")
+
+    system = (
+        "You are an independent, skeptical QA reviewer for a Telegram bot builder. "
+        "Compare the ORIGINAL USER REQUEST against the NORMALIZED CONFIG and the ENGINE CAPABILITIES. "
+        "Do not trust the builder's explanation or its own unsupported list. Inspect the actual config. "
+        "For every explicit, material functional requirement, verify that a real executable path/action exists. "
+        "A button label, node title, promise in text, or mocked/static message is NOT implementation of a feature. "
+        "Check navigation/reachability, forms and saved values, variables/actions, payment/role flows, and whether "
+        "the requested major functions are implemented rather than described only. Do not invent capabilities. "
+        "Only report clear, material omissions, fake implementations, contradictions, or unimplementable requirements. "
+        "Do NOT report optional extras, subjective style preferences, tiny copy edits, or speculative bugs. "
+        "If the config truly covers the explicit requirements and is logically coherent, return status pass and empty gaps. "
+        "If a requirement is absent or only simulated, return at most 3 gaps. For a fix that current engine supports, "
+        "say exactly what config/flow must be corrected; do not suggest a paid upgrade needlessly. For a feature the engine "
+        "cannot do, name the required backend/engine capability and a testable acceptance criterion. "
+        "All gap fields must be in Persian. Output ONLY JSON in this schema: "
+        '{"status":"pass"|"review","gaps":[{"want":"...","why":"...","upgrade":"..."}]}.'
+    )
+    # ممیز باید علاوه بر فهرست اکشن‌ها، محدودیت‌های واقعی مثل پرداخت، گروه/کانال و بازی زنده را هم بداند.
+    limits_match = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
+    reasoning_match = re.search(r"REASONING PROTOCOL.*?(?=\nDesign rules:)", SYSTEM_PROMPT, re.S)
+    engine_contract = "\n\n".join(x.group(0) for x in (limits_match, reasoning_match) if x)
+    engine_contract += "\n\n" + _caps_mod.caps_ai_text()
+    payload = {
+        "original_user_request": str(prompt or "")[:MAX_PROMPT],
+        "engine_capabilities_and_limits": engine_contract,
+        "normalized_config_to_audit": view,
+    }
+    raw_text, usage = llm_post(
+        [{"role": "system", "content": system},
+         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        1800, temperature=0.1, timeout=90,
+        model=(os.environ.get("AI_AUDIT_MODEL") or AI_MODEL),
+    )
+    acc.append(usage)
+    match = re.search(r"\{.*\}", raw_text, re.S)
+    if not match:
+        raise RuntimeError("ممیزی کیفیت پاسخ JSON معتبر نداد؛ ساخت بدون ارزیابی نهایی متوقف شد")
+    try:
+        result = json.loads(match.group(0))
+    except Exception as exc:
+        raise RuntimeError("ممیزی کیفیت خروجی قابل‌خواندن نداد؛ ساخت بدون ارزیابی نهایی متوقف شد") from exc
+    if not isinstance(result, dict) or result.get("status") not in ("pass", "review"):
+        raise RuntimeError("ممیزی کیفیت نتیجه معتبر نداد؛ ساخت بدون ارزیابی نهایی متوقف شد")
+    gaps = _take_gaps(result.get("gaps"))
+    if result.get("status") == "review" and not gaps:
+        raise RuntimeError("ممیزی کیفیت وجود نقص را اعلام کرد اما جزئیات نقص نداد؛ ساخت متوقف شد")
+    return gaps
+
+
+def _merge_gap_items(*groups, limit=3):
+    """ترکیب گزارش‌ها بدون تکرار؛ موارد ممیزی نهایی در اولویت‌اند."""
+    out = []
+    seen = set()
+    for group in groups:
+        for item in group or []:
+            if not isinstance(item, dict):
+                continue
+            want = str(item.get("want") or "").strip()
+            if not want:
+                continue
+            key = (want.casefold(), str(item.get("why") or "").strip().casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"want": want[:300], "why": str(item.get("why") or "").strip()[:500],
+                        "upgrade": str(item.get("upgrade") or "").strip()[:600]})
+            if len(out) >= limit:
+                return out
+    return out
+
+
 def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
-    """یک بار تلاش اول؛ اگه خروجی خراب بود، زبان توضیح اشتباه بود یا کانفیگ مشکل منطقی داشت، یک بار با بازخورد دوباره.
-    acc = فهرست مصرف (توکن ورودی/خروجی) هر فراخوانی؛ برای محاسبه‌ی هزینه‌ی واقعی
-    nodes_cap = سقف بخش‌های ربات (پلن‌محور)"""
+    """ساخت، تلاش اصلاحی، ممیزی مستقل تطابق و گزارش امنِ نقص‌های باقی‌مانده."""
     acc = [] if acc is None else acc
     lang = detect_lang(prompt)
-    guard = lang == "fa" and not has_foreign(prompt)          # کاربر خودش متن غیرفارسی ننوشته → خروجی فقط فارسی
-    check_cfg = guard and not foreign_in(current)             # اگه ربات فعلی از قبل نویسه‌ی بیگانه داره، فقط پاکش می‌کنیم
+    guard = lang == "fa" and not has_foreign(prompt)
+    check_cfg = guard and not foreign_in(current)
     media_ids = {m["id"] for m in media_items}
-    best, last, feedback = None, None, ""
+    best, best_problems, last, feedback = None, [], None, ""
     cb = getattr(_prog, "cb", None)
     if cb:
         cb.fa = lang == "fa"
+    _gap.items = []
+
+    candidate = None
+    candidate_problems = []
     for attempt in (0, 1):
         if cb:
             cb.attempt(attempt + 1)
         try:
-            thinking, cfg, ideas, warns = _call_llm(build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1, media_ids, acc, guard, check_cfg, nodes_cap)
-        except ThinkLang as e:
-            best, last = best or ("", e.cfg, e.ideas), e
-            feedback = "(Your previous answer used the wrong language or contained foreign-script characters (Chinese/Japanese/Korean/Russian...) in \"thinking\", \"ideas\", \"unsupported\" or node texts. Rewrite EVERYTHING in Persian only, with no foreign characters.)"
+            thinking, cfg, ideas, warns = _call_llm(
+                build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1,
+                media_ids, acc, guard, check_cfg, nodes_cap)
+        except ThinkLang as exc:
+            if best is None:
+                best = ("", exc.cfg, exc.ideas)
+                best_problems = ["زبان یا متن خروجی در بازبینی اول ناسازگار بود و تلاش اصلاحی باید با موفقیت تأیید شود"]
+            last = exc
+            feedback = ("(The previous answer used the wrong language or foreign-script characters. Rewrite the FULL config "
+                        "in the required language and keep all requested functions.)")
             log.warning("thinking in wrong language, retrying")
             continue
-        except (ValueError, KeyError, TypeError) as e:   # خروجی خراب → یک بار دیگه
-            last = e
-            feedback = f"(Your previous reply was rejected: {str(e)[:200]}. Return one valid JSON object.)"
+        except (ValueError, KeyError, TypeError) as exc:
+            last = exc
+            feedback = f"(Your previous reply was rejected: {str(exc)[:200]}. Return one valid complete JSON config.)"
             log.warning("bad AI output, retrying once", exc_info=True)
             continue
+
         problems = lint(cfg) + [f"the validator dropped or changed something: {w}" for w in warns]
         if problems and attempt == 0:
             best = (thinking, cfg, ideas)
-            feedback = "(Your previous config had logic problems, fix them and return the FULL config again: " + "; ".join(problems[:6]) + ")"
+            best_problems = list(problems)
+            feedback = ("(Your previous config had logic or validation problems. Fix every item and return the FULL config: "
+                        + "; ".join(problems[:8]) + ")")
             log.info("lint problems, retrying: %s", problems)
             continue
-        if problems:
-            existing = list(getattr(_gap, "items", []) or [])
-            for problem in problems:
-                if len(existing) >= 3:
-                    break
-                existing.append({"want": "درخواست به بررسی منطقی بیشتری نیاز دارد", "why": str(problem)[:500],
-                                 "upgrade": "اصلاح خودکار منطق و اعتبارسنجی پیش از تحویل نهایی"})
-            _gap.items = existing
-        return thinking, cfg, ideas
-    if best:                        # کانفیگ سالمِ تلاش اول رو نگه می‌داریم
-        th, cfg, ideas = best
-        return (th or FALLBACK_THINKING), cfg, ideas
-    raise last
+        candidate = (thinking, cfg, ideas)
+        candidate_problems = list(problems)
+        break
 
+    # مهم: قبلاً در صورت شکست تلاش دوم، کانفیگ ناقصِ تلاش اول بی‌سروصدا برمی‌گشت.
+    # حالا همان خروجی فقط به‌عنوان نامزد بازبینی می‌ماند و هرگز بدون گزارش تحویل نمی‌شود.
+    if candidate is None:
+        if best is None:
+            raise last or RuntimeError("مدل هوش مصنوعی خروجی قابل استفاده تولید نکرد")
+        candidate = best
+        candidate_problems = list(best_problems)
 
-ENHANCE_PROMPT = ("You are a product designer who briefs a Telegram-bot builder. Rewrite the user's rough bot idea into a clear, concrete brief "
-                  "in the SAME language as the idea (Persian stays Persian). Structure it in plain sentences: purpose, sections/menus, forms or data to collect, "
-                  "smart features worth adding (AI assistant, points, invites, forced channel join, media) only if they fit. "
-                  "Keep every fact the user gave (names, prices, links). Never invent prices, phone numbers or links; use placeholders like [قیمت]. "
-                  "Max 2500 characters. No markdown, no headings, no lists with symbols. Preserve all specific requirements and output only the brief.")
+    thinking, cfg, ideas = candidate
+    builder_gaps = list(getattr(_gap, "items", []) or [])
+    structural_gaps = [{
+        "want": "ساخت ربات با همه مسیرهای منطقی سالم",
+        "why": str(problem)[:500],
+        "upgrade": "اصلاح همین مسیر/اکشن در کانفیگ، اجرای دوبارهٔ lint و جلوگیری از ذخیره تا عبور از آزمون منطقی"
+    } for problem in candidate_problems[:3]]
+    builder_gaps = _merge_gap_items(structural_gaps, builder_gaps)
+
+    # ممیزی تطابق درخواست با کانفیگ واقعی؛ فهرست unsupported مدل سازنده به‌تنهایی کافی نیست.
+    qa_gaps = audit_requirements(prompt, cfg, acc)
+    if qa_gaps:
+        qa_feedback = (
+            "(Independent QA found these explicit requirements missing, incomplete, or only described as text. "
+            "Repair the FULL CONFIG without removing other implemented requirements. Use only real engine capabilities. "
+            "If a requested feature truly cannot be implemented, keep it honestly in unsupported with a concrete reason. "
+            "QA findings: " + json.dumps(qa_gaps, ensure_ascii=False) + ")"
+        )
+        original_gaps = list(getattr(_gap, "items", []) or [])
+        repaired = None
+        repaired_problems = []
+        try:
+            rthinking, rcfg, rideas, rwarns = _call_llm(
+                build_user(prompt, current, lang, media_items, qa_feedback), lang, True,
+                media_ids, acc, guard, check_cfg, nodes_cap)
+            repaired = (rthinking, rcfg, rideas)
+            repaired_problems = lint(rcfg) + [f"the validator dropped or changed something: {w}" for w in rwarns]
+            remaining_qa = audit_requirements(prompt, rcfg, acc)
+            # اگر اصلاح، همه‌ی نقص‌های تشخیص‌داده‌شده را رفع کرده باشد، از خروجی اصلاح‌شده استفاده می‌کنیم.
+            thinking, cfg, ideas = repaired
+            final_builder_gaps = _merge_gap_items(
+                [{"want": "ساخت ربات با همه مسیرهای منطقی سالم", "why": str(x),
+                  "upgrade": "اصلاح همین مسیر/اکشن و اجرای دوبارهٔ آزمون منطقی"} for x in repaired_problems],
+                list(getattr(_gap, "items", []) or [])
+            )
+            _gap.items = _merge_gap_items(remaining_qa, final_builder_gaps)
+            if remaining_qa:
+                log.warning("independent QA still sees missing requirements after repair: %s", remaining_qa)
+        except Exception as exc:
+            # در صورت شکست ترمیم/ممیزی دوم، خروجی قبلی را مخفیانه موفق اعلام نکن؛ برای تصمیم/گزارش نگه دار.
+            log.warning("QA repair failed; keeping original candidate for review: %s", exc, exc_info=True)
+            thinking, cfg, ideas = candidate
+            _gap.items = _merge_gap_items(qa_gaps, original_gaps, builder_gaps, [{
+                "want": "بازبینی و ترمیم خودکار درخواست قبل از تحویل",
+                "why": f"ممیزی اولیه نقص‌هایی یافت، اما تلاش اصلاح و تأیید مجدد موفق نشد: {type(exc).__name__}: {str(exc)[:300]}",
+                "upgrade": "اصلاح چرخهٔ ترمیم و ممیزی؛ معیار پذیرش این است که هر الزام صریح به یک مسیر واقعی نگاشت شود و سپس ممیزی دوم بدون نقص بگذرد"
+            }])
+    else:
+        _gap.items = _merge_gap_items(builder_gaps, list(getattr(_gap, "items", []) or []))
+
+    return thinking or FALLBACK_THINKING, cfg, ideas
 
 
 def enhance_prompt(prompt):

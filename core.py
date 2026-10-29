@@ -134,6 +134,7 @@ MAX_PROMPT   = 12000
 MAX_VERSIONS = 6
 MAX_NODES    = _int("MAX_NODES", 200)      # پایه‌ی سقف بخش‌ها؛ سقف واقعی هر کاربر پلن‌محور است (limits_of)
 JOB_TIMEOUT  = 240
+BOT_BUILD_TIMEOUT = _int("BOT_BUILD_TIMEOUT", 900)  # ساخت + ترمیم + ممیزی مستقل؛ سقف جدا از کارهای معمول
 PAYMENTS     = os.environ.get("PAYMENTS", "1").strip() != "0"       # دکمه‌ی پرداخت با ستاره‌ی تلگرام داخل رباتا (۰ = خاموش)
 SCHED_ON     = os.environ.get("SCHED", "1").strip() != "0"          # پیام‌های زمان‌بندی‌شده (یادآور)
 MAX_STAFF    = 5            # حداکثر پشتیبان علاوه بر صاحب ربات

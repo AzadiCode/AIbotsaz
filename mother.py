@@ -39,7 +39,7 @@ from core import (
     ADMIN_IDS, admin_only, age_sec, AI_CHAT_MODEL, AI_MSG_COST, AI_NODE_MAX_TOKENS, ai_per, app,
     authed, aware, balance, BASE_URL, BILLING, calc_cost, charge_up_to, claim_daily, credit, db, DEBUG,
     dec, _DIG, enc, ensure_user, FJ_CACHE, fj_chat, FJ_CONF, fj_conf, FJ_DEFAULT_TEXT, fj_missing,
-    fj_public, get_bot, get_media, media_bytes, hold, _int, is_block_err, JOB_TIMEOUT, limits_of, link_referral, log, max_bots,
+    fj_public, get_bot, get_media, media_bytes, hold, _int, is_block_err, JOB_TIMEOUT, BOT_BUILD_TIMEOUT, limits_of, link_referral, log, max_bots,
     MAX_PROMPT, MAX_VERSIONS, media_list, mother_link, MOTHER_SECRET, MOTHER_TOKEN, naive, now,
     ONLINE_SECS, PACKS, parse_err, perks_of, plain_html, rate_ok, redeem, REF_INVITEE, REF_INVITER,
     REF_ON, request_user, send_rich, settle_referral, tehran_day, tg, tg_html, thash, touch_user,
@@ -569,7 +569,7 @@ def mk_watch(uid, chat, jid):
         _mk_watch.add(uid)
     try:
         last, tick, t0 = "", 0, time.time()
-        while time.time() - t0 < JOB_TIMEOUT + 90:
+        while time.time() - t0 < BOT_BUILD_TIMEOUT + 90:
             j = db.jobs.find_one({"_id": jid})
             if not j or j["status"] in ("done", "error", "review", "cancelled"):
                 break
@@ -662,7 +662,7 @@ def mk_build(uid, chat):
         note = f"سقف ربات‌های شما {max_bots(uid)} عدد است و امکان ساخت ربات جدید وجود ندارد."
     elif not rate_ok(f"gen:{uid}", 10, 60):
         note = "درخواست‌ها زیاد بود. لطفاً چند لحظه بعد دوباره تلاش کنید."
-    elif any(age_sec(j["t"]) < JOB_TIMEOUT for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}})):
+    elif any(age_sec(j["t"]) < BOT_BUILD_TIMEOUT for j in db.jobs.find({"uid": uid, "status": {"$in": ["running", "saving"]}})):
         note = "کار دیگری از شما هنوز در حال انجام است. لطفاً کمی صبر کنید."
     else:
         ensure_user(uid)
@@ -907,6 +907,14 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc), uid=uid))
         gaps = list(getattr(_gap, "items", []) or [])
+        if gaps and bot_id:
+            # نسخهٔ موجود را با خروجی‌ای که ممیزی نتوانسته تأیید کند بازنویسی نکن.
+            report_gaps(uid, bot, prompt, gaps)
+            db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
+                "status": "error",
+                "error": "ارتقا اعمال نشد؛ بررسی نهایی چند نقص احتمالی پیدا کرد و برای جلوگیری از خراب شدن ربات قبلی، هیچ تغییری ذخیره و هیچ توکنی کسر نشد. گزارش برای بررسی ثبت شد."
+            }})
+            return
         if gaps and not bot_id:
             # توقف امن: تا تصمیم کاربر، هیچ رباتی ذخیره و هیچ توکنی کسر نمی‌شود.
             changed = db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
