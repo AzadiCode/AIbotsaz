@@ -1940,6 +1940,29 @@ def _is_message_length_error(exc):
         "reduce the length", "shorten your last message"))
 
 
+def _rate_limit_retry(exc, messages, max_tokens, temperature, model):
+    """۴۲۹ «تعداد درخواست در دقیقه» (نه سهمیهٔ روزانه): کمی صبر می‌کند و همان مدل را یک بار دیگر امتحان می‌کند.
+    مخصوص وقتی که فقط یک مدل رایگان داریم و بدون صبر هر وظیفه فوراً می‌سوزد؛ در غیر این صورت None."""
+    text = str(exc).lower()
+    if "429" not in text or any(t in text for t in ("daily", "today's free", "allowance", "quota")):
+        return None
+    m = re.search(r"allows\s+(\d+)\s+request", text)
+    per_min = int(m.group(1)) if m else 1
+    wait = 62.0 if per_min <= 1 else 20.0
+    try:
+        wait = min(wait, _job_remaining(wait) - 10)
+    except Exception:
+        return None
+    if wait < 5:
+        return None
+    log.warning("429 per-minute limit on %s; waiting %.0fs then retrying once", model, wait)
+    time.sleep(wait)
+    try:
+        return _llm_post_one(messages, max_tokens, temperature, max(15.0, min(60.0, _job_remaining(60))), model)
+    except Exception:
+        return None
+
+
 def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max_models=None, total_timeout=None):
     """فراخوانی سازگار با APIهای OpenAI؛ در خطای مدل، مدل بعدی AI_MODELS را امتحان می‌کند."""
     message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
@@ -1982,6 +2005,11 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max
                 cb.last_model = candidate
             return result
         except Exception as exc:
+            _retry = _rate_limit_retry(exc, messages, max_tokens, temperature, candidate)
+            if _retry is not None:
+                if cb:
+                    cb.last_model = candidate
+                return _retry
             raw_error = str(exc)
             low_error = raw_error.lower()
             if "429" in low_error and any(term in low_error for term in ("daily", "today's free token", "allowance", "rate_limit")):
@@ -2284,6 +2312,11 @@ def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None
                 cb.last_model = candidate
             return result
         except Exception as exc:
+            _retry = _rate_limit_retry(exc, messages, max_tokens, temperature, candidate)
+            if _retry is not None:
+                if cb:
+                    cb.last_model = candidate
+                return _retry
             errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
