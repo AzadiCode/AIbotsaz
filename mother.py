@@ -22,7 +22,7 @@ mother.py — ربات مادر و سیستم‌های اطرافش (وابست�
 """
 
 import html as _html
-import io, os, re, time, secrets, random, threading, asyncio, copy
+import io, os, re, json, time, secrets, random, threading, asyncio, copy
 from collections import deque
 from urllib.parse import quote
 from datetime import timedelta
