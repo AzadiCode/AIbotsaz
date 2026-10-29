@@ -314,7 +314,7 @@ async function runJob(prompt, botId){
   try{
     const d = await api("/api/generate", "POST", { prompt, bot_id: botId });
     S.wallet = d.wallet; renderTop();
-    for(let i = 0; i < 300; i++){
+    for(let i = 0; i < 960; i++){
       await sleep(1000);
       const r = await api(`/api/jobs/${d.job}`);
       const before = S.wallet?.tokens; S.wallet = r.wallet; if(r.wallet?.tokens !== before) renderTop();
