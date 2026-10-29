@@ -2052,7 +2052,7 @@ class Progress:
         self.task_i = 0
         self.task_n = 0
         self.task_title = ""
-        self.deadline = time.monotonic() + max(90, _int("AI_BUILD_DEADLINE", 300))
+        self.deadline = time.monotonic() + max(90, _int("AI_BUILD_DEADLINE", 900))
         self.flush(True)
 
     def set_task(self, index, total, title):
@@ -2163,7 +2163,7 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
     t0 = time.time()
     timeout = _job_remaining(min(float(timeout), float(max(20, _int("AI_GENERATION_TIMEOUT", 80)))))
     connect_timeout = max(1, min(10, timeout / 4))
-    read_timeout = max(1, min(float(max(8, _int("AI_MODEL_TIMEOUT", 35))), timeout / 2, 18.0))
+    read_timeout = max(5.0, min(float(max(8, _int("AI_MODEL_TIMEOUT", 45))), timeout))
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
@@ -2842,7 +2842,7 @@ def audit_requirements(prompt, cfg, acc):
     for audit_attempt in range(2):
         raw_text, usage = llm_post(
             audit_messages,
-            1800, temperature=0.1, timeout=min(14, _job_remaining(14)), total_timeout=min(28, _job_remaining(28)),
+            1800, temperature=0.1, timeout=min(45, _job_remaining(45)), total_timeout=min(90, _job_remaining(90)),
             model=(os.environ.get("AI_AUDIT_MODEL") or AI_MODEL), max_models=3,
         )
         _record_usage(acc, usage)
@@ -3007,7 +3007,7 @@ def _plan_build_tasks(prompt, current, acc):
     try:
         txt, usage = llm_run([{"role": "system", "content": TASK_PLAN_SYSTEM},
                               {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-                             900, temperature=0.1, timeout=10, max_models=3, total_timeout=24)
+                             900, temperature=0.1, timeout=40, max_models=3, total_timeout=90)
         _record_usage(acc, usage)
         plan_json, _ = _loads_json_with_safe_repairs(txt)
         return _normalize_task_plan(plan_json, prompt, current)
@@ -3173,7 +3173,8 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
         cb.rejected_models.clear()
         cb.set_task(task_index + 1, len(plan), task.get("title") or task.get("id"))
     started = time.monotonic()
-    task_budget = max(20.0, min(65.0, float(_int("AI_TASK_BUDGET", 48))))
+    task_budget = max(20.0, min(300.0, float(_int("AI_TASK_BUDGET", 170))))
+    task_model_timeout = float(max(15, _int("AI_TASK_MODEL_TIMEOUT", 60)))
     last_parse_error = ""
     parse_attempt_limit = max(3, min(5, len(_model_candidates())))
     for parse_try in range(parse_attempt_limit):
@@ -3221,8 +3222,8 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
             text, usage = llm_run(
                 task_messages,
                 min(AI_MAX_TOKENS, max(2600, min(5200, AI_MAX_TOKENS))), temperature=0.18,
-                timeout=min(12.0, remaining_task, _job_remaining(12)), max_models=3,
-                total_timeout=min(36.0, remaining_task, _job_remaining(36)))
+                timeout=min(task_model_timeout, remaining_task, _job_remaining(task_model_timeout)), max_models=3,
+                total_timeout=min(task_model_timeout * 2, remaining_task, _job_remaining(task_model_timeout * 2)))
             _record_usage(acc, usage)
         except Exception as exc:
             # Try unvisited providers in a second batch, but never restart completed tasks.
@@ -3233,9 +3234,9 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
                     text, usage = llm_run(
                         task_messages,
                         min(AI_MAX_TOKENS, 5200), temperature=0.18,
-                        timeout=min(12.0, task_budget - (time.monotonic() - started), _job_remaining(12)),
+                        timeout=min(task_model_timeout, task_budget - (time.monotonic() - started), _job_remaining(task_model_timeout)),
                         max_models=len(remaining_models),
-                        total_timeout=max(1.0, min(task_budget - (time.monotonic() - started), _job_remaining(12))))
+                        total_timeout=max(1.0, min(task_budget - (time.monotonic() - started), _job_remaining(task_model_timeout * 2))))
                     _record_usage(acc, usage)
                 except Exception as second_exc:
                     raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:700]}") from second_exc
