@@ -720,7 +720,8 @@ def report_gaps(uid, bot, prompt, items):
     try:
         u = db.users.find_one({"_id": uid}) or {}
         who = f"{u.get('tg_name') or ''} {('@' + u['tg_user']) if u.get('tg_user') else ''}".strip() or "بدون نام"
-        db.gaps.insert_one({"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": prompt[:1500], "items": items, "t": now()})
+        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": prompt[:1500], "items": items, "t": now()}
+        gap_id = db.gaps.insert_one(gap_doc).inserted_id
         lines = [f"گزارش هوش مصنوعی: درخواستی که ربات‌ساز کامل نتونست انجام بده",
                  f"کاربر: {who} (آیدی {uid})",
                  f"ربات: {(bot or {}).get('name') or 'جدید'}" + (f" (@{bot['username']})" if bot and bot.get("username") else ""),
@@ -728,11 +729,85 @@ def report_gaps(uid, bot, prompt, items):
         for i, x in enumerate(items, 1):
             lines += ["", f"{i}) خواسته: {x['want']}", f"چرا نشد: {x['why'] or '-'}", f"راه ارتقا: {x['upgrade'] or '-'}"]
         text = "\n".join(lines)[:3900]
+        kb = {"inline_keyboard": [[
+            {"text": "✉️ پاسخ به کاربر", "callback_data": f"gap:reply:{uid}:{gap_id}"},
+            {"text": "⚡ پاسخ آماده", "callback_data": f"gap:ready:{uid}:{gap_id}"}
+        ]]}
         for admin in ADMIN_IDS:
-            tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=text)
+            tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=text, reply_markup=kb)
     except Exception:
         log.exception("report_gaps failed")
 
+
+
+GAP_READY_TEXT = (
+    "سلام! 👋\n\n"
+    "من ربات‌ساز هوشمند هستم. درخواست قبلی‌ات رو بررسی کردم و از بازخوردت برای بهبود و ارتقای سیستم استفاده کردم. "
+    "حالا می‌تونی دوباره درخواستت رو ثبت کنی تا با نسخه‌ی به‌روزشده، ربات دلخواهت رو دقیق‌تر و کامل‌تر بسازیم.\n\n"
+    "ممنون که کمک می‌کنی هر روز بهتر بشیم 💙"
+)
+
+
+def gap_admin_callback(cq):
+    """دکمه‌های پاسخ به گزارش محدود به ادمین؛ پاسخ آزاد با وضعیت موقت و پاسخ آماده."""
+    uid = cq.get("from", {}).get("id")
+    data = str(cq.get("data") or "")
+    if uid not in ADMIN_IDS:
+        tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text="فقط ادمین مجاز است.", show_alert=True)
+        return True
+    m = re.fullmatch(r"gap:(reply|ready):(\d{1,20}):([a-fA-F0-9]{24})", data)
+    if not m:
+        return False
+    mode, target, gap_id = m.group(1), int(m.group(2)), m.group(3)
+    gap = db.gaps.find_one({"_id": ObjectId(gap_id), "uid": target})
+    if not gap:
+        tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text="گزارش پیدا نشد.", show_alert=True)
+        return True
+    if mode == "ready":
+        kb = {"inline_keyboard": [[{"text": "🚀 همین الان رباتتو بساز", "web_app": {"url": APP_URL}}]]}
+        r = tg_html(MOTHER_TOKEN, "sendMessage", chat_id=target, text=GAP_READY_TEXT, reply_markup=kb, disable_web_page_preview=True)
+        ok = bool(r.get("ok"))
+        tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text=("پیام آماده ارسال شد." if ok else "ارسال پیام ناموفق بود."), show_alert=not ok)
+        if ok:
+            db.gaps.update_one({"_id": gap["_id"]}, {"$set": {"ready_sent": now(), "ready_by": uid}})
+        return True
+    key = f"gap_reply:{uid}"
+    db.settings.update_one({"_id": key}, {"$set": {"uid": target, "gap": gap_id, "t": time.time()}}, upsert=True)
+    tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text="حالت پاسخ فعال شد.")
+    tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=f"پیامت رو برای کاربر {target} بنویس و ارسال کن. برای لغو /cancel")
+    return True
+
+
+def gap_admin_message(msg):
+    """دریافت متن پاسخ ادمین؛ وضعیت پس از ۱۰ دقیقه منقضی می‌شود."""
+    admin = (msg.get("from") or {}).get("id")
+    if admin not in ADMIN_IDS:
+        return False
+    key = f"gap_reply:{admin}"
+    state = db.settings.find_one({"_id": key})
+    if not state:
+        return False
+    text = (msg.get("text") or "").strip()
+    if time.time() - state.get("t", 0) > 600:
+        db.settings.delete_one({"_id": key})
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text="مهلت پاسخ‌گویی تمام شد؛ از گزارش دوباره دکمه پاسخ را بزن.")
+        return True
+    if text == "/cancel":
+        db.settings.delete_one({"_id": key})
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text="پاسخ لغو شد.")
+        return True
+    if not text:
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text="لطفاً پاسخ را به‌صورت پیام متنی بفرست یا /cancel را بزن.")
+        return True
+    target = int(state["uid"])
+    r = tg_html(MOTHER_TOKEN, "sendMessage", chat_id=target, text=text, disable_web_page_preview=True)
+    if r.get("ok"):
+        db.gaps.update_one({"_id": ObjectId(state["gap"])}, {"$set": {"replied_at": now(), "replied_by": admin}})
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=f"پاسخت با موفقیت برای کاربر {target} ارسال شد.")
+    else:
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=f"ارسال پاسخ ناموفق بود: {r.get('description', 'خطای نامشخص')}")
+    db.settings.delete_one({"_id": key})
+    return True
 
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: تا پایان کار چیزی از موجودی کم نمی‌شه؛ در پایان فقط هزینه‌ی واقعی (حداکثر سقف رزرو) کسر می‌شه"""
@@ -2973,10 +3048,14 @@ def mother_hook():
             if str(cq.get("data") or "").startswith("cd:"):
                 card_cb(cq)
                 return "ok"
+            if str(cq.get("data") or "").startswith("gap:") and gap_admin_callback(cq):
+                return "ok"
             mother_callback(cq)
             return "ok"
         msg = upd.get("message")
         if not msg or msg.get("chat", {}).get("type") != "private":
+            return "ok"
+        if gap_admin_message(msg):
             return "ok"
         if not msg.get("successful_payment") and (msg.get("from") or {}).get("id") and fj_gate_msg(msg):
             return "ok"
