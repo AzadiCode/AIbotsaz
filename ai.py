@@ -2790,14 +2790,28 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
 
     candidate = None
     candidate_problems = []
+    # Keep a durable in-memory checkpoint between attempts. A repair attempt receives
+    # the last usable config as its working base instead of rebuilding from an empty slate.
+    checkpoint_cfg = current
+    checkpoint_thinking = ""
+    checkpoint_ideas = []
     for attempt in (0, 1):
         if cb:
             cb.attempt(attempt + 1)
             if attempt:
                 cb.stage("repair", max(58.0, float(cb.d.get("p") or 58.0)))
         try:
+            repair_note = feedback
+            if attempt and checkpoint_cfg is not None:
+                repair_note = (
+                    "RESUME FROM CHECKPOINT — do NOT restart design from scratch. The current config below is the last usable checkpoint. "
+                    "Preserve every already implemented node, route, form answer, variable, and feature unless it directly causes a listed problem. "
+                    "Apply only the smallest changes needed to fix the listed validation/JSON/lint issues, then return the COMPLETE updated config. "
+                    "Do not drop working functionality or replace it with a simplified generic bot.\n" + str(feedback or "")
+                )
+            working_config = checkpoint_cfg if attempt and checkpoint_cfg is not None else current
             thinking, cfg, ideas, warns = _call_llm(
-                build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1,
+                build_user(prompt, working_config, lang, media_items, repair_note), lang, attempt == 1,
                 media_ids, acc, guard, check_cfg, nodes_cap)
         except ThinkLang as exc:
             if cb:
@@ -2805,6 +2819,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             if best is None:
                 best = ("", exc.cfg, exc.ideas)
                 best_problems = ["زبان یا متن خروجی در بازبینی اول ناسازگار بود و تلاش اصلاحی باید با موفقیت تأیید شود"]
+                checkpoint_cfg, checkpoint_thinking, checkpoint_ideas = exc.cfg, "", exc.ideas
             last = exc
             feedback = ("(The previous answer used the wrong language or foreign-script characters. Rewrite the FULL config "
                         "in the required language and keep all requested functions.)")
@@ -2828,8 +2843,9 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
                 cb.reject_last_model()
             best = (thinking, cfg, ideas)
             best_problems = list(problems)
-            feedback = ("(Your previous config had logic or validation problems. Fix every item and return the FULL config: "
-                        + "; ".join(problems[:8]) + ")")
+            checkpoint_cfg, checkpoint_thinking, checkpoint_ideas = cfg, thinking, ideas
+            feedback = ("CHECKPOINT REPAIR TASKS (do these without discarding working features): "
+                        + "; ".join(problems[:8]) + ". Return the complete corrected config, preserving all other nodes and behavior.")
             log.info("lint problems, retrying: %s", problems)
             continue
         candidate = (thinking, cfg, ideas)
@@ -2872,7 +2888,8 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
                 cb.stage("repair", 86.0)
                 cb.reject_last_model() if qa_gaps else None
             rthinking, rcfg, rideas, rwarns = _call_llm(
-                build_user(prompt, current, lang, media_items, qa_feedback), lang, True,
+                build_user(prompt, cfg, lang, media_items,
+                           "RESUME FROM THE VALIDATED CONFIG CHECKPOINT. Preserve all working functionality and apply only QA findings. " + qa_feedback), lang, True,
                 media_ids, acc, guard, check_cfg, nodes_cap)
             repaired = (rthinking, rcfg, rideas)
             repaired_problems = lint(rcfg) + [f"the validator dropped or changed something: {w}" for w in rwarns]
