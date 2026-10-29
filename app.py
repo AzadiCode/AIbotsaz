@@ -82,7 +82,7 @@ from core import (
     TEMPLATE_FACTOR, TEMPLATE_MAX_COST, TEMPLATE_MIN_COST, TEMPLATE_UNIT_COST, tg, TOKEN_MIN_COST,
     SECRET_KEY, TOKEN_OUT_RATE, TOKEN_SCALE, touch_user, wallet_info,
 )
-from ai import enhance_prompt, EXT_API, lint, MAX_RECORDS_SHARED, reserve_cost, sanitize, TEMPLATES, typical_cost
+from ai import enhance_prompt, EXT_API, lint, MAX_RECORDS_SHARED, reserve_cost, sanitize, TEMPLATES, typical_cost, _task_hash
 from engine import PROMO_CONF, PROMO_DEF_LOCK, PROMO_DEF_TEXT, sched_loop, sync_commands
 from mother import (
     ann_new, audience_targets, card_public, do_activate, fj_parse, fj_str, gen_job, lint_fa, MAX_USERBOTS,
@@ -448,8 +448,11 @@ def api_generate(uid):
                else f"توکن کافی نداری. برای این درخواست حداقل {reserve} توکن لازمه (هزینه‌ی واقعی معمولاً کمتره و فقط همون بعد از ساخت کم می‌شه).")
         return jsonify(error=msg, need=reserve, wallet=wallet_info(uid)), 402
     jid = secrets.token_hex(8)
-    db.jobs.insert_one({"_id": jid, "uid": uid, "status": "running", "hold": 0, "t": now()})
-    threading.Thread(target=gen_job, args=(jid, uid, str(bot["_id"]) if bot else None, prompt, reserve), daemon=True).start()
+    bot_id = str(bot["_id"]) if bot else None
+    # Save the immutable request/bot identity with the job so a failed build can resume its durable task checkpoint.
+    db.jobs.insert_one({"_id": jid, "uid": uid, "status": "running", "kind": "bot_build", "hold": 0,
+                        "prompt": prompt, "bot_id": bot_id, "reserve": int(reserve), "t": now()})
+    threading.Thread(target=gen_job, args=(jid, uid, bot_id, prompt, reserve), daemon=True).start()
     return jsonify(job=jid, hold=reserve, wallet=wallet_info(uid))
 
 
@@ -465,17 +468,65 @@ def api_job(uid, jid):
         j = db.jobs.find_one({"_id": jid})
     out = {"status": "running" if j["status"] == "saving" else j["status"], "wallet": wallet_info(uid)}
     if j["status"] in ("running", "saving") and j.get("prog"):
-        out["prog"] = {k: j["prog"].get(k) for k in ("p", "st", "n", "ti", "th", "att", "model_try", "model_total", "model_label")}
+        out["prog"] = {k: j["prog"].get(k) for k in ("p", "st", "n", "ti", "th", "att", "model_try", "model_total", "model_label", "task_i", "task_n", "task_title")}
     if j["status"] == "done":
         b = get_bot(j["bot"], uid)
         out.update(bot=public(b) if b else None, ideas=j.get("ideas", []), cost=j.get("cost", 0))
     elif j["status"] == "error":
         out["error"] = j.get("error", "ناموفق بود")
+        state = j.get("build_state") or {}
+        can_resume = bool(j.get("kind") == "bot_build" and j.get("prompt")
+                          and state.get("version") == 1 and isinstance(state.get("plan"), list)
+                          and isinstance(state.get("cfg"), dict)
+                          and state.get("request_hash") == _task_hash(j.get("prompt")))
+        out["can_resume"] = can_resume
+        if can_resume:
+            out["completed_tasks"] = len(state.get("completed") or [])
+            out["total_tasks"] = len(state.get("plan") or [])
+            out["build_phase"] = str(state.get("phase") or "")[:60]
     elif j["status"] == "review":
         out.update(gaps=j.get("gaps", []), cost=int(j.get("cost") or 0), prompt=j.get("prompt", ""))
     elif j["status"] == "cancelled":
         out["message"] = "درخواست لغو شد؛ توکنی کسر نشد."
     return jsonify(out)
+
+
+@app.post("/api/jobs/<jid>/resume")
+@authed
+def api_job_resume(uid, jid):
+    """Resume only unfinished tasks from the most recent durable checkpoint; no bot/token is committed on failure."""
+    job = db.jobs.find_one({"_id": jid, "uid": uid, "status": "error", "kind": "bot_build"})
+    if not job:
+        return jsonify(error="کار ناموفق و قابل‌ادامه پیدا نشد؛ ممکن است قبلاً ادامه یافته باشد."), 409
+    state = job.get("build_state") or {}
+    prompt = str(job.get("prompt") or "")
+    if (state.get("version") != 1 or not prompt or not isinstance(state.get("plan"), list)
+            or not isinstance(state.get("cfg"), dict) or state.get("request_hash") != _task_hash(prompt)):
+        return jsonify(error="checkpoint معتبر برای ادامه وجود ندارد. درخواست جدید بساز؛ برای این شکست هزینه‌ای کسر نشده است."), 409
+    bot_id = job.get("bot_id")
+    current = None
+    if bot_id:
+        bot = get_bot(bot_id, uid)
+        if not bot:
+            return jsonify(error="ربات اصلی برای ارتقا پیدا نشد؛ checkpoint روی نسخهٔ دیگری اعمال نمی‌شود."), 409
+        current = bot.get("config")
+        if state.get("base_hash") != _task_hash(current):
+            return jsonify(error="نسخهٔ اصلی ربات از زمان این تلاش تغییر کرده؛ برای جلوگیری از بازنویسی تغییرات جدید، ارتقا باید از نو ثبت شود."), 409
+    elif state.get("base_hash") != "new":
+        return jsonify(error="checkpoint متعلق به ساخت/ارتقای دیگری است؛ ادامه متوقف شد."), 409
+    reserve = max(0, int(job.get("reserve") or 0))
+    if reserve <= 0:
+        reserve = int(reserve_cost(prompt, current, uid))
+    if not hold(uid, reserve):
+        return jsonify(error=f"موجودی کافی نیست؛ برای تکمیل این کار تا سقف {reserve} توکن لازم است.", need=reserve, wallet=wallet_info(uid)), 402
+    changed = db.jobs.find_one_and_update(
+        {"_id": jid, "uid": uid, "status": "error"},
+        {"$set": {"status": "running", "t": now(), "resume_count": int(job.get("resume_count") or 0) + 1}, "$unset": {"error": ""}},
+    )
+    if not changed:
+        return jsonify(error="این کار هم‌زمان توسط درخواست دیگری ادامه داده شده است."), 409
+    threading.Thread(target=gen_job, args=(jid, uid, bot_id, prompt, reserve), daemon=True).start()
+    return jsonify(job=jid, resumed=True, wallet=wallet_info(uid))
 
 
 @app.post("/api/jobs/<jid>/review")

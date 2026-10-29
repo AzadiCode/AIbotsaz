@@ -23,7 +23,7 @@ ai.py — هوش مصنوعیِ ساخت ربات (وابسته به core)
   TEMPLATES, to_num, typical_cost, VAR_RE
 """
 
-import os, re, json, time, math, threading, ast, copy
+import os, re, json, time, math, threading, ast, copy, hashlib
 from urllib.parse import urlparse
 
 import requests
@@ -1717,13 +1717,36 @@ def _job_remaining(default=45):
     return max(1.0, min(float(default), remaining))
 
 
+def _record_usage(acc, usage):
+    """Accumulate provider usage locally and durably so a resumed task charges total successful work once."""
+    acc.append(usage)
+    try:
+        cb = getattr(_prog, "cb", None)
+        if not cb or not getattr(cb, "jid", None) or not isinstance(usage, (tuple, list)) or len(usage) < 2:
+            return
+        prompt_tokens = max(0, int(usage[0] or 0))
+        completion_tokens = max(0, int(usage[1] or 0))
+        if prompt_tokens or completion_tokens:
+            db.jobs.update_one(
+                {"_id": cb.jid, "status": {"$in": ["running", "saving"]}},
+                {"$inc": {"build_usage.prompt_tokens": prompt_tokens,
+                          "build_usage.completion_tokens": completion_tokens},
+                 "$set": {"build_usage.updated": time.time()}},
+            )
+    except Exception:
+        # Usage bookkeeping must not break generation, but the final cost falls back to this run's local usage.
+        log.exception("failed to persist AI usage with build checkpoint")
+
+
 def _usable_models(preferred=None):
     """مدل‌هایی که هنوز در این کار خروجی نامعتبر نداده‌اند را جلوتر قرار می‌دهد."""
     models = _model_candidates(preferred)
     cb = getattr(_prog, "cb", None)
     rejected = set(getattr(cb, "rejected_models", set()) or set()) if cb else set()
     available = [m for m in models if m.casefold() not in rejected]
-    return available or models
+    # Never silently retry providers whose output was already rejected in this job/task.
+    # Callers that begin a genuinely new phase may explicitly clear the rejection set.
+    return available if rejected else models
 
 
 def _extract_json_object(text):
@@ -1873,7 +1896,7 @@ def _compact_messages_for_provider(messages):
     character and divides large bodies into bounded chunks. Consecutive system/user messages
     are valid in OpenAI-compatible Chat Completions APIs.
     """
-    cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 3500)))
+    cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
 
     def chunks(value):
         remaining = value
@@ -1915,27 +1938,44 @@ def _is_message_length_error(exc):
         "reduce the length", "shorten your last message"))
 
 
-def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
+def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max_models=None, total_timeout=None):
     """فراخوانی سازگار با APIهای OpenAI؛ در خطای مدل، مدل بعدی AI_MODELS را امتحان می‌کند."""
+    message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
+    if any(isinstance(m.get("content"), str) and len(m["content"]) > message_cap for m in messages):
+        messages = _compact_messages_for_provider(messages)
     errors = []
     models = _usable_models(model)
+    if max_models is not None:
+        models = models[:max(1, int(max_models))]
     cb = getattr(_prog, "cb", None)
+    total_deadline = time.monotonic() + max(1.0, float(total_timeout)) if total_timeout is not None else None
     for idx, candidate in enumerate(models, 1):
         try:
             if cb and len(models) > 1:
                 cb.model_fallback(idx, candidate, len(models))
-            per_model_timeout = min(float(timeout), float(max(8, _int("AI_MODEL_TIMEOUT", 35))), _job_remaining(float(timeout)))
+            left_total = (total_deadline - time.monotonic()) if total_deadline is not None else float(timeout)
+            if left_total <= 1:
+                raise TimeoutError("کل بودجهٔ زمانی فراخوانی مدل تمام شد")
+            # When a total budget is supplied, divide it across remaining providers so one slow
+            # provider cannot consume all fallback opportunities.
+            remaining_providers = max(1, len(models) - idx + 1)
+            candidate_budget = min(float(timeout), left_total / remaining_providers)
+            per_model_timeout = min(candidate_budget, float(max(8, _int("AI_MODEL_TIMEOUT", 35))), _job_remaining(candidate_budget))
+            candidate_deadline = time.monotonic() + per_model_timeout
             try:
                 result = _llm_post_one(messages, max_tokens, temperature, per_model_timeout, candidate)
             except Exception as first_exc:
                 if not _is_message_length_error(first_exc):
                     raise
                 compact_messages = _compact_messages_for_provider(messages)
+                retry_left = candidate_deadline - time.monotonic()
+                if retry_left <= 1:
+                    raise first_exc
                 log.warning("Provider rejected message length; retrying model %s once with compact prompt", candidate)
                 if cb:
                     cb.model_fallback(idx, candidate + " (compact)", len(models))
                 result = _llm_post_one(compact_messages, max_tokens, temperature,
-                                       min(per_model_timeout, _job_remaining(per_model_timeout)), candidate)
+                                       min(retry_left, _job_remaining(retry_left)), candidate)
             if cb:
                 cb.last_model = candidate
             return result
@@ -2009,7 +2049,33 @@ class Progress:
         self.phase = "generate"
         self.last_model = None
         self.rejected_models = set()
+        self.task_i = 0
+        self.task_n = 0
+        self.task_title = ""
         self.deadline = time.monotonic() + max(90, _int("AI_BUILD_DEADLINE", 300))
+        self.flush(True)
+
+    def set_task(self, index, total, title):
+        self.task_i = max(1, int(index))
+        self.task_n = max(1, int(total))
+        self.task_title = str(title or "")[:100]
+        self.phase = "build"
+        self.d["st"] = "build"
+        self.d["task_i"] = self.task_i
+        self.d["task_n"] = self.task_n
+        self.d["task_title"] = self.task_title
+        start = 10.0 + 66.0 * (self.task_i - 1) / self.task_n
+        self.d["p"] = max(float(self.d.get("p") or 2), min(start, 76.0))
+        self.flush(True)
+
+    def task_done(self, index, total, title):
+        self.task_i, self.task_n = int(index), max(1, int(total))
+        self.task_title = str(title or "")[:100]
+        self.d["task_i"] = self.task_i
+        self.d["task_n"] = self.task_n
+        self.d["task_title"] = self.task_title
+        self.d["st"] = "build"
+        self.d["p"] = max(float(self.d.get("p") or 2), min(10.0 + 66.0 * self.task_i / self.task_n, 78.0))
         self.flush(True)
 
     def flush(self, force=False):
@@ -2052,11 +2118,13 @@ class Progress:
         self.d["model_try"] = int(n)
         self.d["model_total"] = int(total)
         self.d["model_label"] = str(model)[:80]
-        if self.phase in ("audit", "repair", "validate", "save"):
+        if self.phase in ("audit", "repair", "validate", "save", "build"):
             self.d["st"] = self.phase
         else:
             self.d["st"] = "analyze" if n == 1 else "fallback"
-        self.d["p"] = max(float(self.d.get("p") or 2), min(8.0 + (n - 1) * 2.5, 19.0))
+        # Model fallback should not reset a task-based build to 2–19% after progress has advanced.
+        if self.phase != "build":
+            self.d["p"] = max(float(self.d.get("p") or 2), min(8.0 + (n - 1) * 2.5, 19.0))
         self.flush(True)
 
     def feed(self, text, reasoning=0):
@@ -2068,12 +2136,18 @@ class Progress:
         info = live_info(vis, self.fa)
         tok = est_tokens(vis) if vis else 0
         sat = tok / (tok + 1800.0)
-        if self.att == 1:
+        if self.task_n > 0 and self.phase == "build":
+            start = 10.0 + 66.0 * (max(1, self.task_i) - 1) / max(1, self.task_n)
+            span = 66.0 / max(1, self.task_n)
+            p = start + span * min(0.88, sat * 0.9)
+            cap = start + span * 0.92
+        elif self.att == 1:
             p = 4 + 56 * sat if tok else 3 + min(8.0, reasoning / 900.0)
+            cap = 56.0
         else:
             p = 58 + 18 * sat
-        # 95% رزروِ ذخیرهٔ واقعی است؛ استریم یا parse ناموفق نباید تا آن درصد وانمود کند.
-        cap = 56.0 if self.att == 1 else 76.0
+            cap = 76.0
+        # Never imply validation/save success while a task is only streaming.
         self.d["p"] = round(max(self.d["p"], min(p, cap)), 1)
         self.d["n"] = max(self.d["n"], info["n"])
         if info["ti"]:
@@ -2153,16 +2227,29 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
                  int(u.get("completion_tokens") or est_tokens(txt)))
 
 
-def llm_run(messages, max_tokens, temperature=0.4):
-    """ساخت با failover مدل: خطای هر مدل باعث امتحان مدل بعدی می‌شود، نه گیر کردن روی همان مدل."""
+def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None, total_timeout=None):
+    """فراخوانی مدل‌ها با بودجهٔ هر مدل و سقف تلاش قابل کنترل؛ برای کارهای وظیفه‌محور."""
+    message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
+    if any(isinstance(m.get("content"), str) and len(m["content"]) > message_cap for m in messages):
+        messages = _compact_messages_for_provider(messages)
     cb = getattr(_prog, "cb", None)
     models = _usable_models()
+    if max_models is not None:
+        models = models[:max(1, int(max_models))]
     errors = []
+    requested_timeout = float(timeout if timeout is not None else max(20, _int("AI_GENERATION_TIMEOUT", 80)))
+    total_deadline = time.monotonic() + max(1.0, float(total_timeout)) if total_timeout is not None else None
     for idx, candidate in enumerate(models, 1):
         try:
             if cb:
                 cb.model_fallback(idx, candidate, len(models))
-            generation_timeout = min(float(max(20, _int("AI_GENERATION_TIMEOUT", 80))), _job_remaining(80))
+            left_total = (total_deadline - time.monotonic()) if total_deadline is not None else requested_timeout
+            if left_total <= 1:
+                raise TimeoutError("کل بودجهٔ زمانی فراخوانی مدل تمام شد")
+            remaining_providers = max(1, len(models) - idx + 1)
+            candidate_budget = min(requested_timeout, left_total / remaining_providers)
+            generation_timeout = min(candidate_budget, _job_remaining(candidate_budget))
+            candidate_deadline = time.monotonic() + generation_timeout
             try:
                 if not (cb and AI_STREAM):
                     result = _llm_post_one(messages, max_tokens, temperature,
@@ -2173,17 +2260,23 @@ def llm_run(messages, max_tokens, temperature=0.4):
                                             timeout=generation_timeout, model=candidate)
                     except _NoStream as exc:
                         log.warning("مدل %s استریم را پشتیبانی نمی‌کند؛ درخواست عادی امتحان می‌شود: %s", candidate, exc)
+                        remaining_candidate = candidate_deadline - time.monotonic()
+                        if remaining_candidate <= 1:
+                            raise TimeoutError("بودجهٔ مدل برای fallback بدون استریم باقی نمانده است") from exc
                         result = _llm_post_one(messages, max_tokens, temperature,
-                                               min(generation_timeout, _job_remaining(generation_timeout)), candidate)
+                                               min(remaining_candidate, _job_remaining(remaining_candidate)), candidate)
             except Exception as first_exc:
                 if not _is_message_length_error(first_exc):
                     raise
                 compact_messages = _compact_messages_for_provider(messages)
+                retry_left = candidate_deadline - time.monotonic()
+                if retry_left <= 1:
+                    raise first_exc
                 log.warning("Provider rejected message length; retrying model %s once with compact prompt", candidate)
                 if cb:
                     cb.model_fallback(idx, candidate + " (compact)", len(models))
                 result = _llm_post_one(compact_messages, max_tokens, temperature,
-                                       min(generation_timeout, _job_remaining(generation_timeout)), candidate)
+                                       min(retry_left, _job_remaining(retry_left)), candidate)
             if cb:
                 cb.last_model = candidate
             return result
@@ -2591,7 +2684,7 @@ def _repair_reserved_write_vars(config):
 
 def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, nodes_cap=None):
     txt, usage = llm_run([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
-    acc.append(usage)
+    _record_usage(acc, usage)
     cb = getattr(_prog, "cb", None)
     if cb:
         cb.stage("validate", 68.0)
@@ -2742,17 +2835,17 @@ def audit_requirements(prompt, cfg, acc):
         cb.stage("audit", 82.0)
     audit_messages = [
         {"role": "system", "content": system},
-        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False, indent=2)},
     ]
     result = None
     parse_errors = []
     for audit_attempt in range(2):
         raw_text, usage = llm_post(
             audit_messages,
-            1800, temperature=0.1, timeout=35,
-            model=(os.environ.get("AI_AUDIT_MODEL") or AI_MODEL),
+            1800, temperature=0.1, timeout=min(14, _job_remaining(14)), total_timeout=min(28, _job_remaining(28)),
+            model=(os.environ.get("AI_AUDIT_MODEL") or AI_MODEL), max_models=3,
         )
-        acc.append(usage)
+        _record_usage(acc, usage)
         try:
             result, repaired_json = _loads_json_with_safe_repairs(raw_text)
             if repaired_json:
@@ -2805,150 +2898,610 @@ def _merge_gap_items(*groups, limit=3):
     return out
 
 
+TASK_PLAN_SYSTEM = """You are a senior technical planner for a Telegram bot builder. Convert the user's request into an execution plan of 1-4 small, independently implementable tasks. Return ONLY valid JSON: {\"tasks\":[{\"id\":\"foundation\",\"title\":\"...\",\"scope\":\"...\",\"acceptance\":[\"...\"],\"node_ids\":[\"start\"]}]}. For a new bot, the first task MUST have id foundation and define the start/menu/navigation skeleton. Later tasks add distinct capabilities, each with precise acceptance checks. Preserve every explicit user requirement across the tasks; don't invent features. If the request only references another bot by username, plan a conservative starter and say exact replication requires screenshots or a feature list. If this is an update to an existing config, preserve existing features and plan only the requested changes; foundation means verify the home/navigation structure, not rebuild the bot. Keep each scope compact and specific. Maximum 4 tasks including foundation. Do not generate the config yet."""
+
+_TASK_PATCH_SUFFIX = r"""
+TASK PATCH MODE — this instruction overrides the earlier complete-config output requirement for THIS call only.
+Return the usual envelope {"thinking":"...","ideas":[...],"unsupported":[...],"config":{...}}, but config is an INCREMENTAL PATCH, not a full replacement config.
+Include only new/changed top-level fields. Put newly created nodes in config.nodes. If modifying an existing node, put the changed properties in config.update_nodes under that node id; never delete unrelated nodes. If the task creates a node whose id already exists, use a new unique id. Existing node IDs and navigation are listed in the user payload. Don't repeat or rewrite the entire current config. Never claim a feature is implemented if you only mention it in text. Keep every button/route target consistent with the provided task plan and existing node IDs. Use the exact task id in a top-level task_id field if possible. Output complete JSON, no markdown. The config patch may be incomplete by itself and will only be validated after all tasks are merged."""
+
+
+# A task-specific prompt avoids resending the 41k-character monolithic prompt on every task.
+# It preserves the engine contract but keeps each provider request small enough for free endpoints.
+TASK_PATCH_SYSTEM = r"""You are the implementation worker for a fixed, safe Telegram bot JSON engine. Implement ONLY the current task in the supplied task plan. You do not have access to the reference bot's private configuration; never claim you inspected it.
+
+Return one complete valid JSON object only: {"thinking":"...","ideas":[],"unsupported":[],"config":{...}}. The config is a PATCH, not the whole bot. Only report unsupported features that the engine truly cannot implement; do not add gaps merely because the task has not yet been done by other tasks. User-facing text and thinking must use the user's language.
+
+ROOT CONFIG: name (short display name), start (node ID), fallback (node ID), commands (command-name to node ID), vars (per-user defaults), globals (shared defaults), desk (staff numeric IDs and/or staff_usernames, ticket settings), join (forced channel membership), mod (group/channel moderation toolkit), group.triggers (group keyword/command triggers), games.list (supported built-in games), on_ref/ref_text (referrals), and nodes. Do not invent unsupported root keys or capabilities.
+
+NODE FIELDS: title, text, buttons, ask, fields, save, types, skip, silent, done, done_media, next, ai, ticket, tag, board, list, join, do, route, alt, photo, media, btnlist. `fields` is a sequential form; `save` and `types` align by index. Types: text, number, phone, email, photo, photo_optional. `photo_optional` requires `skip` label (for example «عکس ندارم») and must be a real form skip button, not an alert. `media`/`done_media` may only use exact IDs from the supplied media library. Never invent image URLs; only use `photo` if the user supplied a direct image URL.
+
+BUTTONS: rows of button objects. Each button must perform exactly one main operation: goto an existing node, url (https only), alert, copy, share, app, or pay if enabled. `do`/`join` may accompany only supported button types. Keep all goto/start/fallback/next/route/reminder/command targets valid. Every node should be reachable from start; provide a home/back route for nonterminal screens.
+
+LOGIC: variables are lowercase English letters/digits/underscore, <=20 chars, and cannot overwrite built-in read-only variables such as name, username, id, text, lang, date, time, refs, visits, ticket_no. Declare custom vars in `vars` with defaults. Supported action/event/game operators are listed below. Use only supported actions and actual engine behavior. Payment support is Telegram Stars only when enabled; never promise bank/card gateway payments, reading the contents of user photos/files, unsupported group/channel functions, inline mode, calls, or real-time multiplayer. For orders that need a human response, use a form/ask with ticket support and route messages to the configured owner/staff.
+
+PATCH CONTRACT: include only changed root keys. Add new nodes under config.nodes. For an existing node, send partial properties under config.update_nodes[node_id]; do not delete/replace unrelated nodes or rewrite the whole config. Use unique node IDs that do not collide with IDs in current_config_summary.node_ids. A patch is valid only if it makes a real config change or adds a genuinely new supported setting. Do not merely describe a feature in `thinking`; implement it in config. Use minimal changes, preserve all previously completed tasks, and keep existing config unchanged outside this task.
+
+The execution context may be delivered across consecutive user messages to satisfy provider per-message length limits; read all parts together. The original request may likewise arrive in labelled parts; combine them in order exactly. Implement only this task, but do not contradict the full request. Return valid JSON with no markdown.
+""" + "\n\nSUPPORTED ENGINE CAPABILITIES:\n" + _caps_mod.caps_ai_text() + "\n\n" + _TASK_PATCH_SUFFIX
+
+_ROOT_CONFIG_KEYS = {
+    "name", "start", "fallback", "commands", "nodes", "on_ref", "ref_text", "group", "vars", "globals",
+    "desk", "games", "growth", "channelpost", "rss", "inline", "webin", "digest", "join", "mod", "dbfields"
+}
+
+
+def _task_hash(value):
+    try:
+        raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        raw = str(value)
+    return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()
+
+
+def _fallback_task_plan(prompt, current=None):
+    """Safe offline planner; keeps the complete source request in every generated task context."""
+    text = str(prompt or "").strip()
+    if current is not None:
+        return [{"id": "foundation", "title": "حفظ ساختار فعلی و آماده‌سازی تغییر", 
+                 "scope": "فقط تغییرات درخواستی کاربر را روی کانفیگ فعلی اعمال کن و هیچ قابلیت سالمی را حذف نکن. درخواست کامل: " + text,
+                 "acceptance": ["حفظ قابلیت‌های قبلی", "اعمال تمام تغییرات صریح"], "node_ids": []}]
+    # Split only at user-authored boundaries. Don't split a handle/URL or ordinary comma-separated phrase.
+    parts = [x.strip(" \t-*•") for x in re.split(r"\n+|(?<=[.!?؟؛])\s+", text) if x.strip(" \t-*•")]
+    if len(parts) <= 1:
+        return [{"id": "foundation", "title": "ساخت ربات پایه مطابق درخواست", "scope": text or "یک ربات پایهٔ کاربردی بساز.",
+                 "acceptance": ["منوی شروع قابل استفاده", "پیاده‌سازی درخواست در حد امکانات موتور"], "node_ids": ["start"]}]
+    tasks = [{"id": "foundation", "title": "منوی شروع و مسیرهای اصلی", 
+              "scope": "یک اسکلت ربات کاربردی بساز و مسیرهای منو را برای وظایف بعدی آماده کن. درخواست کامل: " + text,
+              "acceptance": ["گره شروع معتبر", "پیوند به قابلیت‌های درخواست‌شده"], "node_ids": ["start"]}]
+    for i, part in enumerate(parts[:3], 1):
+        tasks.append({"id": f"feature_{i}", "title": f"پیاده‌سازی بخش {i}", "scope": part,
+                      "acceptance": ["مسیر اجرایی واقعی برای این خواسته"], "node_ids": [f"feature_{i}"]})
+    return tasks[:4]
+
+
+def _normalize_task_plan(raw, prompt, current=None):
+    if not isinstance(raw, dict) or not isinstance(raw.get("tasks"), list):
+        raise ValueError("برنامهٔ وظایف ساخت معتبر نیست")
+    out, seen = [], set()
+    for i, item in enumerate(raw["tasks"][:12]):
+        if not isinstance(item, dict):
+            continue
+        tid = re.sub(r"[^a-z0-9_]", "_", str(item.get("id") or f"task_{i+1}").lower()).strip("_")[:24]
+        if not tid or not tid[0].isalpha() or tid in seen:
+            tid = f"task_{i+1}"
+        seen.add(tid)
+        title = str(item.get("title") or f"وظیفه {i+1}").strip()[:100]
+        scope = str(item.get("scope") or "").strip()[:1800]
+        if not scope:
+            continue
+        acceptance = [str(x).strip()[:180] for x in item.get("acceptance", [])[:5] if str(x).strip()] if isinstance(item.get("acceptance"), list) else []
+        node_ids = [re.sub(r"[^a-z0-9_]", "_", str(x).lower())[:32] for x in item.get("node_ids", [])[:8] if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{0,31}", str(x))] if isinstance(item.get("node_ids"), list) else []
+        out.append({"id": tid, "title": title, "scope": scope, "acceptance": acceptance, "node_ids": node_ids})
+    if not out:
+        raise ValueError("برنامه هیچ وظیفهٔ قابل اجرایی ندارد")
+    if current is None and out[0]["id"] != "foundation":
+        out.insert(0, {"id": "foundation", "title": "منوی شروع و اسکلت ربات",
+                       "scope": "منوی شروع و گره‌های پایه را بساز و برای وظایف برنامه‌ریزی‌شده مسیر قابل‌دسترسی فراهم کن. درخواست کامل کاربر: " + str(prompt or ""),
+                       "acceptance": ["گره شروع معتبر", "پیوند به وظایف بعدی"], "node_ids": ["start"]})
+    if current is not None and out[0]["id"] != "foundation":
+        out.insert(0, {"id": "foundation", "title": "حفظ کانفیگ و مسیریابی موجود",
+                       "scope": "کانفیگ فعلی را حفظ کن و فقط مسیر خانه/شروع را در صورت نیاز تنظیم کن؛ از بازسازی کامل خودداری کن. درخواست کامل: " + str(prompt or ""),
+                       "acceptance": ["عدم حذف قابلیت‌های موجود"], "node_ids": []})
+    if len(out) > 4:
+        tail = out[3:]
+        out = out[:3] + [{"id": "remaining_features", "title": "سایر قابلیت‌های درخواستی",
+                          "scope": "\n".join(f"{x['title']}: {x['scope']}" for x in tail)[:4000],
+                          "acceptance": [c for x in tail for c in x.get("acceptance", [])][:8],
+                          "node_ids": [n for x in tail for n in x.get("node_ids", [])][:8]}]
+    return out
+
+
+def _plan_build_tasks(prompt, current, acc):
+    cb = getattr(_prog, "cb", None)
+    if cb:
+        cb.stage("analyze", 5.0)
+    current_summary = _config_task_summary(current) if current else None
+    payload = {"user_request": str(prompt or "")[:MAX_PROMPT], "mode": "update existing bot" if current else "new bot",
+               "current_config_summary": current_summary}
+    try:
+        txt, usage = llm_run([{"role": "system", "content": TASK_PLAN_SYSTEM},
+                              {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+                             900, temperature=0.1, timeout=10, max_models=3, total_timeout=24)
+        _record_usage(acc, usage)
+        plan_json, _ = _loads_json_with_safe_repairs(txt)
+        return _normalize_task_plan(plan_json, prompt, current)
+    except Exception as exc:
+        log.warning("Task planning used the deterministic fallback: %s", str(exc)[:300])
+        if cb:
+            cb.rejected_models.clear()
+        return _fallback_task_plan(prompt, current)
+
+
+def _task_context_trim(value, depth=0):
+    """Bound nested current-config context before sending it to a model; the full config remains in the checkpoint."""
+    if depth >= 3:
+        if isinstance(value, (dict, list)):
+            return "[details omitted from model context; preserved in checkpoint]"
+        return str(value)[:80] if value is not None else None
+    if isinstance(value, str):
+        return value[:100]
+    if isinstance(value, dict):
+        items = list(value.items())[:12]
+        out = {str(k): _task_context_trim(v, depth + 1) for k, v in items}
+        if len(value) > len(items):
+            out["_omitted_keys"] = len(value) - len(items)
+        return out
+    if isinstance(value, list):
+        result = [_task_context_trim(v, depth + 1) for v in value[:6]]
+        if len(value) > len(result):
+            result.append(f"[{len(value) - len(result)} more items omitted; preserved in checkpoint]")
+        return result
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    return str(value)[:80]
+
+
+def _config_task_summary(cfg, target_node_ids=None):
+    if not isinstance(cfg, dict):
+        return None
+    nodes = cfg.get("nodes") if isinstance(cfg.get("nodes"), dict) else {}
+    all_ids = [str(x) for x in nodes.keys()][:MAX_NODES]
+    # Send every node ID so new routes don't collide, but detailed contents only for the most relevant nodes.
+    preferred = []
+    for nid in ([cfg.get("start"), cfg.get("fallback")] + list(target_node_ids or [])):
+        if isinstance(nid, str) and nid in nodes and nid not in preferred:
+            preferred.append(nid)
+    details_order = preferred + [nid for nid in all_ids if nid not in preferred]
+    slim_nodes = {}
+    for node_id in details_order[:4]:
+        node = nodes.get(node_id)
+        if not isinstance(node, dict):
+            continue
+        slim_nodes[node_id] = {
+            "title": str(node.get("title") or "")[:40], "text": str(node.get("text") or "")[:55],
+            "buttons": [[{"text": str(b.get("text") or "")[:16], "goto": str(b.get("goto") or "")[:20]}
+                          for b in row[:2] if isinstance(b, dict)]
+                        for row in (node.get("buttons") or [])[:2] if isinstance(row, list)],
+            "fields": [str(x)[:50] for x in node.get("fields", [])[:3]] if isinstance(node.get("fields"), list) else [],
+            "types": list(node.get("types") or [])[:3] if isinstance(node.get("types"), list) else [],
+            "save": list(node.get("save") or [])[:3] if isinstance(node.get("save"), list) else [],
+            "ask": bool(node.get("ask")), "next": str(node.get("next") or "")[:20],
+            "route": [{"goto": str(x.get("goto") or "")[:20], "when": ({"var": str((x.get("when") or {}).get("var") or "")[:16], "op": str((x.get("when") or {}).get("op") or "")[:8], "value": str((x.get("when") or {}).get("value") or "")[:24]} if isinstance(x.get("when"), dict) else None)}
+                      for x in (node.get("route") or [])[:2] if isinstance(x, dict)] if isinstance(node.get("route"), list) else [],
+            "do": [{"op": str(a.get("op") or "")[:12], "var": str(a.get("var") or "")[:12]}
+                   for a in node.get("do", [])[:2] if isinstance(a, dict)] if isinstance(node.get("do"), list) else [],
+        }
+    root = {k: v for k, v in cfg.items() if k not in ("nodes", "thinking", "ideas")}
+    root = _task_context_trim(root)
+    return {"root": root, "node_ids": all_ids, "node_details_omitted": max(0, len(all_ids) - len(slim_nodes)), "nodes": slim_nodes}
+
+
+def _merge_patch_value(old, new, path=""):
+    if isinstance(old, dict) and isinstance(new, dict):
+        out = copy.deepcopy(old)
+        for key, value in new.items():
+            out[key] = _merge_patch_value(out.get(key), value, f"{path}.{key}" if path else str(key))
+        return out
+    if isinstance(old, list) and isinstance(new, list) and path.endswith(".triggers"):
+        out = copy.deepcopy(old)
+        seen = {json.dumps(x, ensure_ascii=False, sort_keys=True, default=str) for x in out}
+        for value in new:
+            sig = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+            if sig not in seen:
+                out.append(copy.deepcopy(value)); seen.add(sig)
+        return out
+    return copy.deepcopy(new)
+
+
+def _merge_config_patch(cfg, patch):
+    """Merge only explicit patch fields; existing nodes not mentioned by a task remain untouched."""
+    if not isinstance(cfg, dict) or not isinstance(patch, dict):
+        raise ValueError("پچ وظیفه، شیء تنظیمات معتبر نیست")
+    merged = copy.deepcopy(cfg)
+    for key, value in patch.items():
+        if key not in _ROOT_CONFIG_KEYS or key in ("nodes", "update_nodes"):
+            continue
+        if key in ("commands", "vars", "globals", "dbfields") and isinstance(value, dict):
+            merged[key] = _merge_patch_value(merged.get(key, {}), value, key)
+        elif key in ("group", "mod", "desk", "games", "growth", "channelpost", "rss", "inline", "webin", "digest", "join") and isinstance(value, dict):
+            merged[key] = _merge_patch_value(merged.get(key, {}), value, key)
+        else:
+            merged[key] = copy.deepcopy(value)
+    existing_nodes = merged.setdefault("nodes", {})
+    if not isinstance(existing_nodes, dict):
+        existing_nodes = merged["nodes"] = {}
+    for node_key in ("nodes", "update_nodes"):
+        changed_nodes = patch.get(node_key)
+        if not isinstance(changed_nodes, dict):
+            continue
+        for node_id, node_patch in changed_nodes.items():
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", str(node_id)) or not isinstance(node_patch, dict):
+                continue
+            node_id = str(node_id)
+            if node_id in existing_nodes:
+                existing_nodes[node_id] = _merge_patch_value(existing_nodes[node_id], node_patch, f"nodes.{node_id}")
+            else:
+                existing_nodes[node_id] = copy.deepcopy(node_patch)
+    if len(existing_nodes) > max(1, min(200, MAX_NODES)):
+        raise ValueError(f"تعداد گره‌ها از سقف مجاز موتور ({MAX_NODES}) بیشتر شد؛ وظیفه به checkpoint برنگشت")
+    return merged
+
+
+def _checkpoint_build_state(cb, prompt, base, plan, completed, cfg, thinking, ideas, gaps, phase, task_index, last_error=""):
+    if not cb or not getattr(cb, "jid", None):
+        return
+    try:
+        state = {
+            "version": 1, "request_hash": _task_hash(str(prompt or "")), "base_hash": _task_hash(base) if base is not None else "new",
+            "plan": copy.deepcopy(plan), "completed": list(completed), "cfg": copy.deepcopy(cfg),
+            "thinking": str(thinking or "")[:900], "ideas": list(ideas or [])[:3], "gaps": list(gaps or [])[:12],
+            "phase": str(phase), "task_index": int(task_index), "last_error": str(last_error or "")[:500],
+            "retry_counts": dict(getattr(cb, "task_retry_counts", {}) or {}), "updated": time.time()
+        }
+        result = db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"build_state": state}})
+        if getattr(result, "matched_count", 1) == 0:
+            raise RuntimeError("job no longer accepts checkpoint updates; refusing to continue without durable state")
+    except Exception as exc:
+        log.exception("failed to persist task checkpoint; stopping build to protect progress")
+        raise RuntimeError(f"ذخیرهٔ checkpoint وظیفه در دیتابیس ناموفق بود؛ برای جلوگیری از گم‌شدن پیشرفت، ساخت متوقف شد: {type(exc).__name__}: {str(exc)[:300]}") from exc
+
+
+def _load_build_state(cb, prompt, current):
+    if not cb or not getattr(cb, "jid", None):
+        return None
+    try:
+        job = db.jobs.find_one({"_id": cb.jid}, {"build_state": 1}) or {}
+        state = job.get("build_state") or {}
+        if state.get("version") != 1 or state.get("request_hash") != _task_hash(str(prompt or "")):
+            return None
+        if state.get("base_hash") != (_task_hash(current) if current is not None else "new"):
+            return None
+        if not isinstance(state.get("plan"), list) or not isinstance(state.get("cfg"), dict):
+            return None
+        return state
+    except Exception:
+        log.exception("failed to load task checkpoint")
+        return None
+
+
+def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media_ids, acc, feedback=""):
+    """Generate one atomic config patch. Provider failures are failovered; malformed outputs switch model without restarting earlier tasks."""
+    cb = getattr(_prog, "cb", None)
+    if cb:
+        cb.last_model = None
+        cb.rejected_models.clear()
+        cb.set_task(task_index + 1, len(plan), task.get("title") or task.get("id"))
+    started = time.monotonic()
+    task_budget = max(20.0, min(65.0, float(_int("AI_TASK_BUDGET", 48))))
+    last_parse_error = ""
+    parse_attempt_limit = max(3, min(5, len(_model_candidates())))
+    for parse_try in range(parse_attempt_limit):
+        remaining_task = task_budget - (time.monotonic() - started)
+        if remaining_task <= 3:
+            break
+        context = {
+            "original_user_request_parts_follow_in_next_messages": True,
+            "current_task": task,
+            "all_tasks": [{"id": x.get("id"), "title": x.get("title"), "node_ids": x.get("node_ids", [])} for x in plan],
+            "completed_tasks": completed,
+            "current_config_summary": _config_task_summary(cfg, task.get("node_ids")),
+            "patch_contract": {
+                "config": "partial config patch; omit unchanged values",
+                "nodes": "new nodes or complete replacements when a node id already exists",
+                "update_nodes": "partial property updates to existing nodes; do not include unrelated nodes",
+                "allowed_top_level_keys": sorted(_ROOT_CONFIG_KEYS),
+            },
+            "validation_feedback_from_previous_output": last_parse_error,
+            "additional_instruction": str(feedback or "")[:2200],
+            "language": "Persian" if lang == "fa" else "same as user request",
+        }
+        system = TASK_PATCH_SYSTEM
+        context_messages = [{"role": "user", "content": "EXECUTION CONTEXT (JSON):\n" + json.dumps(context, ensure_ascii=False, indent=2)}]
+        request_text = str(prompt or "")[:MAX_PROMPT]
+        request_cap = max(700, min(1900, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200) - 200))
+        request_parts = []
+        remaining_text = request_text
+        while len(remaining_text) > request_cap:
+            cut_at = remaining_text.rfind("\n", 1, request_cap + 1)
+            if cut_at < request_cap * 0.55:
+                cut_at = remaining_text.rfind(" ", 1, request_cap + 1)
+            if cut_at < request_cap * 0.55:
+                cut_at = request_cap
+            else:
+                cut_at += 1
+            request_parts.append(remaining_text[:cut_at])
+            remaining_text = remaining_text[cut_at:]
+        if remaining_text or not request_parts:
+            request_parts.append(remaining_text)
+        request_messages = [{"role": "user", "content": f"ORIGINAL USER REQUEST — PART {i}/{len(request_parts)}. Read all request parts together, in order:\n{part}"}
+                            for i, part in enumerate(request_parts, 1)]
+        task_messages = [{"role": "system", "content": system}] + context_messages + request_messages
+        try:
+            text, usage = llm_run(
+                task_messages,
+                min(AI_MAX_TOKENS, max(2600, min(5200, AI_MAX_TOKENS))), temperature=0.18,
+                timeout=min(12.0, remaining_task, _job_remaining(12)), max_models=3,
+                total_timeout=min(36.0, remaining_task, _job_remaining(36)))
+            _record_usage(acc, usage)
+        except Exception as exc:
+            # Try unvisited providers in a second batch, but never restart completed tasks.
+            rejected = set(getattr(cb, "rejected_models", set()) or set()) if cb else set()
+            remaining_models = [m for m in _model_candidates() if m.casefold() not in rejected]
+            if remaining_models and (task_budget - (time.monotonic() - started)) > 3:
+                try:
+                    text, usage = llm_run(
+                        task_messages,
+                        min(AI_MAX_TOKENS, 5200), temperature=0.18,
+                        timeout=min(12.0, task_budget - (time.monotonic() - started), _job_remaining(12)),
+                        max_models=len(remaining_models),
+                        total_timeout=max(1.0, min(task_budget - (time.monotonic() - started), _job_remaining(12))))
+                    _record_usage(acc, usage)
+                except Exception as second_exc:
+                    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:700]}") from second_exc
+            else:
+                raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(exc).__name__}: {str(exc)[:700]}") from exc
+        try:
+            raw, repaired_json = _loads_json_with_safe_repairs(text)
+            if not isinstance(raw, dict):
+                raise ValueError("پاسخ وظیفه یک شیء JSON نبود")
+            patch = raw.get("config") if isinstance(raw.get("config"), dict) else raw.get("patch")
+            if not isinstance(patch, dict):
+                raise ValueError("پاسخ وظیفه فاقد config/patch بود")
+            has_patch = any(k in _ROOT_CONFIG_KEYS for k in patch) or isinstance(patch.get("update_nodes"), dict)
+            if not has_patch or not isinstance(patch.get("nodes", {}), dict):
+                raise ValueError("پچ وظیفه هیچ تغییر قابل‌اعمالی نداشت یا nodes نامعتبر بود")
+            proposed_cfg = _merge_config_patch(cfg, patch)
+            if _task_hash(proposed_cfg) == _task_hash(cfg):
+                raise ValueError("پچ JSON بود اما هیچ تغییر واقعی در کانفیگ نداد؛ وظیفه تکمیل‌شده محسوب نمی‌شود")
+            thinking = str(raw.get("thinking") or "").strip()[:900]
+            ideas = [str(x).strip()[:80] for x in raw.get("ideas", []) if str(x).strip()][:3] if isinstance(raw.get("ideas"), list) else []
+            gaps = _take_gaps(raw.get("unsupported"))
+            if cb and repaired_json:
+                log.info("JSON syntax repaired in task %s", task.get("id"))
+            if cb:
+                cb.last_model = None
+            return patch, thinking, ideas, gaps
+        except Exception as exc:
+            last_parse_error = f"Task {task.get('id')}: {type(exc).__name__}: {str(exc)[:450]}. Return a complete valid JSON config PATCH only; preserve all previous tasks and output only changed/new nodes and settings."
+            log.warning("Task patch rejected; switching model for task %s, attempt %s: %s", task.get("id"), parse_try + 1, str(exc)[:250])
+            if cb:
+                cb.reject_last_model()
+    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از چند خروجی نامعتبر تکمیل نشد؛ کارهای قبلی checkpoint شده‌اند. {last_parse_error[:500]}")
+
+
+def _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap):
+    """Normalize only once all task patches are merged; return cfg and structural warnings."""
+    cfg, renamed_vars = _repair_reserved_write_vars(copy.deepcopy(cfg))
+    warns = []
+    cfg = sanitize(cfg, media=media_ids, warns=warns, nodes_cap=nodes_cap)
+    auto_links = _repair_orphan_confirmation_nodes(cfg)
+    feature_changes, feature_warnings, requested_staff = _repair_explicit_requirements(prompt, cfg, lang)
+    warns.extend(feature_warnings)
+    if auto_links and not any("unreachable nodes" in item.lower() for item in lint(cfg)):
+        log.info("orphan confirmation nodes were repaired before final lint")
+    if lang == "fa":
+        cfg = scrub_deep(cfg)
+    return cfg, warns, feature_changes, requested_staff
+
+
+def _is_transient_task_failure(exc):
+    """Retry a task once only for likely transient transport/server failures; never loop on permanent quota/config errors."""
+    message = f"{type(exc).__name__}: {exc}".casefold()
+    permanent = (
+        "daily_free_quota_exhausted", "today's free token allowance", "allowance renews",
+        "provider_content_refusal", "content grounds", "refused this prompt", "content policy",
+        "model_not_found", "http 404", "http 401", "http 403", "unauthorized",
+        "invalid api key", "provider_message_length_limit", "limits the length of a single message",
+        "context_length_exceeded", "http 400",
+    )
+    if any(term in message for term in permanent):
+        return False
+    transient = (
+        "readtimeout", "connecttimeout", "timeout", "timed out", "connection reset",
+        "connection aborted", "temporarily unavailable", "remote end closed", "http 500",
+        "http 502", "http 503", "http 504", "bad gateway", "service unavailable",
+    )
+    return any(term in message for term in transient)
+
+
 def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
-    """ساخت، تلاش اصلاحی، ممیزی مستقل تطابق و گزارش امنِ نقص‌های باقی‌مانده."""
+    """Task-based builder: plan -> patch each capability -> persist every checkpoint -> normalize/lint/QA."""
     acc = [] if acc is None else acc
+    prompt = str(prompt or "")[:MAX_PROMPT]
     lang = detect_lang(prompt)
     guard = lang == "fa" and not has_foreign(prompt)
-    check_cfg = guard and not foreign_in(current)
-    media_ids = {m["id"] for m in media_items}
-    best, best_problems, last, feedback = None, [], None, ""
+    media_ids = {m["id"] for m in media_items if isinstance(m, dict) and m.get("id")}
     cb = getattr(_prog, "cb", None)
     if cb:
         cb.fa = lang == "fa"
     _gap.items = []
 
-    candidate = None
-    candidate_problems = []
-    # Keep a durable in-memory checkpoint between attempts. A repair attempt receives
-    # the last usable config as its working base instead of rebuilding from an empty slate.
-    checkpoint_cfg = current
-    checkpoint_thinking = ""
-    checkpoint_ideas = []
-    for attempt in (0, 1):
+    state = _load_build_state(cb, prompt, current)
+    if state:
+        plan = state["plan"]
+        cfg = copy.deepcopy(state["cfg"])
+        completed = list(state.get("completed") or [])
+        thinking = str(state.get("thinking") or "")
+        ideas = list(state.get("ideas") or [])[:3]
+        carried_gaps = list(state.get("gaps") or [])
+        retry_counts = {str(k): int(v) for k, v in (state.get("retry_counts") or {}).items() if str(v).isdigit()}
         if cb:
-            cb.attempt(attempt + 1)
-            if attempt:
-                cb.stage("repair", max(58.0, float(cb.d.get("p") or 58.0)))
+            cb.task_retry_counts = retry_counts
+        log.info("Resuming task build at checkpoint: %s/%s tasks done", len(completed), len(plan))
+        _gap.items = carried_gaps
+    else:
+        plan = _plan_build_tasks(prompt, current, acc)
+        cfg = copy.deepcopy(current) if current is not None else {
+            "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",
+            "commands": {}, "nodes": {}
+        }
+        completed, thinking, ideas = [], "", []
+        retry_counts = {}
+        if cb:
+            cb.task_retry_counts = retry_counts
+        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, [], "planned", 0)
+
+    task_map = {str(t.get("id")): t for t in plan}
+    # Reconcile duplicate/corrupted task IDs defensively before execution.
+    for i, task in enumerate(plan):
+        if not task.get("id"):
+            task["id"] = f"task_{i+1}"
+        if not task.get("node_ids") and task.get("id") == "foundation":
+            task["node_ids"] = ["start"]
+    all_gaps = list(_gap.items or [])
+    for index, task in enumerate(plan):
+        tid = str(task.get("id"))
+        if tid in completed:
+            continue
+        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "task_running", index)
         try:
-            repair_note = feedback
-            if attempt and checkpoint_cfg is not None:
-                repair_note = (
-                    "RESUME FROM CHECKPOINT — do NOT restart design from scratch. The current config below is the last usable checkpoint. "
-                    "Preserve every already implemented node, route, form answer, variable, and feature unless it directly causes a listed problem. "
-                    "Apply only the smallest changes needed to fix the listed validation/JSON/lint issues, then return the COMPLETE updated config. "
-                    "Do not drop working functionality or replace it with a simplified generic bot.\n" + str(feedback or "")
-                )
-            working_config = checkpoint_cfg if attempt and checkpoint_cfg is not None else current
-            thinking, cfg, ideas, warns = _call_llm(
-                build_user(prompt, working_config, lang, media_items, repair_note), lang, attempt == 1,
-                media_ids, acc, guard, check_cfg, nodes_cap)
-        except ThinkLang as exc:
+            task_feedback = ""
+            patch_result = None
+            for task_attempt in range(2):
+                try:
+                    patch_result = _task_patch_call(
+                        prompt, task, plan, index, cfg, completed, lang, media_ids, acc, feedback=task_feedback)
+                    break
+                except Exception as task_exc:
+                    retries_used = int((getattr(cb, "task_retry_counts", {}) or {}).get(tid, 0)) if cb else 0
+                    deadline_left = (getattr(cb, "deadline", time.monotonic()) - time.monotonic()) if cb else 0
+                    if (task_attempt == 0 and retries_used < 1 and _is_transient_task_failure(task_exc)
+                            and deadline_left > 25):
+                        retry_counts = dict(getattr(cb, "task_retry_counts", {}) or {}) if cb else {}
+                        retry_counts[tid] = retries_used + 1
+                        if cb:
+                            cb.task_retry_counts = retry_counts
+                            cb.stage("repair", max(float(cb.d.get("p") or 2), min(74.0, 10.0 + 66.0 * (index + 1) / max(1, len(plan)))))
+                        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
+                                                "task_transient_retry", index,
+                                                f"{type(task_exc).__name__}: {str(task_exc)[:400]}")
+                        task_feedback = (
+                            "The previous attempt for THIS task failed due to a transient provider/transport error. "
+                            "Continue from the supplied current config; do not redo completed tasks. Return only the missing incremental patch."
+                        )
+                        log.warning("Retrying only transiently failed task %s from the saved config; completed tasks remain untouched", tid)
+                        continue
+                    raise
+            if patch_result is None:
+                raise RuntimeError(f"وظیفهٔ {tid} نتیجه‌ای تولید نکرد")
+            patch, task_thinking, task_ideas, task_gaps = patch_result
+            cfg = _merge_config_patch(cfg, patch)
+            completed.append(tid)
+            if task_thinking and (not thinking or tid == "foundation"):
+                thinking = task_thinking
+            for idea in task_ideas:
+                if idea not in ideas and len(ideas) < 3:
+                    ideas.append(idea)
+            all_gaps = _merge_gap_items(all_gaps, task_gaps, limit=12)
+            _gap.items = all_gaps
+            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "task_done", index + 1)
             if cb:
-                cb.reject_last_model()
-            if best is None:
-                best = ("", exc.cfg, exc.ideas)
-                best_problems = ["زبان یا متن خروجی در بازبینی اول ناسازگار بود و تلاش اصلاحی باید با موفقیت تأیید شود"]
-                checkpoint_cfg, checkpoint_thinking, checkpoint_ideas = exc.cfg, "", exc.ideas
-            last = exc
-            feedback = ("(The previous answer used the wrong language or foreign-script characters. Rewrite the FULL config "
-                        "in the required language and keep all requested functions.)")
-            log.warning("thinking in wrong language, retrying")
-            continue
-        except (ValueError, KeyError, TypeError) as exc:
-            if cb:
-                cb.reject_last_model()
-            last = exc
-            feedback = (
-                f"(Your previous reply was rejected by the parser/validator: {str(exc)[:320]}. "
-                "Return one complete syntactically valid JSON object, with every string correctly escaped, commas between all sibling properties/items, "
-                "no trailing commas, no markdown fences, and the full config. Keep all user-requested functions.)"
-            )
-            log.warning("bad AI output, retrying once", exc_info=True)
-            continue
+                cb.task_done(index + 1, len(plan), task.get("title") or tid)
+        except Exception as exc:
+            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
+                                    "task_failed", index, f"{type(exc).__name__}: {str(exc)[:500]}")
+            raise
 
-        problems = lint(cfg) + [f"the validator dropped or changed something: {w}" for w in warns]
-        if problems and attempt == 0:
-            if cb:
-                cb.reject_last_model()
-            best = (thinking, cfg, ideas)
-            best_problems = list(problems)
-            checkpoint_cfg, checkpoint_thinking, checkpoint_ideas = cfg, thinking, ideas
-            feedback = ("CHECKPOINT REPAIR TASKS (do these without discarding working features): "
-                        + "; ".join(problems[:8]) + ". Return the complete corrected config, preserving all other nodes and behavior.")
-            log.info("lint problems, retrying: %s", problems)
-            continue
-        candidate = (thinking, cfg, ideas)
-        candidate_problems = list(problems)
-        break
+    if not cfg.get("nodes"):
+        raise RuntimeError("همه وظایف ظاهراً پایان یافتند اما هیچ گره‌ای ساخته نشد؛ کانفیگ ذخیره نشد")
 
-    # مهم: قبلاً در صورت شکست تلاش دوم، کانفیگ ناقصِ تلاش اول بی‌سروصدا برمی‌گشت.
-    # حالا همان خروجی فقط به‌عنوان نامزد بازبینی می‌ماند و هرگز بدون گزارش تحویل نمی‌شود.
-    if candidate is None:
-        if best is None:
-            raise last or RuntimeError("مدل هوش مصنوعی خروجی قابل استفاده تولید نکرد")
-        candidate = best
-        candidate_problems = list(best_problems)
+    if cb:
+        cb.stage("validate", 76.0)
+    cfg, warns, feature_changes, requested_staff = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
+    # One targeted structural repair task, if needed. Keep the normalized config checkpoint and repair only the reported problems.
+    structure_issues = lint(cfg)
+    if structure_issues or warns:
+        repair_task = {"id": "repair_structure", "title": "اصلاح ساختار و مسیرهای اجرایی",
+                       "scope": "فقط این خطاهای اعتبارسنجی را اصلاح کن؛ قابلیت‌های سالم و همهٔ وظایف تکمیل‌شده را حفظ کن. مشکلات: " +
+                                json.dumps((structure_issues + ["validator warning: " + x for x in warns])[:10], ensure_ascii=False),
+                       "acceptance": ["lint بدون خطای مسیر", "حفظ همهٔ قابلیت‌های قبلی"], "node_ids": []}
+        _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps, "repair_structure", len(plan))
+        try:
+            patch, rthinking, rideas, rgaps = _task_patch_call(prompt, repair_task, plan + [repair_task], len(plan), cfg, completed, lang, media_ids, acc,
+                                                               feedback="Repair only the exact validator/lint findings. Do not redesign or regenerate the bot.")
+            cfg = _merge_config_patch(cfg, patch)
+            if rthinking:
+                thinking = rthinking
+            ideas = (ideas + [x for x in rideas if x not in ideas])[:3]
+            all_gaps = _merge_gap_items(all_gaps, rgaps, limit=12)
+            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repair_structure_done", len(plan))
+        except Exception as exc:
+            _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
+                                    "repair_structure_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
+            raise RuntimeError(f"ترمیم ساختاری شکست خورد؛ همهٔ وظایف قبلی حفظ شده‌اند و باید فقط همین وظیفه ادامه یابد: {type(exc).__name__}: {str(exc)[:350]}") from exc
+        cfg, warns2, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
+        warns = warns2
+        feature_changes.extend(feature_changes2)
+        requested_staff = list(dict.fromkeys(requested_staff + requested_staff2))
+        structure_issues = lint(cfg)
+        if structure_issues:
+            _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
+                                    "final_lint_failed", len(plan), "; ".join(structure_issues[:8]))
+            raise RuntimeError("اعتبارسنجی مسیرها پس از ترمیم هنوز خطا دارد؛ خروجی ذخیره نشد و checkpoint باقی ماند تا فقط ترمیم مسیر ادامه یابد: " + "; ".join(structure_issues[:6]))
 
-    thinking, cfg, ideas = candidate
-    builder_gaps = list(getattr(_gap, "items", []) or [])
-    structural_gaps = [{
-        "want": "ساخت ربات با همه مسیرهای منطقی سالم",
-        "why": str(problem)[:500],
-        "upgrade": "اصلاح همین مسیر/اکشن در کانفیگ، اجرای دوبارهٔ lint و جلوگیری از ذخیره تا عبور از آزمون منطقی"
-    } for problem in candidate_problems[:3]]
-    builder_gaps = _merge_gap_items(structural_gaps, builder_gaps)
+    for warning in warns:
+        all_gaps = _merge_gap_items(all_gaps, [{"want": "اعتبارسنجی کانفیگ نهایی", "why": str(warning)[:500],
+            "upgrade": "اصلاح خروجی همان وظیفه و اجرای مجدد sanitize/lint؛ تغییر خودکار نباید باعث حذف قابلیت درخواستی شود."}], limit=12)
 
-    # ممیزی تطابق درخواست با کانفیگ واقعی؛ فهرست unsupported مدل سازنده به‌تنهایی کافی نیست.
     if cb:
         cb.stage("audit", 82.0)
-    qa_gaps = audit_requirements(prompt, cfg, acc)
+    _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "pre_audit", len(plan))
+    try:
+        qa_gaps = audit_requirements(prompt, cfg, acc)
+    except Exception as exc:
+        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
+                                "audit_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
+        raise RuntimeError(f"ممیزی نهایی در این اجرا موفق نشد؛ کانفیگ و وظایف ساخته‌شده checkpoint شده‌اند. در ادامه فقط ممیزی/وظیفهٔ باقی‌مانده دوباره انجام می‌شود. {type(exc).__name__}: {str(exc)[:350]}") from exc
     if qa_gaps:
-        qa_feedback = (
-            "(Independent QA found these explicit requirements missing, incomplete, or only described as text. "
-            "Repair the FULL CONFIG without removing other implemented requirements. Use only real engine capabilities. "
-            "If a requested feature truly cannot be implemented, keep it honestly in unsupported with a concrete reason. "
-            "QA findings: " + json.dumps(qa_gaps, ensure_ascii=False) + ")"
-        )
-        original_gaps = list(getattr(_gap, "items", []) or [])
-        repaired = None
-        repaired_problems = []
+        if cb:
+            cb.stage("repair", 86.0)
+        repair_task = {"id": "repair_requirements", "title": "تکمیل خواسته‌های جاافتاده",
+                       "scope": "درخواست اصلی کاربر را با کانفیگ فعلی مقایسه کن و فقط این نقص‌های مشخص را اصلاح کن: " +
+                                json.dumps(qa_gaps, ensure_ascii=False),
+                       "acceptance": ["پیاده‌سازی اجرایی هر خواستهٔ قابل پشتیبانی", "حفظ قابلیت‌های قبلی"], "node_ids": []}
+        _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps, "repair_requirements", len(plan))
         try:
-            if cb:
-                cb.stage("repair", 86.0)
-                cb.reject_last_model() if qa_gaps else None
-            rthinking, rcfg, rideas, rwarns = _call_llm(
-                build_user(prompt, cfg, lang, media_items,
-                           "RESUME FROM THE VALIDATED CONFIG CHECKPOINT. Preserve all working functionality and apply only QA findings. " + qa_feedback), lang, True,
-                media_ids, acc, guard, check_cfg, nodes_cap)
-            repaired = (rthinking, rcfg, rideas)
-            repaired_problems = lint(rcfg) + [f"the validator dropped or changed something: {w}" for w in rwarns]
-            if cb:
-                cb.stage("audit", 91.0)
-            remaining_qa = audit_requirements(prompt, rcfg, acc)
-            # اگر اصلاح، همه‌ی نقص‌های تشخیص‌داده‌شده را رفع کرده باشد، از خروجی اصلاح‌شده استفاده می‌کنیم.
-            thinking, cfg, ideas = repaired
-            final_builder_gaps = _merge_gap_items(
-                [{"want": "ساخت ربات با همه مسیرهای منطقی سالم", "why": str(x),
-                  "upgrade": "اصلاح همین مسیر/اکشن و اجرای دوبارهٔ آزمون منطقی"} for x in repaired_problems],
-                list(getattr(_gap, "items", []) or [])
-            )
-            _gap.items = _merge_gap_items(remaining_qa, final_builder_gaps)
-            if remaining_qa:
-                log.warning("independent QA still sees missing requirements after repair: %s", remaining_qa)
+            patch, rthinking, rideas, rgaps = _task_patch_call(prompt, repair_task, plan + [repair_task], len(plan), cfg, completed, lang, media_ids, acc,
+                                                               feedback="Use a minimal patch. Do not restart the design or remove working features.")
+            cfg = _merge_config_patch(cfg, patch)
+            if rthinking:
+                thinking = rthinking
+            ideas = (ideas + [x for x in rideas if x not in ideas])[:3]
+            all_gaps = _merge_gap_items(all_gaps, rgaps, limit=12)
+            cfg, warns_after, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
+            structure_issues = lint(cfg)
+            qa_gaps = audit_requirements(prompt, cfg, acc)
+            qa_gaps = _merge_gap_items(qa_gaps,
+                [{"want": "اعتبارسنجی مسیرهای ربات", "why": x, "upgrade": "اصلاح مسیر و اجرای مجدد lint."} for x in structure_issues], limit=3)
+            all_gaps = _merge_gap_items(all_gaps,
+                [{"want": "اعتبارسنجی کانفیگ نهایی", "why": x, "upgrade": "رفع هشدار و اجرای دوبارهٔ آزمون پذیرش."} for x in warns_after], limit=12)
+            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repair_requirements_done", len(plan))
+            feature_changes.extend(feature_changes2)
+            requested_staff = list(dict.fromkeys(requested_staff + requested_staff2))
         except Exception as exc:
-            # در صورت شکست ترمیم/ممیزی دوم، خروجی قبلی را مخفیانه موفق اعلام نکن؛ برای تصمیم/گزارش نگه دار.
-            log.warning("QA repair failed; keeping original candidate for review: %s", exc, exc_info=True)
-            thinking, cfg, ideas = candidate
-            _gap.items = _merge_gap_items(qa_gaps, original_gaps, builder_gaps, [{
-                "want": "بازبینی و ترمیم خودکار درخواست قبل از تحویل",
-                "why": f"ممیزی اولیه نقص‌هایی یافت، اما تلاش اصلاح و تأیید مجدد موفق نشد: {type(exc).__name__}: {str(exc)[:300]}",
-                "upgrade": "اصلاح چرخهٔ ترمیم و ممیزی؛ معیار پذیرش این است که هر الزام صریح به یک مسیر واقعی نگاشت شود و سپس ممیزی دوم بدون نقص بگذرد"
-            }])
-    else:
-        _gap.items = _merge_gap_items(builder_gaps, list(getattr(_gap, "items", []) or []))
+            _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
+                                    "repair_requirements_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
+            raise RuntimeError(f"ترمیم خواسته‌های جاافتاده شکست خورد؛ checkpoint حفظ شده و باید فقط همان وظیفه ادامه پیدا کند. {type(exc).__name__}: {str(exc)[:350]}") from exc
 
-    return thinking or FALLBACK_THINKING, cfg, ideas
+    # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
+    all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
+    if guard:
+        thinking = scrub_foreign(thinking) if thinking else ""
+        ideas = [scrub_foreign(x) for x in ideas]
+        ideas = [x for x in ideas if x]
+    if not thinking:
+        thinking = FALLBACK_THINKING
+    if requested_staff:
+        manager_note = " برای دریافت پیام‌ها، " + ", ".join("@" + x for x in requested_staff) + " باید یک‌بار /start همین ربات را بزند؛ انتقال مالکیت BotFather انجام نمی‌شود." if lang == "fa" else \
+                       " For private notifications, " + ", ".join("@" + x for x in requested_staff) + " must open this bot and press /start once; BotFather ownership is not transferred."
+        if manager_note not in thinking:
+            thinking = (thinking[:max(0, 899-len(manager_note))].rstrip() + " " + manager_note).strip()[:900]
+    _gap.items = all_gaps[:3]
+    _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, _gap.items, "complete_candidate", len(plan))
+    if cb:
+        cb.stage("validate", 94.0)
+    return thinking, cfg, ideas
 
 
 def enhance_prompt(prompt):

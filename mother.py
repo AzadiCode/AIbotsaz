@@ -22,7 +22,7 @@ mother.py — ربات مادر و سیستم‌های اطرافش (وابست�
 """
 
 import html as _html
-import io, os, re, time, secrets, random, threading, asyncio
+import io, os, re, time, secrets, random, threading, asyncio, copy
 from collections import deque
 from urllib.parse import quote
 from datetime import timedelta
@@ -336,7 +336,7 @@ def mother_command(msg):
 # ───────────────────────── ساخت ربات مستقیم داخل چت ربات مادر ─────────────────────────
 # یک پیام واحد برای کل مسیر که فقط ویرایش می‌شود: توکن ← توضیح ← تأیید ← ساخت ← فعال‌سازی و نتیجه
 _mk_watch, _mk_lock = set(), threading.Lock()
-MK_STAGE = {"analyze": "تحلیل توضیحات", "fallback": "امتحان مدل جایگزین پس از خطا", "build": "طراحی ساختار و بخش‌ها", "review": "بازبینی و بهینه‌سازی", "validate": "اعتبارسنجی خروجی", "save": "ذخیره‌سازی نهایی"}
+MK_STAGE = {"analyze": "برنامه‌ریزی درخواست", "fallback": "امتحان مدل جایگزین پس از خطا", "build": "اجرای وظیفه و ذخیرهٔ checkpoint", "repair": "ترمیم وظیفهٔ ناموفق", "audit": "ممیزی نهایی", "review": "بازبینی و بهینه‌سازی", "validate": "اعتبارسنجی خروجی", "save": "ذخیره‌سازی نهایی"}
 MK_TITLE = "<b>ساخت ربات جدید</b>"
 
 
@@ -555,9 +555,15 @@ def mk_progress_text(j, tick):
     out = ["<b>در حال ساخت ربات</b>", "",
            f"مرحله: {MK_STAGE.get(pr.get('st') or 'analyze', 'پردازش')}{'.' * (tick % 3 + 1)}",
            f"{'▰' * on}{'▱' * (12 - on)}  {int(p)}%"]
+    if pr.get("task_n"):
+        ti, tn = int(pr.get("task_i") or 0), int(pr.get("task_n") or 0)
+        if ti and tn:
+            out.append(f"وظیفه {min(ti, tn)} از {tn}: {hx(pr.get('task_title') or 'در حال اجرا')}")
+    if pr.get("model_try") and pr.get("model_total"):
+        out.append(f"امتحان مدل {int(pr.get('model_try'))}/{int(pr.get('model_total'))}: {hx(pr.get('model_label') or '')}")
     if pr.get("n"):
         out.append(f"بخش‌های طراحی‌شده: {pr['n']}" + (f" | آخرین بخش: «{hx(pr['ti'])}»" if pr.get("ti") else ""))
-    out += ["", "نتیجه در همین پیام اعلام می‌شود."]
+    out += ["", "پیشرفت وظیفه‌ها مرحله‌به‌مرحله ذخیره می‌شود؛ نتیجه فقط پس از اعتبارسنجی نهایی اعلام می‌شود."]
     return "\n".join(out)
 
 
@@ -601,8 +607,21 @@ def mk_watch(uid, chat, jid):
             db.mstate.update_one({"_id": uid}, {"$unset": {"job": ""}})
             mk_render(uid, chat, "درخواست لغو شد؛ رباتی ساخته نشد و هیچ توکنی کسر نشد.")
         else:
-            mk_put(uid, step="confirm")
-            mk_render(uid, chat, "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد.")
+            mk_put(uid, step="confirm", job=jid)
+            build_state = j.get("build_state") or {}
+            can_resume = bool(build_state.get("version") == 1 and isinstance(build_state.get("plan"), list)
+                             and isinstance(build_state.get("cfg"), dict))
+            if can_resume:
+                completed = len(build_state.get("completed") or [])
+                total = len(build_state.get("plan") or [])
+                body = ("ساخت به‌دلیل خطای مدل/اعتبارسنجی متوقف شد؛ هیچ ربات ناقصی ذخیره نشد و توکنی کسر نشد.\n\n"
+                        + hx(j.get("error") or "خطای نامشخص")
+                        + f"\n\nپیشرفت حفظ‌شده: {completed} از {total} وظیفه. با ادامه، فقط وظایف باقی‌مانده اجرا می‌شوند.")
+                kb = mk_kb([mk_btn("ادامه از آخرین checkpoint", f"mk:resume:{jid}")],
+                           [mk_btn("شروع درخواست جدید", "mk:new")])
+                mk_show(uid, chat, body, kb)
+            else:
+                mk_render(uid, chat, "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد.")
     except Exception:
         log.exception("chat build watcher crashed")
     finally:
@@ -736,6 +755,30 @@ def mother_callback(cq):
             core.refund(uid, cost, "gen_rollback")
             db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "review", "error": "ذخیره‌سازی ناموفق بود"}, "$unset": {"approved_at": ""}})
             return ack("ذخیره‌سازی ناموفق بود؛ هزینه برگشت داده شد.", True)
+    if act.startswith("resume:"):
+        jid = act.split(":", 1)[1]
+        if not re.fullmatch(r"[a-fA-F0-9]{16,32}", jid):
+            return ack("شناسهٔ کار معتبر نیست.", True)
+        job = db.jobs.find_one({"_id": jid, "uid": uid, "status": "error"})
+        st = mk_get(uid) or {}
+        build_state = (job or {}).get("build_state") or {}
+        if not job or build_state.get("version") != 1 or not isinstance(build_state.get("plan"), list) or not isinstance(build_state.get("cfg"), dict):
+            return ack("checkpoint قابل ادامه پیدا نشد؛ درخواست جدید بساز.", True)
+        if not st.get("prompt") or not st.get("token_enc"):
+            return ack("متن درخواست یا نشست ربات مادر موجود نیست؛ درخواست جدید را شروع کن.", True)
+        reserve = reserve_cost(st["prompt"], None, uid)
+        if balance(uid) < reserve:
+            return ack(f"موجودی کافی نیست؛ برای ادامه تا سقف {reserve} توکن لازم است.", True)
+        changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "error"},
+            {"$set": {"status": "running", "t": now()}, "$unset": {"error": ""}})
+        if not changed:
+            return ack("این کار قبلاً ادامه پیدا کرده یا وضعیتش تغییر کرده است.", True)
+        mk_put(uid, step="building", job=jid)
+        ack("ادامهٔ ساخت از آخرین checkpoint شروع شد.")
+        threading.Thread(target=gen_job, args=(jid, uid, None, st["prompt"], reserve), daemon=True).start()
+        mk_show(uid, chat, mk_progress_text({"prog": {"p": 2, "st": "analyze"}}, 0))
+        threading.Thread(target=mk_watch, args=(uid, chat, jid), daemon=True).start()
+        return None
     if act == "new":
         ack()
         return mk_begin(uid, chat)
@@ -900,12 +943,26 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: تا پایان کار چیزی از موجودی کم نمی‌شه؛ در پایان فقط هزینه‌ی واقعی (حداکثر سقف رزرو) کسر می‌شه"""
     acc = []
     bot = None
+    charged_amount = 0
+    new_bot_created = False
+    existing_bot_mutated = False
+    job_marked_done = False
+    old_bot_snapshot = None
     _gap.items = []
     _prog.cb = Progress(jid)
     try:
-        bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
+        bot = db.bots.find_one({"_id": ObjectId(bot_id), "owner": uid}) if bot_id else None
+        if bot_id and not bot:
+            raise ValueError("ربات اصلی برای ارتقا پیدا نشد؛ ربات جدیدی به‌جای آن ساخته نمی‌شود")
         thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
-        cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc), uid=uid))
+        if BILLING == "fixed":
+            cost = int(reserve)
+        else:
+            usage_doc = db.jobs.find_one({"_id": jid}, {"build_usage": 1}) or {}
+            build_usage = usage_doc.get("build_usage") or {}
+            prompt_tokens = int(build_usage.get("prompt_tokens") or sum(x[0] for x in acc))
+            completion_tokens = int(build_usage.get("completion_tokens") or sum(x[1] for x in acc))
+            cost = min(reserve, calc_cost(prompt_tokens, completion_tokens, uid=uid))
         gaps = list(getattr(_gap, "items", []) or [])
         if gaps and bot_id:
             # نسخهٔ موجود را با خروجی‌ای که ممیزی نتوانسته تأیید کند بازنویسی نکن.
@@ -928,21 +985,66 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             return
         _prog.cb.stage("save", 98.0)
         if bot:
-            db.bots.update_one({"_id": bot["_id"]}, {
+            old_bot_snapshot = {k: copy.deepcopy(bot.get(k)) for k in ("config", "name", "thinking", "updated", "versions", "last_manual") if k in bot}
+            save_result = db.bots.update_one({"_id": bot["_id"], "owner": uid}, {
                 "$set": {"config": cfg, "name": cfg["name"], "thinking": thinking, "updated": now()},
                 "$push": {"versions": {"$each": [bot["config"]], "$slice": -(MAX_VERSIONS + perks_of(uid)["ver"])}},
                 "$unset": {"last_manual": ""}})
+            if getattr(save_result, "matched_count", 1) == 0:
+                raise RuntimeError("ربات اصلی حین ذخیره‌سازی تغییر کرد یا حذف شد؛ ارتقا اعمال نشد")
+            existing_bot_mutated = True
             bot = db.bots.find_one({"_id": bot["_id"]})
+            if not bot:
+                raise RuntimeError("پس از ذخیره، ربات اصلی پیدا نشد")
             sync_commands(bot, cfg)
         else:
             bot = new_bot_doc(uid, cfg, thinking)
-        cost = charge_up_to(uid, cost, "edit" if bot_id else "gen")
-        db.jobs.update_one({"_id": jid}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": cost}})
+            new_bot_created = True
+        charged_amount = charge_up_to(uid, cost, "edit" if bot_id else "gen")
+        done_result = db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": charged_amount}})
+        if getattr(done_result, "matched_count", 1) == 0:
+            raise RuntimeError("ذخیرهٔ ربات انجام شد، اما ثبت وضعیت نهایی کار ناموفق بود؛ rollback اجرا می‌شود")
+        job_marked_done = True
         if REF_ON == "create":
-            settle_referral(uid)
+            try:
+                settle_referral(uid)
+            except Exception:
+                log.exception("referral settlement failed after successful bot save")
         if gaps:
-            report_gaps(uid, bot, prompt, gaps)
+            try:
+                report_gaps(uid, bot, prompt, gaps)
+            except Exception:
+                log.exception("post-save limitation report failed")
     except Exception as e:
+        if not job_marked_done:
+            try:
+                if charged_amount > 0:
+                    core.refund(uid, charged_amount, "gen_rollback")
+                    charged_amount = 0
+            except Exception:
+                log.exception("failed to refund after bot-save rollback")
+            try:
+                if new_bot_created and bot and bot.get("_id"):
+                    db.bots.delete_one({"_id": bot["_id"], "owner": uid})
+                elif existing_bot_mutated and bot and old_bot_snapshot:
+                    restore_set = {k: copy.deepcopy(v) for k, v in old_bot_snapshot.items() if k != "last_manual"}
+                    restore_unset = {}
+                    if "last_manual" in old_bot_snapshot:
+                        restore_set["last_manual"] = copy.deepcopy(old_bot_snapshot["last_manual"])
+                    else:
+                        restore_unset["last_manual"] = ""
+                    restore_update = {"$set": restore_set}
+                    if restore_unset:
+                        restore_update["$unset"] = restore_unset
+                    db.bots.update_one({"_id": bot["_id"], "owner": uid}, restore_update)
+                    try:
+                        restored = db.bots.find_one({"_id": bot["_id"], "owner": uid})
+                        if restored and isinstance(old_bot_snapshot.get("config"), dict):
+                            sync_commands(restored, old_bot_snapshot["config"])
+                    except Exception:
+                        log.exception("command synchronization rollback failed")
+            except Exception:
+                log.exception("failed to rollback bot/config after unsuccessful final save")
         log.exception("generate failed")
         # اگر مدل محدودیتی را گزارش کرده بود ولی مرحله‌ی بعدی خطا داد، گزارش را از دست نده.
         try:
