@@ -273,6 +273,200 @@ def mother_emoji(msg):
     return True
 
 
+# ───────────────────────── تشخیص زندهٔ مدل‌های هوش مصنوعی (ادمین) ─────────────────────────
+_MODEL_DIAG_LOCK = threading.Lock()
+_MODEL_DIAG_RUNNING = set()
+
+
+def _diagnostic_model_list():
+    """همهٔ مدل‌های متمایزِ تنظیم‌شده را برای تست مستقل گردآوری می‌کند؛ این فهرست عمداً سقف پنج‌مدل سازنده را ندارد."""
+    raw = []
+    for key in ("AI_MODELS", "AI_MODEL", "AI_FALLBACK_MODELS", "AI_AUDIT_MODEL", "AI_CHAT_MODEL"):
+        value = os.environ.get(key, "")
+        raw.extend(x.strip().strip("\"'") for x in re.split(r"[,;\r\n]+", value) if x.strip().strip("\"'"))
+    try:
+        from core import AI_MODEL, AI_CHAT_MODEL
+        raw.extend([AI_MODEL, AI_CHAT_MODEL])
+    except Exception:
+        pass
+    result, seen = [], set()
+    for model in raw:
+        model = str(model or "").strip()
+        if not model or model.casefold() in seen:
+            continue
+        if re.search(r"(?:^|[/_-])(?:text-)?embedding(?:[-_/]|$)|embedding-\d", model, re.I):
+            continue
+        seen.add(model.casefold())
+        result.append(model)
+    # برای اینکه گزارش در یک پیام تلگرام جا شود، در هر نوبت حداکثر 12 مدل سنجیده می‌شود.
+    return result[:12], max(0, len(result) - 12)
+
+
+def _diagnostic_classify(status, body):
+    text = str(body or "").lower()
+    if status == 401:
+        return "کلید API نامعتبر/غایب (401)"
+    if status == 403:
+        return "دسترسی ارائه‌دهنده رد شد (403)"
+    if status == 404 or "model_not_found" in text:
+        return "شناسهٔ مدل/مسیر پیدا نشد (404)"
+    if status == 429:
+        if any(x in text for x in ("daily", "today's free", "allowance", "quota")):
+            return "سهمیهٔ رایگان تمام شده (429)"
+        return "محدودیت نرخ/سهمیه (429)"
+    if status == 400:
+        if any(x in text for x in ("content grounds", "refused", "content policy")):
+            return "درخواست از فیلتر محتوا رد شد (400)"
+        if any(x in text for x in ("length", "too long", "context_length")):
+            return "محدودیت طول پیام/کانتکست (400)"
+        return "درخواست/API ناسازگار (400)"
+    if status >= 500:
+        return f"خطای سرور ارائه‌دهنده ({status})"
+    return f"خطای HTTP {status}"
+
+
+def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
+    """هر مدل را جداگانه با یک درخواست کوتاه، واقعی و بدون دخالت fallback آزمایش می‌کند."""
+    from core import AI_BASE_URL, AI_API_KEY
+    timeout_s = max(3, min(15, _int_env_for_diag("AI_DIAG_TIMEOUT", 9)))
+    rows = []
+    total = len(models)
+
+    def render(done=False):
+        passed = sum(1 for x in rows if x.get("kind") == "pass")
+        connected = sum(1 for x in rows if x.get("kind") in ("pass", "json_bad"))
+        parts = ["🧪 گزارش تست مستقل مدل‌های هوش مصنوعی", "", f"مدل‌های تنظیم‌شده: {total + omitted} | بررسی‌شده: {len(rows)}",
+                 f"پاسخ معتبر JSON: {passed} | اتصال برقرار ولی JSON نامعتبر: {sum(1 for x in rows if x.get('kind') == 'json_bad')}", ""]
+        for i, row in enumerate(rows, 1):
+            model_label = str(row.get("model", ""))[:65]
+            result_label = str(row.get("result", ""))[:60]
+            parts.append(f"{i}. {model_label} — {result_label} ({row.get('seconds', 0):.1f}s)")
+            if row.get("detail"):
+                parts.append("   " + str(row["detail"]).replace("\n", " ")[:85])
+        if omitted:
+            parts.extend(["", f"⚠️ به‌دلیل محدودیت هر نوبت، {omitted} مدل دیگر در این اجرا بررسی نشدند."])
+        if not done:
+            if len(rows) < total:
+                parts.extend(["", f"در حال تست مدل {len(rows)+1} از {total}…"])
+        else:
+            parts.extend(["", f"زمان کل: {time.monotonic()-started:.1f} ثانیه"])
+            if passed:
+                parts.append("نتیجه: حداقل یک مدل درخواست کوتاه و JSON را درست پاسخ داده؛ اگر ساخت ربات هنوز گیر می‌کند، مشکل احتمالاً در prompt/وظایف/اعتبارسنجی/زنجیرهٔ ساخت هم هست، نه فقط دسترسی مدل.")
+            elif connected:
+                parts.append("نتیجه: اتصال به حداقل یک مدل برقرار است، اما خروجی JSON آزمون را پاس نکرد؛ قابلیت تولید ساختاریافته یا قرارداد خروجی را بررسی کن.")
+            else:
+                parts.append("نتیجه: هیچ مدلی این آزمون را پاس نکرد. خطاهای هر مدل بالا علت محتمل را مشخص می‌کنند: کلید، شناسه، سهمیه، فیلتر، طول پیام یا timeout.")
+            parts.append("این تست فقط اتصال و یک خروجی کوتاه را می‌سنجد؛ تضمین‌کنندهٔ کیفیت ساخت کامل ربات نیست. مصرف هر مدل اندک است اما ممکن است از سهمیهٔ API کم کند.")
+        # محدودیت تلگرام: حداکثر 4096 نویسه. 20 مدل با جزئیات فشرده نگه داشته می‌شوند.
+        return "\n".join(parts)[:3900]
+
+    try:
+        for idx, model in enumerate(models, 1):
+            t0 = time.monotonic()
+            row = {"model": model, "kind": "fail", "seconds": 0, "result": "ناموفق"}
+            try:
+                response = requests.post(
+                    f"{AI_BASE_URL}/chat/completions",
+                    headers={"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model": model,
+                        "max_tokens": 100,
+                        "temperature": 0,
+                        "messages": [
+                            {"role": "system", "content": 'Diagnostic only. Reply with exactly one JSON object and no markdown: {"status":"ok","echo":"PING_OK"}.'},
+                            {"role": "user", "content": 'Return exactly {"status":"ok","echo":"PING_OK"}.'},
+                        ],
+                    },
+                    timeout=(min(4, timeout_s), timeout_s),
+                )
+                row["seconds"] = time.monotonic() - t0
+                if response.status_code >= 400:
+                    body = re.sub(r"\s+", " ", response.text or "")[:260]
+                    row["result"] = _diagnostic_classify(response.status_code, body)
+                    row["detail"] = body
+                else:
+                    try:
+                        data = response.json()
+                        choices = data.get("choices") or []
+                        content = choices[0].get("message", {}).get("content", "") if choices else ""
+                        if isinstance(content, list):
+                            content = "".join(str(x.get("text", "")) for x in content if isinstance(x, dict))
+                        content = str(content or "").strip()
+                        row["usage"] = data.get("usage") or {}
+                        if not content:
+                            row["result"], row["detail"] = "پاسخ خالی", "HTTP 200 ولی choices/content خالی بود"
+                        else:
+                            match = re.search(r"\{.*\}", content, re.S)
+                            try:
+                                parsed = json.loads(match.group(0)) if match else None
+                            except Exception:
+                                parsed = None
+                            if isinstance(parsed, dict) and parsed.get("status") == "ok" and parsed.get("echo") == "PING_OK":
+                                row["kind"], row["result"] = "pass", "سالم؛ تولید + JSON موفق"
+                                usage = row["usage"]
+                                if usage:
+                                    row["detail"] = f"tokens: in={usage.get('prompt_tokens','?')}, out={usage.get('completion_tokens','?')}"
+                            else:
+                                row["kind"], row["result"] = "json_bad", "اتصال موفق؛ خروجی آزمون نامعتبر"
+                                row["detail"] = content.replace("\n", " ")[:180]
+                    except Exception as exc:
+                        row["result"] = "پاسخ API نامعتبر"
+                        row["detail"] = f"{type(exc).__name__}: {str(exc)[:150]}"
+            except requests.exceptions.Timeout as exc:
+                row["seconds"] = time.monotonic() - t0
+                row["result"], row["detail"] = "timeout", f"{type(exc).__name__}: مهلت {timeout_s}s تمام شد"
+            except requests.exceptions.RequestException as exc:
+                row["seconds"] = time.monotonic() - t0
+                row["result"], row["detail"] = "خطای شبکه", f"{type(exc).__name__}: {str(exc)[:160]}"
+            except Exception as exc:
+                row["seconds"] = time.monotonic() - t0
+                row["result"], row["detail"] = "خطای تست", f"{type(exc).__name__}: {str(exc)[:160]}"
+            rows.append(row)
+            tg(MOTHER_TOKEN, "editMessageText", chat_id=chat_id, message_id=message_id, text=render(False), disable_web_page_preview=True)
+    except Exception as exc:
+        log.exception("model diagnostic crashed")
+        rows.append({"model": "diagnostic-runner", "kind": "fail", "seconds": 0, "result": "خطای اجرای تست", "detail": f"{type(exc).__name__}: {str(exc)[:180]}"})
+    finally:
+        try:
+            tg(MOTHER_TOKEN, "editMessageText", chat_id=chat_id, message_id=message_id, text=render(True), disable_web_page_preview=True)
+        except Exception:
+            log.exception("failed to post model diagnostic results")
+        with _MODEL_DIAG_LOCK:
+            _MODEL_DIAG_RUNNING.discard(chat_id)
+
+
+def _int_env_for_diag(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def start_model_diagnostic(chat_id):
+    if chat_id not in ADMIN_IDS:
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="این دستور فقط برای ادمین مجاز است.")
+        return
+    models, omitted = _diagnostic_model_list()
+    if not models:
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="هیچ مدل متنی پیدا نشد. AI_MODEL یا AI_MODELS را در Environment بررسی کن.")
+        return
+    with _MODEL_DIAG_LOCK:
+        if chat_id in _MODEL_DIAG_RUNNING:
+            tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="آزمون مدل‌ها برای تو همین الان در حال اجراست؛ نتیجهٔ همان پیام به‌روز می‌شود.")
+            return
+        _MODEL_DIAG_RUNNING.add(chat_id)
+    response = tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id,
+                  text=f"🧪 آزمون واقعی {len(models)} مدل شروع شد. هر مدل جداگانه با یک درخواست کوتاه سنجیده می‌شود؛ لازم نیست چت را باز نگه داری.")
+    message_id = (response.get("result") or {}).get("message_id") if response.get("ok") else None
+    if not message_id:
+        with _MODEL_DIAG_LOCK:
+            _MODEL_DIAG_RUNNING.discard(chat_id)
+        return
+    started = time.monotonic()
+    threading.Thread(target=_run_model_diagnostic, args=(chat_id, message_id, models, omitted, started), daemon=True,
+                     name=f"model-diag-{chat_id}").start()
+
+
 def mother_command(msg):
     uid, name = msg["from"]["id"], msg["from"].get("first_name", "")
     cmd, _, arg = (msg.get("text") or "").strip().partition(" ")
@@ -283,6 +477,9 @@ def mother_command(msg):
         link_referral(uid, int(arg[4:]))
     say = lambda t, kb=True: tg(MOTHER_TOKEN, "sendMessage", chat_id=uid, text=t, **({"reply_markup": mother_keyboard(uid)} if kb else {}))
     if uid in ADMIN_IDS:
+        if cmd in ("/testmodels", "/modeltest", "/تست_مدلها"):
+            start_model_diagnostic(uid)
+            return
         if cmd == "/give":
             m = re.fullmatch(r"(\d+)\s+(-?\d+)", arg)
             if m and db.users.find_one({"_id": int(m.group(1))}):
