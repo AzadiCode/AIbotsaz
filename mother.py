@@ -469,7 +469,7 @@ def _int_env_for_diag(name, default):
         return default
 
 
-def start_model_diagnostic(chat_id):
+def start_model_diagnostic(chat_id, model_filter=None):
     if chat_id not in ADMIN_IDS:
         tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="این دستور فقط برای ادمین مجاز است.")
         return
@@ -477,13 +477,27 @@ def start_model_diagnostic(chat_id):
     if not models:
         tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="هیچ مدل متنی پیدا نشد. AI_MODEL یا AI_MODELS را در Environment بررسی کن.")
         return
+    # Prefer a targeted single-model probe: repeatedly testing all free models can
+    # hit provider-specific per-model limits and consume the daily free allowance.
+    if model_filter:
+        wanted = model_filter.strip().strip("\"'")
+        selected = [m for m in models if m.casefold() == wanted.casefold()]
+        if not selected:
+            choices = "\n".join(f"• {m}" for m in models)
+            tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id,
+               text=f"مدل «{wanted}» دقیقاً در فهرست مدل‌های تنظیم‌شده پیدا نشد. شناسه را عیناً از این فهرست کپی کن:\n{choices}"[:3900])
+            return
+        models, omitted = selected, 0
     with _MODEL_DIAG_LOCK:
         if chat_id in _MODEL_DIAG_RUNNING:
             tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="آزمون مدل‌ها برای تو همین الان در حال اجراست؛ نتیجهٔ همان پیام به‌روز می‌شود.")
             return
         _MODEL_DIAG_RUNNING.add(chat_id)
-    response = tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id,
-                  text=f"🧪 آزمون واقعی {len(models)} مدل شروع شد. هر مدل جداگانه با یک درخواست کوتاه سنجیده می‌شود؛ لازم نیست چت را باز نگه داری.")
+    if model_filter:
+        intro = f"🧪 آزمون فقط برای مدل {models[0]} شروع شد؛ فقط یک درخواست ارسال می‌شود. اگر مدل اخیراً 429 داده، قبل از تست مجدد محدودیت اعلام‌شده را رعایت کن."
+    else:
+        intro = f"🧪 آزمون واقعی {len(models)} مدل شروع شد. هر مدل جداگانه با یک درخواست کوتاه سنجیده می‌شود؛ اجرای دوبارهٔ سریع ممکن است به محدودیت 429 بخورد. برای تست هدفمند از /testmodel شناسه_دقیق_مدل استفاده کن."
+    response = tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text=intro)
     message_id = (response.get("result") or {}).get("message_id") if response.get("ok") else None
     if not message_id:
         with _MODEL_DIAG_LOCK:
@@ -506,6 +520,11 @@ def mother_command(msg):
     if uid in ADMIN_IDS:
         if cmd in ("/testmodels", "/modeltest", "/تست_مدلها"):
             start_model_diagnostic(uid)
+            return
+        if cmd in ("/testmodel", "/تست_مدل"):
+            if not arg:
+                return say("استفاده: /testmodel شناسه_دقیق_مدل\nمثلاً: /testmodel glm-4.7-flash:free\n\nفقط همان مدل یک بار درخواست می‌گیرد؛ شناسه باید عیناً در AI_MODELS یا AI_MODEL تنظیم شده باشد.", False)
+            start_model_diagnostic(uid, arg)
             return
         if cmd == "/give":
             m = re.fullmatch(r"(\d+)\s+(-?\d+)", arg)
