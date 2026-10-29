@@ -1615,25 +1615,61 @@ class ThinkLang(ValueError):
         self.cfg, self.ideas = cfg, ideas
 
 
-def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
-    """یک فراخوانی چت؛ (متن، (توکن ورودی، توکن خروجی)) برمی‌گردونه"""
+def _model_candidates(preferred=None):
+    """مدل‌های مجاز به‌ترتیب اولویت؛ AI_MODELS یک فهرست comma-separated در تنظیمات محیطی است."""
+    raw = []
+    if preferred:
+        raw.append(str(preferred).strip())
+    raw.extend(x.strip() for x in os.environ.get("AI_MODELS", "").replace("\n", ",").split(","))
+    raw.extend([AI_MODEL])
+    # مدل چت نیز می‌تواند در فهرست باشد، اما فقط یک بار امتحان شود.
+    raw.extend(x.strip() for x in os.environ.get("AI_FALLBACK_MODELS", "").split(","))
+    out, seen = [], set()
+    for name in raw:
+        if name and name not in seen:
+            seen.add(name)
+            out.append(name)
+    # سقف حفاظتی برای جلوگیری از انتظار طولانی در صورت وارد شدن فهرست بسیار بزرگ.
+    return (out or [AI_MODEL])[:5]
+
+
+def _llm_post_one(messages, max_tokens, temperature, timeout, model):
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
-        json={"model": model or AI_MODEL, "max_tokens": max_tokens, "temperature": temperature, "messages": messages},
+        json={"model": model, "max_tokens": max_tokens, "temperature": temperature, "messages": messages},
         timeout=timeout)
     if r.status_code >= 400:
-        raise RuntimeError(f"AI HTTP {r.status_code}: {r.text[:300]}")
+        body = re.sub(r"\s+", " ", r.text or "")[:650]
+        raise RuntimeError(f"AI HTTP {r.status_code} [model={model}]: {body}")
     try:
         j = r.json()
         txt = j["choices"][0]["message"]["content"] or ""
     except Exception:
-        raise RuntimeError(f"AI پاسخ غیرمنتظره داد: {r.text[:300]}")
+        raise RuntimeError(f"AI پاسخ غیرمنتظره داد [model={model}]: {(r.text or '')[:300]}")
     txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S).strip()
+    if not txt:
+        raise RuntimeError(f"AI پاسخ خالی داد [model={model}]")
     u = j.get("usage") or {}
     pt = int(u.get("prompt_tokens") or est_tokens("".join(str(m["content"]) for m in messages)))
     ct = int(u.get("completion_tokens") or est_tokens(txt))
     return txt, (pt, ct)
+
+
+def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
+    """فراخوانی سازگار با APIهای OpenAI؛ در خطای مدل، مدل بعدی AI_MODELS را امتحان می‌کند."""
+    errors = []
+    models = _model_candidates(model)
+    cb = getattr(_prog, "cb", None)
+    for idx, candidate in enumerate(models, 1):
+        try:
+            if cb and len(models) > 1:
+                cb.model_fallback(idx, candidate, len(models))
+            return _llm_post_one(messages, max_tokens, temperature, timeout, candidate)
+        except Exception as exc:
+            errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
+            log.warning("AI model failed (%s/%s): %s", idx, len(models), errors[-1])
+    raise RuntimeError("همه مدل‌های پیکربندی‌شده ناموفق بودند؛ " + " || ".join(errors[:len(models)]))
 
 
 AI_STREAM = _int("AI_STREAM", 1)         # ۱ = ساخت ربات با استریم و پیشرفت زنده؛ ۰ = مثل قبل (یک درخواست بدون استریم)
@@ -1705,6 +1741,15 @@ class Progress:
             self.d["p"] = max(self.d["p"], 60.0)
         self.flush(True)
 
+    def model_fallback(self, n, model, total):
+        # پیشرفت مرحله‌ای: اگر یک ارائه‌دهنده رد کند/قطع شود، کاربر روی ۲٪ ثابت نمی‌ماند.
+        self.d["model_try"] = int(n)
+        self.d["model_total"] = int(total)
+        self.d["model_label"] = str(model)[:80]
+        self.d["st"] = "analyze" if n == 1 else "fallback"
+        self.d["p"] = max(float(self.d.get("p") or 2), min(12.0 + (n - 1) * 3.0, 24.0))
+        self.flush(True)
+
     def feed(self, text, reasoning=0):
         if time.time() - self.last < 0.7:
             return
@@ -1736,10 +1781,14 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
         json={"model": model or AI_MODEL, "max_tokens": max_tokens, "temperature": temperature, "messages": messages,
               "stream": True, "stream_options": {"include_usage": True}},
-        timeout=(10, 90), stream=True)
+        timeout=(10, 45), stream=True)
     try:
         if r.status_code >= 400:
-            raise _NoStream(f"HTTP {r.status_code}: {r.text[:200]}")
+            body = re.sub(r"\s+", " ", r.text or "")[:650]
+            # فقط خطاهای مربوط به عدم پشتیبانی استریم با همان مدل بدون استریم امتحان می‌شوند.
+            if r.status_code in (400, 404, 405, 415) and re.search(r"stream|unsupported|not support|unknown field", body, re.I):
+                raise _NoStream(f"HTTP {r.status_code}: {body}")
+            raise RuntimeError(f"AI HTTP {r.status_code} [model={model or AI_MODEL}]: {body}")
         if "event-stream" not in (r.headers.get("content-type") or "").lower():     # سرویس‌دهنده استریم نکرد و جواب کامل داد
             j = r.json()
             txt = j["choices"][0]["message"]["content"] or ""
@@ -1783,15 +1832,25 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
 
 
 def llm_run(messages, max_tokens, temperature=0.4):
-    """فراخوانی ساخت ربات: اگه پیشرفت زنده فعاله استریم می‌کنه، وگرنه (یا اگه استریم پشتیبانی نشه) مثل قبل"""
+    """ساخت با failover مدل: خطای هر مدل باعث امتحان مدل بعدی می‌شود، نه گیر کردن روی همان مدل."""
     cb = getattr(_prog, "cb", None)
-    if not (cb and AI_STREAM):
-        return llm_post(messages, max_tokens, temperature)
-    try:
-        return llm_stream(messages, max_tokens, temperature, cb)
-    except _NoStream as e:
-        log.warning("استریم پشتیبانی نشد، بدون استریم ادامه می‌دیم: %s", e)
-        return llm_post(messages, max_tokens, temperature)
+    models = _model_candidates()
+    errors = []
+    for idx, candidate in enumerate(models, 1):
+        try:
+            if cb:
+                cb.model_fallback(idx, candidate, len(models))
+            if not (cb and AI_STREAM):
+                return _llm_post_one(messages, max_tokens, temperature, 100, candidate)
+            try:
+                return llm_stream(messages, max_tokens, temperature, cb, timeout=100, model=candidate)
+            except _NoStream as exc:
+                log.warning("مدل %s استریم را پشتیبانی نمی‌کند؛ درخواست عادی امتحان می‌شود: %s", candidate, exc)
+                return _llm_post_one(messages, max_tokens, temperature, 100, candidate)
+        except Exception as exc:
+            errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
+            log.warning("generation model failed (%s/%s): %s", idx, len(models), errors[-1])
+    raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + " || ".join(errors[:len(models)]))
 
 
 _gap = threading.local()          # گزارش «چیزی که ربات‌ساز نتونست»؛ هر کار پس‌زمینه در ترد خودش می‌خونه
