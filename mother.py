@@ -294,7 +294,7 @@ def _diagnostic_model_list():
         model = str(model or "").strip()
         if not model or model.casefold() in seen:
             continue
-        if re.search(r"(?:^|[/_-])(?:text-)?embedding(?:[-_/]|$)|embedding-\d", model, re.I):
+        if re.search(r"(?:^|[/_-])(?:text-)?embedding(?:[-_/]|$)|embedding-\d|(?:^|[/_-])(?:bge|rerank|whisper|tts|diffusion|sdxl|flux|stable-diffusion)(?:[-_/.\d]|$)", model, re.I):
             continue
         seen.add(model.casefold())
         result.append(model)
@@ -328,16 +328,15 @@ def _diagnostic_classify(status, body):
 def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
     """هر مدل را جداگانه با یک درخواست کوتاه، واقعی و بدون دخالت fallback آزمایش می‌کند."""
     from core import AI_BASE_URL, AI_API_KEY
-    timeout_s = max(3, min(30, _int_env_for_diag("AI_DIAG_TIMEOUT", 20)))
+    timeout_s = max(3, min(15, _int_env_for_diag("AI_DIAG_TIMEOUT", 9)))
     rows = []
     total = len(models)
 
     def render(done=False):
         passed = sum(1 for x in rows if x.get("kind") == "pass")
-        valid_json = sum(1 for x in rows if x.get("kind") in ("pass", "json_mismatch"))
-        connected = sum(1 for x in rows if x.get("kind") in ("pass", "json_mismatch", "json_bad"))
+        connected = sum(1 for x in rows if x.get("kind") in ("pass", "json_bad"))
         parts = ["🧪 گزارش تست مستقل مدل‌های هوش مصنوعی", "", f"مدل‌های تنظیم‌شده: {total + omitted} | بررسی‌شده: {len(rows)}",
-                 f"قرارداد آزمون پاس‌شده: {passed} | JSON معتبر: {valid_json} | JSON نامعتبر: {sum(1 for x in rows if x.get('kind') == 'json_bad')}", ""]
+                 f"پاسخ معتبر JSON: {passed} | اتصال برقرار ولی JSON نامعتبر: {sum(1 for x in rows if x.get('kind') == 'json_bad')}", ""]
         for i, row in enumerate(rows, 1):
             model_label = str(row.get("model", ""))[:65]
             result_label = str(row.get("result", ""))[:60]
@@ -354,9 +353,7 @@ def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
             if passed:
                 parts.append("نتیجه: حداقل یک مدل درخواست کوتاه و JSON را درست پاسخ داده؛ اگر ساخت ربات هنوز گیر می‌کند، مشکل احتمالاً در prompt/وظایف/اعتبارسنجی/زنجیرهٔ ساخت هم هست، نه فقط دسترسی مدل.")
             elif connected:
-                mismatch = sum(1 for x in rows if x.get("kind") == "json_mismatch")
-                invalid = sum(1 for x in rows if x.get("kind") == "json_bad")
-                parts.append(f"نتیجه: {valid_json} پاسخ JSON قابل‌خواندن بود؛ {mismatch} پاسخ قرارداد دقیق آزمون را نداشت و {invalid} پاسخ JSON نامعتبر بود. جزئیات هر ردیف این موارد را جدا می‌کند.")
+                parts.append("نتیجه: اتصال به حداقل یک مدل برقرار است، اما خروجی JSON آزمون را پاس نکرد؛ قابلیت تولید ساختاریافته یا قرارداد خروجی را بررسی کن.")
             else:
                 parts.append("نتیجه: هیچ مدلی این آزمون را پاس نکرد. خطاهای هر مدل بالا علت محتمل را مشخص می‌کنند: کلید، شناسه، سهمیه، فیلتر، طول پیام یا timeout.")
             parts.append("این تست فقط اتصال و یک خروجی کوتاه را می‌سنجد؛ تضمین‌کنندهٔ کیفیت ساخت کامل ربات نیست. مصرف هر مدل اندک است اما ممکن است از سهمیهٔ API کم کند.")
@@ -399,43 +396,19 @@ def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
                         if not content:
                             row["result"], row["detail"] = "پاسخ خالی", "HTTP 200 ولی choices/content خالی بود"
                         else:
-                            # اول کل پاسخ را parse کن؛ اگر مدل متن اضافه/کدبلاک داد، JSON object را
-                            # با raw_decode جدا کن تا آکولادهای تو در تو باعث regex اشتباه نشوند.
-                            parsed = None
+                            match = re.search(r"\{.*\}", content, re.S)
                             try:
-                                parsed = json.loads(content)
+                                parsed = json.loads(match.group(0)) if match else None
                             except Exception:
-                                fenced = re.search(r"```(?:json)?\s*(.*?)```", content, re.S | re.I)
-                                candidates = [fenced.group(1).strip()] if fenced else []
-                                decoder = json.JSONDecoder()
-                                for pos, char in enumerate(content):
-                                    if char != "{":
-                                        continue
-                                    try:
-                                        value, _end = decoder.raw_decode(content[pos:])
-                                        if isinstance(value, dict):
-                                            parsed = value
-                                            break
-                                    except Exception:
-                                        continue
-                                if parsed is None:
-                                    for candidate in candidates:
-                                        try:
-                                            parsed = json.loads(candidate)
-                                            break
-                                        except Exception:
-                                            pass
+                                parsed = None
                             if isinstance(parsed, dict) and parsed.get("status") == "ok" and parsed.get("echo") == "PING_OK":
                                 row["kind"], row["result"] = "pass", "سالم؛ تولید + JSON موفق"
                                 usage = row["usage"]
                                 if usage:
                                     row["detail"] = f"tokens: in={usage.get('prompt_tokens','?')}, out={usage.get('completion_tokens','?')}"
-                            elif isinstance(parsed, dict):
-                                row["kind"], row["result"] = "json_mismatch", "JSON معتبر؛ قرارداد پاسخ متفاوت"
-                                row["detail"] = (f"status={parsed.get('status')!r}, echo={parsed.get('echo')!r}; raw={content!r}")[:220]
                             else:
-                                row["kind"], row["result"] = "json_bad", "اتصال موفق؛ JSON قابل‌خواندن نیست"
-                                row["detail"] = f"raw={content!r}"[:220]
+                                row["kind"], row["result"] = "json_bad", "اتصال موفق؛ خروجی آزمون نامعتبر"
+                                row["detail"] = content.replace("\n", " ")[:180]
                     except Exception as exc:
                         row["result"] = "پاسخ API نامعتبر"
                         row["detail"] = f"{type(exc).__name__}: {str(exc)[:150]}"
@@ -469,7 +442,7 @@ def _int_env_for_diag(name, default):
         return default
 
 
-def start_model_diagnostic(chat_id, model_filter=None):
+def start_model_diagnostic(chat_id):
     if chat_id not in ADMIN_IDS:
         tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="این دستور فقط برای ادمین مجاز است.")
         return
@@ -477,27 +450,13 @@ def start_model_diagnostic(chat_id, model_filter=None):
     if not models:
         tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="هیچ مدل متنی پیدا نشد. AI_MODEL یا AI_MODELS را در Environment بررسی کن.")
         return
-    # Prefer a targeted single-model probe: repeatedly testing all free models can
-    # hit provider-specific per-model limits and consume the daily free allowance.
-    if model_filter:
-        wanted = model_filter.strip().strip("\"'")
-        selected = [m for m in models if m.casefold() == wanted.casefold()]
-        if not selected:
-            choices = "\n".join(f"• {m}" for m in models)
-            tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id,
-               text=f"مدل «{wanted}» دقیقاً در فهرست مدل‌های تنظیم‌شده پیدا نشد. شناسه را عیناً از این فهرست کپی کن:\n{choices}"[:3900])
-            return
-        models, omitted = selected, 0
     with _MODEL_DIAG_LOCK:
         if chat_id in _MODEL_DIAG_RUNNING:
             tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text="آزمون مدل‌ها برای تو همین الان در حال اجراست؛ نتیجهٔ همان پیام به‌روز می‌شود.")
             return
         _MODEL_DIAG_RUNNING.add(chat_id)
-    if model_filter:
-        intro = f"🧪 آزمون فقط برای مدل {models[0]} شروع شد؛ فقط یک درخواست ارسال می‌شود. اگر مدل اخیراً 429 داده، قبل از تست مجدد محدودیت اعلام‌شده را رعایت کن."
-    else:
-        intro = f"🧪 آزمون واقعی {len(models)} مدل شروع شد. هر مدل جداگانه با یک درخواست کوتاه سنجیده می‌شود؛ اجرای دوبارهٔ سریع ممکن است به محدودیت 429 بخورد. برای تست هدفمند از /testmodel شناسه_دقیق_مدل استفاده کن."
-    response = tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id, text=intro)
+    response = tg(MOTHER_TOKEN, "sendMessage", chat_id=chat_id,
+                  text=f"🧪 آزمون واقعی {len(models)} مدل شروع شد. هر مدل جداگانه با یک درخواست کوتاه سنجیده می‌شود؛ لازم نیست چت را باز نگه داری.")
     message_id = (response.get("result") or {}).get("message_id") if response.get("ok") else None
     if not message_id:
         with _MODEL_DIAG_LOCK:
@@ -520,11 +479,6 @@ def mother_command(msg):
     if uid in ADMIN_IDS:
         if cmd in ("/testmodels", "/modeltest", "/تست_مدلها"):
             start_model_diagnostic(uid)
-            return
-        if cmd in ("/testmodel", "/تست_مدل"):
-            if not arg:
-                return say("استفاده: /testmodel شناسه_دقیق_مدل\nمثلاً: /testmodel glm-4.7-flash:free\n\nفقط همان مدل یک بار درخواست می‌گیرد؛ شناسه باید عیناً در AI_MODELS یا AI_MODEL تنظیم شده باشد.", False)
-            start_model_diagnostic(uid, arg)
             return
         if cmd == "/give":
             m = re.fullmatch(r"(\d+)\s+(-?\d+)", arg)

@@ -1693,7 +1693,7 @@ def _model_candidates(preferred=None):
     out, seen = [], set()
     for name in raw:
         # مدل‌های embedding برای chat/completions مناسب نیستند؛ کنار گذاشته می‌شوند.
-        if re.search(r"(?:^|[/_-])(?:text-)?embedding(?:[-_/]|$)|embedding-\d", name, re.I):
+        if re.search(r"(?:^|[/_-])(?:text-)?embedding(?:[-_/]|$)|embedding-\d|(?:^|[/_-])(?:bge|rerank|whisper|tts|diffusion|sdxl|flux|stable-diffusion)(?:[-_/.\d]|$)", name, re.I):
             log.warning("Skipping embedding model in chat model list: %s", name)
             continue
         key = name.casefold()
