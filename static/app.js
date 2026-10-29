@@ -247,8 +247,8 @@ const THINK = ["در حال تحلیل درخواست…", "طراحی ساخت�
 const RB = `<svg class="rb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle class="r1" cx="12" cy="12" r="10" stroke-dasharray="9 5"/><path class="r2" d="M12 6a6 6 0 0 1 6 6" /><path class="r2" d="M12 18a6 6 0 0 1-6-6" /><circle class="c" cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`;
 const FAD = n => String(n);          // اعداد لاتین، مثل بقیه‌ی جاهای اپ
 const LQ_STEPS = ["تحلیل", "ساخت", "بررسی", "ذخیره"];
-const LQ_IDX = {analyze: 0, build: 1, review: 1, validate: 2, save: 3};
-const LQ_LBL = {analyze: "تحلیل درخواست", build: "ساخت بخش‌ها و مسیرها", review: "بازبینی و اصلاح نهایی", validate: "بررسی سازگاری با تلگرام", save: "ذخیره‌ی ربات"};
+const LQ_IDX = {analyze: 0, fallback: 0, build: 1, review: 2, repair: 2, audit: 2, validate: 2, save: 3};
+const LQ_LBL = {analyze: "تحلیل درخواست", fallback: "تغییر مدل و تلاش جایگزین", build: "ساخت بخش‌ها و مسیرها", review: "بازبینی و اصلاح نهایی", repair: "اصلاح پاسخ نامعتبر", audit: "ممیزی تطابق درخواست", validate: "بررسی سازگاری با تلگرام", save: "ذخیره‌ی ربات"};
 let LQ = {};
 function lqSteps(root, idx, all){
   root.querySelectorAll(".lqst li").forEach((li, i) => { li.classList.toggle("done", !!all || i < idx); li.classList.toggle("on", !all && i === idx); });
@@ -297,6 +297,11 @@ function liveUpdate(pr){
   root.querySelector(".lqbar").classList.remove("ind");
   if(pr.st && pr.st !== LQ.st){
     LQ.st = pr.st; root.querySelector(".lqs").textContent = LQ_LBL[pr.st] || LQ_LBL.analyze; lqSteps(root, LQ_IDX[pr.st] ?? 0);
+  }
+  if(pr.model_try && pr.model_total > 1 && pr.model_try > 1){
+    const modelHint = ` · امتحان مدل جایگزین ${pr.model_try}/${pr.model_total}`;
+    const label = root.querySelector(".lqs");
+    label.textContent = label.textContent.replace(/ · امتحان مدل جایگزین \d+\/\d+$/, "") + modelHint;
   }
   const n = root.querySelector(".lqn");
   if(pr.n > 0){ n.hidden = false; n.innerHTML = `<b>${FAD(pr.n)}</b> بخش ساخته شد` + (pr.ti ? ` · آخرین: ${esc(pr.ti)}` : ""); }

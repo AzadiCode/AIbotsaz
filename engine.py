@@ -39,7 +39,7 @@ from bson.errors import InvalidId
 
 from core import (
     AI_CHAT_MODEL, AI_NODE_MAX_TOKENS, ai_tick, app, balance, BASE_URL, BILLING, BOARD_SCAN, calc_cost,
-    ADMIN_IDS, charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND,
+    ADMIN_IDS, charge_up_to, db, dec, _DIG, fj_chat, fj_public, log, low_balance_notice, MAX_PENDING_REMIND, MAX_STAFF,
     APP_URL, MEDIA_KEYS, MOTHER_TOKEN, naive, now, PAYMENTS, perks_of, plain_html, strip_fx_text, tehran_day, tg, tg_html, tg_media,
     TOKEN_SCALE,
 )
@@ -125,6 +125,8 @@ class Env:
             return "1" if u.get("is_premium") else "0"
         if k == "is_owner":
             return "1" if self.uid == self.owner else "0"
+        if k == "is_admin":
+            return "1" if is_staff(self.bot, self.uid) else "0"
         if k == "bot_name":
             return self.cfg.get("name", "")
         if k == "bot_username":
@@ -640,7 +642,7 @@ def run_actions(acts, env):
             if m and int(m.group(1)) <= int(m.group(2)):
                 env.set(name, str(random.randint(int(m.group(1)), int(m.group(2)))))
         elif op == "notify" and val.strip():
-            to_owner(env, text=f"{env.cfg.get('name', '')}\n{val}\n\n{who(env)}")
+            notify_staff(env, text=f"{env.cfg.get('name', '')}\n{val}\n\n{who(env)}")
         elif op == "remind":
             schedule_remind(env, a)
         elif op == "dice":
@@ -792,6 +794,29 @@ def clear_reply_kb(env):
     db.rk.delete_one({"_id": env.sid})
 
 
+def send_form_question(env, node_id, node, idx):
+    """سؤال فرم را با نوع پاسخ درست می‌فرستد؛ photo_optional یک دکمه‌ی واقعی برای رد کردن دارد."""
+    fields = node.get("fields") or []
+    if idx < 0 or idx >= len(fields):
+        return
+    types = node.get("types") or []
+    kind = types[idx] if idx < len(types) else "text"
+    markup = {"remove_keyboard": True}
+    if kind == "photo_optional":
+        skips = node.get("skip") or []
+        label = str(skips[idx] if idx < len(skips) else "عکس ندارم").strip() or "عکس ندارم"
+        placeholder = ("Send a photo or tap this option" if re.search(r"[A-Za-z]", label) and not re.search(r"[\u0600-\u06FF]", label)
+                       else "عکس بفرست یا این گزینه را بزن")
+        markup = {"keyboard": [[{"text": label[:64]}]], "resize_keyboard": True,
+                  "one_time_keyboard": True, "input_field_placeholder": placeholder}
+        db.rk.replace_one({"_id": env.sid}, {"_id": env.sid, "node": node_id, "t": now()}, upsert=True)
+    else:
+        # حذف کیبورد skip قبلی دقیقاً هم‌زمان با ارسال سؤال بعدی
+        db.rk.delete_one({"_id": env.sid})
+    tg_html(env.token, "sendMessage", chat_id=env.chat_id,
+            text=fill(fields[idx], env, True), reply_markup=markup)
+
+
 # ───────────────────────── ارسال بخش‌ها ─────────────────────────
 def deliver(env, text, markup, mid=None, photo=None, edit=None, has_kb=True):
     """متن + (رسانه‌ی کتابخونه | عکس لینکی) + دکمه‌ها؛ تا جای ممکن پیام قبلی رو ویرایش می‌کنه"""
@@ -867,8 +892,8 @@ def send_node(env, node_id, edit=None, depth=0):
             tg(env.token, "sendMessage", chat_id=env.chat_id, text="👇", reply_markup=rk)
         db.rk.replace_one({"_id": sid}, {"_id": sid, "node": node_id, "t": now()}, upsert=True)
     if node.get("fields"):
-        db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "t": now()}, upsert=True)
-        tg_html(env.token, "sendMessage", chat_id=env.chat_id, text=fill(node["fields"][0], env, True))
+        db.states.replace_one({"_id": sid}, {"_id": sid, "form": node_id, "a": [], "attachments": [], "t": now()}, upsert=True)
+        send_form_question(env, node_id, node, 0)
     elif node.get("ask"):
         db.states.replace_one({"_id": sid}, {"_id": sid, "ask": node_id, "t": now()}, upsert=True)
     elif node.get("ai"):
@@ -909,7 +934,7 @@ def reply_press(env, rk, text):
 
 
 def to_owner(env, text=None, copy_msg=None):
-    """پیام یا کپیِ پیام کاربر رو برای صاحب ربات می‌فرسته و ذخیره می‌کنه تا با reply جواب بده"""
+    """پیام یا کپیِ پیام کاربر را برای صاحب ربات می‌فرستد و reply را به کاربر برمی‌گرداند."""
     ids = []
     if copy_msg:
         r = tg(env.token, "copyMessage", chat_id=env.owner, from_chat_id=env.chat_id, message_id=copy_msg)
@@ -924,6 +949,39 @@ def to_owner(env, text=None, copy_msg=None):
         key = f"{env.bot_id}:{mid}"
         db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id, "t": now()}, upsert=True)
     return bool(ids)
+
+
+def notify_staff(env, text, attachments=None, ticket_no=None):
+    """متن فرم و عکس‌های ضمیمه را برای صاحب ربات و مدیران تنظیم‌شده می‌فرستد؛ مدیران با reply جواب می‌دهند."""
+    ok = False
+    attachments = attachments if isinstance(attachments, list) else []
+    recipients = staff_ids(env.bot)
+    for staff in recipients:
+        sent_ids = []
+        r = tg(env.token, "sendMessage", chat_id=staff, text=str(text or "")[:4000])
+        if r.get("ok"):
+            ok = True
+            sent_ids.append(r["result"]["message_id"])
+        for mid in sent_ids:
+            key = f"{env.bot_id}:{staff}:{mid}"
+            db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id,
+                                  "uid": env.uid, **({"tk": ticket_no} if ticket_no else {}), "t": now()}, upsert=True)
+        for item in attachments:
+            try:
+                source_mid = int(item.get("message_id")) if isinstance(item, dict) else int(item)
+            except (TypeError, ValueError):
+                continue
+            kw = {"reply_markup": tk_buttons(ticket_no, blocked=is_blocked(env.bot_id, env.uid))} if ticket_no else {}
+            rr = tg(env.token, "copyMessage", chat_id=staff, from_chat_id=env.chat_id,
+                    message_id=source_mid, **kw)
+            if rr.get("ok"):
+                ok = True
+                copied_mid = (rr.get("result") or {}).get("message_id")
+                if copied_mid:
+                    key = f"{env.bot_id}:{staff}:{copied_mid}"
+                    db.relay.replace_one({"_id": key}, {"_id": key, "chat": env.chat_id,
+                                          "uid": env.uid, **({"tk": ticket_no} if ticket_no else {}), "t": now()}, upsert=True)
+    return ok
 
 
 def finish(env, node, default_done):
@@ -1778,11 +1836,72 @@ STATUS_FA = {"open": "باز", "answered": "پاسخ داده‌شده", "closed
 
 
 def staff_ids(bot):
+    """آیدی‌های عددیِ مدیران. نام کاربری فقط بعد از /start همین ربات به chat_id قابل استفاده تبدیل می‌شود."""
     ids = [bot["owner"]]
-    for x in (bot["config"].get("desk") or {}).get("staff", []):
-        if x not in ids:
-            ids.append(x)
+    desk = (bot.get("config") or {}).get("desk") or {}
+    for x in desk.get("staff", []):
+        try:
+            uid = int(x)
+        except (TypeError, ValueError):
+            continue
+        if uid not in ids:
+            ids.append(uid)
+    bid = str(bot.get("_id") or "")
+    for name in desk.get("staff_usernames", []):
+        uname = str(name or "").strip().lstrip("@").casefold()
+        if not uname or not bid:
+            continue
+        bind_key = f"{bid}:{uname}"
+        try:
+            # Pin a username to the first Telegram numeric ID that starts this bot with that username.
+            # This prevents a later username reassignment from silently transferring admin rights.
+            bound = db.staff_bindings.find_one({"_id": bind_key})
+            if bound and bound.get("uid"):
+                uid = int(bound["uid"])
+                if uid not in ids:
+                    ids.append(uid)
+                continue
+            cursor = db.subs.find({"bot": bid, "un": {"$regex": "^" + re.escape(uname) + "$", "$options": "i"}},
+                                  {"uid": 1, "chat": 1}).limit(MAX_STAFF + 5)
+            for sub in cursor:
+                # A username can only resolve after the account has started this exact bot.
+                uid = sub.get("uid") or sub.get("chat")
+                try:
+                    uid = int(uid)
+                except (TypeError, ValueError):
+                    continue
+                try:
+                    db.staff_bindings.update_one(
+                        {"_id": bind_key},
+                        {"$setOnInsert": {"uid": uid, "username": uname, "bot": bid, "t": now()}},
+                        upsert=True)
+                except Exception:
+                    # A concurrent /start may have created the binding first; read the winner below.
+                    log.debug("staff username bind raced for %s on %s", uname, bid, exc_info=True)
+                pinned = db.staff_bindings.find_one({"_id": bind_key}) or {"uid": uid}
+                pinned_uid = int(pinned.get("uid") or 0)
+                if pinned_uid and pinned_uid not in ids:
+                    ids.append(pinned_uid)
+                break
+        except Exception:
+            log.exception("resolving staff username failed for bot %s", bid)
     return ids
+
+
+def unresolved_staff_usernames(bot):
+    """Usernameهای تنظیم‌شده‌ای که هنوز برای همین ربات /start نزده‌اند."""
+    desk = (bot.get("config") or {}).get("desk") or {}
+    expected = [str(x or "").strip().lstrip("@") for x in desk.get("staff_usernames", []) if str(x or "").strip()]
+    if not expected:
+        return []
+    bid = str(bot.get("_id") or "")
+    try:
+        known = {str(x.get("un") or "").casefold() for x in db.subs.find({"bot": bid}, {"un": 1}).limit(5000)}
+        bound = {str((db.staff_bindings.find_one({"_id": f"{bid}:{x.casefold()}"}) or {}).get("username") or "").casefold() for x in expected}
+    except Exception:
+        log.exception("listing started staff usernames failed")
+        known, bound = set(), set()
+    return [x for x in expected if x.casefold() not in known and x.casefold() not in bound]
 
 
 def is_staff(bot, uid):
@@ -1820,16 +1939,20 @@ def tk_buttons(n, status="open", blocked=False):
 def ticket_push(env, n, body="", copy_msg=None, new=False, tag=""):
     """پیام تیکت رو برای صاحب ربات و همه‌ی پشتیبان‌ها می‌فرسته (زیرش دکمه‌ی پاسخ)؛ True = حداقل برای یکی رسید"""
     head = ("تیکت جدید" if new else "پیام جدید در تیکت") + f" #{n}" + (f" — {tag}" if tag else "") + f"\n{who(env)}"
+    missing_staff = unresolved_staff_usernames(env.bot) if new else []
     kb, ok = tk_buttons(n, blocked=is_blocked(env.bot_id, env.uid)), False
     for staff in staff_ids(env.bot):
+        staff_head = head
+        if missing_staff and str(staff) == str(env.owner):
+            staff_head += "\n\n⚠️ مدیر(ان) " + ", ".join("@" + x for x in missing_staff) + " هنوز این ربات را /start نکرده‌اند؛ تلگرام تا آن زمان ارسال خصوصی به آن‌ها را اجازه نمی‌دهد."
         ids = []
         if copy_msg:
-            r = tg(env.token, "sendMessage", chat_id=staff, text=head)
+            r = tg(env.token, "sendMessage", chat_id=staff, text=staff_head)
             if r.get("ok"):
                 ids.append(r["result"]["message_id"])
             r = tg(env.token, "copyMessage", chat_id=staff, from_chat_id=env.chat_id, message_id=copy_msg, reply_markup=kb)
         else:
-            r = tg(env.token, "sendMessage", chat_id=staff, text=(head + "\n\n" + body)[:4000], reply_markup=kb)
+            r = tg(env.token, "sendMessage", chat_id=staff, text=(staff_head + "\n\n" + body)[:4000], reply_markup=kb)
         if r.get("ok"):
             ok = True
             ids.append(r["result"]["message_id"])
@@ -1969,11 +2092,18 @@ def staff_message(bot, env, msg, text):
             return True
         db.states.delete_one({"_id": sid})              # دستور دیگه‌ای زده؛ از حالت پاسخ خارج می‌شه
     rt = msg.get("reply_to_message")
-    if rt:                                              # reply روی پیام تیکت
+    if rt:                                              # reply روی پیام تیکت یا اعلان فرم
         rel = db.relay.find_one({"_id": f"{bot_id}:{chat_id}:{rt['message_id']}"})
         tk = tk_get(bot_id, rel["tk"]) if rel and rel.get("tk") else None
         if tk:
             ticket_answer(bot, token, chat_id, msg["message_id"], tk, text or msg.get("caption") or "")
+            return True
+        if rel and rel.get("chat") is not None:
+            r = tg(token, "copyMessage", chat_id=rel["chat"], from_chat_id=chat_id, message_id=msg["message_id"])
+            if r.get("ok"):
+                tg(token, "setMessageReaction", chat_id=chat_id, message_id=msg["message_id"], reaction=[{"type": "emoji", "emoji": "👍"}])
+            else:
+                tg(token, "sendMessage", chat_id=chat_id, text="پاسخ به کاربر ارسال نشد؛ ممکن است ربات را بلاک کرده باشد.")
             return True
     if text.startswith("/"):
         parts = text[1:].split(maxsplit=1)
@@ -2557,7 +2687,7 @@ def sync_commands(bot, cfg):
         try:
             staff_cmds = base + [{"command": "tickets", "description": "تیکت‌های باز"}]
             owner_cmds = staff_cmds + ([{"command": "payments", "description": "آخرین پرداخت‌ها"}] if has_pay(cfg) else [])
-            for sid in [bot["owner"]] + [x for x in (cfg.get("desk") or {}).get("staff", []) if x != bot["owner"]]:
+            for sid in staff_ids(bot):
                 tg(token, "setMyCommands", commands=owner_cmds if sid == bot["owner"] else staff_cmds,
                    scope={"type": "chat", "chat_id": sid})
             ensure_webhook(bot, cfg)
@@ -2649,6 +2779,15 @@ def sub_hook(bot_id):
             is_new = prev is None
             ad_chat, ad_uid = chat0["id"], actor["id"]
             ad = promo_decide(bot, bot_id, actor, is_new, prev, bool(msg and str(msg.get("text") or "").startswith("/start")))
+            if msg and re.match(r"^/start(?:@\w+)?(?:\s|$)", str(msg.get("text") or "")) and is_staff(bot, actor["id"]):
+                try:
+                    staff_commands = ([{"command": "start", "description": "شروع"}]
+                                      + [{"command": c, "description": c} for c in cfg["commands"]]
+                                      + [{"command": "tickets", "description": "تیکت‌های باز"}])
+                    tg(token, "setMyCommands", commands=staff_commands,
+                       scope={"type": "chat", "chat_id": actor["id"]})
+                except Exception:
+                    log.exception("initial username staff command scope failed")
         if cq:
             data, user, m = cq.get("data", ""), cq.get("from", {}), cq.get("message") or {}
             chat_id = (m.get("chat") or {}).get("id")
@@ -2840,38 +2979,65 @@ def sub_hook(bot_id):
         elif state and state.get("form") in cfg["nodes"] and cfg["nodes"][state["form"]].get("fields"):
             node = cfg["nodes"][state["form"]]
             fields = node["fields"]
-            if not text:
-                tg(token, "sendMessage", chat_id=chat_id, text="لطفاً جوابت رو به‌صورت متن بفرست.")
-                return "ok"
             idx = len(state.get("a") or [])
             types = node.get("types") or []
-            ok, val = valid_answer(types[idx] if idx < len(types) else "text", text)
-            if not ok:
-                tg(token, "sendMessage", chat_id=chat_id, text=FORM_HINT.get(types[idx], "جواب معتبر نیست، دوباره بفرست."))
-                return "ok"
+            kind = types[idx] if idx < len(types) else "text"
+            skips = node.get("skip") or []
+            skip_label = str(skips[idx] if idx < len(skips) else "عکس ندارم").strip() if kind == "photo_optional" else ""
+            attachments = list(state.get("attachments") or [])
+            is_image = bool(msg.get("photo")) or str((msg.get("document") or {}).get("mime_type") or "").lower().startswith("image/")
+            if kind in ("photo", "photo_optional"):
+                if text and kind == "photo_optional" and text.strip().casefold() == (skip_label or "عکس ندارم").casefold():
+                    val = skip_label or "عکس ندارم"
+                elif is_image:
+                    val = "📷 عکس پیوست شد"
+                    attachments.append({"message_id": int(msg["message_id"])})
+                else:
+                    label = skip_label or "عکس ندارم"
+                    if kind == "photo_optional":
+                        tg(token, "sendMessage", chat_id=chat_id, text=f"لطفاً عکس را ارسال کن یا دکمهٔ «{label}» را بزن.")
+                    else:
+                        tg(token, "sendMessage", chat_id=chat_id, text="لطفاً خودِ عکس را به‌صورت Photo یا فایل تصویری ارسال کن.")
+                    return "ok"
+            else:
+                if not text:
+                    tg(token, "sendMessage", chat_id=chat_id, text="لطفاً جوابت رو به‌صورت متن بفرست.")
+                    return "ok"
+                ok, val = valid_answer(kind, text)
+                if not ok:
+                    tg(token, "sendMessage", chat_id=chat_id, text=FORM_HINT.get(kind, "جواب معتبر نیست، دوباره بفرست."))
+                    return "ok"
             sv = node.get("save") or []
             if idx < len(sv) and sv[idx]:
                 env.set(sv[idx], val)
-            ans = (state.get("a") or []) + [val[:500]]
+            ans = (state.get("a") or []) + [str(val)[:500]]
             if len(ans) < len(fields):
-                db.states.update_one({"_id": sid}, {"$set": {"a": ans}})
-                tg_html(token, "sendMessage", chat_id=chat_id, text=fill(fields[len(ans)], env, True))
+                db.states.update_one({"_id": sid}, {"$set": {"a": ans, "attachments": attachments, "t": now()}})
+                send_form_question(env, state["form"], node, len(ans))
             else:
                 db.states.delete_one({"_id": sid})
                 body = "\n\n".join(f"{plain_html(q)}\n» {a}" for q, a in zip(fields, ans))
-                run_actions(node.get("do"), env)                # اکشن‌های فرم با جواب‌های پرشده (db_add، تخفیف، …)
-                if node.get("ticket"):                              # فرم تیکتی: شماره‌دار + دکمه‌ی پاسخ برای پشتیبان‌ها
+                run_actions(node.get("do"), env)                # اکشن‌های فرم با جواب‌های پرشده
+                qa = [[q, a] for q, a in zip(fields, ans)]
+                if node.get("ticket"):
                     if is_blocked(bot_id, env.uid):
                         tg(token, "sendMessage", chat_id=chat_id, text="ارتباط شما با پشتیبانی محدود شده.")
                         return "ok"
                     if not node.get("silent"):
-                        save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
-                    ticket_open(env, state["form"], node, body=f"{node.get('title') or 'فرم'}\n\n{body}")
+                        save_submission(env, state["form"], node, qa)
+                    tk_no, _sent = ticket_open(env, state["form"], node, body=f"{node.get('title') or 'فرم'}\n\n{body}")
+                    if attachments:
+                        notify_staff(env, "پیوست‌های فرم بالا (تیکت #%s)." % tk_no, attachments, ticket_no=tk_no)
                     finish(env, node, "اطلاعاتت ثبت شد (تیکت #{ticket_no}). به‌زودی جواب می‌دیم.")
                 else:
                     if not node.get("silent"):
-                        save_submission(env, state["form"], node, [[q, a] for q, a in zip(fields, ans)])
-                        to_owner(env, text=f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}")
+                        save_submission(env, state["form"], node, qa)
+                        report_text = f"فرم جدید — {cfg['name']}\n{who(env)}\n\n{body}"
+                        # اگر مدیر username هنوز این ربات را /start نکرده، مالک هشدار واضح می‌گیرد.
+                        missing = unresolved_staff_usernames(bot)
+                        if missing:
+                            report_text += "\n\n⚠️ مدیر(ان) " + ", ".join("@" + x for x in missing) + " هنوز این ربات را /start نکرده‌اند؛ تا آن زمان تلگرام اجازهٔ ارسال خصوصی به آن‌ها را نمی‌دهد."
+                        notify_staff(env, report_text, attachments)
                     finish(env, node, "اطلاعاتت ثبت شد، ممنون!")
         elif state and state.get("ask") and isinstance(state["ask"], str) and (cfg["nodes"].get(state["ask"]) or {}).get("ticket"):
             node = cfg["nodes"][state["ask"]]                       # پیام تیکتی: شماره‌دار + دکمه‌ی پاسخ برای پشتیبان‌ها
@@ -2885,7 +3051,11 @@ def sub_hook(bot_id):
             finish(env, node, "پیامت ثبت شد (تیکت #{ticket_no}). به‌محض پاسخ، همین‌جا برات می‌فرستیم." if sent
                    else "ارسال پیام ناموفق بود، دوباره امتحان کن.")
         elif state and state.get("ask"):
-            sent = to_owner(env, text=who(env), copy_msg=msg["message_id"])
+            report_text = who(env)
+            missing = unresolved_staff_usernames(bot)
+            if missing:
+                report_text += "\n\n⚠️ مدیر(ان) " + ", ".join("@" + x for x in missing) + " هنوز این ربات را /start نکرده‌اند؛ تا آن زمان تلگرام اجازهٔ ارسال خصوصی به آن‌ها را نمی‌دهد."
+            sent = notify_staff(env, text=report_text, attachments=[{"message_id": int(msg["message_id"])}])
             save_submission(env, state["ask"], cfg["nodes"].get(state["ask"]) if isinstance(state["ask"], str) else None,
                             text=text or msg.get("caption") or "(فایل/رسانه)")
             db.states.delete_one({"_id": sid})

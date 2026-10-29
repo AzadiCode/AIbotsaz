@@ -459,13 +459,13 @@ def api_job(uid, jid):
     j = db.jobs.find_one({"_id": jid, "uid": uid})
     if not j:
         return jsonify(error="کار پیدا نشد"), 404
-    if j["status"] == "running" and age_sec(j["t"]) > BOT_BUILD_TIMEOUT:
-        db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
-                "status": "error", "error": "ساخت بیش از حد طول کشید و چیزی از توکن‌هات کم نشد. دوباره امتحان کن."}})
+    if j["status"] in ("running", "saving") and age_sec(j["t"]) > BOT_BUILD_TIMEOUT:
+        db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {
+                "status": "error", "error": "مهلت ساخت تمام شد؛ خروجی تأییدنشده ذخیره نشد و توکنی کسر نشد. گزارش خطای مرحله‌ای برای بررسی ثبت می‌شود."}})
         j = db.jobs.find_one({"_id": jid})
     out = {"status": "running" if j["status"] == "saving" else j["status"], "wallet": wallet_info(uid)}
     if j["status"] in ("running", "saving") and j.get("prog"):
-        out["prog"] = {k: j["prog"].get(k) for k in ("p", "st", "n", "ti", "th", "att")}
+        out["prog"] = {k: j["prog"].get(k) for k in ("p", "st", "n", "ti", "th", "att", "model_try", "model_total", "model_label")}
     if j["status"] == "done":
         b = get_bot(j["bot"], uid)
         out.update(bot=public(b) if b else None, ideas=j.get("ideas", []), cost=j.get("cost", 0))

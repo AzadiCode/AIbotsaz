@@ -90,7 +90,7 @@ GROUP & CHANNEL MANAGEMENT (use it whenever the user wants to manage, moderate o
  "join": {"channels": ["channel_username"], "text": "message asking to join"},      (optional, whole bot; prefer per-section/per-button join below)
  "vars": {"coins": "0", "city": ""},                                                 (optional, declare EVERY custom variable with its default value)
  "globals": {"votes_a": "0"},                                                       (optional, variables SHARED by all users, see GLOBALS)
- "desk": {"staff": [123456789], "closed": "text sent when a ticket is closed", "reply_btn": "label"},   (optional, see SUPPORT DESK)
+ "desk": {"staff": [123456789], "staff_usernames": ["TelegramUsername"], "closed": "text sent when a ticket is closed", "reply_btn": "label"},   (optional, see SUPPORT DESK)
  "mod": {...},                                                                       (optional, group/channel manager, see GROUP & CHANNEL MANAGEMENT)
  "on_ref": [ ...actions... ],                                                        (optional, see REFERRALS)
  "ref_text": "message sent to the inviter",                                          (optional, see REFERRALS)
@@ -109,7 +109,8 @@ GROUP & CHANNEL MANAGEMENT (use it whenever the user wants to manage, moderate o
      "ask": false,
      "fields": ["Question 1?", "Question 2?"],                                       (optional, multi-step form)
      "save": ["city", ""],                                                           (optional, see FORMS)
-     "types": ["text", "number"],                                                    (optional, see FORMS)
+     "types": ["text", "number", "photo", "photo_optional"],                             (optional, see FORMS)
+     "skip": ["", "عکس ندارم"],                                                        (optional, per-field skip button label; use only for photo_optional)
      "silent": false,                                                                (optional, see FORMS)
      "done": "message shown after the user finished ask/form",                      (optional)
      "done_media": "<media_id>",                                                    (optional, sent with the done message)
@@ -128,8 +129,9 @@ GROUP & CHANNEL MANAGEMENT (use it whenever the user wants to manage, moderate o
 
 BASIC ENGINE FEATURES
 - Buttons: goto a section, open a link, show a popup message (alert), copy text (promo code, card number), share (opens Telegram's share dialog with the user's personal invite link of this bot plus your message).
-- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner. The owner can answer by replying to it inside the bot chat and the answer reaches the user. Good for simple one-way notes. For anything where the owner must answer users personally, add "ticket": true (see SUPPORT DESK), which gives numbered tickets and a Reply button.
-- "fields": a multi-step form. The bot asks each question in order and sends all answers to the owner as one summary (the owner can reply to it too). Use for orders, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
+- "ask": true = the user's next message (ANY type: text, photo, video, voice, file) is forwarded to the bot owner and any configured operational managers. An owner/manager can answer by replying to it inside the bot chat and the answer reaches the user. Good for simple one-way notes. For anything where the owner must answer users personally, add "ticket": true (see SUPPORT DESK), which gives numbered tickets and a Reply button.
+- "fields": a multi-step form. The bot asks each question in order and sends all answers to the configured operational admins as one summary. Use for orders, listings, registration, applications, surveys. Node "text" is the intro, fields are the questions. Use "done" for the thank-you message.
+- FORM PHOTO INPUT IS A REAL ENGINE FEATURE: `types` aligns with `fields` and supports `text`, `number`, `phone`, `email`, `photo`, `photo_optional`. For `photo` / `photo_optional`, the user must send a Telegram photo (or an image document); text is not accepted as a photo. `photo_optional` supports a real reply-keyboard skip button set by `skip`, an array aligned with fields, e.g. `"skip": ["", "عکس ندارم"]`. Never implement "I don't have a photo" as an `alert` or fake popup. The submitted image(s) are copied to the configured managers together with the completed form summary. Save-variable for a photo field is a human-readable marker (e.g. `"عکس پیوست شد"`), not a promise that the file can be displayed using a text placeholder.
 - "join": force membership of public channels (usernames without @). Only if the user asks for forced/mandatory join. Put it on the specific node (the section the user must unlock) or on a goto/alert/pay button ({"text": "...", "goto": "vip", "join": {"channels": ["x"], "text": "..."}}) so only that part is locked; use the top-level "join" only when the user wants the WHOLE bot locked. In "thinking" remind that the bot must be admin in that channel.
 - "kb": "reply" on a BUTTON = that button is shown in the keyboard under the chat input box instead of a glass button under the message. Each button chooses by itself, so one section can have both kinds (glass buttons under the message + a main-menu keyboard under the chat). Only if the user asks for a keyboard under the chat / a main-menu keyboard. Never on sections with "ask", "fields" or "ai". Link/popup/copy/share buttons still work inside it.
 - "photo": only if the user gave an image link. Never invent image URLs.
@@ -157,7 +159,7 @@ VARIABLES (this is what makes a bot feel professional)
 - Custom variables are stored PER USER (each Telegram user has their own values). Name: lowercase english letters/digits/underscore, starts with a letter, max 20 chars, max 40 variables per bot. Declare each one in config.vars with a default string ("0" for counters, "" for text). Values are strings; math and numeric comparison work when they look like numbers.
 - Use {var} in node texts, button labels, alert/copy/share text, form questions, "done", notify texts, ai prompts and condition values. {var|fallback} prints fallback when the value is empty, e.g. {city|ثبت نشده}. Every variable you put in a {placeholder} MUST be declared in config.vars (built-ins excepted).
 - Built-in read-only variables (always available in texts AND conditions):
-  {name} first name (falls back to "دوست من"), {first_name}, {last_name}, {full_name}, {username} (with @, empty if none), {id} Telegram user id, {lang} Telegram language code like fa / en, {premium} "1" if the user has Telegram Premium else "0", {is_owner} "1" if the user is the bot owner else "0", {bot_name}, {bot_username}, {text} the last text message the user sent, {param} the payload of /start (deep link t.me/bot?start=xxx), {visits} how many times this user pressed /start (1 on the first time), {refs} number of successful invites of this user, {ref_link} this user's invite link, {date} today's Jalali date like 1405/07/11, {time} HH:MM Tehran time, {hour} 0-23 Tehran, {weekday} Persian weekday name.
+  {name} first name (falls back to "دوست من"), {first_name}, {last_name}, {full_name}, {username} (with @, empty if none), {id} Telegram user id, {lang} Telegram language code like fa / en, {premium} "1" if the user has Telegram Premium else "0", {is_owner} "1" if the user is the bot owner/creator else "0", {is_admin} "1" if the user is the owner or a configured operational manager else "0", {bot_name}, {bot_username}, {text} the last text message the user sent, {param} the payload of /start (deep link t.me/bot?start=xxx), {visits} how many times this user pressed /start (1 on the first time), {refs} number of successful invites of this user, {ref_link} this user's invite link, {date} today's Jalali date like 1405/07/11, {time} HH:MM Tehran time, {hour} 0-23 Tehran, {weekday} Persian weekday name.
 
 CONDITIONS ("cond" object)
 - {"var": "coins", "op": ">=", "value": "10"}. op is one of: == != > >= < <= contains empty filled ("empty"/"filled" take no value). "var" is a custom or built-in variable. "value" may contain {placeholders}. Numbers compare numerically, text compares case-insensitively.
@@ -168,7 +170,7 @@ ACTIONS ("action" object, max 6 per list)
 - {"op": "add", "var": "coins", "value": "5"}               add a number; negative to subtract ("-3"); default 1
 - {"op": "clear", "var": "city"}                            back to the default
 - {"op": "random", "var": "dice", "value": "1-6"}           random whole number in a range
-- {"op": "notify", "value": "text"}                         sends a message to the bot owner (may use {placeholders}; the user's name and id are appended; the owner can reply to it)
+- {"op": "notify", "value": "text"}                         sends a message to the bot owner and all resolved staff / staff_usernames (may use {placeholders}; the user's name and id are appended; replies are relayed to the user)
 - {"op": "remind", "minutes": 60, "value": "text", "goto": "<node_id>", "key": "cart"}   schedule a message for later, see REMINDERS
 - {"op": "dice", "var": "roll", "emoji": "🎲"}              animated Telegram dice; the REAL result lands in the variable after the animation. emoji one of 🎲 🎯 🏀 ⚽ 🎳 (1-6) or 🎰 (1-64). see GAMES
 - {"op": "pick", "var": "prize", "value": "gold|silver|bronze"}   draws one option at random into the variable. see GAMES
@@ -209,10 +211,10 @@ WHERE LOGIC GOES
 - node "alt": [{"when": cond, "text": "..."}] (max 4). The first true condition replaces the node's text (buttons stay). Use for personalised messages ("you have {coins} coins").
 - button "when": cond. The button is only shown to users for whom it is true (admin button, premium-only, hide "buy" when coins are not enough).
 - button "do": [actions]. Only on goto and alert buttons. Runs when the button is tapped, before the goto/alert. Alert text is evaluated AFTER the actions, so a "my balance" alert shows fresh numbers.
-- FORMS: "save": ["city", ""] has the same length as "fields" and stores each answer in that variable ("" = don't store). "types": ["text","number","phone","email"] (same length) validates each answer; the engine re-asks until valid and normalises digits to english. "silent": true = don't send the finished form to the owner (default: it is sent). Later questions and texts can use earlier answers, e.g. "{city} درسته؟".
+- FORMS: "save": ["city", ""] has the same length as "fields" and stores each answer in that variable ("" = don't store). "types" aligns with fields and supports "text", "number", "phone", "email", "photo", "photo_optional". Photo fields accept a Telegram photo or image document, are copied to the configured managers when the form is completed, and save the human-readable marker "📷 عکس پیوست شد" to a save variable. For "photo_optional", define "skip" as a same-length array with a real reply-keyboard label for that field, for example ["", "عکس ندارم"]; when the user taps it, the answer is recorded as skipped and the next question continues. Do NOT implement skip using an alert. The engine re-asks invalid types. "silent": true = don't notify managers/save a normal submission (ticket behavior still follows the ticket flow). Later questions and texts can use earlier answers, e.g. "{city} درسته؟".
 
 WHEN TO USE LOGIC
-- Use variables/conditions when they make the bot genuinely better: points/coins/loyalty, quizzes and scoring, bots that remember answers and reuse them, personalised greetings (first visit vs returning via {visits}), opening hours via {hour}/{weekday}, an owner-only admin menu via {is_owner}, language-aware replies via {lang}, campaign tracking via {param}, invites via {refs}, premium-only perks via {premium}.
+- Use variables/conditions when they make the bot genuinely better: points/coins/loyalty, quizzes and scoring, bots that remember answers and reuse them, personalised greetings (first visit vs returning via {visits}), opening hours via {hour}/{weekday}, an owner-only panel via {is_owner}, a manager/admin panel for the owner plus explicitly configured staff via {is_admin}, language-aware replies via {lang}, campaign tracking via {param}, invites via {refs}, premium-only perks via {premium}. If the user names an operational manager, use `desk.staff_usernames` and `{is_admin}` for any admin-only navigation. Never claim BotFather ownership changed.
 - Do NOT add logic when a plain menu is enough. A simple request deserves a simple, clean bot.
 - Small examples of the constructs (not a full bot):
   "vars": {"score": "0"}
@@ -226,7 +228,7 @@ SUPPORT DESK (tickets with a Reply button; use it for every support, contact, co
 - Add "ticket": true to a node that has "ask": true or "fields". Every message or finished form becomes a numbered ticket (#1, #2, ...). The owner (and optional staff) receive it inside the bot chat with buttons under it: Reply, History, Close ticket, Block user. Tapping Reply puts them in reply mode: the next message they send (text, photo, voice, file) is delivered to the user. Under that answer the user gets a "reply to support" button, so the conversation continues inside the same ticket. The owner can also list open tickets with /tickets.
 - Optional "tag" (max 20 chars) is shown on the ticket. For departments make one ask node per department with its own tag, e.g. "فروش", "فنی", "پرداخت".
 - {ticket_no} is the number of the user's latest ticket. Use it in "done", e.g. "پیامت ثبت شد (تیکت #{ticket_no}). به‌زودی جواب می‌دیم." If "done" is missing a good default is used.
-- Config "desk": {"staff": [numeric telegram ids], "closed": "text sent to the user when a ticket is closed", "reply_btn": "label of the user's reply button"}. Add "staff" ONLY with numeric ids the user gave; never invent ids. Otherwise just mention in "thinking" that extra support staff ids can be added with manual edit (the owner always receives tickets).
+- Config "desk": {"staff": [numeric telegram ids], "staff_usernames": ["TelegramUsername"], "closed": "text sent to the user when a ticket is closed", "reply_btn": "label of the user's reply button"}. Add numeric staff ids only if explicitly supplied. If the user explicitly names a Telegram @username as an operational admin/notification recipient, put the username without @ in `staff_usernames`; if it arrives in `staff`, the sanitizer also normalizes it. Never invent an ID. The engine resolves the username only after that person opens this generated bot and presses /start, because Telegram cannot start a private chat with an arbitrary username. State this clearly in `thinking`. This gives operational access to tickets and notifications; it does NOT transfer the BotFather/token ownership.
 - Always prefer "ticket": true over plain "ask" when a human answers. A ticket form ("fields") is the best way to take orders, bookings, applications and complaints: the owner gets one clean message and can reply to the customer right there.
 - A good support bot: FAQ sections for common questions, a "contact support" ask node with ticket, a cancel button, and optionally an AI section for free questions. In "thinking" tell the owner they will see tickets in the bot chat with a Reply button and can use /tickets.
 
@@ -322,14 +324,14 @@ PH_RE = re.compile(r"\{([a-z][a-z0-9_]{0,19})(?:\|([^{}]{0,60}))?\}")
 MAX_VARS = 40
 MAX_HOPS = 5
 # متغیرهای آماده‌ی تلگرام (فقط‌خواندنی)
-BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner",
+BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "lang", "premium", "is_owner", "is_admin",
             "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday", "ticket_no")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled", "sub")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 ACT_OPS = ("set", "add", "clear", "random", "notify", "remind",
            "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch", "game_play",
            "calc", "disc", "sub_add", "sub_del")
-F_TYPES = ("text", "number", "phone", "email")
+F_TYPES = ("text", "number", "phone", "email", "photo", "photo_optional")
 
 
 # ───────────────────────── جدول داده‌ی رکوردی، اعتبارسنج و بازرس کانفیگ ─────────────────────────
@@ -1065,7 +1067,8 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
         fl_raw = n.get("fields") if isinstance(n.get("fields"), list) else []
         sv_raw = n.get("save") if isinstance(n.get("save"), list) else []
         ty_raw = n.get("types") if isinstance(n.get("types"), list) else []
-        qs, svs, tys = [], [], []
+        sk_raw = n.get("skip") if isinstance(n.get("skip"), list) else []
+        qs, svs, tys, sks = [], [], [], []
         for i, f in enumerate(fl_raw):
             q = str(f).strip()[:200]
             if not q or len(qs) >= 6:
@@ -1081,13 +1084,29 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
                 t = "text"
             if t == "number" and v:
                 nums.add(v)
-            qs.append(q); svs.append(v); tys.append(t)
+            skip_label = str(sk_raw[i] if i < len(sk_raw) and sk_raw[i] is not None else "").strip()[:40]
+            if t == "photo_optional" and not skip_label:
+                # Use the form's actual language for the default skip button.
+                skip_label = "I don't have a photo" if detect_lang(text + " " + q) == "en" else "عکس ندارم"
+            if t != "photo_optional":
+                skip_label = ""
+            qs.append(q); svs.append(v); tys.append(t); sks.append(skip_label)
         if qs:
             node["fields"], node["ask"] = qs, False
             if any(svs):
                 node["save"] = svs
             if any(t != "text" for t in tys):
                 node["types"] = tys
+            if any(sks):
+                node["skip"] = sks
+                skip_labels = {x.casefold() for x in sks if x}
+                if skip_labels:
+                    filtered_rows = []
+                    for row in node.get("buttons", []):
+                        filtered = [b for b in row if not (str(b.get("text") or "").casefold() in skip_labels and "alert" in b)]
+                        if filtered:
+                            filtered_rows.append(filtered)
+                    node["buttons"] = filtered_rows
             if n.get("silent"):
                 node["silent"] = True
         ai = n.get("ai")
@@ -1330,16 +1349,35 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
     # میزکار پشتیبانی: پشتیبان‌های اضافه، پیام بستن تیکت و برچسب دکمه‌ی پاسخ کاربر
     dk = cfg.get("desk")
     if isinstance(dk, dict):
-        d, staff = {}, []
-        for x in (dk.get("staff") if isinstance(dk.get("staff"), list) else [])[:MAX_STAFF]:
-            sx = re.sub(r"\D", "", str(x).translate(_DIG))
+        d, staff, staff_usernames = {}, [], []
+        raw_staff = dk.get("staff") if isinstance(dk.get("staff"), list) else []
+        raw_names = dk.get("staff_usernames") if isinstance(dk.get("staff_usernames"), list) else []
+        # Compatibility: if a model puts an explicitly supplied @username in `staff`, normalize it.
+        for x in raw_staff[:MAX_STAFF]:
+            raw = str(x or "").strip()
+            uname = raw.lstrip("@").strip()
+            if TG_NAME_RE.fullmatch(uname) and not re.fullmatch(r"\d+", uname):
+                if uname.casefold() not in {z.casefold() for z in staff_usernames}:
+                    staff_usernames.append(uname)
+                continue
+            sx = re.sub(r"\D", "", raw.translate(_DIG))
             if 5 <= len(sx) <= 15:
                 if int(sx) not in staff:
                     staff.append(int(sx))
-            else:
-                bad(f"آیدی عددی پشتیبان «{x}» معتبر نیست")
+            elif raw:
+                bad(f"آیدی عددی یا نام کاربری پشتیبان «{x}» معتبر نیست")
+        for x in raw_names[:MAX_STAFF]:
+            uname = str(x or "").strip().lstrip("@").strip()
+            if TG_NAME_RE.fullmatch(uname) and not re.fullmatch(r"\d+", uname):
+                if uname.casefold() not in {z.casefold() for z in staff_usernames}:
+                    staff_usernames.append(uname)
+            elif uname:
+                bad(f"نام کاربری پشتیبان «{x}» معتبر نیست")
+        max_extra = max(0, MAX_STAFF)
         if staff:
-            d["staff"] = staff
+            d["staff"] = staff[:max_extra]
+        if staff_usernames:
+            d["staff_usernames"] = staff_usernames[:max_extra]
         for key, lim in (("closed", 300), ("reply_btn", 30)):
             v = str(dk.get(key) or "").strip()[:lim]
             if v:
@@ -1644,8 +1682,141 @@ def _model_candidates(preferred=None):
         if name and key not in seen:
             seen.add(key)
             out.append(name)
-    # حداکثر ۵ مدل برای محدودکردن تأخیر و هزینه.
-    return out[:5]
+    # سقف مدل‌ها قابل تنظیم است تا فهرست بلند، درخواست را چندین دقیقه معطل نکند.
+    limit = max(1, min(5, _int("AI_MAX_MODEL_TRIES", 5)))
+    return out[:limit]
+
+
+def _job_remaining(default=45):
+    """زمان باقی‌مانده از بودجهٔ کل کار ساخت؛ مانع چندین timeout پشت‌سرهم می‌شود."""
+    cb = getattr(_prog, "cb", None)
+    deadline = getattr(cb, "deadline", None) if cb else None
+    if not deadline:
+        return float(default)
+    remaining = deadline - time.monotonic()
+    if remaining <= 1:
+        raise TimeoutError("مهلت کلی ساخت ربات تمام شد؛ برای جلوگیری از انتظار بی‌پایان کار متوقف شد")
+    return max(1.0, min(float(default), remaining))
+
+
+def _usable_models(preferred=None):
+    """مدل‌هایی که هنوز در این کار خروجی نامعتبر نداده‌اند را جلوتر قرار می‌دهد."""
+    models = _model_candidates(preferred)
+    cb = getattr(_prog, "cb", None)
+    rejected = set(getattr(cb, "rejected_models", set()) or set()) if cb else set()
+    available = [m for m in models if m.casefold() not in rejected]
+    return available or models
+
+
+def _extract_json_object(text):
+    """اولین شیء JSON کامل را با رعایت کوتیشن و escape پیدا می‌کند؛ از regex حریصانه استفاده نمی‌کند."""
+    s = str(text or "").strip().lstrip("\ufeff")
+    s = re.sub(r"^\s*```(?:json)?\s*", "", s, flags=re.I)
+    s = re.sub(r"\s*```\s*$", "", s)
+    start = s.find("{")
+    if start < 0:
+        raise ValueError("پاسخ مدل هیچ شیء JSONای نداشت")
+    in_string = escaped = False
+    depth = 0
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return s[start:i + 1]
+    # متن ناقص را عمداً کامل‌نمایی نمی‌کنیم؛ تلاش اصلاحی مدل باید ساختار را بازسازی کند.
+    raise ValueError("پاسخ مدل پیش از بسته‌شدن کامل JSON قطع شد؛ خروجی ناقص پذیرفته نشد")
+
+
+def _loads_json_with_safe_repairs(text):
+    """JSON را می‌خواند و فقط چند خطای نحوی کم‌خطر مثل کامای جاافتاده را ترمیم می‌کند."""
+    candidate = _extract_json_object(text)
+    try:
+        return json.loads(candidate), False
+    except json.JSONDecodeError as first_error:
+        s = candidate
+        # بیش از ۶ تغییر نحوی انجام نده؛ از حدس‌زدن مقادیر یا ساختارهای گمشده پرهیز می‌کنیم.
+        for _ in range(6):
+            try:
+                value = json.loads(s)
+                log.warning("JSON syntax repaired locally (original error: line %s col %s)",
+                            first_error.lineno, first_error.colno)
+                return value, True
+            except json.JSONDecodeError as exc:
+                if "trailing comma" in exc.msg.lower() and exc.pos < len(s) and s[exc.pos] == ",":
+                    s = s[:exc.pos] + s[exc.pos + 1:]
+                    continue
+                if exc.msg == "Expecting ',' delimiter" and exc.pos < len(s) and s[exc.pos] == '"':
+                    # کاما فقط وقتی اضافه می‌شود که کوتیشن فعلی، کلید property بعدی باشد (دنبالش colon بیاید).
+                    j = exc.pos + 1
+                    esc = False
+                    while j < len(s):
+                        c = s[j]
+                        if esc:
+                            esc = False
+                        elif c == "\\":
+                            esc = True
+                        elif c == '"':
+                            break
+                        j += 1
+                    k = j + 1
+                    while k < len(s) and s[k].isspace():
+                        k += 1
+                    if j < len(s) and k < len(s) and s[k] == ":":
+                        s = s[:exc.pos] + "," + s[exc.pos:]
+                        continue
+                    # در آرایه ممکن است بین دو مقدار رشته‌ای کاما افتاده باشد.
+                    prev = exc.pos - 1
+                    while prev >= 0 and s[prev].isspace():
+                        prev -= 1
+                    if j < len(s) and prev >= 0 and s[prev] in ('"', "]", "}"):
+                        s = s[:exc.pos] + "," + s[exc.pos:]
+                        continue
+                if exc.msg == "Expecting ',' delimiter" and exc.pos < len(s):
+                    # مقدارهای عددی/بولی/آرایه‌ایِ پشت‌سرهم در آرایه؛ فقط وقتی قبل از آن مقدار دیگری تمام شده است.
+                    ch = s[exc.pos]
+                    prefix = s[:exc.pos].rstrip()
+                    ended_value = bool(prefix) and (
+                        prefix.endswith(('"', "]", "}")) or
+                        re.search(r"(?:\btrue|\bfalse|\bnull|-?\d+(?:\.\d+)?|\d+[eE][+-]?\d+)\s*$", prefix) is not None
+                    )
+                    if ch in "{[0123456789tfn-" and ended_value:
+                        s = s[:exc.pos] + "," + s[exc.pos:]
+                        continue
+                # کامای انتهایی قبل از } یا ] را حذف کن، اما به متن داخل رشته‌ها دست نزن.
+                if exc.msg == "Expecting property name enclosed in double quotes" and exc.pos < len(s) and s[exc.pos] == "}":
+                    k = exc.pos - 1
+                    while k >= 0 and s[k].isspace():
+                        k -= 1
+                    if k >= 0 and s[k] == ",":
+                        s = s[:k] + s[k + 1:]
+                        continue
+                if exc.msg == "Expecting value" and exc.pos < len(s) and s[exc.pos] == "]":
+                    k = exc.pos - 1
+                    while k >= 0 and s[k].isspace():
+                        k -= 1
+                    if k >= 0 and s[k] == ",":
+                        s = s[:k] + s[k + 1:]
+                        continue
+                # خطای دیگری که امن قابل ترمیم نیست؛ جزئیات برای مرحلهٔ retry حفظ شود.
+                snippet = s[max(0, exc.pos - 70):min(len(s), exc.pos + 100)].replace("\n", " ")
+                raise ValueError(
+                    f"JSON مدل معتبر نبود ({exc.msg}; line {exc.lineno}, column {exc.colno}, char {exc.pos}); "
+                    f"context={snippet!r}"
+                ) from exc
+        raise ValueError("JSON مدل پس از ترمیم نحوی محدود همچنان معتبر نشد") from first_error
 
 
 def _llm_post_one(messages, max_tokens, temperature, timeout, model):
@@ -1660,8 +1831,11 @@ def _llm_post_one(messages, max_tokens, temperature, timeout, model):
     try:
         j = r.json()
         txt = j["choices"][0]["message"]["content"] or ""
+        finish_reason = j["choices"][0].get("finish_reason")
     except Exception:
         raise RuntimeError(f"AI پاسخ غیرمنتظره داد [model={model}]: {(r.text or '')[:300]}")
+    if finish_reason == "length":
+        raise RuntimeError(f"AI خروجی را به‌دلیل رسیدن به سقف max_tokens قطع کرد [model={model}]؛ خروجی ناقص پذیرفته نشد")
     txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S).strip()
     if not txt:
         raise RuntimeError(f"AI پاسخ خالی داد [model={model}]")
@@ -1674,15 +1848,21 @@ def _llm_post_one(messages, max_tokens, temperature, timeout, model):
 def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
     """فراخوانی سازگار با APIهای OpenAI؛ در خطای مدل، مدل بعدی AI_MODELS را امتحان می‌کند."""
     errors = []
-    models = _model_candidates(model)
+    models = _usable_models(model)
     cb = getattr(_prog, "cb", None)
     for idx, candidate in enumerate(models, 1):
         try:
             if cb and len(models) > 1:
                 cb.model_fallback(idx, candidate, len(models))
-            return _llm_post_one(messages, max_tokens, temperature, timeout, candidate)
+            per_model_timeout = min(float(timeout), float(max(8, _int("AI_MODEL_TIMEOUT", 35))), _job_remaining(float(timeout)))
+            result = _llm_post_one(messages, max_tokens, temperature, per_model_timeout, candidate)
+            if cb:
+                cb.last_model = candidate
+            return result
         except Exception as exc:
             errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
+            if cb:
+                cb.rejected_models.add(str(candidate).casefold())
             log.warning("AI model failed (%s/%s): %s", idx, len(models), errors[-1])
     raise RuntimeError("همه مدل‌های پیکربندی‌شده ناموفق بودند؛ " + " || ".join(errors[:len(models)]))
 
@@ -1732,6 +1912,11 @@ class Progress:
     def __init__(self, jid):
         self.jid, self.fa, self.att, self.last = jid, False, 1, 0.0
         self.d = {"p": 2.0, "st": "analyze", "n": 0, "ti": "", "th": "", "att": 1}
+        self.phase = "generate"
+        self.last_model = None
+        self.rejected_models = set()
+        self.deadline = time.monotonic() + max(90, _int("AI_BUILD_DEADLINE", 300))
+        self.flush(True)
 
     def flush(self, force=False):
         t = time.time()
@@ -1744,25 +1929,40 @@ class Progress:
             pass
 
     def stage(self, st, p=None):
+        self.phase = st
         self.d["st"] = st
+        for key in ("model_try", "model_total", "model_label"):
+            self.d.pop(key, None)
         if p is not None:
             self.d["p"] = max(self.d["p"], p)
         self.flush(True)
 
     def attempt(self, n):
         self.att = self.d["att"] = n
-        self.d["st"] = "analyze" if n == 1 else "review"
+        self.phase = "generate" if n == 1 else "repair"
+        self.d["st"] = "analyze" if n == 1 else "repair"
+        for key in ("model_try", "model_total", "model_label"):
+            self.d.pop(key, None)
         if n > 1:
-            self.d["p"] = max(self.d["p"], 60.0)
+            self.d["p"] = max(self.d["p"], 58.0)
         self.flush(True)
+
+    def reject_last_model(self):
+        if self.last_model:
+            self.rejected_models.add(str(self.last_model).casefold())
+            log.warning("Model output rejected by JSON/config validation; it will be moved behind other candidates: %s", self.last_model)
+            self.last_model = None
 
     def model_fallback(self, n, model, total):
         # پیشرفت مرحله‌ای: اگر یک ارائه‌دهنده رد کند/قطع شود، کاربر روی ۲٪ ثابت نمی‌ماند.
         self.d["model_try"] = int(n)
         self.d["model_total"] = int(total)
         self.d["model_label"] = str(model)[:80]
-        self.d["st"] = "analyze" if n == 1 else "fallback"
-        self.d["p"] = max(float(self.d.get("p") or 2), min(12.0 + (n - 1) * 3.0, 24.0))
+        if self.phase in ("audit", "repair", "validate", "save"):
+            self.d["st"] = self.phase
+        else:
+            self.d["st"] = "analyze" if n == 1 else "fallback"
+        self.d["p"] = max(float(self.d.get("p") or 2), min(8.0 + (n - 1) * 2.5, 19.0))
         self.flush(True)
 
     def feed(self, text, reasoning=0):
@@ -1775,28 +1975,33 @@ class Progress:
         tok = est_tokens(vis) if vis else 0
         sat = tok / (tok + 1800.0)
         if self.att == 1:
-            p = 4 + 84 * sat if tok else 3 + min(8.0, reasoning / 900.0)
+            p = 4 + 56 * sat if tok else 3 + min(8.0, reasoning / 900.0)
         else:
-            p = 62 + 30 * sat
-        self.d["p"] = round(max(self.d["p"], min(p, 94.0)), 1)
+            p = 58 + 18 * sat
+        # 95% رزروِ ذخیرهٔ واقعی است؛ استریم یا parse ناموفق نباید تا آن درصد وانمود کند.
+        cap = 56.0 if self.att == 1 else 76.0
+        self.d["p"] = round(max(self.d["p"], min(p, cap)), 1)
         self.d["n"] = max(self.d["n"], info["n"])
         if info["ti"]:
             self.d["ti"] = info["ti"]
         if info["th"]:
             self.d["th"] = info["th"]
-        self.d["st"] = "review" if self.att > 1 else ("build" if self.d["n"] else "analyze")
+        self.d["st"] = "repair" if self.att > 1 else ("build" if self.d["n"] else "analyze")
         self.flush(True)
 
 
 def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
     """مثل llm_post ولی با استریم (SSE)؛ هر تکه‌ی رسیده به cb.feed داده می‌شه"""
     t0 = time.time()
+    timeout = _job_remaining(min(float(timeout), float(max(20, _int("AI_GENERATION_TIMEOUT", 80)))))
+    connect_timeout = max(1, min(10, timeout / 4))
+    read_timeout = max(1, min(25, timeout / 2))
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
         json={"model": model or AI_MODEL, "max_tokens": max_tokens, "temperature": temperature, "messages": messages,
               "stream": True, "stream_options": {"include_usage": True}},
-        timeout=(10, 45), stream=True)
+        timeout=(connect_timeout, read_timeout), stream=True)
     try:
         if r.status_code >= 400:
             body = re.sub(r"\s+", " ", r.text or "")[:650]
@@ -1806,12 +2011,15 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
             raise RuntimeError(f"AI HTTP {r.status_code} [model={model or AI_MODEL}]: {body}")
         if "event-stream" not in (r.headers.get("content-type") or "").lower():     # سرویس‌دهنده استریم نکرد و جواب کامل داد
             j = r.json()
-            txt = j["choices"][0]["message"]["content"] or ""
+            choice = j["choices"][0]
+            txt = choice["message"]["content"] or ""
+            if choice.get("finish_reason") == "length":
+                raise RuntimeError(f"AI خروجی را به‌دلیل رسیدن به سقف max_tokens قطع کرد [model={model or AI_MODEL}]؛ خروجی ناقص پذیرفته نشد")
             u = j.get("usage") or {}
             txt = re.sub(r"<think>.*?</think>", "", txt, flags=re.S).strip()
             return txt, (int(u.get("prompt_tokens") or est_tokens("".join(str(m["content"]) for m in messages))),
                          int(u.get("completion_tokens") or est_tokens(txt)))
-        parts, reasoning, usage = [], 0, None
+        parts, reasoning, usage, finish_reason = [], 0, None, None
         for raw in r.iter_lines():
             if time.time() - t0 > timeout:
                 raise RuntimeError("AI timeout")
@@ -1830,6 +2038,9 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
             if j.get("usage"):
                 usage = j["usage"]
             d = ((j.get("choices") or [{}])[0].get("delta")) or {}
+            choice = ((j.get("choices") or [{}])[0])
+            if choice.get("finish_reason"):
+                finish_reason = choice.get("finish_reason")
             piece = d.get("content")
             if piece:
                 parts.append(piece)
@@ -1839,6 +2050,8 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
     finally:
         r.close()
     txt = re.sub(r"<think>.*?</think>", "", "".join(parts), flags=re.S).strip()
+    if finish_reason == "length":
+        raise RuntimeError(f"AI خروجی را به‌دلیل رسیدن به سقف max_tokens قطع کرد [model={model or AI_MODEL}]؛ خروجی ناقص پذیرفته نشد")
     if not txt:
         raise RuntimeError("AI پاسخ خالی داد")
     u = usage or {}
@@ -1849,21 +2062,35 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
 def llm_run(messages, max_tokens, temperature=0.4):
     """ساخت با failover مدل: خطای هر مدل باعث امتحان مدل بعدی می‌شود، نه گیر کردن روی همان مدل."""
     cb = getattr(_prog, "cb", None)
-    models = _model_candidates()
+    models = _usable_models()
     errors = []
     for idx, candidate in enumerate(models, 1):
         try:
             if cb:
                 cb.model_fallback(idx, candidate, len(models))
             if not (cb and AI_STREAM):
-                return _llm_post_one(messages, max_tokens, temperature, 100, candidate)
+                result = _llm_post_one(messages, max_tokens, temperature,
+                                       min(float(max(20, _int("AI_GENERATION_TIMEOUT", 80))), _job_remaining(80)), candidate)
+                if cb:
+                    cb.last_model = candidate
+                return result
             try:
-                return llm_stream(messages, max_tokens, temperature, cb, timeout=100, model=candidate)
+                result = llm_stream(messages, max_tokens, temperature, cb,
+                                    timeout=max(20, _int("AI_GENERATION_TIMEOUT", 80)), model=candidate)
+                if cb:
+                    cb.last_model = candidate
+                return result
             except _NoStream as exc:
                 log.warning("مدل %s استریم را پشتیبانی نمی‌کند؛ درخواست عادی امتحان می‌شود: %s", candidate, exc)
-                return _llm_post_one(messages, max_tokens, temperature, 100, candidate)
+                result = _llm_post_one(messages, max_tokens, temperature,
+                                       min(float(max(20, _int("AI_GENERATION_TIMEOUT", 80))), _job_remaining(80)), candidate)
+                if cb:
+                    cb.last_model = candidate
+                return result
         except Exception as exc:
             errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
+            if cb:
+                cb.rejected_models.add(str(candidate).casefold())
             log.warning("generation model failed (%s/%s): %s", idx, len(models), errors[-1])
     raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + " || ".join(errors[:len(models)]))
 
@@ -1880,16 +2107,298 @@ def _take_gaps(raw):
     return out
 
 
+def _reachable_cfg_nodes(cfg):
+    nodes = cfg.get("nodes") or {}
+    seen, stack = set(), [cfg.get("start"), cfg.get("fallback"), *(cfg.get("commands") or {}).values()]
+    while stack:
+        nid = stack.pop()
+        if nid in seen or nid not in nodes:
+            continue
+        seen.add(nid)
+        n = nodes[nid]
+        stack.extend(b["goto"] for row in n.get("buttons", []) for b in row if isinstance(b, dict) and b.get("goto"))
+        stack.extend(r["goto"] for r in n.get("route", []) if isinstance(r, dict) and r.get("goto"))
+        if n.get("next"):
+            stack.append(n["next"])
+        for action in _walk(n):
+            if action.get("op") == "remind" and action.get("goto"):
+                stack.append(action["goto"])
+            if isinstance(action.get("pay"), dict) and action["pay"].get("goto"):
+                stack.append(action["pay"]["goto"])
+    return seen
+
+
+def _repair_orphan_confirmation_nodes(cfg):
+    """Repair only high-confidence orphan success nodes by attaching them to the most related reachable form."""
+    nodes = cfg.get("nodes") or {}
+    if not nodes:
+        return []
+    generic = {"form", "saved", "save", "success", "done", "finish", "finished", "completed", "complete",
+               "confirmation", "confirmed", "submit", "submitted", "node", "step", "end", "final", "result",
+               "menu", "home", "start", "thanks", "thank", "info", "data", "register", "registration",
+               "ثبت", "شد", "شده", "موفق", "موفقیت", "ذخیره", "ثبتشد", "تکمیل", "پایان", "نهایی", "تایید",
+               "تأیید", "اطلاعات", "فرم", "صفحه", "بخش", "خانه", "شروع", "تشکر"}
+    success_re = re.compile(r"(?:^|[_\s-])(saved|success|done|finish(?:ed)?|complete(?:d)?|confirm(?:ed|ation)?|submit(?:ted)?|registered|thank(?:s|you)?|ثبت.?شد|ذخیره.?شد|موفق(?:یت)?)(?:$|[_\s-])", re.I)
+
+    def terms(v):
+        vals = re.findall(r"[a-zA-Z0-9_]+|[\u0600-\u06FF]+", str(v or "").casefold())
+        return {x.strip("_") for x in vals if len(x.strip("_")) >= 2 and x.strip("_") not in generic}
+
+    changes = []
+    # At most the node count, so malformed/cyclic graphs cannot loop this pass forever.
+    for _ in range(min(len(nodes), 12)):
+        seen = _reachable_cfg_nodes(cfg)
+        lost = [nid for nid, n in nodes.items() if nid not in seen and
+                success_re.search(nid + " " + str(n.get("title") or "") + " " + str(n.get("text") or ""))]
+        if not lost:
+            break
+        changed = False
+        for target in lost:
+            target_node = nodes[target]
+            target_terms = terms(target + " " + target_node.get("title", "") + " " + target_node.get("text", ""))
+            candidates = []
+            for source, node in nodes.items():
+                if source not in seen:
+                    continue
+                next_node = node.get("next")
+                # Never overwrite an intentional onward route. A form with no next or a next back
+                # to start is a common broken-submit pattern; otherwise consider only true terminal nodes.
+                has_out = bool(next_node or node.get("route") or any(
+                    b.get("goto") for row in node.get("buttons", []) for b in row if isinstance(b, dict)))
+                is_form = bool(node.get("fields") or node.get("ask"))
+                if is_form:
+                    if next_node and next_node != cfg.get("start"):
+                        continue
+                    priority = 3
+                else:
+                    if has_out or source == cfg.get("start"):
+                        continue
+                    priority = 1
+                source_terms = terms(source + " " + node.get("title", "") + " " + node.get("text", "") + " " + " ".join(node.get("fields") or []))
+                overlap = len(target_terms & source_terms)
+                sid_parts = [x for x in re.split(r"[_\W]+", source.casefold()) if x and x not in generic]
+                tid_parts = [x for x in re.split(r"[_\W]+", target.casefold()) if x and x not in generic]
+                id_overlap = len(set(sid_parts) & set(tid_parts))
+                score = overlap * 2 + id_overlap + priority
+                if score > priority:
+                    candidates.append((score, source, priority))
+            if not candidates:
+                continue
+            candidates.sort(key=lambda item: (-item[0], -item[2], item[1]))
+            best_score = candidates[0][0]
+            best_priority = candidates[0][2]
+            winners = [src for score, src, priority in candidates if score == best_score and priority == best_priority]
+            if len(winners) == 1:
+                source = winners[0]
+                source_node = nodes[source]
+                if source_node.get("fields") or source_node.get("ask"):
+                    source_node["next"] = target
+                else:
+                    # `next` is consumed only by a completed form/ask in the runtime. For an ordinary
+                    # menu/terminal page, a real goto button is required for the runtime path.
+                    target_blob = str(nodes[target].get("title") or "") + " " + str(nodes[target].get("text") or "")
+                    label = "Continue" if re.search(r"[A-Za-z]", target_blob) and not re.search(r"[\u0600-\u06FF]", target_blob) else "ادامه"
+                    source_node.setdefault("buttons", []).append([{"text": label, "goto": target}])
+                changes.append((source, target))
+                log.warning("auto-linked orphan confirmation node %s from related reachable node %s", target, source)
+                changed = True
+                break
+        if not changed:
+            break
+    # Confirmation pages are legitimate terminal nodes but should provide a working way home.
+    seen = _reachable_cfg_nodes(cfg)
+    for nid, node in nodes.items():
+        label_blob = nid + " " + str(node.get("title") or "") + " " + str(node.get("text") or "")
+        if nid not in seen or not success_re.search(label_blob) or node.get("fields") or node.get("ask"):
+            continue
+        has_exit = bool(node.get("next") or node.get("route") or any(
+            b.get("goto") for row in node.get("buttons", []) for b in row if isinstance(b, dict)))
+        if not has_exit and cfg.get("start") in nodes:
+            start_blob = str(nodes[cfg["start"]].get("title") or "") + " " + str(nodes[cfg["start"]].get("text") or "")
+            label = "Main menu" if re.search(r"[A-Za-z]", start_blob) and not re.search(r"[\u0600-\u06FF]", start_blob) else "منوی اصلی"
+            node.setdefault("buttons", []).append([{"text": label, "goto": cfg["start"]}])
+            changes.append((nid, cfg["start"]))
+            log.warning("added home route to terminal confirmation node %s", nid)
+    return changes
+
+
+def _extract_builder_request(user):
+    """Extract only the user's current request, excluding serialized old config and boilerplate."""
+    text = str(user or "")
+    match = re.search(r"(?:Bot request|Change request):\n", text)
+    if match:
+        text = text[match.end():]
+    text = text.split("\n\nReminder: reply with the JSON object only", 1)[0]
+    return text.strip()
+
+
+def _repair_explicit_requirements(request_text, cfg, lang):
+    """Deterministically enforce two implemented features when explicitly requested: optional photo input and manager username routing."""
+    changes, warnings = [], []
+    request = str(request_text or "")
+    low = request.casefold()
+    name = str(cfg.get("name") or "")
+
+    # Explicit operational-manager intent + @username must become actual recipient configuration,
+    # not merely a sentence or fake button in the generated UI.
+    manager_context = bool(re.search(r"مدیر|مسئول|ادمین|پشتیبان|صاحب.?ربات|admin|manager|owner|staff", low, re.I))
+    manager_action = bool(re.search(r"اطلاعات|گزارش|پیام|ارسال|بفرست|عوض|تغییر|قرار.?بده|notify|send|notification|change|assign|set.{0,25}(?:owner|manager|admin)", low, re.I))
+    manager_intent = manager_context and manager_action
+    # Wording like "از این به بعد مدیر را عوض کن" means replace the operational staff list,
+    # not silently add another manager while retaining the old configured admins.
+    manager_replace = manager_intent and bool(re.search(
+        r"عوض|تغییر|جایگزین|از\s*(?:این|عین)\s*به\s*بعد|\b(?:change|replace|switch)\b", low, re.I))
+    handles = []
+    if manager_intent:
+        for match in re.finditer(r"(?<![A-Za-z0-9_])@([A-Za-z][A-Za-z0-9_]{4,31})", request):
+            handle = match.group(1).strip()
+            if TG_NAME_RE.fullmatch(handle) and handle.casefold() not in {x.casefold() for x in handles}:
+                handles.append(handle)
+
+    if handles:
+        desk = cfg.setdefault("desk", {})
+        if not isinstance(desk, dict):
+            desk = cfg["desk"] = {}
+        staff = desk.get("staff") if isinstance(desk.get("staff"), list) else []
+        names = desk.get("staff_usernames") if isinstance(desk.get("staff_usernames"), list) else []
+        if manager_replace:
+            # A requested replacement must not continue notifying old extra admins.
+            desk.pop("staff", None)
+            normalized = list(handles[:MAX_STAFF])
+            desk["staff_usernames"] = normalized
+            changes.append(("staff_replaced", tuple(normalized)))
+        else:
+            normalized = [str(x or "").strip().lstrip("@") for x in names if str(x or "").strip()]
+            before = {x.casefold() for x in normalized}
+            for handle in handles:
+                if handle.casefold() not in before:
+                    normalized.append(handle)
+                    before.add(handle.casefold())
+            capacity = max(0, MAX_STAFF - min(len(staff), MAX_STAFF))
+            # Explicitly requested recipients have priority over previously generated username entries.
+            if len(normalized) > capacity:
+                required = [x for x in handles if x.casefold() in before]
+                others = [x for x in normalized if x.casefold() not in {h.casefold() for h in handles}]
+                normalized = (required + others)[:MAX_STAFF]
+            if normalized:
+                desk["staff_usernames"] = normalized[:MAX_STAFF]
+        changes.extend(("staff_username", x) for x in handles)
+
+    # A photo field is required only when the request actually asks users to submit/send an image.
+    photo_word = bool(re.search(r"عکس|تصویر|photo|image|picture", low, re.I))
+    optional_photo = bool(re.search(
+        r"عکس\s*ندارم|بدون\s*عکس|اگر\s*(?:عکس|تصویر)\s*ندار|نداشته\s*باشد|(?:عکس|تصویر).{0,25}اختیار(?:ی)?|اختیار(?:ی)?.{0,25}(?:عکس|تصویر)|i\s*(?:do\s*not|don't|dont)\s*have\s*(?:a\s*)?(?:photo|picture|image)|(?:do\s*not|don't|dont|does\s*not|doesn't|doesnt)\s*have\s*(?:a\s*)?(?:photo|picture|image)|no\s*(?:photo|picture|image)|without\s+(?:a\s*)?(?:photo|picture|image)|optional.{0,25}(?:photo|picture|image)|(?:photo|picture|image).{0,25}optional|skip\s*(?:the\s*)?(?:photo|picture|image)",
+        low, re.I))
+    photo_input_intent = optional_photo or bool(re.search(
+        r"بخش.{0,12}(?:عکس|تصویر)|فیلد.{0,12}(?:عکس|تصویر)|کاربر.{0,30}(?:عکس|تصویر).{0,25}(?:بفرست|ارسال|آپلود)|(?:کاربر|مخاطب).{0,20}(?:بفرست|ارسال|آپلود).{0,20}(?:عکس|تصویر)|(?:عکس|تصویر).{0,25}(?:بفرست|ارسال|آپلود|دریافت)|\b(?:photo|image|picture)\s+(?:upload|field|input)\b|\b(?:user|customer)\b.{0,30}\b(?:send|upload|attach|submit)\b.{0,25}\b(?:photo|image|picture)\b",
+        low, re.I))
+    wants_photo = photo_word and photo_input_intent
+    if wants_photo:
+        nodes = cfg.get("nodes") if isinstance(cfg.get("nodes"), dict) else {}
+        forms = [(nid, node) for nid, node in nodes.items() if isinstance(node, dict) and isinstance(node.get("fields"), list) and node.get("fields")]
+        target = None
+        if len(forms) == 1:
+            target = forms[0]
+        elif len(forms) > 1:
+            context = (request + " " + name).casefold()
+            keys = [
+                (r"آگهی|آگهی", "listing"), (r"ثبت.?آگهی|ثبت.?محصول", "register"),
+                (r"فروش|فروشنده|خرید|کالا|محصول", "commerce"),
+                (r"\b(?:ad|listing|marketplace)\b", "listing_en"),
+                (r"\b(?:product|item|sell|sale|buy)\b", "commerce_en"),
+            ]
+            wanted = {tag for pat, tag in keys if re.search(pat, context, re.I)}
+            ranked = []
+            for nid, node in forms:
+                blob = " ".join([nid, str(node.get("title") or ""), str(node.get("text") or ""), *[str(x) for x in node.get("fields", [])]]).casefold().replace("_", " ")
+                score = 0
+                if "listing" in wanted or "listing_en" in wanted:
+                    score += 5 if re.search(r"آگهی|\b(?:ad|listing)\b", blob, re.I) else 0
+                if "register" in wanted:
+                    score += 2 if re.search(r"ثبت|register|submit", blob, re.I) else 0
+                if "commerce" in wanted or "commerce_en" in wanted:
+                    score += 2 if re.search(r"فروش|خرید|کالا|محصول|\b(?:product|item|sell|sale|buy)\b", blob, re.I) else 0
+                # An existing photo field is the strongest target for a request that extends an existing form.
+                types = node.get("types") if isinstance(node.get("types"), list) else []
+                if any(str(t).lower() in ("photo", "photo_optional") for t in types):
+                    score += 3
+                if score:
+                    ranked.append((score, nid, node))
+            if ranked:
+                ranked.sort(key=lambda x: (-x[0], x[1]))
+                if len(ranked) == 1 or ranked[0][0] > ranked[1][0]:
+                    target = (ranked[0][1], ranked[0][2])
+        if target is None:
+            warnings.append("درخواست صریحِ دریافت عکس تشخیص داده شد، اما فرم مقصد با اطمینان مشخص نشد؛ فیلد عکس به فرم اشتباه اضافه نشد. یک فرم ثبت/ارسال مرتبط لازم است.")
+        else:
+            nid, node = target
+            fields = node["fields"]
+            types = list(node.get("types") or [])
+            types = (types + ["text"] * len(fields))[:len(fields)]
+            skips = list(node.get("skip") or [])
+            skips = (skips + [""] * len(fields))[:len(fields)]
+            photo_idx = next((i for i, t in enumerate(types) if str(t).lower() in ("photo", "photo_optional")), None)
+            desired_type = "photo_optional" if optional_photo else "photo"
+            skip_label = "I don't have a photo" if lang == "en" else "عکس ندارم"
+            photo_satisfied = False
+            if photo_idx is not None:
+                photo_satisfied = True
+                types[photo_idx] = desired_type
+                skips[photo_idx] = (skips[photo_idx] or skip_label) if optional_photo else ""
+                if types != (node.get("types") or []) or skips != (node.get("skip") or []):
+                    changes.append(("photo_field_normalized", nid))
+            elif len(fields) < 7:
+                # Engine runtime supports sequential answers from an arbitrary list length; allow a
+                # single deterministic 7th field here instead of chaining a second form (which would
+                # reset saved answers and send the submission too early).
+                fields.append("Send the photo (optional)." if lang == "en" and optional_photo else
+                              "Send the photo." if lang == "en" else
+                              "عکس را ارسال کن (اختیاری)." if optional_photo else "عکس را ارسال کن.")
+                types.append(desired_type)
+                skips.append(skip_label if optional_photo else "")
+                if isinstance(node.get("save"), list):
+                    node["save"].append("")
+                photo_satisfied = True
+                changes.append(("photo_field_added", nid))
+            else:
+                warnings.append(f"فرم «{nid}» از قبل به ۷ سؤال رسیده است؛ فیلد عکس خودکار اضافه نشد تا ساختار ذخیره‌سازی فرم ناخواسته تغییر نکند.")
+            if photo_satisfied and len(fields) <= 7:
+                node["types"] = types
+                if optional_photo:
+                    node["skip"] = skips
+                elif any(skips):
+                    node["skip"] = skips
+            if photo_satisfied:
+                changes.append(("photo_requirement_satisfied", nid))
+
+    # An explicit request to send submitted information to the named manager overrides silent forms;
+    # otherwise the setting would suppress the exact notification the user asked for.
+    if manager_intent and handles:
+        for nid, node in (cfg.get("nodes") or {}).items():
+            if isinstance(node, dict) and node.get("fields") and node.get("silent"):
+                node.pop("silent", None)
+                changes.append(("form_notifications_enabled", nid))
+
+    # If there is a configured manager, add a truthful, visible onboarding instruction to the owner.
+    configured = (cfg.get("desk") or {}).get("staff_usernames", []) if isinstance(cfg.get("desk"), dict) else []
+    requested = {x.casefold() for x in handles}
+    confirmed = [str(x).lstrip("@") for x in configured if str(x).lstrip("@").casefold() in requested]
+    return changes, warnings, confirmed
+
+
 def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, nodes_cap=None):
     txt, usage = llm_run([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
     cb = getattr(_prog, "cb", None)
     if cb:
-        cb.stage("validate", 95.0)
-    m = re.search(r"\{.*\}", txt, re.S)
-    if not m:
-        raise ValueError(f"پاسخ AI شامل JSON نبود: {txt[:200]!r}")
-    raw = json.loads(m.group(0))
+        cb.stage("validate", 68.0)
+    try:
+        raw, repaired_json = _loads_json_with_safe_repairs(txt)
+        if repaired_json:
+            log.info("AI builder returned repairable JSON syntax; repaired before config validation")
+    except ValueError as exc:
+        model_name = getattr(cb, "last_model", None) if cb else None
+        raise ValueError(f"پاسخ ساخت مدل JSON معتبر نداشت [model={model_name or 'unknown'}]: {str(exc)[:340]}") from exc
     if not isinstance(raw, dict) or not isinstance(raw.get("config"), dict):
         raise ValueError("پاسخ AI فاقد بخش config بود")
     gaps = _take_gaps(raw.get("unsupported"))
@@ -1898,6 +2407,22 @@ def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, n
     if guard:                                   # قبل از اعتبارسنجی پاک می‌کنیم تا دکمه/متن نیمه‌کاره نمونه
         raw["config"] = scrub_deep(raw["config"])
     cfg = sanitize(raw["config"], media=media_ids, warns=warns, nodes_cap=nodes_cap)
+    auto_links = _repair_orphan_confirmation_nodes(cfg)
+    if auto_links:
+        log.info("auto-repaired %d orphan confirmation node(s)", len(auto_links))
+    original_request = _extract_builder_request(user)
+    feature_changes, feature_warnings, requested_staff = _repair_explicit_requirements(original_request, cfg, lang)
+    if feature_changes:
+        log.info("applied %d deterministic request repair(s): %s", len(feature_changes), feature_changes[:8])
+    if feature_warnings:
+        warns.extend(feature_warnings)
+    # Ignore builder-reported gaps for requirements that the deterministic repair has actually fulfilled.
+    if any(kind == "photo_requirement_satisfied" for kind, *_ in feature_changes):
+        gaps = [g for g in gaps if not re.search(r"عکس|تصویر|photo|image|picture", " ".join(str(g.get(k) or "") for k in ("want", "why")), re.I)]
+    if any(kind == "staff_username" for kind, *_ in feature_changes):
+        gaps = [g for g in gaps if not re.search(r"مدیر|مسئول|ادمین|پشتیبان|آیدی|نام کاربری|اطلاعات|ارسال|staff|manager|owner|admin|username|notify", " ".join(str(g.get(k) or "") for k in ("want", "why")), re.I)]
+    if auto_links and not any("unreachable nodes" in item.lower() for item in lint(cfg)):
+        gaps = [g for g in gaps if "unreachable nodes" not in str(g.get("why") or "").lower()]
     thinking = str(raw.get("thinking") or "").strip()[:900]
     ideas = [str(x).strip()[:80] for x in (raw.get("ideas") if isinstance(raw.get("ideas"), list) else []) if str(x).strip()][:3]
     if lang == "fa":
@@ -1913,6 +2438,15 @@ def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, n
                 thinking = FALLBACK_THINKING
         if guard:                               # آخرین خط دفاعی: هر نویسه‌ی غیرفارسی باقی‌مونده حذف می‌شه
             ideas, gaps = [x for x in scrub_deep(ideas) if x], [g for g in scrub_deep(gaps) if g.get("want")]
+    if requested_staff:
+        if lang == "en":
+            manager_note = " For private notifications, " + ", ".join("@" + x for x in requested_staff) + " must open this bot and press /start once; BotFather ownership is not transferred."
+        else:
+            manager_note = " برای دریافت پیام‌ها، " + ", ".join("@" + x for x in requested_staff) + " باید یک‌بار /start همین ربات را بزند؛ انتقال مالکیت BotFather انجام نمی‌شود."
+        if manager_note.strip() not in thinking:
+            note = manager_note.strip()
+            thinking = thinking[:max(0, 899 - len(note))].rstrip() + " " + note
+            thinking = thinking.strip()[:900]
     # هر تغییری که اعتبارسنج مجبور شده روی خروجی اعمال کند، نشانه‌ی احتمالیِ اجرا نشدن دقیق درخواست است؛
     # برای جلوگیری از تحویل بی‌اطلاع نسخه‌ی ناقص، آن را هم به مرحله‌ی تأیید کاربر می‌فرستیم.
     for w in warns:
@@ -1997,20 +2531,44 @@ def audit_requirements(prompt, cfg, acc):
         "engine_capabilities_and_limits": engine_contract,
         "normalized_config_to_audit": view,
     }
-    raw_text, usage = llm_post(
-        [{"role": "system", "content": system},
-         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-        1800, temperature=0.1, timeout=90,
-        model=(os.environ.get("AI_AUDIT_MODEL") or AI_MODEL),
-    )
-    acc.append(usage)
-    match = re.search(r"\{.*\}", raw_text, re.S)
-    if not match:
-        raise RuntimeError("ممیزی کیفیت پاسخ JSON معتبر نداد؛ ساخت بدون ارزیابی نهایی متوقف شد")
-    try:
-        result = json.loads(match.group(0))
-    except Exception as exc:
-        raise RuntimeError("ممیزی کیفیت خروجی قابل‌خواندن نداد؛ ساخت بدون ارزیابی نهایی متوقف شد") from exc
+    cb = getattr(_prog, "cb", None)
+    if cb:
+        cb.stage("audit", 82.0)
+    audit_messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    result = None
+    parse_errors = []
+    for audit_attempt in range(2):
+        raw_text, usage = llm_post(
+            audit_messages,
+            1800, temperature=0.1, timeout=35,
+            model=(os.environ.get("AI_AUDIT_MODEL") or AI_MODEL),
+        )
+        acc.append(usage)
+        try:
+            result, repaired_json = _loads_json_with_safe_repairs(raw_text)
+            if repaired_json:
+                log.info("Audit JSON syntax was locally repaired")
+            break
+        except ValueError as exc:
+            parse_errors.append(f"model={getattr(cb, 'last_model', None) if cb else 'unknown'}: {str(exc)[:200]}")
+            if cb:
+                cb.reject_last_model()
+            if audit_attempt == 0:
+                if cb:
+                    cb.stage("audit", 85.0)
+                audit_messages = audit_messages + [
+                    {"role": "assistant", "content": raw_text[:10000]},
+                    {"role": "user", "content": (
+                        "Your previous output was not valid JSON. Return ONLY one complete valid JSON object in the exact schema. "
+                        f"Parser feedback: {str(exc)[:250]}. Do not include markdown or text outside JSON."
+                    )},
+                ]
+                continue
+    if result is None:
+        raise RuntimeError("ممیزی کیفیت پس از یک تلاش اصلاحی، JSON معتبر تولید نکرد؛ ساخت تأییدنشده متوقف شد. جزئیات: " + " || ".join(parse_errors))
     if not isinstance(result, dict) or result.get("status") not in ("pass", "review"):
         raise RuntimeError("ممیزی کیفیت نتیجه معتبر نداد؛ ساخت بدون ارزیابی نهایی متوقف شد")
     gaps = _take_gaps(result.get("gaps"))
@@ -2059,11 +2617,15 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     for attempt in (0, 1):
         if cb:
             cb.attempt(attempt + 1)
+            if attempt:
+                cb.stage("repair", max(58.0, float(cb.d.get("p") or 58.0)))
         try:
             thinking, cfg, ideas, warns = _call_llm(
                 build_user(prompt, current, lang, media_items, feedback), lang, attempt == 1,
                 media_ids, acc, guard, check_cfg, nodes_cap)
         except ThinkLang as exc:
+            if cb:
+                cb.reject_last_model()
             if best is None:
                 best = ("", exc.cfg, exc.ideas)
                 best_problems = ["زبان یا متن خروجی در بازبینی اول ناسازگار بود و تلاش اصلاحی باید با موفقیت تأیید شود"]
@@ -2073,13 +2635,21 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             log.warning("thinking in wrong language, retrying")
             continue
         except (ValueError, KeyError, TypeError) as exc:
+            if cb:
+                cb.reject_last_model()
             last = exc
-            feedback = f"(Your previous reply was rejected: {str(exc)[:200]}. Return one valid complete JSON config.)"
+            feedback = (
+                f"(Your previous reply was rejected by the parser/validator: {str(exc)[:320]}. "
+                "Return one complete syntactically valid JSON object, with every string correctly escaped, commas between all sibling properties/items, "
+                "no trailing commas, no markdown fences, and the full config. Keep all user-requested functions.)"
+            )
             log.warning("bad AI output, retrying once", exc_info=True)
             continue
 
         problems = lint(cfg) + [f"the validator dropped or changed something: {w}" for w in warns]
         if problems and attempt == 0:
+            if cb:
+                cb.reject_last_model()
             best = (thinking, cfg, ideas)
             best_problems = list(problems)
             feedback = ("(Your previous config had logic or validation problems. Fix every item and return the FULL config: "
@@ -2108,6 +2678,8 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     builder_gaps = _merge_gap_items(structural_gaps, builder_gaps)
 
     # ممیزی تطابق درخواست با کانفیگ واقعی؛ فهرست unsupported مدل سازنده به‌تنهایی کافی نیست.
+    if cb:
+        cb.stage("audit", 82.0)
     qa_gaps = audit_requirements(prompt, cfg, acc)
     if qa_gaps:
         qa_feedback = (
@@ -2120,11 +2692,16 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         repaired = None
         repaired_problems = []
         try:
+            if cb:
+                cb.stage("repair", 86.0)
+                cb.reject_last_model() if qa_gaps else None
             rthinking, rcfg, rideas, rwarns = _call_llm(
                 build_user(prompt, current, lang, media_items, qa_feedback), lang, True,
                 media_ids, acc, guard, check_cfg, nodes_cap)
             repaired = (rthinking, rcfg, rideas)
             repaired_problems = lint(rcfg) + [f"the validator dropped or changed something: {w}" for w in rwarns]
+            if cb:
+                cb.stage("audit", 91.0)
             remaining_qa = audit_requirements(prompt, rcfg, acc)
             # اگر اصلاح، همه‌ی نقص‌های تشخیص‌داده‌شده را رفع کرده باشد، از خروجی اصلاح‌شده استفاده می‌کنیم.
             thinking, cfg, ideas = repaired
