@@ -328,15 +328,16 @@ def _diagnostic_classify(status, body):
 def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
     """هر مدل را جداگانه با یک درخواست کوتاه، واقعی و بدون دخالت fallback آزمایش می‌کند."""
     from core import AI_BASE_URL, AI_API_KEY
-    timeout_s = max(3, min(15, _int_env_for_diag("AI_DIAG_TIMEOUT", 9)))
+    timeout_s = max(3, min(30, _int_env_for_diag("AI_DIAG_TIMEOUT", 20)))
     rows = []
     total = len(models)
 
     def render(done=False):
         passed = sum(1 for x in rows if x.get("kind") == "pass")
-        connected = sum(1 for x in rows if x.get("kind") in ("pass", "json_bad"))
+        valid_json = sum(1 for x in rows if x.get("kind") in ("pass", "json_mismatch"))
+        connected = sum(1 for x in rows if x.get("kind") in ("pass", "json_mismatch", "json_bad"))
         parts = ["🧪 گزارش تست مستقل مدل‌های هوش مصنوعی", "", f"مدل‌های تنظیم‌شده: {total + omitted} | بررسی‌شده: {len(rows)}",
-                 f"پاسخ معتبر JSON: {passed} | اتصال برقرار ولی JSON نامعتبر: {sum(1 for x in rows if x.get('kind') == 'json_bad')}", ""]
+                 f"قرارداد آزمون پاس‌شده: {passed} | JSON معتبر: {valid_json} | JSON نامعتبر: {sum(1 for x in rows if x.get('kind') == 'json_bad')}", ""]
         for i, row in enumerate(rows, 1):
             model_label = str(row.get("model", ""))[:65]
             result_label = str(row.get("result", ""))[:60]
@@ -353,7 +354,9 @@ def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
             if passed:
                 parts.append("نتیجه: حداقل یک مدل درخواست کوتاه و JSON را درست پاسخ داده؛ اگر ساخت ربات هنوز گیر می‌کند، مشکل احتمالاً در prompt/وظایف/اعتبارسنجی/زنجیرهٔ ساخت هم هست، نه فقط دسترسی مدل.")
             elif connected:
-                parts.append("نتیجه: اتصال به حداقل یک مدل برقرار است، اما خروجی JSON آزمون را پاس نکرد؛ قابلیت تولید ساختاریافته یا قرارداد خروجی را بررسی کن.")
+                mismatch = sum(1 for x in rows if x.get("kind") == "json_mismatch")
+                invalid = sum(1 for x in rows if x.get("kind") == "json_bad")
+                parts.append(f"نتیجه: {valid_json} پاسخ JSON قابل‌خواندن بود؛ {mismatch} پاسخ قرارداد دقیق آزمون را نداشت و {invalid} پاسخ JSON نامعتبر بود. جزئیات هر ردیف این موارد را جدا می‌کند.")
             else:
                 parts.append("نتیجه: هیچ مدلی این آزمون را پاس نکرد. خطاهای هر مدل بالا علت محتمل را مشخص می‌کنند: کلید، شناسه، سهمیه، فیلتر، طول پیام یا timeout.")
             parts.append("این تست فقط اتصال و یک خروجی کوتاه را می‌سنجد؛ تضمین‌کنندهٔ کیفیت ساخت کامل ربات نیست. مصرف هر مدل اندک است اما ممکن است از سهمیهٔ API کم کند.")
@@ -396,19 +399,43 @@ def _run_model_diagnostic(chat_id, message_id, models, omitted, started):
                         if not content:
                             row["result"], row["detail"] = "پاسخ خالی", "HTTP 200 ولی choices/content خالی بود"
                         else:
-                            match = re.search(r"\{.*\}", content, re.S)
+                            # اول کل پاسخ را parse کن؛ اگر مدل متن اضافه/کدبلاک داد، JSON object را
+                            # با raw_decode جدا کن تا آکولادهای تو در تو باعث regex اشتباه نشوند.
+                            parsed = None
                             try:
-                                parsed = json.loads(match.group(0)) if match else None
+                                parsed = json.loads(content)
                             except Exception:
-                                parsed = None
+                                fenced = re.search(r"```(?:json)?\s*(.*?)```", content, re.S | re.I)
+                                candidates = [fenced.group(1).strip()] if fenced else []
+                                decoder = json.JSONDecoder()
+                                for pos, char in enumerate(content):
+                                    if char != "{":
+                                        continue
+                                    try:
+                                        value, _end = decoder.raw_decode(content[pos:])
+                                        if isinstance(value, dict):
+                                            parsed = value
+                                            break
+                                    except Exception:
+                                        continue
+                                if parsed is None:
+                                    for candidate in candidates:
+                                        try:
+                                            parsed = json.loads(candidate)
+                                            break
+                                        except Exception:
+                                            pass
                             if isinstance(parsed, dict) and parsed.get("status") == "ok" and parsed.get("echo") == "PING_OK":
                                 row["kind"], row["result"] = "pass", "سالم؛ تولید + JSON موفق"
                                 usage = row["usage"]
                                 if usage:
                                     row["detail"] = f"tokens: in={usage.get('prompt_tokens','?')}, out={usage.get('completion_tokens','?')}"
+                            elif isinstance(parsed, dict):
+                                row["kind"], row["result"] = "json_mismatch", "JSON معتبر؛ قرارداد پاسخ متفاوت"
+                                row["detail"] = (f"status={parsed.get('status')!r}, echo={parsed.get('echo')!r}; raw={content!r}")[:220]
                             else:
-                                row["kind"], row["result"] = "json_bad", "اتصال موفق؛ خروجی آزمون نامعتبر"
-                                row["detail"] = content.replace("\n", " ")[:180]
+                                row["kind"], row["result"] = "json_bad", "اتصال موفق؛ JSON قابل‌خواندن نیست"
+                                row["detail"] = f"raw={content!r}"[:220]
                     except Exception as exc:
                         row["result"] = "پاسخ API نامعتبر"
                         row["detail"] = f"{type(exc).__name__}: {str(exc)[:150]}"
