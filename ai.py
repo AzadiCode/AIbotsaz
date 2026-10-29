@@ -1616,21 +1616,36 @@ class ThinkLang(ValueError):
 
 
 def _model_candidates(preferred=None):
-    """مدل‌های مجاز به‌ترتیب اولویت؛ AI_MODELS یک فهرست comma-separated در تنظیمات محیطی است."""
+    """مدل‌های مجاز به‌ترتیب اولویت. هر منبع می‌تواند یک مدل یا فهرست comma/semicolon/newline-separated باشد.
+
+    این انعطاف‌پذیری عمداً شامل AI_MODEL هم می‌شود تا اگر کاربر اشتباهاً کل فهرست را
+    داخل AI_MODEL گذاشته باشد، رشتهٔ کامل به‌عنوان شناسهٔ یک مدل به API ارسال نشود.
+    """
     raw = []
-    if preferred:
-        raw.append(str(preferred).strip())
-    raw.extend(x.strip() for x in os.environ.get("AI_MODELS", "").replace("\n", ",").split(","))
-    raw.extend([AI_MODEL])
-    # مدل چت نیز می‌تواند در فهرست باشد، اما فقط یک بار امتحان شود.
-    raw.extend(x.strip() for x in os.environ.get("AI_FALLBACK_MODELS", "").split(","))
+    def add_list(value):
+        if value is None:
+            return
+        # کاما/سمی‌کالن/خط جدید جداکننده‌اند؛ فاصله به‌تنهایی جداکننده نیست چون ممکن
+        # است بخشی از تنظیمات یا متن خطا باشد.
+        raw.extend(part.strip().strip('"\'') for part in re.split(r"[,;\r\n]+", str(value)) if part.strip().strip('"\''))
+
+    add_list(preferred)
+    add_list(os.environ.get("AI_MODELS", ""))
+    add_list(AI_MODEL)
+    add_list(os.environ.get("AI_FALLBACK_MODELS", ""))
+
     out, seen = [], set()
     for name in raw:
-        if name and name not in seen:
-            seen.add(name)
+        # مدل‌های embedding برای chat/completions مناسب نیستند؛ کنار گذاشته می‌شوند.
+        if re.search(r"(?:^|[/_-])(?:text-)?embedding(?:[-_/]|$)|embedding-\d", name, re.I):
+            log.warning("Skipping embedding model in chat model list: %s", name)
+            continue
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
             out.append(name)
-    # سقف حفاظتی برای جلوگیری از انتظار طولانی در صورت وارد شدن فهرست بسیار بزرگ.
-    return (out or [AI_MODEL])[:5]
+    # حداکثر ۵ مدل برای محدودکردن تأخیر و هزینه.
+    return out[:5]
 
 
 def _llm_post_one(messages, max_tokens, temperature, timeout, model):
