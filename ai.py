@@ -1845,6 +1845,38 @@ def _llm_post_one(messages, max_tokens, temperature, timeout, model):
     return txt, (pt, ct)
 
 
+
+def _compact_messages_for_provider(messages):
+    """نسخهٔ فشردهٔ درخواست برای ارائه‌دهندگانی که سقف طول پیام سخت‌گیرانه دارند.
+
+    درخواست اصلی حفظ می‌شود؛ فقط دستورالعمل بسیار بلند سیستم و payloadهای بزرگ
+    برای یک تلاش جایگزین کوتاه می‌شوند. این نسخه برای تلاش اول استفاده نمی‌شود.
+    """
+    compact = []
+    for msg in messages:
+        item = dict(msg)
+        content = item.get("content")
+        if isinstance(content, str) and len(content) > 9000:
+            # دستورالعمل‌های اصلی ابتدا و قرارداد قابلیت‌های انتهایی حفظ می‌شوند.
+            if item.get("role") == "system":
+                content = content[:5600] + "\n\n[Compact fallback: keep the original JSON schema, safety rules, engine limits, and output requirements. Avoid unsupported features.]\n\n" + content[-2800:]
+            else:
+                # payloadهای audit/config: فقط برای جلوگیری از ارسال پیام بیش‌ازحد بلند
+                # کوتاه می‌شوند؛ پاسخ اصلی همچنان باید از اعتبارسنجی عبور کند.
+                content = content[:7800] + "\n[Payload compacted because provider rejected message length.]\n" + content[-900:]
+            item["content"] = content
+        compact.append(item)
+    return compact
+
+
+def _is_message_length_error(exc):
+    message = str(exc).lower()
+    return any(term in message for term in (
+        "limits the length of a single message", "message is too long", "prompt is too long",
+        "maximum context length", "input is too long", "context_length_exceeded",
+        "reduce the length", "shorten your last message"))
+
+
 def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
     """فراخوانی سازگار با APIهای OpenAI؛ در خطای مدل، مدل بعدی AI_MODELS را امتحان می‌کند."""
     errors = []
@@ -1855,7 +1887,17 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
             if cb and len(models) > 1:
                 cb.model_fallback(idx, candidate, len(models))
             per_model_timeout = min(float(timeout), float(max(8, _int("AI_MODEL_TIMEOUT", 35))), _job_remaining(float(timeout)))
-            result = _llm_post_one(messages, max_tokens, temperature, per_model_timeout, candidate)
+            try:
+                result = _llm_post_one(messages, max_tokens, temperature, per_model_timeout, candidate)
+            except Exception as first_exc:
+                if not _is_message_length_error(first_exc):
+                    raise
+                compact_messages = _compact_messages_for_provider(messages)
+                log.warning("Provider rejected message length; retrying model %s once with compact prompt", candidate)
+                if cb:
+                    cb.model_fallback(idx, candidate + " (compact)", len(models))
+                result = _llm_post_one(compact_messages, max_tokens, temperature,
+                                       min(per_model_timeout, _job_remaining(per_model_timeout)), candidate)
             if cb:
                 cb.last_model = candidate
             return result
@@ -1995,7 +2037,7 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
     t0 = time.time()
     timeout = _job_remaining(min(float(timeout), float(max(20, _int("AI_GENERATION_TIMEOUT", 80)))))
     connect_timeout = max(1, min(10, timeout / 4))
-    read_timeout = max(1, min(25, timeout / 2))
+    read_timeout = max(1, min(float(max(8, _int("AI_MODEL_TIMEOUT", 35))), timeout / 2, 18.0))
     r = requests.post(
         f"{AI_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AI_API_KEY}"},
@@ -2068,25 +2110,31 @@ def llm_run(messages, max_tokens, temperature=0.4):
         try:
             if cb:
                 cb.model_fallback(idx, candidate, len(models))
-            if not (cb and AI_STREAM):
-                result = _llm_post_one(messages, max_tokens, temperature,
-                                       min(float(max(20, _int("AI_GENERATION_TIMEOUT", 80))), _job_remaining(80)), candidate)
-                if cb:
-                    cb.last_model = candidate
-                return result
+            generation_timeout = min(float(max(20, _int("AI_GENERATION_TIMEOUT", 80))), _job_remaining(80))
             try:
-                result = llm_stream(messages, max_tokens, temperature, cb,
-                                    timeout=max(20, _int("AI_GENERATION_TIMEOUT", 80)), model=candidate)
+                if not (cb and AI_STREAM):
+                    result = _llm_post_one(messages, max_tokens, temperature,
+                                           min(generation_timeout, _job_remaining(generation_timeout)), candidate)
+                else:
+                    try:
+                        result = llm_stream(messages, max_tokens, temperature, cb,
+                                            timeout=generation_timeout, model=candidate)
+                    except _NoStream as exc:
+                        log.warning("مدل %s استریم را پشتیبانی نمی‌کند؛ درخواست عادی امتحان می‌شود: %s", candidate, exc)
+                        result = _llm_post_one(messages, max_tokens, temperature,
+                                               min(generation_timeout, _job_remaining(generation_timeout)), candidate)
+            except Exception as first_exc:
+                if not _is_message_length_error(first_exc):
+                    raise
+                compact_messages = _compact_messages_for_provider(messages)
+                log.warning("Provider rejected message length; retrying model %s once with compact prompt", candidate)
                 if cb:
-                    cb.last_model = candidate
-                return result
-            except _NoStream as exc:
-                log.warning("مدل %s استریم را پشتیبانی نمی‌کند؛ درخواست عادی امتحان می‌شود: %s", candidate, exc)
-                result = _llm_post_one(messages, max_tokens, temperature,
-                                       min(float(max(20, _int("AI_GENERATION_TIMEOUT", 80))), _job_remaining(80)), candidate)
-                if cb:
-                    cb.last_model = candidate
-                return result
+                    cb.model_fallback(idx, candidate + " (compact)", len(models))
+                result = _llm_post_one(compact_messages, max_tokens, temperature,
+                                       min(generation_timeout, _job_remaining(generation_timeout)), candidate)
+            if cb:
+                cb.last_model = candidate
+            return result
         except Exception as exc:
             errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
             if cb:
