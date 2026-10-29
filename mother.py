@@ -571,7 +571,7 @@ def mk_watch(uid, chat, jid):
         last, tick, t0 = "", 0, time.time()
         while time.time() - t0 < JOB_TIMEOUT + 90:
             j = db.jobs.find_one({"_id": jid})
-            if not j or j["status"] in ("done", "error"):
+            if not j or j["status"] in ("done", "error", "review", "cancelled"):
                 break
             tg(MOTHER_TOKEN, "sendChatAction", chat_id=chat, action="typing")      # بالای چت «در حال نوشتن…» تا پایان ساخت
             txt = mk_progress_text(j, tick)
@@ -584,6 +584,22 @@ def mk_watch(uid, chat, jid):
         if j.get("status") == "done" and j.get("bot"):
             mk_put(uid, step="activate", bot=j["bot"], cost=j.get("cost", 0))
             mk_activate(uid, chat)
+        elif j.get("status") == "review":
+            gaps = j.get("gaps") or []
+            detail = "\n".join(f"• {x.get('want','')}: {x.get('why','')}" for x in gaps[:3])
+            review_cost = int(j.get("cost") or 0)
+            body = ("⚠️ <b>قبل از ساخت، یک نکته مهم</b>\n\n"
+                    "بررسی درخواست نشان داد بخشی از قابلیت‌هایی که خواستی با امکانات فعلی ربات‌ساز قابل پیاده‌سازی دقیق نیست. برای اینکه بدون اطلاع تو نسخه‌ی ناقص نسازیم، هنوز رباتی ذخیره نشده و هیچ توکنی کم نشده.\n\n"
+                    + hx(detail) + "\n\n"
+                    f"💳 هزینه در صورت تأیید ساخت: {review_cost} توکن\n\n"
+                    "می‌تونی نسخه‌ی نزدیک به درخواستت رو با آگاهی از این محدودیت‌ها بسازی، یا درخواست رو لغو کنی. لغو درخواست رایگانه.")
+            kb = mk_kb([mk_btn("✅ ساخت نسخه با محدودیت‌های بالا", f"mk:review:yes:{jid}")],
+                       [mk_btn("❌ لغو درخواست (بدون کسر توکن)", f"mk:review:no:{jid}")])
+            mk_show(uid, chat, body, kb)
+        elif j.get("status") == "cancelled":
+            mk_put(uid, step="confirm")
+            db.mstate.update_one({"_id": uid}, {"$unset": {"job": ""}})
+            mk_render(uid, chat, "درخواست لغو شد؛ رباتی ساخته نشد و هیچ توکنی کسر نشد.")
         else:
             mk_put(uid, step="confirm")
             mk_render(uid, chat, "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد.")
@@ -680,6 +696,46 @@ def mother_callback(cq):
     ensure_user(uid, cq["from"].get("first_name", ""))
     touch_user(cq["from"])
     act, st = data[3:], mk_get(uid)
+    if act.startswith("review:"):
+        parts = act.split(":")
+        if len(parts) != 3 or parts[1] not in ("yes", "no"):
+            return ack("درخواست نامعتبر است.", True)
+        decision, jid = parts[1], parts[2]
+        job = db.jobs.find_one({"_id": jid, "uid": uid, "status": "review"})
+        if not job:
+            return ack("این درخواست منقضی شده یا قبلاً بررسی شده است.", True)
+        if decision == "no":
+            changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
+                                                   {"$set": {"status": "cancelled", "cancelled_at": now()}})
+            if not changed:
+                return ack("وضعیت درخواست تغییر کرده است.", True)
+            db.mstate.update_one({"_id": uid}, {"$set": {"step": "confirm", "t": now()}, "$unset": {"job": ""}})
+            ack("درخواست لغو شد؛ توکنی کسر نشد.")
+            return mk_show(uid, chat, "درخواست لغو شد؛ رباتی ساخته نشد و هیچ توکنی کسر نشد.", MK_NEW, cmid)
+        # قبول نسخه‌ی تقریبی: خرج و ذخیره‌سازی فقط بعد از تأیید صریح کاربر
+        job = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
+                                          {"$set": {"status": "saving", "approved_at": now()}})
+        if not job:
+            return ack("این درخواست قبلاً پردازش شده است.", True)
+        cost = int(job.get("cost") or 0)
+        if balance(uid) < cost or not core.spend(uid, cost, "gen"):
+            db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "review"}, "$unset": {"approved_at": ""}})
+            ack("موجودی کافی نیست؛ هیچ رباتی ساخته نشد و توکنی کسر نشد.", True)
+            return mk_show(uid, chat, f"موجودی برای ساخت این نسخه کافی نیست. هزینه: {cost} توکن. ابتدا موجودی را افزایش بده.",
+                           mk_kb([mk_app("افزایش موجودی")], [mk_btn("لغو درخواست", f"mk:review:no:{jid}")]), cmid)
+        try:
+            bot = new_bot_doc(uid, job["cfg"], job.get("thinking") or "")
+            db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "done", "bot": str(bot["_id"]), "cost": cost}})
+            if REF_ON == "create":
+                settle_referral(uid)
+            mk_put(uid, step="activate", bot=str(bot["_id"]), cost=cost)
+            ack("نسخه‌ی تأییدشده در حال آماده‌سازی است.")
+            return mk_activate(uid, chat)
+        except Exception:
+            log.exception("approved partial build failed")
+            core.refund(uid, cost, "gen_rollback")
+            db.jobs.update_one({"_id": jid, "status": "saving"}, {"$set": {"status": "review", "error": "ذخیره‌سازی ناموفق بود"}, "$unset": {"approved_at": ""}})
+            return ack("ذخیره‌سازی ناموفق بود؛ هزینه برگشت داده شد.", True)
     if act == "new":
         ack()
         return mk_begin(uid, chat)
@@ -713,40 +769,71 @@ def new_bot_doc(uid, cfg, thinking):
     return doc
 
 
+def _split_telegram_text(value, limit=3500):
+    """تقسیم متن گزارش به پیام‌های قابل ارسال تلگرام، بدون حذف هیچ بخشی."""
+    value = str(value or "")
+    if not value:
+        return ["(متنی ثبت نشده است)"]
+    chunks = []
+    while len(value) > limit:
+        cut = value.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = limit
+        chunks.append(value[:cut])
+        value = value[cut:].lstrip("\n")
+    if value:
+        chunks.append(value)
+    return chunks
+
+
 def report_gaps(uid, bot, prompt, items):
-    """وقتی کاربر چیزی خواسته که موتور واقعاً نمی‌تونه: متن گزارشِ نوشته‌شده‌ی خودِ هوش مصنوعی برای ادمین ربات‌ساز فرستاده و ذخیره می‌شه"""
+    """ثبت و ارسال گزارش کامل محدودیت‌ها برای ادمین، با حفظ تمام متن درخواست کاربر."""
     if not items:
         return
     try:
         u = db.users.find_one({"_id": uid}) or {}
         who = f"{u.get('tg_name') or ''} {('@' + u['tg_user']) if u.get('tg_user') else ''}".strip() or "بدون نام"
-        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": prompt[:1500], "items": items, "t": now()}
+        full_prompt = str(prompt or "")
+        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt, "items": items, "t": now()}
         gap_id = db.gaps.insert_one(gap_doc).inserted_id
-        lines = [f"گزارش هوش مصنوعی: درخواستی که ربات‌ساز کامل نتونست انجام بده",
-                 f"کاربر: {who} (آیدی {uid})",
-                 f"ربات: {(bot or {}).get('name') or 'جدید'}" + (f" (@{bot['username']})" if bot and bot.get("username") else ""),
-                 "", "متن درخواست کاربر:", prompt[:700]]
+        lines = [
+            "🚨 گزارش محدودیت ربات‌ساز هوشمند Azadi",
+            f"کاربر: {who} (آیدی {uid})",
+            f"ربات: {(bot or {}).get('name') or 'جدید'}" + (f" (@{bot['username']})" if bot and bot.get("username") else ""),
+            f"شناسه گزارش: {gap_id}",
+            "",
+            "📝 متن کامل درخواست کاربر:",
+            full_prompt if full_prompt else "(متنی ثبت نشده است)",
+            "",
+            "🔎 جزئیات موارد انجام‌نشده:"
+        ]
         for i, x in enumerate(items, 1):
-            lines += ["", f"{i}) خواسته: {x['want']}", f"چرا نشد: {x['why'] or '-'}", f"راه ارتقا: {x['upgrade'] or '-'}"]
-        text = "\n".join(lines)[:3900]
+            lines += ["", f"{i}) خواسته: {x.get('want') or '-'}", f"چرا انجام نشد: {x.get('why') or '-'}", f"راهکار ارتقا: {x.get('upgrade') or '-'}"]
+        report_text = "\n".join(lines)
+        chunks = _split_telegram_text(report_text)
         kb = {"inline_keyboard": [[
             {"text": "✉️ پاسخ به کاربر", "callback_data": f"gap:reply:{uid}:{gap_id}"},
-            {"text": "⚡ پاسخ آماده", "callback_data": f"gap:ready:{uid}:{gap_id}"}
+            {"text": "🚀 ارسال پیام آماده", "callback_data": f"gap:ready:{uid}:{gap_id}"}
         ]]}
         for admin in ADMIN_IDS:
-            tg(MOTHER_TOKEN, "sendMessage", chat_id=admin, text=text, reply_markup=kb)
+            for idx, chunk in enumerate(chunks):
+                payload = {"chat_id": admin, "text": chunk}
+                if idx == 0:
+                    payload["reply_markup"] = kb
+                result = tg(MOTHER_TOKEN, "sendMessage", **payload)
+                if not result.get("ok"):
+                    log.error("Could not send gap report chunk %s/%s to admin %s: %s", idx + 1, len(chunks), admin, result.get("description"))
     except Exception:
         log.exception("report_gaps failed")
 
 
-
 GAP_READY_TEXT = (
-    "سلام! 👋\n\n"
-    "من ربات‌ساز هوشمند هستم. درخواست قبلی‌ات رو بررسی کردم و از بازخوردت برای بهبود و ارتقای سیستم استفاده کردم. "
-    "حالا می‌تونی دوباره درخواستت رو ثبت کنی تا با نسخه‌ی به‌روزشده، ربات دلخواهت رو دقیق‌تر و کامل‌تر بسازیم.\n\n"
-    "ممنون که کمک می‌کنی هر روز بهتر بشیم 💙"
+    "🚀 یه فرصت تازه برای ساخت ربات دلخواهت!\n\n"
+    "سلام! من ربات‌ساز هوشمند Azadi هستم. 👋\n\n"
+    "درخواست قبلی‌ات رو بررسی کردیم و با استفاده از بازخوردت، برای بهتر شدن تجربه‌ی ساخت ربات تلاش کردیم. "
+    "حالا می‌تونی دوباره درخواستت رو ثبت کنی و با نسخه‌ی به‌روزشده، رباتی نزدیک‌تر به چیزی که در ذهنته بسازی.\n\n"
+    "آماده‌ای دوباره امتحان کنیم؟ این بار ایده‌ات رو به ما بسپار! 💙"
 )
-
 
 def gap_admin_callback(cq):
     """دکمه‌های پاسخ به گزارش محدود به ادمین؛ پاسخ آزاد با وضعیت موقت و پاسخ آماده."""
@@ -818,8 +905,18 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         bot = db.bots.find_one({"_id": ObjectId(bot_id)}) if bot_id else None
         thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         cost = reserve if BILLING == "fixed" else min(reserve, calc_cost(sum(x[0] for x in acc), sum(x[1] for x in acc), uid=uid))
+        gaps = list(getattr(_gap, "items", []) or [])
+        if gaps and not bot_id:
+            # توقف امن: تا تصمیم کاربر، هیچ رباتی ذخیره و هیچ توکنی کسر نمی‌شود.
+            changed = db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
+                "status": "review", "cfg": cfg, "thinking": thinking, "ideas": ideas,
+                "gaps": gaps, "prompt": prompt, "cost": int(cost), "t_review": now()
+            }})
+            if changed:
+                report_gaps(uid, None, prompt, gaps)
+            return
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
-            return                                  # کار منقضی شده و توکن‌ها برگشته؛ نتیجه رو دور می‌ریزیم
+            return
         _prog.cb.stage("save", 98.0)
         if bot:
             db.bots.update_one({"_id": bot["_id"]}, {
@@ -830,11 +927,12 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             sync_commands(bot, cfg)
         else:
             bot = new_bot_doc(uid, cfg, thinking)
-        cost = charge_up_to(uid, cost, "edit" if bot_id else "gen")      # فقط هزینه‌ی واقعی، همین الان کسر می‌شه
+        cost = charge_up_to(uid, cost, "edit" if bot_id else "gen")
         db.jobs.update_one({"_id": jid}, {"$set": {"status": "done", "bot": str(bot["_id"]), "ideas": ideas, "cost": cost}})
         if REF_ON == "create":
             settle_referral(uid)
-        report_gaps(uid, bot, prompt, getattr(_gap, "items", []))
+        if gaps:
+            report_gaps(uid, bot, prompt, gaps)
     except Exception as e:
         log.exception("generate failed")
         msg = "ساخت ربات ناموفق بود و چیزی از توکن‌هات کم نشد. دوباره امتحان کن یا توضیح رو ساده‌تر بنویس."

@@ -1839,7 +1839,16 @@ def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, n
                 thinking = FALLBACK_THINKING
         if guard:                               # آخرین خط دفاعی: هر نویسه‌ی غیرفارسی باقی‌مونده حذف می‌شه
             ideas, gaps = [x for x in scrub_deep(ideas) if x], [g for g in scrub_deep(gaps) if g.get("want")]
-    _gap.items = gaps
+    # هر تغییری که اعتبارسنج مجبور شده روی خروجی اعمال کند، نشانه‌ی احتمالیِ اجرا نشدن دقیق درخواست است؛
+    # برای جلوگیری از تحویل بی‌اطلاع نسخه‌ی ناقص، آن را هم به مرحله‌ی تأیید کاربر می‌فرستیم.
+    for w in warns:
+        msg = str(w).strip()
+        if msg and not any(msg in str(g.get("why", "")) for g in gaps):
+            gaps.append({"want": "بخشی از ساختار درخواستی در اعتبارسنجی خودکار تغییر کرد", "why": msg[:500],
+                         "upgrade": "بررسی دستی این بخش و افزودن پشتیبانی کامل در موتور ربات‌ساز"})
+        if len(gaps) >= 3:
+            break
+    _gap.items = gaps[:3]
     return thinking, cfg, ideas, warns
 
 
@@ -1900,6 +1909,14 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             feedback = "(Your previous config had logic problems, fix them and return the FULL config again: " + "; ".join(problems[:6]) + ")"
             log.info("lint problems, retrying: %s", problems)
             continue
+        if problems:
+            existing = list(getattr(_gap, "items", []) or [])
+            for problem in problems:
+                if len(existing) >= 3:
+                    break
+                existing.append({"want": "درخواست به بررسی منطقی بیشتری نیاز دارد", "why": str(problem)[:500],
+                                 "upgrade": "اصلاح خودکار منطق و اعتبارسنجی پیش از تحویل نهایی"})
+            _gap.items = existing
         return thinking, cfg, ideas
     if best:                        # کانفیگ سالمِ تلاش اول رو نگه می‌داریم
         th, cfg, ideas = best
