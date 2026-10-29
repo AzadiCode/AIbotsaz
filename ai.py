@@ -23,7 +23,7 @@ ai.py — هوش مصنوعیِ ساخت ربات (وابسته به core)
   TEMPLATES, to_num, typical_cost, VAR_RE
 """
 
-import os, re, json, time, math, threading, ast
+import os, re, json, time, math, threading, ast, copy
 from urllib.parse import urlparse
 
 import requests
@@ -42,6 +42,8 @@ _SP_BASE = """You design Telegram bots as a JSON config that a fixed, safe engin
 LANGUAGE RULE (strict, highest priority): the request states the OUTPUT LANGUAGE. Write "thinking", "ideas" and EVERY user-facing text (node texts, button labels, bot name) in that language. If it says Persian, write natural, simple Persian (فارسی) and NEVER English, even though this prompt, the JSON keys, node_ids and variable names are English.
 
 STYLE RULE: texts are simple, clear and meaningful. Short sentences. Emojis are rare: none in button labels, at most one per message and only when it adds meaning. Never decorate with emoji rows.
+
+REFERENCE BOT REQUESTS: If the user only gives another Telegram bot handle (for example, "make a bot like @examplebot"), do NOT claim you inspected its private config or internal behavior. Build a useful, conservative starter based only on the handle and visible request, and explain in `thinking` that an exact replica needs screenshots or a list of features. Do not invent exact features of the referenced bot and do not fail the build merely because its internal config is unavailable.
 
 Output ONLY one valid JSON object, no markdown fences, no comments. Top-level shape:
 {
@@ -211,7 +213,7 @@ WHERE LOGIC GOES
 - node "alt": [{"when": cond, "text": "..."}] (max 4). The first true condition replaces the node's text (buttons stay). Use for personalised messages ("you have {coins} coins").
 - button "when": cond. The button is only shown to users for whom it is true (admin button, premium-only, hide "buy" when coins are not enough).
 - button "do": [actions]. Only on goto and alert buttons. Runs when the button is tapped, before the goto/alert. Alert text is evaluated AFTER the actions, so a "my balance" alert shows fresh numbers.
-- FORMS: "save": ["city", ""] has the same length as "fields" and stores each answer in that variable ("" = don't store). "types" aligns with fields and supports "text", "number", "phone", "email", "photo", "photo_optional". Photo fields accept a Telegram photo or image document, are copied to the configured managers when the form is completed, and save the human-readable marker "📷 عکس پیوست شد" to a save variable. For "photo_optional", define "skip" as a same-length array with a real reply-keyboard label for that field, for example ["", "عکس ندارم"]; when the user taps it, the answer is recorded as skipped and the next question continues. Do NOT implement skip using an alert. The engine re-asks invalid types. "silent": true = don't notify managers/save a normal submission (ticket behavior still follows the ticket flow). Later questions and texts can use earlier answers, e.g. "{city} درسته؟".
+- FORMS: "save": ["city", ""] has the same length as "fields" and stores each answer in that variable ("" = don't store). NEVER use a built-in read-only variable name for storage (especially "name", "username", "id", "text", "date", "time"); use names like "customer_name", "contact_username", or "submitted_text". "types" aligns with fields and supports "text", "number", "phone", "email", "photo", "photo_optional". Photo fields accept a Telegram photo or image document, are copied to the configured managers when the form is completed, and save the human-readable marker "📷 عکس پیوست شد" to a save variable. For "photo_optional", define "skip" as a same-length array with a real reply-keyboard label for that field, for example ["", "عکس ندارم"]; when the user taps it, the answer is recorded as skipped and the next question continues. Do NOT implement skip using an alert. The engine re-asks invalid types. "silent": true = don't notify managers/save a normal submission (ticket behavior still follows the ticket flow). Later questions and texts can use earlier answers, e.g. "{city} درسته؟".
 
 WHEN TO USE LOGIC
 - Use variables/conditions when they make the bot genuinely better: points/coins/loyalty, quizzes and scoring, bots that remember answers and reuse them, personalised greetings (first visit vs returning via {visits}), opening hours via {hour}/{weekday}, an owner-only panel via {is_owner}, a manager/admin panel for the owner plus explicitly configured staff via {is_admin}, language-aware replies via {lang}, campaign tracking via {param}, invites via {refs}, premium-only perks via {premium}. If the user names an operational manager, use `desk.staff_usernames` and `{is_admin}` for any admin-only navigation. Never claim BotFather ownership changed.
@@ -1847,26 +1849,46 @@ def _llm_post_one(messages, max_tokens, temperature, timeout, model):
 
 
 def _compact_messages_for_provider(messages):
-    """نسخهٔ فشردهٔ درخواست برای ارائه‌دهندگانی که سقف طول پیام سخت‌گیرانه دارند.
+    """Split overlong message bodies into consecutive same-role messages without dropping any prompt text.
 
-    درخواست اصلی حفظ می‌شود؛ فقط دستورالعمل بسیار بلند سیستم و payloadهای بزرگ
-    برای یک تلاش جایگزین کوتاه می‌شوند. این نسخه برای تلاش اول استفاده نمی‌شود.
+    Some free upstream providers enforce a maximum length per *single message*. The old
+    fallback truncated the system prompt to a fixed size, which could remove required schema
+    or capability rules and still exceed a provider's limit. This fallback preserves every
+    character and divides large bodies into bounded chunks. Consecutive system/user messages
+    are valid in OpenAI-compatible Chat Completions APIs.
     """
-    compact = []
-    for msg in messages:
-        item = dict(msg)
-        content = item.get("content")
-        if isinstance(content, str) and len(content) > 9000:
-            # دستورالعمل‌های اصلی ابتدا و قرارداد قابلیت‌های انتهایی حفظ می‌شوند.
-            if item.get("role") == "system":
-                content = content[:5600] + "\n\n[Compact fallback: keep the original JSON schema, safety rules, engine limits, and output requirements. Avoid unsupported features.]\n\n" + content[-2800:]
+    cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 3500)))
+
+    def chunks(value):
+        remaining = value
+        result = []
+        while len(remaining) > cap:
+            # Prefer a paragraph/line boundary, but always make progress for long single lines.
+            cut_at = remaining.rfind("\n", 1, cap + 1)
+            if cut_at < int(cap * 0.55):
+                cut_at = cap
             else:
-                # payloadهای audit/config: فقط برای جلوگیری از ارسال پیام بیش‌ازحد بلند
-                # کوتاه می‌شوند؛ پاسخ اصلی همچنان باید از اعتبارسنجی عبور کند.
-                content = content[:7800] + "\n[Payload compacted because provider rejected message length.]\n" + content[-900:]
-            item["content"] = content
-        compact.append(item)
-    return compact
+                cut_at += 1  # Keep the newline on the previous chunk; no content is lost.
+            result.append(remaining[:cut_at])
+            remaining = remaining[cut_at:]
+        if remaining or not result:
+            result.append(remaining)
+        return result
+
+    expanded = []
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str) and len(content) > cap:
+            parts = chunks(content)
+            log.info("Splitting oversized %s prompt message into %d parts (%d chars total)",
+                     msg.get("role", "unknown"), len(parts), len(content))
+            for part in parts:
+                item = dict(msg)
+                item["content"] = part
+                expanded.append(item)
+        else:
+            expanded.append(dict(msg))
+    return expanded
 
 
 def _is_message_length_error(exc):
@@ -2434,6 +2456,109 @@ def _repair_explicit_requirements(request_text, cfg, lang):
     return changes, warnings, confirmed
 
 
+def _repair_reserved_write_vars(config):
+    """Deterministically rename built-in/read-only names used as custom *write* targets.
+
+    Names such as `name` are valid built-ins for reading a Telegram user's display name,
+    but invalid as form storage/action destinations. Instead of silently dropping these
+    writes and forcing another expensive model round-trip, normalize only write positions.
+    Read-only conditions and ordinary `{name}` greeting placeholders remain untouched.
+    """
+    if not isinstance(config, dict):
+        return config, {}
+    cfg = copy.deepcopy(config)
+    aliases = {
+        "name": "customer_name", "first_name": "customer_first_name",
+        "last_name": "customer_last_name", "full_name": "customer_full_name",
+        "username": "customer_username", "id": "customer_id", "lang": "user_lang",
+        "premium": "user_premium", "is_owner": "owner_flag", "is_admin": "admin_flag",
+        "bot_name": "target_bot_name", "bot_username": "target_bot_user",
+        "text": "submitted_text", "param": "input_param", "visits": "visit_count",
+        "refs": "ref_count", "ref_link": "referral_link", "date": "form_date",
+        "time": "form_time", "hour": "current_hour", "weekday": "week_day",
+        "ticket_no": "ticket_number",
+    }
+    occupied = set()
+    for key in ("vars", "globals"):
+        if isinstance(cfg.get(key), dict):
+            occupied.update(str(k).strip().lower() for k in cfg[key])
+    for node in (cfg.get("nodes") or {}).values() if isinstance(cfg.get("nodes"), dict) else []:
+        if isinstance(node, dict):
+            occupied.update(str(v).strip().lower() for v in (node.get("save") or []) if v)
+
+    writers = set(ACT_OPS)
+    reserved = set(BUILTINS)
+    to_rename = set()
+    if isinstance(cfg.get("vars"), dict):
+        to_rename.update(str(k).strip().lower() for k in cfg["vars"] if str(k).strip().lower() in reserved)
+    if isinstance(cfg.get("globals"), dict):
+        to_rename.update(str(k).strip().lower() for k in cfg["globals"] if str(k).strip().lower() in reserved)
+    nodes = cfg.get("nodes") if isinstance(cfg.get("nodes"), dict) else {}
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        to_rename.update(str(v).strip().lower() for v in (node.get("save") or [])
+                         if str(v or "").strip().lower() in reserved)
+        if isinstance(node.get("growth"), dict) and str(node["growth"].get("var") or "").strip().lower() in reserved:
+            to_rename.add(str(node["growth"].get("var")).strip().lower())
+
+    def scan_actions(obj):
+        if isinstance(obj, dict):
+            op = str(obj.get("op") or "").strip().lower()
+            var = str(obj.get("var") or "").strip().lower()
+            if op in writers and var in reserved:
+                to_rename.add(var)
+            for value in obj.values():
+                scan_actions(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                scan_actions(value)
+    scan_actions(cfg)
+    if not to_rename:
+        return cfg, {}
+
+    mapping = {}
+    for old in sorted(to_rename):
+        base = aliases.get(old, ("form_" + old)[:20])
+        base = base[:20]
+        candidate, n = base, 2
+        while candidate in occupied or candidate in reserved or not VAR_RE.fullmatch(candidate):
+            suffix = "_" + str(n)
+            candidate = base[:20-len(suffix)] + suffix
+            n += 1
+        mapping[old] = candidate
+        occupied.add(candidate)
+
+    for key in ("vars", "globals"):
+        source = cfg.get(key)
+        if isinstance(source, dict):
+            renamed = {}
+            for old, value in source.items():
+                k = str(old).strip().lower()
+                renamed[mapping.get(k, k)] = value
+            cfg[key] = renamed
+
+    def rewrite(obj):
+        if isinstance(obj, dict):
+            op = str(obj.get("op") or "").strip().lower()
+            if op in writers and str(obj.get("var") or "").strip().lower() in mapping:
+                obj["var"] = mapping[str(obj["var"]).strip().lower()]
+            if isinstance(obj.get("save"), list):
+                obj["save"] = [mapping.get(str(v or "").strip().lower(), v) if v else v for v in obj["save"]]
+            if isinstance(obj.get("growth"), dict):
+                old = str(obj["growth"].get("var") or "").strip().lower()
+                if old in mapping:
+                    obj["growth"]["var"] = mapping[old]
+            for value in obj.values():
+                rewrite(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                rewrite(value)
+    rewrite(cfg)
+    log.warning("Normalized reserved write variables: %s", mapping)
+    return cfg, mapping
+
+
 def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, nodes_cap=None):
     txt, usage = llm_run([{"role": "system", "content": SYSTEM_PROMPT + (LANG_GUARD if guard else "")}, {"role": "user", "content": user}], AI_MAX_TOKENS)
     acc.append(usage)
@@ -2454,6 +2579,9 @@ def _call_llm(user, lang, final, media_ids, acc, guard=False, check_cfg=False, n
     cfg_foreign = guard and check_cfg and foreign_in(raw["config"])
     if guard:                                   # قبل از اعتبارسنجی پاک می‌کنیم تا دکمه/متن نیمه‌کاره نمونه
         raw["config"] = scrub_deep(raw["config"])
+    raw["config"], renamed_vars = _repair_reserved_write_vars(raw["config"])
+    if renamed_vars:
+        log.info("Reserved variable destinations were normalized before validation (%d mappings)", len(renamed_vars))
     cfg = sanitize(raw["config"], media=media_ids, warns=warns, nodes_cap=nodes_cap)
     auto_links = _repair_orphan_confirmation_nodes(cfg)
     if auto_links:
