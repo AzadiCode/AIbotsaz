@@ -248,7 +248,7 @@ const RB = `<svg class="rb" viewBox="0 0 24 24" fill="none" stroke="currentColor
 const FAD = n => String(n);          // اعداد لاتین، مثل بقیه‌ی جاهای اپ
 const LQ_STEPS = ["تحلیل", "ساخت", "بررسی", "ذخیره"];
 const LQ_IDX = {analyze: 0, fallback: 0, build: 1, review: 2, repair: 2, audit: 2, validate: 2, save: 3};
-const LQ_LBL = {analyze: "تحلیل درخواست", fallback: "تغییر مدل و تلاش جایگزین", build: "ساخت بخش‌ها و مسیرها", review: "بازبینی و اصلاح نهایی", repair: "اصلاح پاسخ نامعتبر", audit: "ممیزی تطابق درخواست", validate: "بررسی سازگاری با تلگرام", save: "ذخیره‌ی ربات"};
+const LQ_LBL = {analyze: "برنامه‌ریزی درخواست", fallback: "تغییر مدل و تلاش جایگزین", build: "اجرای وظیفه و ذخیرهٔ checkpoint", review: "بازبینی و اصلاح نهایی", repair: "اصلاح پاسخ نامعتبر", audit: "ممیزی تطابق درخواست", validate: "بررسی سازگاری با تلگرام", save: "ذخیره‌ی ربات"};
 let LQ = {};
 function lqSteps(root, idx, all){
   root.querySelectorAll(".lqst li").forEach((li, i) => { li.classList.toggle("done", !!all || i < idx); li.classList.toggle("on", !all && i === idx); });
@@ -304,7 +304,10 @@ function liveUpdate(pr){
     label.textContent = label.textContent.replace(/ · امتحان مدل جایگزین \d+\/\d+$/, "") + modelHint;
   }
   const n = root.querySelector(".lqn");
-  if(pr.n > 0){ n.hidden = false; n.innerHTML = `<b>${FAD(pr.n)}</b> بخش ساخته شد` + (pr.ti ? ` · آخرین: ${esc(pr.ti)}` : ""); }
+  if(pr.task_n){
+    const taskLine = `وظیفه ${FAD(Math.max(0, Number(pr.task_i || 0)))} از ${FAD(pr.task_n)}${pr.task_title ? ` · ${pr.task_title}` : ""}`;
+    n.hidden = false; n.textContent = taskLine;
+  } else if(pr.n > 0){ n.hidden = false; n.textContent = `${FAD(pr.n)} بخش ساخته شد` + (pr.ti ? ` · آخرین: ${pr.ti}` : ""); }
 }
 function liveDone(){
   const root = $("#live .lq"); if(!root) return;
@@ -314,23 +317,56 @@ function liveDone(){
 }
 function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); LQ = {}; const b = $("#live"); if(b) b.innerHTML = ""; }
 
+async function pollBuildJob(jid){
+  for(let i = 0; i < 420; i++){
+    await sleep(1000);
+    const r = await api(`/api/jobs/${encodeURIComponent(jid)}`);
+    const before = S.wallet?.tokens; S.wallet = r.wallet; if(r.wallet?.tokens !== before) renderTop();
+    if(r.status === "done"){ liveDone(); await sleep(reduced() ? 0 : 500); return r; }
+    if(r.status === "review"){ liveDone(); return {...r, job: jid}; }
+    if(r.status === "cancelled") throw new Error("درخواست لغو شد؛ رباتی ساخته نشد و توکنی کسر نشد.");
+    if(r.status === "error"){
+      const err = new Error(r.error || "ساخت ناموفق بود");
+      err.job = jid; err.canResume = !!r.can_resume;
+      err.completedTasks = Number(r.completed_tasks || 0); err.totalTasks = Number(r.total_tasks || 0);
+      err.buildPhase = r.build_phase || "";
+      throw err;
+    }
+    liveUpdate(r.prog);
+  }
+  const err = new Error("ساخت بیش از حد طول کشید؛ اگر checkpoint ذخیره شده باشد، می‌توانی از همان‌جا ادامه بدهی.");
+  err.job = jid; err.canResume = true; throw err;
+}
 async function runJob(prompt, botId){
   startLive(botId ? "در حال ارتقای ربات" : "در حال ساخت ربات");
   try{
     const d = await api("/api/generate", "POST", { prompt, bot_id: botId });
     S.wallet = d.wallet; renderTop();
-    for(let i = 0; i < 960; i++){
-      await sleep(1000);
-      const r = await api(`/api/jobs/${d.job}`);
-      const before = S.wallet?.tokens; S.wallet = r.wallet; if(r.wallet?.tokens !== before) renderTop();
-      if(r.status === "done"){ liveDone(); await sleep(reduced() ? 0 : 500); return r; }
-      if(r.status === "review"){ liveDone(); return {...r, job: d.job}; }
-      if(r.status === "cancelled") throw new Error("درخواست لغو شد؛ رباتی ساخته نشد و توکنی کسر نشد.");
-      if(r.status === "error") throw new Error(r.error);
-      liveUpdate(r.prog);
-    }
-    throw new Error("ساخت بیش از حد طول کشید، دوباره امتحان کن");
+    return await pollBuildJob(d.job);
   } finally { stopLive(); }
+}
+async function resumeBuildJob(jid){
+  startLive("ادامهٔ ساخت از آخرین checkpoint");
+  try{
+    const d = await api(`/api/jobs/${encodeURIComponent(jid)}/resume`, "POST", {});
+    S.wallet = d.wallet || S.wallet; renderTop();
+    return await pollBuildJob(jid);
+  } finally { stopLive(); }
+}
+function showBuildFailure(r){
+  const can = !!r.canResume && !!r.job;
+  const progress = r.totalTasks > 0 ? `<p class="muted">پیشرفت ذخیره‌شده: ${N(r.completedTasks || 0)} از ${N(r.totalTasks)} وظیفه${r.buildPhase ? ` · مرحلهٔ آخر: ${esc(r.buildPhase)}` : ""}</p>` : "";
+  S.pendingResume = can ? r.job : null; S.sheet = {kind: "info"};
+  showSheet(head(can ? "ساخت متوقف شد؛ پیشرفت حفظ شده" : "ساخت ناموفق بود") +
+    `<p>${esc(r.message || r.error || "یک خطای فنی رخ داد.")}</p>${progress}` +
+    `<p class="muted">هیچ رباتی به‌عنوان خروجی موفق تحویل نشده است. ادامه، وظیفه‌های ذخیره‌نشده را از آخرین checkpoint اجرا می‌کند؛ وظایف تکمیل‌شده از ابتدا ساخته نمی‌شوند.</p>` +
+    `<div class="bar">${can ? `<button class="b" data-a="resumejob" data-id="${esc(r.job)}">ادامه از آخرین checkpoint</button>` : ""}<button class="b o" data-a="closefail">بستن</button></div><div class="fgap"></div>`);
+}
+function applyBuiltBot(r, was){
+  if(!r.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
+  S.wallet = r.wallet || S.wallet; S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
+  S.cur = r.bot; S.view = "bot"; S.btab = "ai"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null;
+  render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? `، ${r.cost} توکن` : "")); haptic("ok"); scrollTo(0, 0);
 }
 function showBuildReview(r){
   const gaps = (r.gaps || []).slice(0, 8).map((g, i) => `<div class="sub2"><b>${i + 1}. ${esc(g.want || "محدودیت شناسایی‌شده")}</b><p class="muted">${esc(g.why || "این بخش نیاز به بررسی بیشتری دارد.")}</p>${g.upgrade ? `<p class="muted">راهکار: ${esc(g.upgrade)}</p>` : ""}</div>`).join("");
@@ -349,12 +385,11 @@ function submitPrompt(){
       const r = await runJob(p, botId);
       if(r.status === "review"){ showBuildReview(r); return; }
       const was = !!botId;
-      S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
-      S.cur = r.bot; S.view = "bot"; S.btab = "ai"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null;
-      render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? `، ${r.cost} توکن` : "")); haptic("ok");
-      scrollTo(0, 0);
+      applyBuiltBot(r, was);
     }catch(e){
-      if(e.status === 402) openBuy(e.message); else toast(e.message);
+      if(e.status === 402) openBuy(e.message);
+      else if(e.canResume) showBuildFailure({job:e.job, canResume:true, error:e.message, completedTasks:e.completedTasks, totalTasks:e.totalTasks, buildPhase:e.buildPhase});
+      else showBuildFailure({job:e.job, canResume:false, error:e.message});
     }finally{ if(ta.isConnected) ta.readOnly = false; }
   });
 }
@@ -751,6 +786,21 @@ const A = {
     await api(`/api/jobs/${encodeURIComponent(el.dataset.id)}/review`, "POST", {decision: "no"});
     closeSheet(); await sync(); render(); toast("درخواست لغو شد؛ توکنی کسر نشد.");
   }),
+  resumejob: el => busy(el, async () => {
+    const jid = el.dataset.id;
+    closeSheet();
+    try{
+      const r = await resumeBuildJob(jid);
+      if(r.status === "review"){ showBuildReview(r); return; }
+      const was = !!(S.cur && r.bot && S.cur.id === r.bot.id);
+      applyBuiltBot(r, was);
+    }catch(e){
+      if(e.status === 402) openBuy(e.message);
+      else if(e.canResume) showBuildFailure({job:e.job || jid, canResume:true, error:e.message, completedTasks:e.completedTasks, totalTasks:e.totalTasks, buildPhase:e.buildPhase});
+      else showBuildFailure({job:jid, canResume:false, error:e.message});
+    }
+  }),
+  closefail: () => closeSheet(),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
   idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
   open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "bot"; S.btab = "ai"; S.sbot = S.cur.id; S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
