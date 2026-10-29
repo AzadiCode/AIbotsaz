@@ -47,7 +47,7 @@ function applyTheme(){
 }
 applyTheme(); tg?.onEvent?.("themeChanged", applyTheme);
 
-function toast(m){ const t = $("#toast"); t.innerHTML = digitsHTML(m); t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3000); }
+function toast(m){ const t = $("#toast"); const msg = String(m ?? ""); t.innerHTML = digitsHTML(msg); t.classList.add("show"); clearTimeout(toast.t); /* پیام‌های خطا/طولانی زمان بیشتری برای خواندن دارند */ const duration = /(ناموفق|خطا|نشد|کسر نشد|دوباره امتحان|گزارش)/i.test(msg) || msg.length > 90 ? 5000 : 4000; toast.t = setTimeout(() => t.classList.remove("show"), duration); }
 
 /* ═════════ ارتباط با سرور ═════════ */
 async function api(path, method = "GET", body){
