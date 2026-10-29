@@ -46,7 +46,7 @@ from core import (
     APP_URL, wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID, PLAN_RANK, plan_of, PLANS,
 )
 from ai import (
-    ask_llm, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
+    ask_llm, PreflightReview, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
 )
 from engine import ai_postcharge, ai_precheck, allowed_updates, sync_commands, to_jalali
 
@@ -791,12 +791,19 @@ def mk_watch(uid, chat, jid):
             gaps = j.get("gaps") or []
             detail = "\n".join(f"• {x.get('want','')}: {x.get('why','')}" for x in gaps[:3])
             review_cost = int(j.get("cost") or 0)
-            body = ("⚠️ <b>قبل از ساخت، یک نکته مهم</b>\n\n"
+            pre = bool(j.get("preflight"))
+            detail = "\n".join(f"• {x.get('want','')}: {x.get('why','')}" + (f" ({x['upgrade']})" if pre and x.get("upgrade") else "") for x in gaps[:4])
+            body = ("⚠️ <b>قبل از شروع ساخت، یک نکته مهم</b>\n\n"
+                    "بعد از تحلیل درخواستت مشخص شد بخشی از آن با امکانات فعلی ربات‌ساز دقیقاً قابل پیاده‌سازی نیست؛ جایگزین نزدیک ساخته می‌شود. هنوز ساخت شروع نشده و هیچ توکنی کم نشده.\n\n"
+                    + hx(detail) + "\n\n"
+                    "می‌خوای با همین جایگزین‌ها ساخت رو ادامه بدم، یا درخواست رو لغو و اصلاح کنی؟ لغو رایگانه."
+                    if pre else
+                    "⚠️ <b>قبل از ساخت، یک نکته مهم</b>\n\n"
                     "بررسی درخواست نشان داد بخشی از قابلیت‌هایی که خواستی با امکانات فعلی ربات‌ساز قابل پیاده‌سازی دقیق نیست. برای اینکه بدون اطلاع تو نسخه‌ی ناقص نسازیم، هنوز رباتی ذخیره نشده و هیچ توکنی کم نشده.\n\n"
                     + hx(detail) + "\n\n"
                     f"💳 هزینه در صورت تأیید ساخت: {review_cost} توکن\n\n"
                     "می‌تونی نسخه‌ی نزدیک به درخواستت رو با آگاهی از این محدودیت‌ها بسازی، یا درخواست رو لغو کنی. لغو درخواست رایگانه.")
-            kb = mk_kb([mk_btn("✅ ساخت نسخه با محدودیت‌های بالا", f"mk:review:yes:{jid}")],
+            kb = mk_kb([mk_btn("✅ ادامه ساخت با جایگزین‌ها" if pre else "✅ ساخت نسخه با محدودیت‌های بالا", f"mk:review:yes:{jid}")],
                        [mk_btn("❌ لغو درخواست (بدون کسر توکن)", f"mk:review:no:{jid}")])
             mk_show(uid, chat, body, kb)
         elif j.get("status") == "cancelled":
@@ -928,6 +935,23 @@ def mother_callback(cq):
             db.mstate.update_one({"_id": uid}, {"$set": {"step": "confirm", "t": now()}, "$unset": {"job": ""}})
             ack("درخواست لغو شد؛ توکنی کسر نشد.")
             return mk_show(uid, chat, "درخواست لغو شد؛ رباتی ساخته نشد و هیچ توکنی کسر نشد.", MK_NEW, cmid)
+        if job.get("preflight"):
+            # تأیید قبل از ساخت: همان برنامهٔ ذخیره‌شده ادامه پیدا می‌کند (برنامه‌ریزی دوباره انجام نمی‌شود)
+            st2 = mk_get(uid) or {}
+            prompt2 = job.get("prompt") or st2.get("prompt") or ""
+            reserve = reserve_cost(prompt2, None, uid)
+            if balance(uid) < reserve:
+                return ack(f"موجودی کافی نیست؛ برای ساخت تا سقف {reserve} توکن لازم است.", True)
+            changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
+                {"$set": {"status": "running", "preflight_ok": True, "t": now()}, "$unset": {"error": ""}})
+            if not changed:
+                return ack("این درخواست قبلاً پردازش شده است.", True)
+            mk_put(uid, step="building", job=jid)
+            ack("ساخت شروع شد.")
+            threading.Thread(target=gen_job, args=(jid, uid, None, prompt2, reserve), daemon=True).start()
+            mk_show(uid, chat, mk_progress_text({"prog": {"p": 2, "st": "analyze"}}, 0))
+            threading.Thread(target=mk_watch, args=(uid, chat, jid), daemon=True).start()
+            return None
         # قبول نسخه‌ی تقریبی: خرج و ذخیره‌سازی فقط بعد از تأیید صریح کاربر
         job = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
                                           {"$set": {"status": "saving", "approved_at": now()}})
@@ -1151,7 +1175,13 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         bot = db.bots.find_one({"_id": ObjectId(bot_id), "owner": uid}) if bot_id else None
         if bot_id and not bot:
             raise ValueError("ربات اصلی برای ارتقا پیدا نشد؛ ربات جدیدی به‌جای آن ساخته نمی‌شود")
-        thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
+        try:
+            thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
+        except PreflightReview as pr:
+            # قبل از تلف‌کردن زمان و توکن: محدودیت‌ها را همین حالا به کاربر بگو و تصمیمش را بپرس
+            db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
+                "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now()}})
+            return
         if BILLING == "fixed":
             cost = int(reserve)
         else:

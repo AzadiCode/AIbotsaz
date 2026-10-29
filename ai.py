@@ -2291,6 +2291,14 @@ def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None
     raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "همهٔ مدل‌ها در این کار خطا گرفتند و کنار رفتند"))
 
 
+class PreflightReview(Exception):
+    """بعد از تحلیل و قبل از شروع ساخت: بخشی از درخواست با امکانات فعلی دقیقاً شدنی نیست؛ تصمیم با کاربر."""
+    def __init__(self, limits):
+        super().__init__("preflight review")
+        self.limits = limits
+
+
+_plan_meta = threading.local()    # محدودیت‌های اعلام‌شده در مرحلهٔ برنامه‌ریزی
 _gap = threading.local()          # گزارش «چیزی که ربات‌ساز نتونست»؛ هر کار پس‌زمینه در ترد خودش می‌خونه
 
 
@@ -2901,7 +2909,7 @@ def _merge_gap_items(*groups, limit=3):
     return out
 
 
-TASK_PLAN_SYSTEM = """You are a senior technical planner for a Telegram bot builder. Convert the user's request into an execution plan of 1-4 small, independently implementable tasks. Return ONLY valid JSON: {\"tasks\":[{\"id\":\"foundation\",\"title\":\"...\",\"scope\":\"...\",\"acceptance\":[\"...\"],\"node_ids\":[\"start\"]}]}. For a new bot, the first task MUST have id foundation and define the start/menu/navigation skeleton. Later tasks add distinct capabilities, each with precise acceptance checks. Preserve every explicit user requirement across the tasks; don't invent features. If the request only references another bot by username, plan a conservative starter and say exact replication requires screenshots or a feature list. If this is an update to an existing config, preserve existing features and plan only the requested changes; foundation means verify the home/navigation structure, not rebuild the bot. Keep each scope compact and specific. Maximum 4 tasks including foundation. Do not generate the config yet."""
+TASK_PLAN_SYSTEM = """You are a senior technical planner for a Telegram bot builder. Convert the user's request into an execution plan of 1-4 small, independently implementable tasks. Return ONLY valid JSON: {\"tasks\":[{\"id\":\"foundation\",\"title\":\"...\",\"scope\":\"...\",\"acceptance\":[\"...\"],\"node_ids\":[\"start\"]}]}. For a new bot, the first task MUST have id foundation and define the start/menu/navigation skeleton. Later tasks add distinct capabilities, each with precise acceptance checks. Preserve every explicit user requirement across the tasks; don't invent features. If the request only references another bot by username, plan a conservative starter and say exact replication requires screenshots or a feature list. If this is an update to an existing config, preserve existing features and plan only the requested changes; foundation means verify the home/navigation structure, not rebuild the bot. Keep each scope compact and specific. Maximum 4 tasks including foundation. Do not generate the config yet. ALSO return a top-level key "limits": a list (normally EMPTY, max 4) of {"want":"what the user asked, one short Persian sentence","why":"exact reason the engine cannot do it exactly, Persian","alternative":"what will be built instead, Persian"}. Add an item ONLY when the user explicitly asked for something that the ENGINE LIMITS below make truly impossible (not just hard or large) and the build will therefore drop it or replace it with a weaker approximation. Never list things that can be built fully, vague wishes, or optional extras."""
 
 _TASK_PATCH_SUFFIX = r"""
 TASK PATCH MODE — this instruction overrides the earlier complete-config output requirement for THIS call only.
@@ -3008,13 +3016,22 @@ def _plan_build_tasks(prompt, current, acc):
     payload = {"user_request": str(prompt or "")[:MAX_PROMPT], "mode": "update existing bot" if current else "new bot",
                "current_config_summary": current_summary}
     try:
-        txt, usage = llm_run([{"role": "system", "content": TASK_PLAN_SYSTEM},
+        _plan_meta.limits = []
+        _lm = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
+        _plan_system = TASK_PLAN_SYSTEM + ("\n\n" + _lm.group(0) if _lm else "")
+        txt, usage = llm_run([{"role": "system", "content": _plan_system},
                               {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
                              900, temperature=0.1, timeout=40, max_models=3, total_timeout=90)
         _record_usage(acc, usage)
         plan_json, _ = _loads_json_with_safe_repairs(txt)
+        _raw_limits = plan_json.get("limits") if isinstance(plan_json, dict) else None
+        _plan_meta.limits = [{"want": str(x.get("want") or "").strip()[:300], "why": str(x.get("why") or "").strip()[:500],
+                              "upgrade": ("جایگزین: " + str(x.get("alternative") or "").strip()[:400]) if x.get("alternative") else ""}
+                             for x in (_raw_limits if isinstance(_raw_limits, list) else [])[:4]
+                             if isinstance(x, dict) and str(x.get("want") or "").strip()]
         return _normalize_task_plan(plan_json, prompt, current)
     except Exception as exc:
+        _plan_meta.limits = []
         log.warning("Task planning used the deterministic fallback: %s", str(exc)[:300])
         if cb:
             cb.rejected_models.clear()
@@ -3348,6 +3365,11 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         if cb:
             cb.task_retry_counts = retry_counts
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, [], "planned", 0)
+        _limits = list(getattr(_plan_meta, "limits", []) or [])
+        if _limits and cb and getattr(cb, "jid", None) and current is None:
+            _job = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
+            if not _job.get("preflight_ok"):
+                raise PreflightReview(_limits)
 
     task_map = {str(t.get("id")): t for t in plan}
     # Reconcile duplicate/corrupted task IDs defensively before execution.

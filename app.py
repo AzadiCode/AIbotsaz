@@ -485,7 +485,7 @@ def api_job(uid, jid):
             out["total_tasks"] = len(state.get("plan") or [])
             out["build_phase"] = str(state.get("phase") or "")[:60]
     elif j["status"] == "review":
-        out.update(gaps=j.get("gaps", []), cost=int(j.get("cost") or 0), prompt=j.get("prompt", ""))
+        out.update(gaps=j.get("gaps", []), cost=int(j.get("cost") or 0), prompt=j.get("prompt", ""), preflight=bool(j.get("preflight")))
     elif j["status"] == "cancelled":
         out["message"] = "درخواست لغو شد؛ توکنی کسر نشد."
     return jsonify(out)
@@ -546,6 +546,17 @@ def api_job_review(uid, jid):
         return jsonify(status="cancelled", wallet=wallet_info(uid))
     if decision != "yes":
         return jsonify(error="انتخاب نامعتبر است."), 400
+    if job.get("preflight"):
+        prompt = str(job.get("prompt") or "")
+        reserve = max(0, int(reserve_cost(prompt, None, uid)))
+        if not hold(uid, reserve):
+            return jsonify(error=f"موجودی کافی نیست؛ برای ساخت تا سقف {reserve} توکن لازم است.", need=reserve, wallet=wallet_info(uid)), 402
+        changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
+                                              {"$set": {"status": "running", "preflight_ok": True, "t": now()}, "$unset": {"error": ""}})
+        if not changed:
+            return jsonify(error="این درخواست قبلاً پردازش شده است."), 409
+        threading.Thread(target=gen_job, args=(jid, uid, job.get("bot_id"), prompt, reserve), daemon=True).start()
+        return jsonify(status="running", job=jid, wallet=wallet_info(uid))
     if not isinstance(job.get("cfg"), dict) or not job["cfg"].get("nodes"):
         return jsonify(error="پیش‌نویس معتبر پیدا نشد؛ هیچ هزینه‌ای کسر نشد."), 409
     changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},

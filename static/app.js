@@ -371,6 +371,10 @@ function applyBuiltBot(r, was){
 function showBuildReview(r){
   const gaps = (r.gaps || []).slice(0, 8).map((g, i) => `<div class="sub2"><b>${i + 1}. ${esc(g.want || "محدودیت شناسایی‌شده")}</b><p class="muted">${esc(g.why || "این بخش نیاز به بررسی بیشتری دارد.")}</p>${g.upgrade ? `<p class="muted">راهکار: ${esc(g.upgrade)}</p>` : ""}</div>`).join("");
   S.pendingReview = r.job; S.sheet = {kind: "info"};
+  if(r.preflight){
+    showSheet(head("قبل از شروع ساخت، یک نکته مهم") + `<p>بعد از تحلیل درخواستت مشخص شد بخشی از آن با امکانات فعلی دقیقاً قابل اجرا نیست و جایگزین نزدیک ساخته می‌شود. هنوز ساخت شروع نشده و هیچ توکنی کم نشده است.</p>${gaps}<div class="bar"><button class="b" data-a="reviewyes" data-id="${esc(r.job)}">ادامه ساخت با جایگزین‌ها</button><button class="b o" data-a="reviewno" data-id="${esc(r.job)}">لغو و اصلاح درخواست — رایگان</button></div><div class="fgap"></div>`);
+    return;
+  }
   showSheet(head("قبل از ساخت، انتخاب با توست") + `<p>بررسی نهایی نشان داد بعضی بخش‌های درخواستت ممکن است دقیقاً اجرا نشده باشند. برای جلوگیری از تحویل بی‌اطلاع نسخه‌ی ناقص، هنوز رباتی ذخیره نشده و هیچ توکنی کم نشده است.</p>${gaps || `<p class="muted">جزئیات محدودیت در گزارش بررسی ثبت شده است.</p>`}<div class="sub"><b>هزینه در صورت تأیید: ${N(r.cost || 0)} توکن</b></div><div class="bar"><button class="b" data-a="reviewyes" data-id="${esc(r.job)}">ساخت نسخه با این محدودیت‌ها</button><button class="b o" data-a="reviewno" data-id="${esc(r.job)}">لغو درخواست — بدون کسر توکن</button></div><div class="fgap"></div>`);
 }
 
@@ -777,6 +781,19 @@ const A = {
   reviewyes: el => busy(el, async () => {
     const d = await api(`/api/jobs/${encodeURIComponent(el.dataset.id)}/review`, "POST", {decision: "yes"});
     closeSheet();
+    if(d.status === "running"){
+      S.wallet = d.wallet || S.wallet; renderTop();
+      startLive("در حال ساخت ربات");
+      try{
+        const r = await pollBuildJob(d.job);
+        if(r.status === "review"){ showBuildReview(r); return; }
+        applyBuiltBot(r, false);
+      }catch(e){
+        if(e.status === 402) openBuy(e.message);
+        else showBuildFailure({job:e.job || d.job, canResume:!!e.canResume, error:e.message, completedTasks:e.completedTasks, totalTasks:e.totalTasks, buildPhase:e.buildPhase});
+      }finally{ stopLive(); }
+      return;
+    }
     if(!d.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
     S.wallet = d.wallet || S.wallet; S.bots = [d.bot, ...S.bots.filter(b => b.id !== d.bot.id)];
     S.cur = d.bot; S.view = "bot"; S.btab = "ai"; S.sbot = d.bot.id; S.fresh = true; S.ideas = d.ideas || []; S.stats = null;
