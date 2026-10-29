@@ -1998,7 +1998,7 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
             log.warning("AI model failed (%s/%s): %s", idx, len(models), errors[-1])
-    raise RuntimeError("همه مدل‌های پیکربندی‌شده ناموفق بودند؛ " + " || ".join(errors[:len(models)]))
+    raise RuntimeError("همه مدل‌های پیکربندی‌شده ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "هیچ مدل فعالی باقی نمانده بود: همهٔ مدل‌ها در همین کار قبلاً خروجی نامعتبر داده یا خطا گرفته و کنار گذاشته شده‌اند"))
 
 
 AI_STREAM = _int("AI_STREAM", 1)         # ۱ = ساخت ربات با استریم و پیشرفت زنده؛ ۰ = مثل قبل (یک درخواست بدون استریم)
@@ -2285,7 +2285,7 @@ def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
             log.warning("generation model failed (%s/%s): %s", idx, len(models), errors[-1])
-    raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + " || ".join(errors[:len(models)]))
+    raise RuntimeError("همه مدل‌های ساخت ناموفق بودند؛ " + (" || ".join(errors[:len(models)]) or "هیچ مدل فعالی باقی نمانده بود: همهٔ مدل‌ها در همین کار قبلاً خروجی نامعتبر داده یا خطا گرفته و کنار گذاشته شده‌اند"))
 
 
 _gap = threading.local()          # گزارش «چیزی که ربات‌ساز نتونست»؛ هر کار پس‌زمینه در ترد خودش می‌خونه
@@ -3176,6 +3176,7 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
     task_budget = max(20.0, min(300.0, float(_int("AI_TASK_BUDGET", 170))))
     task_model_timeout = float(max(15, _int("AI_TASK_MODEL_TIMEOUT", 60)))
     last_parse_error = ""
+    parse_history = []
     parse_attempt_limit = max(3, min(5, len(_model_candidates())))
     for parse_try in range(parse_attempt_limit):
         remaining_task = task_budget - (time.monotonic() - started)
@@ -3239,9 +3240,9 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
                         total_timeout=max(1.0, min(task_budget - (time.monotonic() - started), _job_remaining(task_model_timeout * 2))))
                     _record_usage(acc, usage)
                 except Exception as second_exc:
-                    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:700]}") from second_exc
+                    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:350]} || ردشدن‌های قبلی همین وظیفه: {' ; '.join(parse_history)[:600] or 'ندارد'}") from second_exc
             else:
-                raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(exc).__name__}: {str(exc)[:700]}") from exc
+                raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(exc).__name__}: {str(exc)[:350]} || ردشدن‌های قبلی همین وظیفه: {' ; '.join(parse_history)[:600] or 'ندارد'}") from exc
         try:
             raw, repaired_json = _loads_json_with_safe_repairs(text)
             if not isinstance(raw, dict):
@@ -3266,6 +3267,7 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
         except Exception as exc:
             last_parse_error = f"Task {task.get('id')}: {type(exc).__name__}: {str(exc)[:450]}. Return a complete valid JSON config PATCH only; preserve all previous tasks and output only changed/new nodes and settings."
             log.warning("Task patch rejected; switching model for task %s, attempt %s: %s", task.get("id"), parse_try + 1, str(exc)[:250])
+            parse_history.append(f"#{parse_try + 1} [{getattr(cb, 'last_model', None) or '?'}] {type(exc).__name__}: {str(exc)[:160]}")
             if cb:
                 cb.reject_last_model()
     raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از چند خروجی نامعتبر تکمیل نشد؛ کارهای قبلی checkpoint شده‌اند. {last_parse_error[:500]}")
