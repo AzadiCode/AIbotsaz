@@ -1295,11 +1295,27 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
         fallback = start
     cmds = {}
     for k, v in (cfg.get("commands") or {}).items():
-        k = str(k).lstrip("/").lower()
-        if not CMD_RE.match(k) or k == "start" or str(v) not in nodes:
-            bad(f"دستور «/{k}» معتبر نیست (فقط حروف انگلیسی کوچک/عدد/_ و غیر از start)")
+        k = str(k).strip().lstrip("/").lower()
+        target = str(v).strip()
+        # نام دستور و مقصد آن دو خطای جدا هستند؛ قبلاً مقصد ناموجود هم با پیام
+        # گمراه‌کنندهٔ «نام دستور معتبر نیست» گزارش می‌شد.
+        if not CMD_RE.match(k) or k == "start":
+            bad(f"نام دستور «/{k}» معتبر نیست (فقط حروف انگلیسی کوچک/عدد/_ و غیر از start)")
             continue
-        cmds[k] = str(v)
+        if target not in nodes:
+            # /help یک دستور رایج تلگرامی است. اگر مدل آن را تعریف کرده اما
+            # مقصدش را جا انداخته، یک صفحهٔ راهنمای امن با بازگشت به شروع بساز.
+            if k == "help" and "help" not in nodes and len(nodes) < cap_n:
+                nodes["help"] = {
+                    "text": "راهنمای استفاده: از دکمه‌های ربات برای انتخاب قابلیت و ادامه استفاده کنید.",
+                    "buttons": [[{"text": "بازگشت به شروع", "goto": start}]],
+                }
+                cmds[k] = "help"
+                log.warning("Repaired /help command with a safe fallback node because its target was missing")
+                continue
+            bad(f"دستور «/{k}» از نظر نام معتبر است، اما به بخش «{target}» اشاره می‌کند که وجود ندارد")
+            continue
+        cmds[k] = target
     out = {"name": str(cfg.get("name") or "ربات من").strip()[:50] or "ربات من", "start": start,
            "fallback": fallback, "commands": cmds, "nodes": nodes}
 
@@ -1924,7 +1940,21 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None):
                 cb.last_model = candidate
             return result
         except Exception as exc:
-            errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
+            raw_error = str(exc)
+            low_error = raw_error.lower()
+            if "429" in low_error and any(term in low_error for term in ("daily", "today's free token", "allowance", "rate_limit")):
+                category = "daily_free_quota_exhausted"
+            elif _is_message_length_error(exc):
+                category = "provider_message_length_limit"
+            elif "400" in low_error and any(term in low_error for term in ("refused", "content grounds", "content policy")):
+                category = "provider_content_refusal"
+            elif "timeout" in low_error or "timed out" in low_error:
+                category = "timeout"
+            elif "404" in low_error or "model_not_found" in low_error:
+                category = "model_not_found"
+            else:
+                category = "provider_or_model_error"
+            errors.append(f"{candidate} [{category}]: {type(exc).__name__}: {raw_error[:280]}")
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
             log.warning("AI model failed (%s/%s): %s", idx, len(models), errors[-1])
