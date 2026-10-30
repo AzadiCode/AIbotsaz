@@ -3403,6 +3403,78 @@ def _is_transient_task_failure(exc):
     return any(term in message for term in transient)
 
 
+# ───────────── بررسی قطعی (بدون مدل) پیش از ساخت: چیزهایی که موتور مطمئناً ندارد ─────────────
+_STATIC_LIMITS = [
+    (r"(ممبر\s*گیر|عضو\s*گیر|ممبرگیر|سفارش\s*(?:دادن\s*)?(?:ممبر|عضو)|تبادل\s*(?:ممبر|عضو)|(?:ممبر|عضو)\s*(?:بگیر|بده|سفارش)|member\s*(?:adder|exchange|order))",
+     "ساخت ربات ممبرگیر/تبادل عضو برای کانال‌ها و گروه‌های کاربران",
+     "موتور فعلی فقط روی خود ربات و ابزار پایهٔ مدیریت گروه کار می‌کند؛ افزودن عضو به کانال/گروه دیگران، بررسی واقعی عضویت در کانال‌های دیگر و پیگیری لفت دادن آن‌ها پشتیبانی نمی‌شود.",
+     "سفارش عضو به‌صورت فرم و تیکت برای مالک، همراه با سکه، رفرال، گردونه و پنل مالک به‌صورت سیستم داخلی ربات"),
+    (r"(لفت|لیو\s*داد|خروج\s*از\s*(?:کانال|گروه)|left\s+the\s+(?:channel|group))",
+     "کسر امتیاز یا سکه هنگام خروج کاربر از کانال/گروه",
+     "ربات‌ساز رویداد خروج کاربران از کانال‌های دیگران را دریافت نمی‌کند.",
+     "جایزهٔ عضویت بدون کسر بعدی، یا تأیید دستی توسط مالک"),
+    (r"(کانال|گروه)\s*های?\s*خصوصی|private\s*(?:channel|group)",
+     "کار با کانال/گروه خصوصی دیگران",
+     "ربات‌ساز به کانال‌ها و گروه‌های خصوصی دیگران دسترسی مدیریتی ندارد.",
+     "دریافت لینک دعوت از کاربر و ارسال سفارش به مالک"),
+    (r"(درگاه\s*(?:بانکی|پرداخت|زرین|پی)|زرین\s*پال|آیدی\s*پی|idpay|zarinpal|پرداخت\s*(?:آنلاین\s*)?(?:با\s*)?کارت|کارت\s*به\s*کارت)",
+     "پرداخت با درگاه بانکی یا کارت‌به‌کارت خودکار",
+     "فقط پرداخت با ستارهٔ تلگرام پشتیبانی می‌شود و تأیید خودکار پرداخت بانکی وجود ندارد.",
+     "پرداخت با ستارهٔ تلگرام، یا ثبت سفارش با تیکت و تأیید دستی مالک"),
+    (r"(بازی\s*(?:آنلاین|لحظه\s*ای)\s*(?:دو\s*نفره|چند\s*نفره)|multiplayer|real[-\s]?time\s*game)",
+     "بازی آنلاین لحظه‌ای چندنفره",
+     "بازی‌های لحظه‌ای هم‌زمان پشتیبانی نمی‌شوند.",
+     "بازی تک‌نفره با سکه و رتبه‌بندی"),
+    (r"(تماس\s*صوتی|تماس\s*تصویری|voice\s*call|video\s*call|اینلاین\s*مود|inline\s*mode)",
+     "تماس صوتی/تصویری یا حالت اینلاین",
+     "این قابلیت‌ها در موتور ربات‌ساز نیست.",
+     "پاسخ متنی و ارجاع به پشتیبان"),
+]
+
+
+def _static_limits(prompt):
+    text = str(prompt or "")
+    out = []
+    for pat, want, why, alt in _STATIC_LIMITS:
+        if re.search(pat, text, re.I):
+            out.append({"want": want, "why": why, "upgrade": "جایگزین: " + alt})
+    return out[:4]
+
+
+def _autolink_unreachable(cfg, issues):
+    """گره‌های بدون مسیر را به‌صورت قطعی (بدون مدل) به منوی شروع وصل می‌کند."""
+    names = []
+    for it in issues:
+        if it.startswith("unreachable nodes") and "):" in it:
+            names += [x.strip() for x in it.split("):", 1)[1].split(",") if x.strip()]
+    nodes = cfg.get("nodes") or {}
+    names = [n for n in names if n in nodes and n != cfg.get("start")]
+    start = nodes.get(cfg.get("start"))
+    if not names or not isinstance(start, dict):
+        return False
+    rows = start.setdefault("buttons", [])
+    changed = False
+    for n in names:
+        title = str(nodes[n].get("title") or n)[:22]
+        btn = {"text": title, "goto": n}
+        if len(rows) < 6:
+            rows.append([btn]); changed = True
+        else:
+            row = next((r for r in rows if len(r) < 3), None)
+            if row is not None:
+                row.append(btn); changed = True
+    return changed
+
+
+def _fix_structure_deterministically(cfg):
+    issues = lint(cfg)
+    for _ in range(4):
+        if not _autolink_unreachable(cfg, issues):
+            break
+        issues = lint(cfg)
+    return issues
+
+
 def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     """Task-based builder: plan -> patch each capability -> persist every checkpoint -> normalize/lint/QA."""
     acc = [] if acc is None else acc
@@ -3429,6 +3501,11 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         log.info("Resuming task build at checkpoint: %s/%s tasks done", len(completed), len(plan))
         _gap.items = carried_gaps
     else:
+        _early = _static_limits(prompt) if current is None else []
+        if _early and cb and getattr(cb, "jid", None):
+            _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
+            if not _job0.get("preflight_ok"):
+                raise PreflightReview(_early)
         plan = _plan_build_tasks(prompt, current, acc)
         cfg = copy.deepcopy(current) if current is not None else {
             "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",
@@ -3513,7 +3590,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         cb.stage("validate", 76.0)
     cfg, warns, feature_changes, requested_staff = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
     # One targeted structural repair task, if needed. Keep the normalized config checkpoint and repair only the reported problems.
-    structure_issues = lint(cfg)
+    structure_issues = _fix_structure_deterministically(cfg)
     if structure_issues or warns:
         repair_task = {"id": "repair_structure", "title": "اصلاح ساختار و مسیرهای اجرایی",
                        "scope": "فقط این خطاهای اعتبارسنجی را اصلاح کن؛ قابلیت‌های سالم و همهٔ وظایف تکمیل‌شده را حفظ کن. مشکلات: " +
@@ -3539,7 +3616,8 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         warns = warns2
         feature_changes.extend(feature_changes2)
         requested_staff = list(dict.fromkeys(requested_staff + requested_staff2))
-        structure_issues = lint(cfg)
+        structure_issues = _fix_structure_deterministically(cfg)
+        structure_issues = [x for x in structure_issues if not x.startswith("variables that are read but never set")]
         if structure_issues:
             _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
                                     "final_lint_failed", len(plan), "; ".join(structure_issues[:8]))
