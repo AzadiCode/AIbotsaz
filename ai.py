@@ -3655,10 +3655,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             ideas = (ideas + [x for x in rideas if x not in ideas])[:3]
             all_gaps = _merge_gap_items(all_gaps, rgaps, limit=12)
             cfg, warns_after, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
-            structure_issues = lint(cfg)
             qa_gaps = audit_requirements(prompt, cfg, acc)
-            qa_gaps = _merge_gap_items(qa_gaps,
-                [{"want": "اعتبارسنجی مسیرهای ربات", "why": x, "upgrade": "اصلاح مسیر و اجرای مجدد lint."} for x in structure_issues], limit=3)
             all_gaps = _merge_gap_items(all_gaps,
                 [{"want": "اعتبارسنجی کانفیگ نهایی", "why": x, "upgrade": "رفع هشدار و اجرای دوبارهٔ آزمون پذیرش."} for x in warns_after], limit=12)
             _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repair_requirements_done", len(plan))
@@ -3670,6 +3667,13 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             qa_gaps = _merge_gap_items([], qa_gaps if isinstance(qa_gaps, list) else [], limit=3)
             log.warning("repair_requirements failed; continuing with disclosed gaps: %s", str(exc)[:200])
 
+    # مسیرهای بدون ورودی را قطعی وصل کن؛ فقط مشکل‌های واقعیِ باقی‌مانده به کاربر گزارش می‌شود (نه هشدارهای فنی).
+    _lint_want = "اعتبارسنجی مسیرهای ربات"
+    qa_gaps = [g for g in qa_gaps if g.get("want") != _lint_want]
+    all_gaps = [g for g in all_gaps if g.get("want") != _lint_want]
+    _left = [x for x in _fix_structure_deterministically(cfg) if not x.startswith("variables that are read but never set")]
+    if _left:
+        all_gaps = _merge_gap_items(all_gaps, [{"want": _lint_want, "why": x[:300], "upgrade": "اصلاح مسیر در ویرایشگر."} for x in _left[:2]], limit=12)
     # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
     all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
     if guard:
