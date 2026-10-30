@@ -318,7 +318,7 @@ function liveDone(){
 function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); LQ = {}; const b = $("#live"); if(b) b.innerHTML = ""; }
 
 async function pollBuildJob(jid){
-  for(let i = 0; i < 420; i++){
+  for(let i = 0; i < 1300; i++){
     await sleep(1000);
     const r = await api(`/api/jobs/${encodeURIComponent(jid)}`);
     const before = S.wallet?.tokens; S.wallet = r.wallet; if(r.wallet?.tokens !== before) renderTop();

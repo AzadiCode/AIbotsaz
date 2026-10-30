@@ -31,7 +31,7 @@ import requests
 from core import (
     AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS, AI_MODEL, BILLING, calc_cost, cut, db, _DIG,
     EDIT_COST, est_tokens, GEN_COST, _int, log, MAX_GLOBALS, MAX_NODES, MAX_PROMPT, MAX_STAFF,
-    MAX_STARS, PAYMENTS,
+    MAX_STARS, PAYMENTS, now as _core_now,
 )
 
 
@@ -1671,6 +1671,41 @@ class ThinkLang(ValueError):
         self.cfg, self.ideas = cfg, ideas
 
 
+_MODEL_HEALTH = {}   # model(casefold) -> {"bad_until": monotonic, "ok": monotonic}
+
+
+def _mh_ok(model):
+    _MODEL_HEALTH[str(model).casefold()] = {"ok": time.monotonic(), "bad_until": 0.0}
+
+
+def _mh_bad(model, exc):
+    """مدلی که با خطای پایدار (۴۰۴/۵۰۳/سقف مصرف/timeout) شکست خورد، مدتی از صف کنار می‌رود تا هر بار وقت تلف نشود."""
+    t = str(exc).lower()
+    if "404" in t or "model_not_found" in t:
+        ttl = 6 * 3600
+    elif "get_channel_failed" in t or "http 503" in t or "http 502" in t or "http 500" in t:
+        ttl = 600
+    elif "429" in t:
+        ttl = 1800 if any(x in t for x in ("usage limit", "daily", "today's free", "allowance", "quota")) else 75
+    elif "timeout" in t or "timed out" in t:
+        ttl = 300
+    elif "http 401" in t or "http 403" in t:
+        ttl = 1800
+    else:
+        return
+    _MODEL_HEALTH[str(model).casefold()] = {"bad_until": time.monotonic() + ttl, "ok": (_MODEL_HEALTH.get(str(model).casefold()) or {}).get("ok", 0.0)}
+
+
+def _mh_order(models):
+    """سالم‌ها اول (مدل‌هایی که اخیراً موفق بوده‌اند جلوتر)، مدل‌های موقتاً خراب حذف می‌شوند مگر همه خراب باشند."""
+    now_m = time.monotonic()
+    good = [m for m in models if (_MODEL_HEALTH.get(m.casefold()) or {}).get("bad_until", 0.0) <= now_m]
+    if not good:
+        return models
+    good.sort(key=lambda m: -((_MODEL_HEALTH.get(m.casefold()) or {}).get("ok", 0.0) > 0))
+    return good
+
+
 def _model_candidates(preferred=None):
     """مدل‌های مجاز به‌ترتیب اولویت. هر منبع می‌تواند یک مدل یا فهرست comma/semicolon/newline-separated باشد.
 
@@ -1701,8 +1736,8 @@ def _model_candidates(preferred=None):
             seen.add(key)
             out.append(name)
     # سقف مدل‌ها قابل تنظیم است تا فهرست بلند، درخواست را چندین دقیقه معطل نکند.
-    limit = max(1, min(5, _int("AI_MAX_MODEL_TRIES", 5)))
-    return out[:limit]
+    limit = max(1, min(6, _int("AI_MAX_MODEL_TRIES", 6)))
+    return _mh_order(out)[:limit]
 
 
 def _job_remaining(default=45):
@@ -2003,13 +2038,16 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max
                                        min(retry_left, _job_remaining(retry_left)), candidate)
             if cb:
                 cb.last_model = candidate
+            _mh_ok(candidate)
             return result
         except Exception as exc:
             _retry = _rate_limit_retry(exc, messages, max_tokens, temperature, candidate)
             if _retry is not None:
                 if cb:
                     cb.last_model = candidate
+                _mh_ok(candidate)
                 return _retry
+            _mh_bad(candidate, exc)
             raw_error = str(exc)
             low_error = raw_error.lower()
             if "429" in low_error and any(term in low_error for term in ("daily", "today's free token", "allowance", "rate_limit")):
@@ -2115,7 +2153,7 @@ class Progress:
             return
         self.last = t
         try:
-            db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"prog": dict(self.d)}})
+            db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"prog": dict(self.d), "t": _core_now()}})
         except Exception:
             pass
 
@@ -2310,13 +2348,16 @@ def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None
                                        min(retry_left, _job_remaining(retry_left)), candidate)
             if cb:
                 cb.last_model = candidate
+            _mh_ok(candidate)
             return result
         except Exception as exc:
             _retry = _rate_limit_retry(exc, messages, max_tokens, temperature, candidate)
             if _retry is not None:
                 if cb:
                     cb.last_model = candidate
+                _mh_ok(candidate)
                 return _retry
+            _mh_bad(candidate, exc)
             errors.append(f"{candidate}: {type(exc).__name__}: {str(exc)[:280]}")
             if cb:
                 cb.rejected_models.add(str(candidate).casefold())
@@ -2942,7 +2983,7 @@ def _merge_gap_items(*groups, limit=3):
     return out
 
 
-TASK_PLAN_SYSTEM = """You are a senior technical planner for a Telegram bot builder. Convert the user's request into an execution plan of 1-4 small, independently implementable tasks. Return ONLY valid JSON: {\"tasks\":[{\"id\":\"foundation\",\"title\":\"...\",\"scope\":\"...\",\"acceptance\":[\"...\"],\"node_ids\":[\"start\"]}]}. For a new bot, the first task MUST have id foundation and define the start/menu/navigation skeleton. Later tasks add distinct capabilities, each with precise acceptance checks. Preserve every explicit user requirement across the tasks; don't invent features. If the request only references another bot by username, plan a conservative starter and say exact replication requires screenshots or a feature list. If this is an update to an existing config, preserve existing features and plan only the requested changes; foundation means verify the home/navigation structure, not rebuild the bot. Keep each scope compact and specific. Maximum 4 tasks including foundation. Do not generate the config yet. ALSO return a top-level key "limits": a list (normally EMPTY, max 4) of {"want":"what the user asked, one short Persian sentence","why":"exact reason the engine cannot do it exactly, Persian","alternative":"what will be built instead, Persian"}. Add an item ONLY when the user explicitly asked for something that the ENGINE LIMITS below make truly impossible (not just hard or large) and the build will therefore drop it or replace it with a weaker approximation. Never list things that can be built fully, vague wishes, or optional extras."""
+TASK_PLAN_SYSTEM = """You are a senior technical planner for a Telegram bot builder. Convert the user's request into an execution plan of 3-7 SMALL, independently implementable tasks (each needs only a short JSON patch, roughly 3-6 nodes, because the workers are small models with limited output length). Return ONLY valid JSON: {\"tasks\":[{\"id\":\"foundation\",\"title\":\"...\",\"scope\":\"...\",\"acceptance\":[\"...\"],\"node_ids\":[\"start\"]}]}. For a new bot, the first task MUST have id foundation and define the start/menu/navigation skeleton. Later tasks add distinct capabilities, each with precise acceptance checks. Preserve every explicit user requirement across the tasks; don't invent features. If the request only references another bot by username, plan a conservative starter and say exact replication requires screenshots or a feature list. If this is an update to an existing config, preserve existing features and plan only the requested changes; foundation means verify the home/navigation structure, not rebuild the bot. Keep each scope compact and specific. Maximum 7 tasks including foundation. Do not generate the config yet. ALSO return a top-level key "limits": a list (normally EMPTY, max 4) of {"want":"what the user asked, one short Persian sentence","why":"exact reason the engine cannot do it exactly, Persian","alternative":"what will be built instead, Persian"}. Add an item ONLY when the user explicitly asked for something that the ENGINE LIMITS below make truly impossible (not just hard or large) and the build will therefore drop it or replace it with a weaker approximation. Never list things that can be built fully, vague wishes, or optional extras."""
 
 _TASK_PATCH_SUFFIX = r"""
 TASK PATCH MODE — this instruction overrides the earlier complete-config output requirement for THIS call only.
@@ -2954,7 +2995,7 @@ Include only new/changed top-level fields. Put newly created nodes in config.nod
 # It preserves the engine contract but keeps each provider request small enough for free endpoints.
 TASK_PATCH_SYSTEM = r"""You are the implementation worker for a fixed, safe Telegram bot JSON engine. Implement ONLY the current task in the supplied task plan. You do not have access to the reference bot's private configuration; never claim you inspected it.
 
-Return one complete valid JSON object only: {"thinking":"...","ideas":[],"unsupported":[],"config":{...}}. The config is a PATCH, not the whole bot. Only report unsupported features that the engine truly cannot implement; do not add gaps merely because the task has not yet been done by other tasks. User-facing text and thinking must use the user's language.
+Return one complete valid JSON object only, written COMPACTLY (single line, no indentation, short texts, "thinking" under 200 characters, at most 6 nodes in this patch) so it is never cut off: {"thinking":"...","ideas":[],"unsupported":[],"config":{...}}. The config is a PATCH, not the whole bot. Only report unsupported features that the engine truly cannot implement; do not add gaps merely because the task has not yet been done by other tasks. User-facing text and thinking must use the user's language.
 
 ROOT CONFIG: name (short display name), start (node ID), fallback (node ID), commands (command-name to node ID), vars (per-user defaults), globals (shared defaults), desk (staff numeric IDs and/or staff_usernames, ticket settings), join (forced channel membership), mod (group/channel moderation toolkit), group.triggers (group keyword/command triggers), games.list (supported built-in games), on_ref/ref_text (referrals), and nodes. Do not invent unsupported root keys or capabilities.
 
@@ -3032,9 +3073,9 @@ def _normalize_task_plan(raw, prompt, current=None):
         out.insert(0, {"id": "foundation", "title": "حفظ کانفیگ و مسیریابی موجود",
                        "scope": "کانفیگ فعلی را حفظ کن و فقط مسیر خانه/شروع را در صورت نیاز تنظیم کن؛ از بازسازی کامل خودداری کن. درخواست کامل: " + str(prompt or ""),
                        "acceptance": ["عدم حذف قابلیت‌های موجود"], "node_ids": []})
-    if len(out) > 4:
-        tail = out[3:]
-        out = out[:3] + [{"id": "remaining_features", "title": "سایر قابلیت‌های درخواستی",
+    if len(out) > 7:
+        tail = out[6:]
+        out = out[:6] + [{"id": "remaining_features", "title": "سایر قابلیت‌های درخواستی",
                           "scope": "\n".join(f"{x['title']}: {x['scope']}" for x in tail)[:4000],
                           "acceptance": [c for x in tail for c in x.get("acceptance", [])][:8],
                           "node_ids": [n for x in tail for n in x.get("node_ids", [])][:8]}]
@@ -3192,7 +3233,7 @@ def _checkpoint_build_state(cb, prompt, base, plan, completed, cfg, thinking, id
             "phase": str(phase), "task_index": int(task_index), "last_error": str(last_error or "")[:500],
             "retry_counts": dict(getattr(cb, "task_retry_counts", {}) or {}), "updated": time.time()
         }
-        result = db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"build_state": state}})
+        result = db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"build_state": state, "t": _core_now()}})
         if getattr(result, "matched_count", 1) == 0:
             raise RuntimeError("job no longer accepts checkpoint updates; refusing to continue without durable state")
     except Exception as exc:
@@ -3491,7 +3532,9 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         except Exception as exc:
             _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
                                     "repair_structure_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
-            raise RuntimeError(f"ترمیم ساختاری شکست خورد؛ همهٔ وظایف قبلی حفظ شده‌اند و باید فقط همین وظیفه ادامه یابد: {type(exc).__name__}: {str(exc)[:350]}") from exc
+            all_gaps = _merge_gap_items(all_gaps, [{"want": "اصلاح خودکار مسیرهای ربات", "why": f"مدل نتوانست مشکلات مسیر را اصلاح کند ({type(exc).__name__}: {str(exc)[:160]}); بقیهٔ ربات کامل ساخته شده است.",
+                                                    "upgrade": "پس از ساخت، مسیرهای گزارش‌شده را در ویرایشگر دستی یا با یک درخواست کوتاه ویرایش اصلاح کن."}], limit=12)
+            log.warning("repair_structure failed; continuing with disclosed gap: %s", str(exc)[:200])
         cfg, warns2, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
         warns = warns2
         feature_changes.extend(feature_changes2)
@@ -3500,7 +3543,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         if structure_issues:
             _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
                                     "final_lint_failed", len(plan), "; ".join(structure_issues[:8]))
-            raise RuntimeError("اعتبارسنجی مسیرها پس از ترمیم هنوز خطا دارد؛ خروجی ذخیره نشد و checkpoint باقی ماند تا فقط ترمیم مسیر ادامه یابد: " + "; ".join(structure_issues[:6]))
+            all_gaps = _merge_gap_items(all_gaps, [{"want": "اعتبارسنجی مسیرهای ربات", "why": x, "upgrade": "اصلاح مسیر در ویرایشگر و اجرای دوبارهٔ بررسی."} for x in structure_issues[:6]], limit=12)
 
     for warning in warns:
         all_gaps = _merge_gap_items(all_gaps, [{"want": "اعتبارسنجی کانفیگ نهایی", "why": str(warning)[:500],
@@ -3514,7 +3557,9 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     except Exception as exc:
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
                                 "audit_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
-        raise RuntimeError(f"ممیزی نهایی در این اجرا موفق نشد؛ کانفیگ و وظایف ساخته‌شده checkpoint شده‌اند. در ادامه فقط ممیزی/وظیفهٔ باقی‌مانده دوباره انجام می‌شود. {type(exc).__name__}: {str(exc)[:350]}") from exc
+        qa_gaps = []
+        all_gaps = _merge_gap_items(all_gaps, [{"want": "ممیزی نهایی تطابق با درخواست", "why": f"ممیزی خودکار انجام نشد ({type(exc).__name__}: {str(exc)[:140]}); ربات ساخته شده ولی تطابق کامل آن بررسی نشده است.",
+                                                "upgrade": "ربات را پس از ساخت آزمایش کن و موارد جاافتاده را با یک درخواست ویرایش اضافه کن."}], limit=12)
     if qa_gaps:
         if cb:
             cb.stage("repair", 86.0)
@@ -3544,7 +3589,8 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         except Exception as exc:
             _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
                                     "repair_requirements_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
-            raise RuntimeError(f"ترمیم خواسته‌های جاافتاده شکست خورد؛ checkpoint حفظ شده و باید فقط همان وظیفه ادامه پیدا کند. {type(exc).__name__}: {str(exc)[:350]}") from exc
+            qa_gaps = _merge_gap_items([], qa_gaps if isinstance(qa_gaps, list) else [], limit=3)
+            log.warning("repair_requirements failed; continuing with disclosed gaps: %s", str(exc)[:200])
 
     # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
     all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)

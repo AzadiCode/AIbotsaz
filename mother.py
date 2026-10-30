@@ -772,7 +772,7 @@ def mk_watch(uid, chat, jid):
         _mk_watch.add(uid)
     try:
         last, tick, t0 = "", 0, time.time()
-        while time.time() - t0 < BOT_BUILD_TIMEOUT + 90:
+        while time.time() - t0 < max(BOT_BUILD_TIMEOUT + 90, _int("AI_BUILD_DEADLINE", 900) + 180):
             j = db.jobs.find_one({"_id": jid})
             if not j or j["status"] in ("done", "error", "review", "cancelled"):
                 break
