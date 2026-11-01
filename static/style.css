@@ -1544,7 +1544,7 @@ button{max-width:100%}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 /* ── صفحهٔ ساخت: یک باکس یکپارچه (ایده + پیش‌نمایش + دکمهٔ ساخت) که تا لبهٔ پایین صفحه می‌رسد؛ عنوان بخش بعدی کمی بیرون می‌زند ── */
-.cstage{display:flex;flex-direction:column;height:calc(100vh - 124px);height:calc(100dvh - 124px);min-height:440px;padding-bottom:6px}
+.cstage{display:flex;flex-direction:column;height:calc(100vh - 62px);height:calc(100dvh - 62px);min-height:440px;padding-bottom:0;margin-bottom:26px}
 .console.big{flex:1;display:flex;flex-direction:column;min-height:0;border-radius:22px}
 .console.big .chead{padding:16px 18px 0;display:flex;flex-direction:column;gap:2px}
 .console.big .chead b{font-size:16px;font-weight:800;line-height:1.5}
@@ -1569,3 +1569,7 @@ button{max-width:100%}
 .pvlim b{display:block;font-size:12px}.pvlim span{display:block;font-size:11px;color:var(--mut);line-height:1.6}
 @keyframes pvIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.pvm,.pvbadge{animation:none}}
+
+.pvlim[hidden],.pvbadge[hidden],.pvmods[hidden]{display:none!important}
+.lqi{background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 7%,var(--sf2)),var(--sf2));border-style:solid;border-color:color-mix(in srgb,var(--ac) 22%,var(--line))}
+.lqi .lqt span{white-space:normal;overflow:visible;font-size:11.5px}
