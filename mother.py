@@ -493,6 +493,25 @@ def mother_command(msg):
                 activate_plan(int(m.group(1)), m.group(2), int(m.group(3) or 0) or None)
                 return say(f"اشتراک {m.group(1)} روی «{PLAN_BY_ID[m.group(2)]['title']}» تنظیم شد.", False)
             return say("فرمت: /plan آیدی_عددی free|premium|pro [تعداد_روز]", False)
+        if cmd == "/unmatched":
+            rows = list(db.unmatched.find({}).sort("t", -1).limit(300))
+            if not rows:
+                return say("هنوز درخواست بدون ماژولی ثبت نشده.", False)
+            cnt = {}
+            for r in rows:
+                k = re.sub(r"\s+", " ", str(r.get("prompt") or ""))[:110]
+                cnt[k] = cnt.get(k, 0) + 1
+            top = sorted(cnt.items(), key=lambda x: -x[1])[:15]
+            return say("درخواست‌هایی که ماژول آماده نداشتند (۳۰۰ مورد اخیر):\n\n" + "\n\n".join(f"{n}× {p}" for p, n in top), False)
+        if cmd == "/candidates":
+            rows = list(db.candidates.find({}).sort("t", -1).limit(10))
+            if not rows:
+                return say("هنوز ساخت موفقی با هوش مصنوعی ثبت نشده.", False)
+            import io as _io
+            body = json.dumps([{"prompt": r.get("prompt"), "cfg": r.get("cfg")} for r in rows], ensure_ascii=False, indent=1)
+            requests.post(f"https://api.telegram.org/bot{MOTHER_TOKEN}/sendDocument", data={"chat_id": uid, "caption": "نمونه ساخت‌های موفق با هوش مصنوعی (۱۰ مورد اخیر) برای ساخت ماژول"},
+                          files={"document": ("candidates.json", _io.BytesIO(body.encode("utf-8")))}, timeout=30)
+            return
         if cmd == "/stats":
             t = naive()
             return say(f"کاربرها: {db.users.count_documents({})}\nآنلاین: {db.users.count_documents({'seen': {'$gte': t - timedelta(seconds=ONLINE_SECS)}})}\n"
@@ -1078,6 +1097,8 @@ def report_gaps(uid, bot, prompt, items):
         kb = {"inline_keyboard": [[
             {"text": "✉️ پاسخ به کاربر", "callback_data": f"gap:reply:{uid}:{gap_id}"},
             {"text": "🚀 ارسال پیام آماده", "callback_data": f"gap:ready:{uid}:{gap_id}"}
+        ], [
+            {"text": "⏳ بعداً دوباره امتحان کن", "callback_data": f"gap:later:{uid}:{gap_id}"}
         ]]}
         for admin in ADMIN_IDS:
             for idx, chunk in enumerate(chunks):
@@ -1099,6 +1120,14 @@ GAP_READY_TEXT = (
     "آماده‌ای دوباره امتحان کنیم؟ این بار ایده‌ات رو به ما بسپار! 💙"
 )
 
+GAP_LATER_TEXT = (
+    "سلام! 👋\n\n"
+    "درخواستت رو بررسی کردیم، ولی این قابلیت فعلاً به‌طور کامل در ربات‌ساز آماده نیست و ساخت کامل آن ممکن نشد.\n"
+    "تیم ما روی اضافه‌کردنش کار می‌کند؛ لطفاً چند روز دیگر دوباره امتحان کن. "
+    "همین حالا هم می‌توانی بخش‌های دیگر ایده‌ات را بسازی. 💙"
+)
+
+
 def gap_admin_callback(cq):
     """دکمه‌های پاسخ به گزارش محدود به ادمین؛ پاسخ آزاد با وضعیت موقت و پاسخ آماده."""
     uid = cq.get("from", {}).get("id")
@@ -1106,7 +1135,7 @@ def gap_admin_callback(cq):
     if uid not in ADMIN_IDS:
         tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text="فقط ادمین مجاز است.", show_alert=True)
         return True
-    m = re.fullmatch(r"gap:(reply|ready):(\d{1,20}):([a-fA-F0-9]{24})", data)
+    m = re.fullmatch(r"gap:(reply|ready|later):(\d{1,20}):([a-fA-F0-9]{24})", data)
     if not m:
         return False
     mode, target, gap_id = m.group(1), int(m.group(2)), m.group(3)
@@ -1121,6 +1150,14 @@ def gap_admin_callback(cq):
         tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text=("پیام آماده ارسال شد." if ok else "ارسال پیام ناموفق بود."), show_alert=not ok)
         if ok:
             db.gaps.update_one({"_id": gap["_id"]}, {"$set": {"ready_sent": now(), "ready_by": uid}})
+        return True
+    if mode == "later":
+        kb = {"inline_keyboard": [[{"text": "🤖 ربات‌ساز", "web_app": {"url": APP_URL}}]]}
+        r = tg_html(MOTHER_TOKEN, "sendMessage", chat_id=target, text=GAP_LATER_TEXT, reply_markup=kb, disable_web_page_preview=True)
+        ok = bool(r.get("ok"))
+        tg(MOTHER_TOKEN, "answerCallbackQuery", callback_query_id=cq["id"], text=("پیام ارسال شد." if ok else "ارسال پیام ناموفق بود."), show_alert=not ok)
+        if ok:
+            db.gaps.update_one({"_id": gap["_id"]}, {"$set": {"later_sent": now(), "later_by": uid}})
         return True
     key = f"gap_reply:{uid}"
     db.settings.update_one({"_id": key}, {"$set": {"uid": target, "gap": gap_id, "t": time.time()}}, upsert=True)

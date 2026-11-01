@@ -3497,6 +3497,10 @@ def _module_build(prompt, cb, nodes_cap, current=None):
         import planner
         pr = planner.plan_request(prompt)
         if not pr.items or pr.confidence < 0.35:
+            try:
+                db.unmatched.insert_one({"prompt": prompt[:1500], "update": current is not None, "t": _core_now()})
+            except Exception:
+                pass
             return None
         if current is not None and not planner.is_additive(prompt):
             return None
@@ -3756,6 +3760,11 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, _gap.items, "complete_candidate", len(plan))
     if cb:
         cb.stage("validate", 94.0)
+    if current is None and not _gap.items:
+        try:
+            db.candidates.insert_one({"prompt": prompt[:1500], "cfg": cfg, "t": _core_now()})
+        except Exception:
+            pass
     return thinking, cfg, ideas
 
 
