@@ -315,7 +315,34 @@ function liveDone(){
   root.querySelector(".lqbar").classList.remove("ind"); root.querySelector(".lqbar").firstElementChild.style.width = "100%";
   root.querySelector(".lqpc").textContent = FAD(100) + "%"; root.querySelector(".lqs").textContent = "آماده شد"; lqSteps(root, 3, true);
 }
-function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); LQ = {}; const b = $("#live"); if(b) b.innerHTML = ""; }
+function idleLive(){
+  return `<div class="lqi"><div class="lqih">${RB}<div class="lqt"><b>پیش‌نمایش ساخت</b><span id="pvs">ایده‌ات را بنویس تا همین‌جا ببینی چه ساخته می‌شود</span></div><span class="pvbadge" id="pvb" hidden></span></div>
+    <div class="pvmods" id="pvm"></div><div class="pvlim" id="pvl" hidden></div>
+    <ol class="lqst">${LQ_STEPS.map(t => `<li><i></i>${t}</li>`).join("")}</ol></div>`;
+}
+let PVT = 0, PVSEQ = 0;
+function planPreview(){
+  const ta = $("#prompt"); if(!ta) return;
+  clearTimeout(PVT);
+  PVT = setTimeout(async () => {
+    const txt = ta.value.trim(), seq = ++PVSEQ;
+    const sub = $("#pvs"), mods = $("#pvm"), lim = $("#pvl"), bd = $("#pvb");
+    if(!sub || !$("#live .lqi")) return;
+    if(txt.length < 12){ sub.textContent = "ایده‌ات را بنویس تا همین‌جا ببینی چه ساخته می‌شود"; mods.innerHTML = ""; lim.hidden = true; bd.hidden = true; return; }
+    try{
+      const d = await api("/api/plan", "POST", {prompt: txt});
+      if(seq !== PVSEQ || !$("#pvs")) return;
+      bd.hidden = false; bd.className = "pvbadge " + (d.instant ? "ok" : "ai");
+      bd.textContent = d.instant ? "ساخت آنی" : "ساخت با هوش مصنوعی";
+      sub.textContent = d.instant ? `«${d.name}» · ${d.modules.length} قابلیت شناسایی شد` : "قابلیتی آماده‌ای پیدا نشد؛ هوش مصنوعی طراحی می‌کند";
+      mods.innerHTML = d.modules.map((m, i) => `<span class="pvm" style="animation-delay:${i * 45}ms">${esc(m.fa)}</span>`).join("");
+      const L = d.limits || [];
+      lim.hidden = !L.length;
+      lim.innerHTML = L.map(x => `<div><b>${esc(x.want)}</b><span>${esc(x.why)}</span></div>`).join("");
+    }catch(e){ /* پیش‌نمایش اختیاری است */ }
+  }, 450);
+}
+function stopLive(){ clearInterval(startLive.t); clearInterval(startLive.c); LQ = {}; const b = $("#live"); if(b){ b.innerHTML = idleLive(); planPreview(); } }
 
 async function pollBuildJob(jid){
   for(let i = 0; i < 1300; i++){
@@ -433,20 +460,22 @@ function tplBlock(){
 function renderCreate(){
   const c = S.cfg, full = S.bots.length >= (c.max_bots || 10);
   $("#app").innerHTML = `
-    <section class="hero-t"><h1>ایده‌ات را بنویس</h1><p>من برات می‌سازمش و هر وقت خواستی، گسترشش می‌دم.</p></section>
     ${full ? `<div class="panel"><h2>به سقف ${N(c.max_bots)} ربات رسیدی</h2><p class="muted">برای ساخت ربات تازه، یکی از ربات‌های قبلی را حذف کن؛ یا همین ربات‌ها را با هوش مصنوعی ارتقا بده.</p><div class="fgap"></div><button class="b o" data-go="bots">ربات‌های من</button></div>` : `
-    <div class="console">
+    <div class="cstage"><div class="console big">
+      <div class="chead"><b>ایده‌ات را بنویس</b><span>من برات می‌سازمش و هر وقت خواستی گسترشش می‌دم</span></div>
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="توضیح ربات" placeholder="${esc(EXAMPLES[0][1])}"></textarea>
       <div class="chips">${EXAMPLES.map((e, i) => `<button class="chip" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="chip ai" data-a="enhance">${IC.spark}تکمیل خودکار</button></div>
       <div class="cfoot">
         <div class="gauge" title="تعداد رباتی که با موجودی فعلی می‌توانی بسازی"><div class="cells">${cellsHTML(buildsLeft())}</div><span class="cost">مصرف توکن ${costTxt(false)}</span></div>
         <button class="b" id="gen" data-a="gen">ساخت ربات</button>
       </div>
-    </div>`}
-    <div id="live"></div>
+    </div>
+    <div id="live" class="livebox">${idleLive()}</div></div>`}
+    ${full ? `<div id="live"></div>` : ""}
     ${bpBlock()}
     ${tplBlock()}`;
   startTyper();
+  $("#prompt")?.addEventListener("input", planPreview);
   if(S.bps === undefined){
     S.bps = null;
     api("/api/blueprints").then(d => { S.bps = d.items || []; if(S.view === "create") render(); }).catch(() => { S.bps = []; });

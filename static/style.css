@@ -1542,3 +1542,26 @@ button{max-width:100%}
 .ubc-f{display:flex;justify-content:space-between;gap:8px;margin-top:10px;color:var(--mut)}
 .ubc-f small{font-size:11px}.ubc-f small.bad{color:var(--bad)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ── صفحهٔ ساخت: فقط دو باکس (نوشتن ایده + پیش‌نمایش ساخت) تمام صفحه؛ بقیه با اسکرول ── */
+.cstage{display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 150px);min-height:calc(100dvh - 150px);padding-bottom:6px}
+.console.big{flex:1 1 56%;display:flex;flex-direction:column;min-height:260px;border-radius:22px}
+.console.big .chead{padding:16px 18px 0;display:flex;flex-direction:column;gap:2px}
+.console.big .chead b{font-size:16px;font-weight:800;line-height:1.5}
+.console.big .chead span{font-size:12px;color:var(--mut);line-height:1.7}
+.console.big textarea{flex:1 1 auto;min-height:150px;resize:none;font-size:15.5px;padding:10px 18px 6px}
+.livebox{flex:1 1 44%;min-height:190px;display:flex}
+.livebox>.lq,.livebox>.lqi{margin:0;flex:1;display:flex;flex-direction:column}
+.lqi{padding:16px 18px;border-radius:22px;background:linear-gradient(160deg,var(--sf),var(--sf2));border:1px dashed color-mix(in srgb,var(--ac) 32%,var(--line));gap:12px}
+.lqih{display:flex;align-items:center;gap:12px}
+.lqih .rb{width:28px;height:28px;color:var(--ac);opacity:.75}
+.lqi .lqst{margin-top:auto;opacity:.55}
+.pvbadge{flex:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;animation:pvIn .3s ease both}
+.pvbadge.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pvbadge.ai{color:var(--ac);background:var(--acs)}
+.pvmods{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+.pvm{font-size:12px;padding:5px 11px;border-radius:99px;background:var(--sf);box-shadow:inset 0 0 0 1px var(--line);animation:pvIn .35s cubic-bezier(.2,.8,.2,1) both}
+.pvlim{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:14px;background:color-mix(in srgb,var(--bad) 8%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bad) 30%,transparent)}
+.pvlim b{display:block;font-size:12.5px}.pvlim span{display:block;font-size:11.5px;color:var(--mut);line-height:1.7}
+@keyframes pvIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.pvm,.pvbadge{animation:none}}

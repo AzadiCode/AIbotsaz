@@ -143,6 +143,8 @@ def _bot_name(t, ids):
                 return n
     if "member_orders" in ids:
         return "ممبرگیر"
+    if "ads" in ids:
+        return "نیازمندی‌ها"
     if "shop" in ids:
         return "فروشگاه من"
     if "group_manager" in ids:

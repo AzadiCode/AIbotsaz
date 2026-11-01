@@ -419,7 +419,27 @@ def c_group(b, p):
     b.notes.append("ربات را در گروه ادمین کن تا قفل‌ها و کپچا کار کنند.")
 
 
+def c_ads(b, p):
+    for v in ("ad_title", "ad_desc", "ad_price", "ad_contact"):
+        b.var(v, "")
+    b.node("ad_new", f"<b>{b.E('📝')}ثبت آگهی</b>\n\nاطلاعات آگهی را مرحله‌به‌مرحله بفرست.", [], title="ثبت آگهی",
+           fields=["نام کالا", "توضیحات کالا", "قیمت (به تومان)", "عکس کالا", "اطلاعات تماس (شماره یا آیدی تلگرام)"],
+           types=["text", "text", "text", "photo", "text"], save=["ad_title", "ad_desc", "ad_price", "", "ad_contact"],
+           ticket=True, tag="آگهی جدید", done="آگهی ثبت شد (تیکت #{ticket_no}) و در فهرست آگهی‌ها قرار گرفت.", next="ad_all",
+           do=[{"op": "db_add", "table": "ads", "data": {"title": "{ad_title}", "price": "{ad_price}", "contact": "{ad_contact}", "desc": "{ad_desc}"}}])
+    line = "{title} · {price} تومان · تماس: {contact}"
+    b.node("ad_all", f"<b>{b.E('🛍')}آگهی‌های تازه</b>", [[_btn("ثبت آگهی", goto="ad_new")], [_btn("آگهی‌های من", goto="ad_my")], b.back()], title="آگهی‌ها",
+           list={"table": "ads", "scope": "all", "limit": 8, "line": line, "empty": "هنوز آگهی‌ای ثبت نشده؛ اولین نفر باش!"})
+    b.node("ad_my", "آگهی‌های من:", [[_btn("ثبت آگهی", goto="ad_new")], [_btn("همهٔ آگهی‌ها", goto="ad_all")], b.back()], title="آگهی‌های من",
+           list={"table": "ads", "scope": "my", "limit": 8, "line": line, "empty": "هنوز آگهی‌ای نداری."})
+    b.menu_add(10, f"{b.E('📝')}ثبت آگهی", "ad_new")
+    b.menu_add(11, f"{b.E('🛍')}دیدن آگهی‌ها", "ad_all")
+    b.notes.append("آگهی‌ها داخل ربات نمایش داده می‌شوند و همراه عکس برای مالک می‌آیند؛ انتشار خودکار در کانال را موتور ندارد، مالک با پاسخ به پیام و دستور /post آن را در کانال می‌گذارد.")
+
+
 def _reg2():
+    register(Module("ads", "آگهی و نیازمندی", "ثبت آگهی با فرم (نام، توضیح، قیمت، عکس، تماس)، فهرست عمومی آگهی‌ها و آگهی‌های من", c_ads, [],
+                    [(r"آگهی|نیازمندی|خرید و فروش (کالا)?|فروش کالا", 1.2)], (), 10, "فروش"))
     register(Module("support", "پشتیبانی", "فرم پیام به مالک (تیکت) و پاسخ از داخل ربات", c_support, [P("text", "متن بالای فرم", "text", "پیامت را بنویس تا تیم پشتیبانی پاسخ بدهد.", max=300)],
                     [(r"پشتیبانی|تیکت|support|ارتباط با (ما|مدیر|ادمین)", 1.0)], (), 60, "عمومی"))
     register(Module("faq", "سؤال‌های پرتکرار", "فهرست پرسش و پاسخ", c_faq,
