@@ -23,6 +23,7 @@ ai.py — هوش مصنوعیِ ساخت ربات (وابسته به core)
   TEMPLATES, to_num, typical_cost, VAR_RE
 """
 
+import itertools
 import os, re, json, time, math, threading, ast, copy, hashlib
 from urllib.parse import urlparse
 
@@ -1641,7 +1642,7 @@ def lint(cfg):
     if dead:
         out.append("dead-end nodes with no goto/back button (add a back or home button): " + ", ".join(dead[:6]))
     reads, writes = set(), set()
-    for d in _walk(nodes):
+    for d in itertools.chain(_walk(nodes), _walk(cfg.get("on_ref") or [])):
         for v in d.values():
             if isinstance(v, str):
                 reads.update(m.group(1) for m in PH_RE.finditer(v))
@@ -3421,6 +3422,14 @@ _STATIC_LIMITS = [
      "پرداخت با درگاه بانکی یا کارت‌به‌کارت خودکار",
      "فقط پرداخت با ستارهٔ تلگرام پشتیبانی می‌شود و تأیید خودکار پرداخت بانکی وجود ندارد.",
      "پرداخت با ستارهٔ تلگرام، یا ثبت سفارش با تیکت و تأیید دستی مالک"),
+    (r"(پورسانت|کمیسیون|درصد\s*(?:از\s*)?(?:خرید|درآمد|سود)\s*(?:زیر\s*مجموعه|دعوت))",
+     "پورسانت از خرید یا درآمد زیرمجموعه‌ها",
+     "موتور موجودی یک کاربر را بر اثر عمل کاربر دیگر تغییر نمی‌دهد؛ فقط پاداش ثابت لحظهٔ دعوت (on_ref) پشتیبانی می‌شود.",
+     "پاداش ثابت برای هر دعوت یا تبدیل قطعه‌های پازل به سکه"),
+    (r"(مالک|ادمین)\s*(?:می\s*?تون[هد]?|بتون[هد]?)\s*(?:به\s*)?(?:کاربر)?\s*(?:سکه|امتیاز|اعتبار)\s*(?:بده|اضافه)",
+     "اضافه‌کردن دستی سکه به کاربر دلخواه توسط مالک",
+     "اکشن‌های موتور فقط روی کیف خود کاربرِ در حال استفاده کار می‌کنند.",
+     "پرداخت با ستارهٔ تلگرام برای شارژ خودکار، یا ثبت درخواست با تیکت"),
     (r"(بازی\s*(?:آنلاین|لحظه\s*ای)\s*(?:دو\s*نفره|چند\s*نفره)|multiplayer|real[-\s]?time\s*game)",
      "بازی آنلاین لحظه‌ای چندنفره",
      "بازی‌های لحظه‌ای هم‌زمان پشتیبانی نمی‌شوند.",
@@ -3475,6 +3484,38 @@ def _fix_structure_deterministically(cfg):
     return issues
 
 
+AI_MODULES = os.environ.get("AI_MODULES", "1").strip().lower() not in ("0", "false", "off", "no")
+
+
+def _module_build(prompt, cb, nodes_cap):
+    """مسیر سریع و قطعی: روتر + ماژول‌های آماده (بدون هوش مصنوعی). اگر مطمئن نبود None برمی‌گرداند تا مسیر قدیمی اجرا شود."""
+    try:
+        import planner
+        pr = planner.plan_request(prompt)
+        if not pr.items or pr.confidence < 0.35:
+            return None
+        if cb:
+            cb.stage("analyze", 18.0)
+        thinking, cfg, ideas = planner.compile_plan(pr)
+        if cb:
+            cb.stage("generate", 62.0)
+        warns = []
+        cfg = sanitize(cfg, strict=False, warns=warns, nodes_cap=nodes_cap)
+        issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
+        if warns or issues:
+            log.warning("module build rejected by validator, falling back to LLM: %s %s", warns[:3], issues[:3])
+            return None
+        if cb:
+            cb.stage("validate", 94.0)
+        tail = " برای افزودن قابلیت‌های دیگر، از «ویرایش با هوش مصنوعی» استفاده کن."
+        thinking = (thinking[:900 - len(tail)].rstrip() + tail)
+        log.info("module build ok: %s (%s nodes)", pr.ids, len(cfg["nodes"]))
+        return thinking, cfg, ideas
+    except Exception:
+        log.exception("module build failed; falling back to LLM pipeline")
+        return None
+
+
 def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     """Task-based builder: plan -> patch each capability -> persist every checkpoint -> normalize/lint/QA."""
     acc = [] if acc is None else acc
@@ -3506,6 +3547,11 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
             if not _job0.get("preflight_ok"):
                 raise PreflightReview(_early)
+        if current is None and AI_MODULES:
+            _fast = _module_build(prompt, cb, nodes_cap)
+            if _fast:
+                _gap.items = []
+                return _fast
         plan = _plan_build_tasks(prompt, current, acc)
         cfg = copy.deepcopy(current) if current is not None else {
             "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",

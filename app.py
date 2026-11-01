@@ -456,6 +456,30 @@ def api_generate(uid):
     return jsonify(job=jid, hold=reserve, wallet=wallet_info(uid))
 
 
+@app.get("/api/modules")
+@authed
+def api_modules(uid):
+    """فهرست ماژول‌های آمادهٔ ساخت سریع (برای نمایش در استودیو)"""
+    from modules import catalog
+    import modlib  # noqa: F401
+    return jsonify(modules=catalog())
+
+
+@app.post("/api/plan")
+@authed
+def api_plan(uid):
+    """پیش‌نمایش آنی (بدون توکن): درخواست چه ماژول‌هایی می‌سازد و کدام بخش‌ها از توان موتور بیرون است"""
+    from planner import plan_request
+    from ai import _static_limits
+    from modules import MODULES
+    d = request.get_json(silent=True) or {}
+    prompt = str(d.get("prompt") or "")[:6000]
+    pr = plan_request(prompt)
+    return jsonify(modules=[{"id": i, "fa": MODULES[i].fa, "params": p} for i, p in pr.items], name=pr.name,
+                   confidence=round(pr.confidence, 2), instant=bool(pr.items and pr.confidence >= 0.35),
+                   limits=_static_limits(prompt))
+
+
 @app.get("/api/jobs/<jid>")
 @authed
 def api_job(uid, jid):
