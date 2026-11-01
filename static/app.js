@@ -464,13 +464,13 @@ function renderCreate(){
     <div class="cstage"><div class="console big">
       <div class="chead"><b>ایده‌ات را بنویس</b><span>من برات می‌سازمش و هر وقت خواستی گسترشش می‌دم</span></div>
       <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="توضیح ربات" placeholder="${esc(EXAMPLES[0][1])}"></textarea>
+      <div id="live" class="livebox">${idleLive()}</div>
       <div class="chips">${EXAMPLES.map((e, i) => `<button class="chip" data-a="chip" data-i="${i}">${e[0]}</button>`).join("")}<button class="chip ai" data-a="enhance">${IC.spark}تکمیل خودکار</button></div>
       <div class="cfoot">
         <div class="gauge" title="تعداد رباتی که با موجودی فعلی می‌توانی بسازی"><div class="cells">${cellsHTML(buildsLeft())}</div><span class="cost">مصرف توکن ${costTxt(false)}</span></div>
         <button class="b" id="gen" data-a="gen">ساخت ربات</button>
       </div>
-    </div>
-    <div id="live" class="livebox">${idleLive()}</div></div>`}
+    </div></div>`}
     ${full ? `<div id="live"></div>` : ""}
     ${bpBlock()}
     ${tplBlock()}`;

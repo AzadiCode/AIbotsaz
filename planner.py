@@ -224,3 +224,85 @@ def compile_plan(pr):
         ideas.append("جایزه‌های گردونه را با ویرایش بخش‌های «جایزه» عوض کن")
     ideas += ["یک بنر یا عکس برای منوی اصلی بگذار", "برای هر بخش دکمهٔ لینک کانال خودت را اضافه کن"]
     return thinking, cfg, ideas[:4]
+
+
+_ADD_RX = re.compile(r"(اضافه|بساز|ایجاد|فعال|داشته باش|قرار بده|بذار|می ?خوام|میخوام|نیاز دارم|لازمه)")
+_EDIT_RX = re.compile(r"(حذف|پاک|عوض|تغییر|ویرایش|اصلاح|به ?جای|درست کن|باگ|خراب|رنگ|متن .{0,20}(را|رو) )")
+
+
+def is_additive(prompt):
+    t = normalize_text(prompt)
+    return not _EDIT_RX.search(t)
+
+
+def merge_plan(current, pr):
+    """افزودن ماژول‌ها به ربات موجود بدون دست‌زدن به بخش‌های قبلی. اگر شناسهٔ بخشی تکراری باشد BuildError (مسیر قدیمی اجرا می‌شود)."""
+    import copy
+    thinking, new, ideas = compile_plan(pr)
+    cfg = copy.deepcopy(current)
+    nodes = cfg.setdefault("nodes", {})
+    start_id = cfg.get("start") or "start"
+    if start_id not in nodes:
+        raise BuildError("ربات فعلی گره شروع ندارد")
+    rename = {"start": start_id}
+    for nid in new["nodes"]:
+        if nid == "start":
+            continue
+        if nid in nodes:
+            raise BuildError("بخش تکراری: " + nid)
+        rename[nid] = nid
+
+    def rw(o):
+        if isinstance(o, dict):
+            return {k: (rename.get(v, v) if k in ("goto", "next") and isinstance(v, str) else rw(v)) for k, v in o.items()}
+        if isinstance(o, list):
+            return [rw(x) for x in o]
+        return o
+
+    for nid, n in new["nodes"].items():
+        if nid != "start":
+            nodes[nid] = rw(n)
+    ns = rw(new["nodes"]["start"])
+    btns = [b for row in ns.get("buttons", []) for b in row]
+    st = nodes[start_id]
+    rows = st.setdefault("buttons", [])
+    need = (len(btns) + 1) // 2
+    if len(rows) + need <= 6:
+        for i in range(0, len(btns), 2):
+            rows.append(btns[i:i + 2])
+    else:
+        mid = "mm_more"
+        if mid in nodes:
+            raise BuildError("بخش تکراری: " + mid)
+        extra = [btns[i:i + 2] for i in range(0, len(btns), 2)][:5] + [[{"text": "بازگشت", "goto": start_id}]]
+        nodes[mid] = {"text": "امکانات بیشتر:", "buttons": extra, "title": "امکانات بیشتر"}
+        link = {"text": "امکانات بیشتر", "goto": mid}
+        if len(rows) < 6:
+            rows.append([link])
+        elif len(rows[-1]) < 3:
+            rows[-1].append(link)
+        else:
+            raise BuildError("منوی اصلی پر است")
+    if ns.get("route"):
+        st["route"] = (st.get("route") or []) + ns["route"]
+        st["route"] = st["route"][:5]
+    for k in ("vars", "globals"):
+        for kk, vv in (new.get(k) or {}).items():
+            cfg.setdefault(k, {}).setdefault(kk, vv)
+    for kk, vv in (new.get("commands") or {}).items():
+        cfg.setdefault("commands", {}).setdefault(kk, rename.get(vv, vv))
+    for k in ("desk", "join", "mod", "group"):
+        if new.get(k):
+            if isinstance(new[k], dict) and isinstance(cfg.get(k), dict):
+                for kk, vv in new[k].items():
+                    cfg[k].setdefault(kk, vv)
+            else:
+                cfg.setdefault(k, new[k])
+    if new.get("on_ref"):
+        cfg["on_ref"] = (cfg.get("on_ref") or []) + [x for x in new["on_ref"] if x not in (cfg.get("on_ref") or [])]
+        if new.get("ref_text"):
+            cfg.setdefault("ref_text", new["ref_text"])
+    names = "، ".join(MODULES[i].fa for i in pr.ids)
+    thinking = f"این قابلیت‌ها بدون تغییر بخش‌های قبلی به ربات اضافه شد: {names}. دکمهٔ ورود به منوی اصلی اضافه شد." + \
+        ("\n" + thinking.split("\n", 1)[1] if "\n" in thinking else "")
+    return thinking, cfg, ideas

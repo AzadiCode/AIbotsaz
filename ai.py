@@ -3491,21 +3491,36 @@ def _fix_structure_deterministically(cfg):
 AI_MODULES = os.environ.get("AI_MODULES", "1").strip().lower() not in ("0", "false", "off", "no")
 
 
-def _module_build(prompt, cb, nodes_cap):
+def _module_build(prompt, cb, nodes_cap, current=None):
     """مسیر سریع و قطعی: روتر + ماژول‌های آماده (بدون هوش مصنوعی). اگر مطمئن نبود None برمی‌گرداند تا مسیر قدیمی اجرا شود."""
     try:
         import planner
         pr = planner.plan_request(prompt)
         if not pr.items or pr.confidence < 0.35:
             return None
+        if current is not None and not planner.is_additive(prompt):
+            return None
         if cb:
             cb.stage("analyze", 18.0)
-        thinking, cfg, ideas = planner.compile_plan(pr)
+        if current is None:
+            thinking, cfg, ideas = planner.compile_plan(pr)
+        else:
+            thinking, cfg, ideas = planner.merge_plan(current, pr)
         if cb:
             cb.stage("generate", 62.0)
         warns = []
         cfg = sanitize(cfg, strict=False, warns=warns, nodes_cap=nodes_cap)
+        if current is not None and warns:
+            _bw = []
+            try:
+                sanitize(current, strict=False, warns=_bw, nodes_cap=nodes_cap)
+            except Exception:
+                pass
+            warns = [x for x in warns if x not in _bw]
         issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
+        if current is not None:
+            base = set(lint(current))
+            issues = [x for x in issues if x not in base]
         if warns or issues:
             log.warning("module build rejected by validator, falling back to LLM: %s %s", warns[:3], issues[:3])
             return None
@@ -3551,8 +3566,8 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
             if not _job0.get("preflight_ok"):
                 raise PreflightReview(_early)
-        if current is None and AI_MODULES:
-            _fast = _module_build(prompt, cb, nodes_cap)
+        if AI_MODULES:
+            _fast = _module_build(prompt, cb, nodes_cap, current)
             if _fast:
                 _gap.items = []
                 return _fast
