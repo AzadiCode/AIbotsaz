@@ -2037,12 +2037,13 @@ UB_MAX_CHATS = _int("UB_MAX_CHATS", 60)     # حداکثر گروه/کانال �
 UB_MAX_POSTS = _int("UB_MAX_POSTS", 20)     # حداکثر پیام زمان‌بندی‌شده
 # سطح ایمنی: سقف‌ها و فاصله‌ها برای ارسال طبیعی و دور ماندن از محدودیت (Flood/Spam) تلگرام
 #   post_h = سقف ارسال زمان‌بندی‌شده در ساعت (کل اکانت)   gap = حداقل فاصله‌ی دو پیام به یک چت (ثانیه)
+#   post_d = سقف کل ارسال‌های زمان‌بندی‌شده‌ی اکانت در شبانه‌روز (به‌وقت تهران)
 #   dmin/dmax = مکث تصادفی بین دو ارسال (ثانیه)   g_h = سقف پاسخ در گروه‌ها در ساعت برای هر گروه   g_cd/u_cd = مکث پاسخ به گروه/هر نفر
 UB_PROF = {
-    "test":     dict(post_h=350, gap=180,  dmin=6,  dmax=14, g_h=40, g_cd=10, u_cd=20),     # فقط برای تست؛ ریسک محدود شدن اکانت
-    "safe":     dict(post_h=12, gap=3600, dmin=30, dmax=90, g_h=10, g_cd=60, u_cd=180),
-    "balanced": dict(post_h=24, gap=1800, dmin=15, dmax=45, g_h=20, g_cd=30, u_cd=90),
-    "fast":     dict(post_h=40, gap=900,  dmin=8,  dmax=25, g_h=40, g_cd=15, u_cd=45),
+    "test":     dict(post_h=350, post_d=2000, gap=180,  dmin=6,  dmax=14, g_h=40, g_cd=10, u_cd=20),     # فقط برای تست؛ ریسک محدود شدن اکانت
+    "safe":     dict(post_h=12, post_d=120, gap=3600, dmin=30, dmax=90, g_h=10, g_cd=60, u_cd=180),
+    "balanced": dict(post_h=24, post_d=200, gap=1800, dmin=15, dmax=45, g_h=20, g_cd=30, u_cd=90),
+    "fast":     dict(post_h=40, post_d=320, gap=900,  dmin=8,  dmax=25, g_h=40, g_cd=15, u_cd=45),
 }
 UB_DEV = dict(device_model="Azadi Userbot", system_version="Linux", app_version="1.0", lang_code="fa", system_lang_code="fa")
 
@@ -2103,7 +2104,7 @@ def ub_creds(doc=None):
 
 
 def ub_default_cfg():
-    return {"who": "all", "safe": "balanced", "away": {"on": False, "text": "سلام {name} 👋 الان در دسترس نیستم، به‌محض اینکه آنلاین شدم جواب می‌دم.", "gap_h": 6},
+    return {"who": "all", "safe": "safe", "away": {"on": False, "text": "سلام {name} 👋 الان در دسترس نیستم، به‌محض اینکه آنلاین شدم جواب می‌دم.", "gap_h": 6},
             "rules": [], "ai": {"on": False, "prompt": "", "daily": 20, "gdaily": 30, "disclose": True}, "cmds": {"on": True},
             "chats": [], "posts": [], "join": {"mode": "off", "daily": 5}}
 
@@ -2118,7 +2119,7 @@ def _ub_int(v, lo, hi, dflt):
 def ub_clean_cfg(c):
     d, c = ub_default_cfg(), (c if isinstance(c, dict) else {})
     out = {"who": c.get("who") if c.get("who") in ("all", "contacts", "others") else "all",
-           "safe": c.get("safe") if c.get("safe") in UB_PROF else "balanced"}
+           "safe": c.get("safe") if c.get("safe") in UB_PROF else "safe"}
     a = c.get("away") if isinstance(c.get("away"), dict) else {}
     out["away"] = {"on": bool(a.get("on")), "text": str(a.get("text") or d["away"]["text"])[:1000].strip() or d["away"]["text"],
                    "gap_h": _ub_int(a.get("gap_h"), 1, 72, 6)}
@@ -2216,20 +2217,26 @@ def _ub_rs(st):
 def ub_public(d):
     ubid = str(d["_id"])
     live = ubid in _ub_live
+    cfg = ub_clean_cfg(d.get("config"))
+    _st = _ub_live.get(ubid)
+    if _st:
+        ACCT = _ub_acct_view(_st, cfg)
+    else:
+        eff0 = UB_PROF.get(cfg.get("safe"), UB_PROF["balanced"])
+        dw = str(d.get("dead_why") or "")
+        ACCT = {"c": "bad" if dw else "off", "t": "اکانت قطع شد" if dw else "یوزربات خاموش",
+                "m": (dw + "؛ از تب یوزربات دوباره وصلش کن.") if dw else "یوزربات خاموش است؛ تا روشنش نکنی هیچ ارسالی انجام نمی‌شود.",
+                "u": 0, "pen": 1, "ramp": 1, "ph": 0, "ph_max": eff0["post_h"], "pd": 0, "pd_max": eff0["post_d"], "fw": 0, "risky": cfg.get("safe") in ("test", "fast"),
+                "ev": list(reversed(d.get("acct", {}).get("ev") or []))[:10] if isinstance(d.get("acct"), dict) else []}
     st = "running" if live else ("revoked" if d.get("revoked") else "stopped")
     return {"id": ubid, "name": d.get("tg_name", ""), "username": d.get("tg_user", ""), "phone": d.get("phone", ""), "status": st,
-            "active": bool(d.get("active")), "config": ub_clean_cfg(d.get("config")),
+            "active": bool(d.get("active")), "config": cfg,
             "stats": {"in": int(d.get("n_in", 0)), "out": int(d.get("n_out", 0)), "ai": int(d.get("n_ai", 0))},
             "log": list(reversed(d.get("log") or []))[:20], "created": aware(d["created"]).isoformat() if d.get("created") else "",
-            "hold": int((_ub_live.get(ubid) or {}).get("hold") or 0),
+            "hold": int((_ub_live.get(ubid) or {}).get("hold") or 0), "dead_why": str(d.get("dead_why") or ""),
             "lim": {"chats": UB_MAX_CHATS, "posts": UB_MAX_POSTS},
             "rs": _ub_rs(_ub_live.get(ubid)),
-            "ph": sum(1 for z in ((_ub_live.get(ubid) or {}).get("psent") or ()) if time.time() - z < 3600),
-            "ph_max": UB_PROF.get(ub_clean_cfg(d.get("config")).get("safe"), UB_PROF["balanced"])["post_h"],
-            "ps": {k: {"last": int(v.get("last") or 0), "next": int(v.get("next") or 0), "n": int(v.get("n") or 0), "pend": len(v.get("pend") or []),
-                       "ok": int(v.get("ok") or 0), "bad": int(v.get("bad") or 0), "err": str(v.get("err") or "")[:120], "cyc": int(v.get("cyc") or 0),
-                       "tg": v.get("tg") if isinstance(v.get("tg"), dict) else {}}
-                   for k, v in ((_ub_live.get(ubid) or {}).get("ps") or d.get("ps") or {}).items() if isinstance(v, dict)}}
+            "ph": ACCT["ph"], "ph_max": ACCT["ph_max"], "acct": ACCT, "ps": _ub_ps_view(ubid, d, cfg)}
 
 
 def get_ub(ubid, owner):
@@ -2355,7 +2362,7 @@ async def _ub_handle_in(ubid, st, ev):
         sent.append(time.time())
         await _ub_db(ub_log, ubid, kind, name, "n_ai" if kind == "پاسخ هوشمند" else "n_out")
     except Exception as e:
-        log.warning("userbot in-handler: %r", e)
+        await _ub_catch(ubid, st, e, "in-handler")
 
 
 async def _ub_handle_out(ubid, st, ev):
@@ -2386,7 +2393,7 @@ async def _ub_handle_out(ubid, st, ev):
             return
         ub_log(ubid, f"دستور {cmd}", "", "n_out")
     except Exception as e:
-        log.warning("userbot out-handler: %r", e)
+        await _ub_catch(ubid, st, e, "out-handler")
 
 
 # ───────── گروه‌ها و کانال‌ها: پاسخ خودکار در گروه + پیام‌های زمان‌بندی‌شده ─────────
@@ -2434,18 +2441,267 @@ def ub_pause_chat(ubid, st, cid, reason):
     ub_notify(st["owner"], ubid, f"c{cid}", f"⚠️ ارسال خودکار به «{title}» متوقف شد: {reason}\nاز تب «گروه‌ها و کانال‌ها» در یوزربات بررسی و ازسرگیری کن.")
 
 
+# ───────── نگهبان اکانت: صبر دقیق در FloodWait، ضریب احتیاط تطبیقی، سقف روزانه، گرم‌کردن اکانت تازه و وضعیت شفاف ─────────
+# هیچ سیستمی ریسک را صفر نمی‌کند؛ اینجا (۱) هر خطای تلگرام دقیق مدیریت و ثبت می‌شود، (۲) بعد از هر محدودیت موقتاً آهسته‌تر
+# ادامه می‌دهیم و کم‌کم برمی‌گردیم، (۳) هر اتفاق برای نمایش در کارت‌های پنل ذخیره می‌شود (st["aev"] و ps["ev"]).
+UB_FATAL = ("UserDeactivatedBanError", "UserDeactivatedError", "AuthKeyUnregisteredError", "AuthKeyDuplicatedError", "SessionRevokedError", "SessionExpiredError")
+UB_NETERR = ("TimedOutError", "ServerError", "RpcCallFailError", "RpcMcgetFailError")
+UB_FATAL_T = {"UserDeactivatedBanError": "اکانت توسط تلگرام مسدود (Ban) شده", "UserDeactivatedError": "اکانت در تلگرام غیرفعال یا حذف شده",
+              "AuthKeyDuplicatedError": "نشست هم‌زمان روی دو سرور یا IP استفاده شد و تلگرام آن را باطل کرد (یوزربات را فقط روی یک سرور اجرا کن)"}
+UB_RAMP = ((86400, 0.4), (3 * 86400, 0.6), (7 * 86400, 0.8))      # عمر نشست ← ضریب سقف‌ها (اکانتی که تازه وصل شده ناگهان پرکار نشود)
+
+
+def _ub_dur(sec):
+    sec = int(max(0, sec))
+    if sec < 90:
+        return f"{sec} ثانیه"
+    if sec < 5400:
+        return f"{round(sec / 60)} دقیقه"
+    return f"{sec / 3600:.1f} ساعت"
+
+
+def _ub_hhmm(ts):
+    return (now() + timedelta(seconds=ts - time.time(), hours=3, minutes=30)).strftime("%H:%M")
+
+
+def _ub_ev(lst, k, m, c=""):
+    """رویداد شفاف برای پنل. k: ok | skip | drop | wait | flood | info | cap | dead"""
+    lst.append({"t": int(time.time()), "k": k, "m": str(m)[:150], "c": str(c)[:40]})
+    del lst[:-14]
+
+
+def _ub_snap(x):
+    """کپی امن از ساختاری که ترد دیگر ممکن است همزمان تغییرش بدهد"""
+    for _ in range(3):
+        try:
+            return list(x)
+        except RuntimeError:
+            continue
+    return []
+
+
+def _ub_pen(st, t=None):
+    """ضریب احتیاط ≥ ۱: بعد از هر FloodWait بالا می‌رود و بعد از پایان محدودیت ساعتی ۰٫۲۵ پایین می‌آید"""
+    t = t or time.time()
+    p = float(st.get("pen") or 1.0)
+    if p <= 1.0:
+        return 1.0
+    start = max(float(st.get("pen_t") or 0), float(st.get("hold") or 0))
+    return max(1.0, p - max(0.0, t - start) / 3600 * 0.25)
+
+
+def _ub_ramp(st, cfg, t=None):
+    if cfg.get("safe") == "test" or not st.get("born"):
+        return 1.0
+    age = (t or time.time()) - float(st["born"])
+    for lim, f in UB_RAMP:
+        if age < lim:
+            return f
+    return 1.0
+
+
+def _ub_eff(st, cfg, t=None):
+    """پروفایل ایمنی مؤثر = پروفایل انتخابی × (گرم‌کردن ÷ ضریب احتیاط). خروجی: (پروفایل، ضریب احتیاط، ضریب گرم‌کردن)"""
+    pr = UB_PROF.get(cfg.get("safe"), UB_PROF["balanced"])
+    pen, ramp = _ub_pen(st, t), _ub_ramp(st, cfg, t)
+    f = ramp / pen
+    return dict(pr, post_h=max(1, int(pr["post_h"] * f)), post_d=max(3, int(pr["post_d"] * f)), gap=int(pr["gap"] * pen),
+                dmin=pr["dmin"] * pen, dmax=pr["dmax"] * pen), pen, ramp
+
+
+def _ub_day_n(st):
+    """شمارنده‌ی ارسال‌های زمان‌بندی‌شده‌ی امروز (کل اکانت)"""
+    d = tehran_day()
+    pd = st.setdefault("pd", {"day": d, "n": 0})
+    if pd.get("day") != d:
+        pd["day"], pd["n"] = d, 0
+    return pd
+
+
+def _ub_next_hour(h, t):
+    """زمان (epoch) رسیدن به ساعت h به‌وقت تهران"""
+    loc = now() + timedelta(hours=3, minutes=30)
+    cur = loc.hour + loc.minute / 60 + loc.second / 3600
+    return t + ((h - cur) % 24) * 3600
+
+
 def _ub_ps_save(ubid, st):
     try:
         keep = {k: {a: b for a, b in v.items() if a != "force"} for k, v in st["ps"].items() if isinstance(v, dict)}
-        db.userbots.update_one({"_id": ObjectId(ubid)}, {"$set": {"ps": keep}})
+        hold = int(min(float(st.get("hold") or 0), time.time() + 30 * 86400))
+        ac = {"hold": hold if hold > time.time() else 0, "why": st.get("hold_why", ""), "t0": int(st.get("hold_t0") or 0),
+              "pen": round(float(st.get("pen") or 1.0), 3), "pen_t": int(st.get("pen_t") or 0), "fw": _ub_snap(st.get("fw") or [])[-20:],
+              "pd": dict(st.get("pd") or {}), "ev": _ub_snap(st.get("aev") or [])[-14:]}
+        db.userbots.update_one({"_id": ObjectId(ubid)}, {"$set": {"ps": keep, "acct": ac}})
     except Exception:
         log.exception("userbot ps save")
 
 
-async def _ub_flood(ubid, st, sec, why):
-    st["hold"] = max(st["hold"], time.time() + sec + 5)
-    if sec > 300:
-        await _ub_db(ub_notify, st["owner"], ubid, "flood", f"⏳ تلگرام به اکانت یوزربات محدودیت موقت داده ({why}، حدود {sec // 60} دقیقه). ارسال خودکار تا پایان آن متوقف شد و بعد خودش ادامه می‌دهد.")
+async def _ub_flood(ubid, st, sec, why, peer=False):
+    """FloodWait/PeerFlood: دقیقاً به‌اندازه‌ی خواسته‌ی تلگرام (و در تکرار، بیشتر) صبر می‌کنیم؛ ضریب احتیاط بالا می‌رود؛ همه‌چیز ثبت و ذخیره می‌شود"""
+    t = time.time()
+    fw = st.setdefault("fw", [])
+    fw[:] = [x for x in fw if t - x < 86400] + [int(t)]
+    n6 = sum(1 for x in fw if t - x < 6 * 3600)
+    hold = sec + 5
+    if peer:
+        hold = max(hold, 86400)
+    elif n6 >= 3:
+        hold = max(hold, min(6 * 3600, 1800 * (n6 - 2)))     # سومین فلود در ۶ ساعت به بعد: استراحت اجباری ۳۰ دقیقه، ۱ ساعت، ۱٫۵ ساعت ...
+    until = t + hold
+    st["pen"], st["pen_t"] = min(4.0, _ub_pen(st, t) + (3.0 if peer else 1.0 if sec >= 600 else 0.5 if sec >= 60 else 0.25)), until
+    if until > st.get("hold", 0):
+        st["hold"], st["hold_why"], st["hold_t0"] = until, why, t
+    st["hold_on"] = True
+    _ub_ev(st.setdefault("aev", []), "flood", f"{why}: تلگرام {_ub_dur(sec)} صبر خواست؛ ارسال تا {_ub_hhmm(until)} متوقف است و بعد با سرعت کمتر (×{st['pen']:.1f}) ادامه می‌یابد")
+    await _ub_db(_ub_ps_save, ubid, st)
+    if sec > 300 or n6 >= 3 or peer:
+        extra = "\n⚠️ این بار سوم در ۶ ساعت اخیر است و استراحت طولانی‌تری اعمال شد. سطح ایمنی را روی «محتاط» بگذار و تعداد مقصدها یا دفعات ارسال را کم کن." if (n6 >= 3 and not peer) else ""
+        await _ub_db(ub_notify, st["owner"], ubid, "flood2" if n6 >= 3 else "flood",
+                     f"⏳ تلگرام به اکانت یوزربات محدودیت موقت داده ({why}، حدود {_ub_dur(sec)}). ارسال خودکار تا ساعت {_ub_hhmm(until)} متوقف است و بعد با سرعت کمتر ادامه می‌یابد.{extra}")
+
+
+def _ub_fatal(ubid, why):
+    """اکانت مسدود/قطع شده: یوزربات کامل خاموش می‌شود تا با تلاش‌های بی‌فایده وضع بدتر نشود (در ترد جدا اجرا می‌شود)"""
+    try:
+        d = db.userbots.find_one({"_id": ObjectId(ubid)})
+        if not d:
+            return
+        ub_stop(d)
+        db.userbots.update_one({"_id": d["_id"]}, {"$set": {"revoked": True, "active": False, "dead_why": why[:160]}})
+        tg(MOTHER_TOKEN, "sendMessage", chat_id=d["owner"], text=f"🚫 یوزربات «{d.get('tg_name', '')}» خاموش شد: {why}.\nبعد از رفع مشکل، از تب یوزربات دوباره وصلش کن.")
+    except Exception:
+        log.exception("userbot fatal")
+
+
+async def _ub_dead(ubid, st, e):
+    if st.get("dead"):
+        return
+    why = UB_FATAL_T.get(type(e).__name__, "نشست اکانت از تلگرام قطع شده")
+    st["dead"], st["hold"] = why, time.time() + 10 ** 9
+    _ub_ev(st.setdefault("aev", []), "dead", why)
+    await _ub_db(_ub_ps_save, ubid, st)
+    asyncio.get_running_loop().run_in_executor(None, _ub_fatal, ubid, why)
+
+
+async def _ub_catch(ubid, st, e, where):
+    """خطای پیش‌بینی‌نشده‌ی هندلرها: فلود ثبت می‌شود، قطع‌شدن اکانت خاموش‌کننده است، بقیه لاگ می‌شود"""
+    if isinstance(e, _ub_errs("FloodWaitError")):
+        await _ub_flood(ubid, st, int(getattr(e, "seconds", 60)), "FloodWait")
+    elif isinstance(e, _ub_errs(*UB_FATAL)):
+        await _ub_dead(ubid, st, e)
+    else:
+        log.warning("userbot %s: %r", where, e)
+
+
+def _ub_end_cycle(p, ps, pr, counted=True):
+    """پایان یک نوبت (همه‌ی مقصدها تعیین‌تکلیف شدند)؛ نوبت بعدی با کمی جابه‌جایی تصادفی زمان‌بندی می‌شود"""
+    t = time.time()
+    gap_s = max(p["every_min"] * 60, pr["gap"])
+    ps["last"] = t
+    if counted:
+        ps["n"] = ps.get("n", 0) + 1
+    ps["next"] = t + gap_s * random.uniform(0.92, 1.18)
+    for k in ("cstart", "txt", "txts", "frc"):
+        ps.pop(k, None)
+    ps["cyc"] = ps.get("cyc", 0) + 1
+    ok_n = sum(1 for v in (ps.get("tg") or {}).values() if isinstance(v, dict) and v.get("s") == "ok")
+    _ub_ev(ps.setdefault("ev", []), "info", f"نوبت تمام شد: {ok_n} ارسال موفق. نوبت بعدی حدود {_ub_dur(ps['next'] - t)} دیگر")
+
+
+def _ub_post_state(st, cfg, p, ps, eff, t):
+    """وضعیت زنده‌ی یک زمان‌بندی برای کارت پنل (تنها منبع حقیقت). c=کلاس رنگ، t=برچسب کوتاه، m=توضیح کامل، u=زمان پایان، l=عنوان شمارنده، f=شروع شمارنده"""
+    def r(c, tt, m, u=0, l="", f=0):
+        return {"c": c, "t": tt, "m": m, "u": int(u or 0), "l": l, "f": int(f or 0)}
+    if not st:
+        if not p["on"]:
+            return r("off", "غیرفعال", "این زمان‌بندی را خودت غیرفعال کرده‌ای.")
+        return r("off", "یوزربات خاموش", "یوزربات خاموش است؛ تا روشنش نکنی هیچ ارسالی انجام نمی‌شود.")
+    if st.get("dead"):
+        return r("bad", "اکانت قطع شد", st["dead"])
+    if not (p["on"] or ps.get("force") or ps.get("frc")):
+        return r("off", "غیرفعال", "این زمان‌بندی را خودت غیرفعال کرده‌ای؛ هیچ ارسالی ندارد.")
+    if t < st.get("hold", 0):
+        w = st.get("hold_why") or "محدودیت تلگرام"
+        return r("tok", "صبر (محدودیت تلگرام)", f"{w}. همه‌ی ارسال‌ها دقیقاً تا پایان این صبر متوقف‌اند و بعد خودکار با سرعت کمتر ادامه می‌یابند.", st["hold"], "تا پایان محدودیت", st.get("hold_t0", 0))
+    cm = _ub_cmap(cfg)
+    ok_t = [x for x in p["chats"] if x in cm and cm[x]["on"] and not cm[x].get("err")]
+    if not ok_t:
+        return r("bad", "مقصد متوقف", "همه‌ی مقصدهای این زمان‌بندی غیرفعال یا دارای خطا هستند؛ علت هر کدام را در تب «گروه‌ها و کانال‌ها» ببین.")
+    ph = [z for z in _ub_snap(st["psent"]) if t - z < 3600]
+    pdn = _ub_day_n(st)
+    pend = ps.get("pend") or []
+    nx = ps.get("next") or 0
+    active = bool(pend) or t >= nx
+    if active and len(ph) >= eff["post_h"]:
+        return r("tok", "سقف ساعتی اکانت", f"سقف ارسال ساعتی اکانت ({len(ph)} از {eff['post_h']}) پر است؛ با آزاد شدن ظرفیت خودکار ادامه می‌دهد.", min(ph) + 3600, "تا آزاد شدن ظرفیت")
+    if active and pdn["n"] >= eff["post_d"]:
+        return r("tok", "سقف روزانه‌ی اکانت", f"سقف ارسال روزانه‌ی اکانت ({pdn['n']} از {eff['post_d']}) پر شده؛ فردا خودکار ادامه می‌دهد.", _ub_next_hour(0, t), "تا ریست روزانه")
+    if pend:
+        tgd = ps.get("tg") or {}
+        done = sum(1 for v in tgd.values() if isinstance(v, dict) and v.get("s") == "ok")
+        tot = len(tgd) or len(pend)
+        idle = st.get("idle")
+        if idle and idle[0] > t:
+            return r("vio", "مکث بین ارسال‌ها", f"{idle[1]} — {done} از {tot} مقصد انجام شد، {len(pend)} مقصد در صف.", idle[0], "تا ارسال بعدی")
+        cb = [st["cblock"].get(x, 0) for x in pend]
+        if cb and all(b > t for b in cb):
+            return r("tok", "اسلو‌مود گروه‌ها", "همه‌ی مقصدهای باقی‌مانده اسلو‌مود دارند و تلگرام اجازه‌ی ارسال نمی‌دهد؛ صبر می‌کنم.", min(cb), "تا پایان اسلو‌مود")
+        gp = [st["clast"].get(x, 0) + eff["gap"] for x in pend if st["cblock"].get(x, 0) <= t]
+        if gp and all(g > t for g in gp):
+            return r("ac", "فاصله‌ی ایمنی", f"برای ایمنی بین دو پیام به یک چت حداقل {_ub_dur(eff['gap'])} فاصله می‌گذارم.", min(gp), "تا مقصد بعدی")
+        return r("ac", "در حال ارسال", f"{done} از {tot} مقصد انجام شد؛ {len(pend)} مقصد در صف.")
+    if ps.get("n", 0) >= p["daily"] and ps.get("day") == tehran_day():
+        return r("tok", "سقف امروز پر شد", f"این زمان‌بندی امروز {ps['n']} نوبت از {p['daily']} را انجام داده؛ فردا ادامه می‌دهد.", _ub_next_hour(0, t), "تا ریست روزانه")
+    if not _ub_in_window(p):
+        return r("vio", "ساعت سکوت", f"خارج از بازه‌ی فعالیت ({p['from_h']:02d}:00 تا {p['to_h'] % 24:02d}:00) هیچ ارسالی انجام نمی‌شود.", _ub_next_hour(p["from_h"], t), "تا شروع بازه")
+    if nx:
+        return r("ok", "در انتظار نوبت", "منتظر نوبت بعدی؛ همه‌چیز عادی است.", nx, "تا ارسال بعدی", ps.get("last") or (nx - max(p["every_min"] * 60, eff["gap"])))
+    return r("ok", "آماده", "به‌زودی اولین نوبت شروع می‌شود.")
+
+
+def _ub_acct_view(st, cfg, t=None):
+    """وضعیت کلی اکانت برای بنر بالای تب زمان‌بندی"""
+    t = t or time.time()
+    eff, pen, ramp = _ub_eff(st, cfg, t)
+    lst = [z for z in _ub_snap(st["psent"]) if t - z < 3600]
+    pdn = _ub_day_n(st)
+    c, tt, m, u = "ok", "سالم و فعال", "همه‌چیز عادی است؛ ارسال‌ها با سقف‌ها و مکث‌های ایمنی انجام می‌شوند.", 0
+    if st.get("dead"):
+        c, tt, m = "bad", "اکانت قطع شد", st["dead"]
+    elif t < st.get("hold", 0):
+        c, tt, m, u = "tok", "صبر (محدودیت تلگرام)", f"{st.get('hold_why') or 'محدودیت تلگرام'}؛ همه‌ی ارسال‌ها تا پایان آن متوقف‌اند.", st["hold"]
+    elif lst and len(lst) >= eff["post_h"]:
+        c, tt, m, u = "tok", "سقف ساعتی", f"سقف ساعتی ({len(lst)} از {eff['post_h']}) پر است؛ با آزاد شدن ظرفیت ادامه می‌دهد.", min(lst) + 3600
+    elif pdn["n"] >= eff["post_d"]:
+        c, tt, m, u = "tok", "سقف روزانه", f"سقف روزانه ({pdn['n']} از {eff['post_d']}) پر شده؛ فردا ادامه می‌دهد.", _ub_next_hour(0, t)
+    elif pen > 1.05:
+        c, tt, m = "ac", "سرعت موقتاً کم شده", f"بعد از محدودیت اخیر تلگرام، با سرعت کمتر (×{pen:.1f}) ارسال می‌شود و ساعت‌به‌ساعت به حالت عادی برمی‌گردد."
+    elif ramp < 1:
+        c, tt, m = "ac", "گرم‌کردن اکانت", f"اکانت تازه وصل شده؛ سقف‌ها موقتاً {int(ramp * 100)}٪ است و طی چند روز کامل می‌شود."
+    risky = cfg.get("safe") in ("test", "fast")
+    if risky:
+        m += " ⚠️ سطح ایمنی «سریع/آزمایشی» ریسک محدود شدن را بالا می‌برد."
+    return {"c": c, "t": tt, "m": m, "u": int(u), "pen": round(pen, 2), "ramp": ramp, "ph": len(lst), "ph_max": eff["post_h"], "pd": pdn["n"], "pd_max": eff["post_d"],
+            "fw": len([x for x in _ub_snap(st.get("fw") or []) if t - x < 86400]), "risky": risky, "ev": list(reversed(_ub_snap(st.get("aev") or [])))[:10]}
+
+
+def _ub_ps_view(ubid, d, cfg):
+    """وضعیت هر زمان‌بندی برای پنل: شمارنده‌ها، وضعیت زنده (stt)، وضعیت هر مقصد و آخرین رویدادها"""
+    st = _ub_live.get(ubid)
+    raw = (st or {}).get("ps") or d.get("ps") or {}
+    t = time.time()
+    eff = _ub_eff(st, cfg, t)[0] if st else UB_PROF.get(cfg.get("safe"), UB_PROF["balanced"])
+    out = {}
+    for p in cfg.get("posts", []):
+        v = raw.get(p["id"])
+        v = dict(v) if isinstance(v, dict) else {}
+        tgd = v.get("tg") if isinstance(v.get("tg"), dict) else {}
+        out[p["id"]] = {"last": int(v.get("last") or 0), "next": int(v.get("next") or 0), "n": int(v.get("n") or 0), "pend": len(v.get("pend") or []),
+                        "ok": int(v.get("ok") or 0), "bad": int(v.get("bad") or 0), "err": str(v.get("err") or "")[:120], "cyc": int(v.get("cyc") or 0),
+                        "tg": {str(k): {"s": str(z.get("s") or ""), "t": int(z.get("t") or 0), "m": str(z.get("m") or "")[:100]} for k, z in tgd.items() if isinstance(z, dict)},
+                        "ev": list(reversed(_ub_snap(v.get("ev") or [])))[:8], "stt": _ub_post_state(st, cfg, p, v, eff, t)}
+    return out
 
 
 async def _ub_media(st, mid):
@@ -2586,7 +2842,8 @@ async def _ub_forward(st, ent, p):
 
 
 async def _ub_send_post(ubid, st, cid, text, title, p, _retry=False):
-    """یک ارسال زمان‌بندی‌شده. خروجی: ok | wait (بعداً دوباره) | drop (مقصد کنار رفت) | skip (این بار رد شد، مقصد سالم است)"""
+    """یک ارسال زمان‌بندی‌شده. خروجی: ok | wait (بعداً دوباره) | drop (مقصد کنار رفت) | skip (این بار رد شد، مقصد سالم است) | dead (اکانت قطع شد).
+    دلیل هر نتیجه در st["why"] می‌ماند تا کارت پنل دقیق نشان بدهد چه شد."""
     c = st["c"]
     ch = _ub_cmap(st["cfg"]).get(cid) or {}
     kind_ = ch.get("kind")
@@ -2606,6 +2863,7 @@ async def _ub_send_post(ubid, st, cid, text, title, p, _retry=False):
         body, pm = ub_fill(text, "", _html.escape(title, quote=False) if hm else title), ("html" if hm else None)
         mm = await _ub_media(st, p["media"]) if p.get("media") else None
         if p.get("media") and not mm and not body:
+            st["why"] = "فایل پیوست پیدا نشد؛ در رسانه‌ها دوباره انتخابش کن"
             await _ub_db(ub_pause_chat, ubid, st, cid, "فایل پیوست پیدا نشد؛ در رسانه‌ها دوباره انتخابش کن")
             return "drop"
         fb, lgs = p.get("fb", "text"), p.get("lgs", "both")
@@ -2677,18 +2935,29 @@ async def _ub_send_post(ubid, st, cid, text, title, p, _retry=False):
             st["lastout"][cid] = (sm, time.time())
         st["clast"][cid] = time.time()
         st["psent"].append(time.time())
+        _ub_day_n(st)["n"] += 1
         st["fails"].pop(cid, None)
+        st["errrun"] = st["net"] = 0
         return "ok"
     except _ub_errs("SlowModeWaitError") as e:
-        st["cblock"][cid] = time.time() + int(getattr(e, "seconds", 60)) + 3
+        sec = int(getattr(e, "seconds", 60))
+        st["cblock"][cid] = time.time() + sec + 3
+        st["why"] = f"اسلو‌مود گروه: {_ub_dur(sec)} صبر می‌کنم و بعد دوباره تلاش می‌شود"
         return "wait"
     except _ub_errs("FloodWaitError") as e:
-        await _ub_flood(ubid, st, int(getattr(e, "seconds", 60)), "FloodWait")
+        sec = int(getattr(e, "seconds", 60))
+        await _ub_flood(ubid, st, sec, "FloodWait")
+        st["why"] = f"FloodWait: تلگرام {_ub_dur(sec)} صبر خواست؛ دقیقاً همین‌قدر (و بیشتر) صبر می‌کنم"
         return "wait"
     except _ub_errs("PeerFloodError"):
-        await _ub_flood(ubid, st, 86400, "محدودیت اسپم")
-        await _ub_db(ub_notify, st["owner"], ubid, "peerflood", "🚫 تلگرام روی اکانت یوزربات «محدودیت اسپم» گذاشته. ارسال خودکار ۲۴ ساعت متوقف شد. برای بررسی به @SpamBot پیام بده و تا برداشته شدن محدودیت، تعداد و تنوع پیام‌ها را کم کن.")
+        await _ub_flood(ubid, st, 86400, "محدودیت اسپم (PeerFlood)", peer=True)
+        await _ub_db(ub_notify, st["owner"], ubid, "peerflood", "🚫 تلگرام روی اکانت یوزربات «محدودیت اسپم» گذاشته. ارسال خودکار ۲۴ ساعت متوقف شد و بعد با سرعت خیلی کمتر ادامه می‌یابد. برای بررسی به @SpamBot پیام بده و تا برداشته شدن محدودیت، تعداد و تنوع پیام‌ها را کم کن.")
+        st["why"] = "تلگرام محدودیت اسپم گذاشته؛ ۲۴ ساعت توقف کامل"
         return "wait"
+    except _ub_errs(*UB_FATAL) as e:
+        await _ub_dead(ubid, st, e)
+        st["why"] = st.get("dead") or "اکانت قطع شد"
+        return "dead"
     except _ub_errs("ChatSendMediaForbiddenError", "ChatSendPhotosForbiddenError", "ChatSendVideosForbiddenError", "ChatSendGifsForbiddenError", "ChatSendDocsForbiddenError",
                     "ChatSendVoicesForbiddenError", "ChatSendAudiosForbiddenError", "ChatSendStickersForbiddenError", "ChatSendWebPageForbiddenError"):
         if _retry or not (p.get("mg") and guard):             # محافظ خاموش است یا جایگزین هم جواب نداد: فقط رد می‌شود، چت متوقف نمی‌شود
@@ -2702,14 +2971,31 @@ async def _ub_send_post(ubid, st, cid, text, title, p, _retry=False):
         return "drop"
     except _ub_errs("ChatWriteForbiddenError", "UserBannedInChannelError", "ChatAdminRequiredError", "ChannelPrivateError", "ChatRestrictedError",
                     "ChatGuestSendForbiddenError", "UserNotParticipantError"):
+        st["why"] = "اجازه‌ی ارسال نداری یا از این چت خارج شده‌ای؛ این مقصد متوقف شد"
         await _ub_db(ub_pause_chat, ubid, st, cid, "اجازه‌ی ارسال نداری یا از این چت خارج شده‌ای")
         return "drop"
     except ValueError:
+        st["why"] = "این چت پیدا نشد (شاید از آن خارج شده‌ای)؛ این مقصد متوقف شد"
         await _ub_db(ub_pause_chat, ubid, st, cid, "این چت پیدا نشد (شاید از آن خارج شده‌ای)")
         return "drop"
+    except (asyncio.TimeoutError, ConnectionError, OSError) + _ub_errs(*UB_NETERR):
+        # قطعی یا کندی اتصال، تقصیر مقصد نیست: مقصد متوقف نمی‌شود، فقط با مکث فزاینده دوباره تلاش می‌کنیم
+        st["net"] = st.get("net", 0) + 1
+        sec = min(600, 30 * 2 ** min(st["net"], 5))
+        t0 = time.time()
+        st["hold"], st["hold_why"], st["hold_t0"], st["hold_on"] = max(st["hold"], t0 + sec), "اتصال به تلگرام قطع یا کند است", t0, True
+        _ub_ev(st.setdefault("aev", []), "wait", f"خطای اتصال به تلگرام؛ {_ub_dur(sec)} صبر و دوباره تلاش")
+        st["why"] = f"خطای اتصال به تلگرام؛ {_ub_dur(sec)} بعد دوباره تلاش می‌شود"
+        return "wait"
     except Exception as e:
         st["fails"][cid] = st["fails"].get(cid, 0) + 1
         log.warning("userbot post send: %r", e)
+        st["why"] = f"خطای ناشناخته ({type(e).__name__})"
+        st["errrun"] = st.get("errrun", 0) + 1
+        if st["errrun"] >= 5:                       # چند خطای ناشناخته‌ی پشت‌سرهم در چت‌های مختلف: مشکل از اکانت/اتصال است، نه یک گروه
+            t0 = time.time()
+            st["hold"], st["hold_why"], st["hold_t0"], st["hold_on"], st["errrun"] = max(st["hold"], t0 + 900), "چند خطای ناشناخته‌ی پشت‌سرهم", t0, True, 0
+            _ub_ev(st.setdefault("aev", []), "wait", "چند خطای ناشناخته‌ی پشت‌سرهم؛ ۱۵ دقیقه توقف احتیاطی")
         if st["fails"][cid] >= 3:
             await _ub_db(ub_pause_chat, ubid, st, cid, "چند بار پشت‌سرهم ارسال ناموفق بود")
         return "drop"
@@ -2717,15 +3003,23 @@ async def _ub_send_post(ubid, st, cid, text, title, p, _retry=False):
 
 async def _ub_sched_tick(ubid, st):
     """یک دور زمان‌بند. ارسال‌ها بین همه‌ی پیام‌های زمان‌بندی‌شده نوبتی (Round-Robin) پخش می‌شود تا
-    یک پیام پرمقصد بقیه را گرسنه نگه ندارد و هر ارسال بلافاصله ذخیره شود (وضعیت زنده و درست)."""
+    یک پیام پرمقصد بقیه را گرسنه نگه ندارد و هر ارسال بلافاصله ذخیره شود (وضعیت زنده و درست).
+    هر نتیجه (موفق، رد شده، صبر، خطا) با دلیلش در ps["ev"] و ps["tg"] ثبت می‌شود تا پنل شفاف باشد؛ تنظیمات هر بار تازه خوانده می‌شود."""
+    if st.get("dead"):
+        return
     cfg = st["cfg"]
-    pr = UB_PROF.get(cfg.get("safe"), UB_PROF["balanced"])
+    t = time.time()
+    if st.get("hold_on") and t >= st["hold"]:
+        st["hold_on"] = False
+        pen = _ub_pen(st, t)
+        _ub_ev(st.setdefault("aev", []), "info", "محدودیت تمام شد؛ ارسال ادامه پیدا کرد" + (f" (با سرعت کمتر ×{pen:.1f}؛ ساعت‌به‌ساعت عادی می‌شود)" if pen > 1.05 else ""))
+        await _ub_db(_ub_ps_save, ubid, st)
+    if t < st["hold"]:
+        return
+    pr, pen, ramp = _ub_eff(st, cfg, t)
     cm = _ub_cmap(cfg)
     posts = cfg.get("posts", [])
     dirty = False
-    t = time.time()
-    if t < st["hold"]:
-        return
     day = tehran_day()
     # ── مرحله ۱: شروع دوره‌ی هر زمان‌بندیِ رسیده (بدون ارسال) ──
     for p in posts:
@@ -2747,10 +3041,15 @@ async def _ub_sched_tick(ubid, st):
         targets = [x for x in p["chats"] if x in cm and cm[x]["on"] and not cm[x].get("err")]
         if not targets:
             ps["next"], dirty = t + gap_s, True
+            _ub_ev(ps.setdefault("ev", []), "skip", "مقصد فعالی نبود؛ این نوبت رد شد")
             continue
         texts = p["texts"] or [""]
+        base = ps.get("idx", 0)
+        # هر مقصد متن (نسخه‌ی) خودش را می‌گیرد تا یک متن واحد هم‌زمان در همه‌ی گروه‌ها نرود (الگوی اسپم)
+        txs = {str(x): texts[(base + i) % len(texts)] for i, x in enumerate(targets)} if p["mode"] == "seq" else {str(x): random.choice(texts) for x in targets}
         ps["tg"] = {str(x): {"s": "q", "t": 0} for x in targets}
-        ps.update(pend=targets, cstart=t, txt=texts[ps.get("idx", 0) % len(texts)] if p["mode"] == "seq" else random.choice(texts), idx=ps.get("idx", 0) + 1)
+        ps.update(pend=targets, cstart=t, txts=txs, idx=base + 1, frc=bool(force), err="")
+        _ub_ev(ps.setdefault("ev", []), "info", f"نوبت جدید شروع شد: {len(targets)} مقصد در صف" + (" (ارسال فوری)" if force else ""))
         dirty = True
     if dirty:
         await _ub_db(_ub_ps_save, ubid, st)
@@ -2758,23 +3057,40 @@ async def _ub_sched_tick(ubid, st):
     # ── مرحله ۲: ارسال نوبتی بین همه‌ی دوره‌های باز ──
     for _ in range(400):
         t = time.time()
-        if t < st["hold"]:
+        if t < st["hold"] or st.get("dead"):
             break
-        for p in posts:                                            # دوره‌ای که بیش از ۶ ساعت باز مانده بسته می‌شود
+        cfg = st["cfg"]                                            # تنظیمات ممکن است وسط دور ذخیره شده باشد (غیرفعال‌کردن مقصد یا پیام)
+        cm, posts = _ub_cmap(cfg), cfg.get("posts", [])
+        pr, pen, ramp = _ub_eff(st, cfg, t)
+        for p in posts:
             ps = st["ps"].get(p["id"]) or {}
-            if ps.get("pend") and ps.get("cstart") and t - ps["cstart"] > 6 * 3600:
+            if ps.get("pend") and not (p["on"] or ps.get("frc")):  # زمان‌بندی وسط نوبت غیرفعال شد
                 for x in ps["pend"]:
-                    ps.setdefault("tg", {})[str(x)] = {"s": "x", "t": int(t)}
+                    ps.setdefault("tg", {})[str(x)] = {"s": "x", "t": int(t), "m": "زمان‌بندی غیرفعال شد"}
+                ps["pend"], ps["err"], dirty = [], "", True
+                _ub_ev(ps.setdefault("ev", []), "info", "نوبت نیمه‌کاره بسته شد چون زمان‌بندی را غیرفعال کردی")
+                _ub_end_cycle(p, ps, pr, counted=False)
+                continue
+            if ps.get("pend") and ps.get("cstart") and t - ps["cstart"] > 6 * 3600:      # دوره‌ای که بیش از ۶ ساعت باز مانده بسته می‌شود
+                for x in ps["pend"]:
+                    ps.setdefault("tg", {})[str(x)] = {"s": "x", "t": int(t), "m": "بعد از ۶ ساعت ارسال نشد"}
                 ps["bad"] = ps.get("bad", 0) + len(ps["pend"])
                 ps["err"] = "ارسال به برخی مقصدها بعد از ۶ ساعت انجام نشد"
+                _ub_ev(ps.setdefault("ev", []), "drop", f"{len(ps['pend'])} مقصد بعد از ۶ ساعت انتظار رها شد")
                 ps["pend"], dirty = [], True
         while st["psent"] and t - st["psent"][0] > 3600:
             st["psent"].popleft()
-        if len(st["psent"]) >= pr["post_h"]:
+        pdn = _ub_day_n(st)
+        if len(st["psent"]) >= pr["post_h"] or pdn["n"] >= pr["post_d"]:
+            daily = pdn["n"] >= pr["post_d"]
             for p in posts:
                 ps = st["ps"].get(p["id"]) or {}
                 if ps.get("pend"):
-                    ps["err"] = "سقف ساعتی ارسال اکانت پر است؛ خودکار ادامه می‌یابد"
+                    ps["err"] = "سقف روزانه‌ی اکانت پر است؛ فردا خودکار ادامه می‌یابد" if daily else "سقف ساعتی ارسال اکانت پر است؛ خودکار ادامه می‌یابد"
+            key = (int(t // 3600), daily)
+            if st.get("capev") != key:
+                st["capev"] = key
+                _ub_ev(st.setdefault("aev", []), "cap", f"سقف {'روزانه' if daily else 'ساعتی'}‌ی اکانت پر شد؛ ارسال‌ها تا آزاد شدن ظرفیت می‌ایستند")
             break
         pick, n = None, len(posts)
         for k in range(n):                                         # نوبتی: از پستِ بعد از آخرین ارسال شروع می‌کنیم
@@ -2790,46 +3106,62 @@ async def _ub_sched_tick(ubid, st):
         if pick is None:
             break
         p, ps, cid = pick
-        res = await _ub_send_post(ubid, st, cid, ps["txt"], cm[cid]["title"], p)
-        tg_ = ps.setdefault("tg", {})
+        title = cm[cid]["title"]
+        txt = (ps.get("txts") or {}).get(str(cid)) or ps.get("txt") or ""
+        res = await _ub_send_post(ubid, st, cid, txt, title, p)
+        why = st.pop("why", "")
+        tg_, ev, ti = ps.setdefault("tg", {}), ps.setdefault("ev", []), int(time.time())
         if res == "ok":
             ps["pend"].remove(cid)
-            tg_[str(cid)] = {"s": "ok", "t": int(time.time())}
+            tg_[str(cid)] = {"s": "ok", "t": ti}
             ps["ok"], ps["err"] = ps.get("ok", 0) + 1, ""
-            await _ub_db(ub_log, ubid, f"پیام زمان‌بندی‌شده «{p['name']}»", cm[cid]["title"], "n_out")
+            _ub_ev(ev, "ok", "ارسال شد", title)
+            await _ub_db(ub_log, ubid, f"پیام زمان‌بندی‌شده «{p['name']}»", title, "n_out")
         elif res == "skip":
+            why = st.pop("skipwhy", "") or why or "رد شد"
             ps["pend"] = [x for x in ps["pend"] if x != cid]
-            tg_[str(cid)] = {"s": "x", "t": int(time.time())}
-            ps["bad"], ps["err"] = ps.get("bad", 0) + 1, st.pop("skipwhy", "رد شد")
+            tg_[str(cid)] = {"s": "x", "t": ti, "m": why[:100]}
+            ps["bad"], ps["err"] = ps.get("bad", 0) + 1, why[:120]
+            _ub_ev(ev, "skip", why, title)
         elif res == "drop":
+            why = why or cm[cid].get("err") or "ارسال ناموفق بود"
             ps["pend"] = [x for x in ps["pend"] if x != cid]
-            tg_[str(cid)] = {"s": "x", "t": int(time.time())}
-            ps["bad"], ps["err"] = ps.get("bad", 0) + 1, (cm[cid].get("err") or "ارسال ناموفق بود")[:100]
+            tg_[str(cid)] = {"s": "x", "t": ti, "m": why[:100]}
+            ps["bad"], ps["err"] = ps.get("bad", 0) + 1, why[:120]
+            _ub_ev(ev, "drop", why, title)
+        elif res == "dead":
+            ps["err"] = why[:120]
+            _ub_ev(ev, "drop", "اکانت قطع یا مسدود شد؛ همه‌ی ارسال‌ها متوقف شد", title)
+            await _ub_db(_ub_ps_save, ubid, st)
+            return
         else:
-            tg_[str(cid)] = {"s": "w", "t": int(time.time())}
-            ps["err"] = "محدودیت موقت تلگرام؛ خودکار دوباره تلاش می‌شود"
+            tg_[str(cid)] = {"s": "w", "t": ti, "m": (why or "محدودیت موقت تلگرام")[:100]}
+            ps["err"] = (why or "محدودیت موقت تلگرام؛ خودکار دوباره تلاش می‌شود")[:120]
+            _ub_ev(ev, "wait", why or "محدودیت موقت تلگرام؛ دوباره تلاش می‌شود", title)
         # پایان دوره‌ی این پیام اگر مقصدی نمانده
         if ps.get("cstart") and not ps.get("pend"):
-            gap_s = max(p["every_min"] * 60, pr["gap"])
-            ps["last"] = time.time()
-            ps["n"] = ps.get("n", 0) + 1
-            ps["next"] = ps["last"] + gap_s * random.uniform(0.92, 1.18)
-            ps.pop("cstart", None); ps.pop("txt", None)
-            ps["cyc"] = ps.get("cyc", 0) + 1
+            _ub_end_cycle(p, ps, pr)
         await _ub_db(_ub_ps_save, ubid, st)                       # وضعیت بلافاصله ذخیره می‌شود، نه آخر دور
         dirty = False
-        if res != "wait":
-            await asyncio.sleep(random.uniform(pr["dmin"], pr["dmax"]))
+        if time.time() >= st["hold"]:
+            if res == "ok":
+                delay, idle_t = random.uniform(pr["dmin"], pr["dmax"]), "مکث تصادفی بین دو ارسال"
+                st["burst"] = st.get("burst", 0) + 1
+                if st["burst"] >= st.setdefault("burst_n", random.randint(5, 9)):        # هر چند ارسال یک استراحت کوتاه، مثل آدم واقعی
+                    st["burst"], st["burst_n"] = 0, random.randint(5, 9)
+                    delay, idle_t = delay + random.uniform(90, 240) * pen, "استراحت کوتاه بین ارسال‌ها (رفتار طبیعی)"
+            else:
+                delay, idle_t = random.uniform(3, 8), "مکث کوتاه قبل از مقصد بعدی"
+            st["idle"] = (time.time() + delay, idle_t)
+            try:
+                await asyncio.sleep(delay)
+            finally:
+                st.pop("idle", None)
     # ── مرحله ۳: دوره‌هایی که بدون ارسال خالی شدند (همه‌ی مقصدها حذف/متوقف شدند) ──
-    for p in posts:
+    for p in cfg.get("posts", []):
         ps = st["ps"].get(p["id"]) or {}
         if ps.get("cstart") and not ps.get("pend"):
-            gap_s = max(p["every_min"] * 60, pr["gap"])
-            ps["last"] = time.time()
-            ps["n"] = ps.get("n", 0) + 1
-            ps["next"] = ps["last"] + gap_s * random.uniform(0.92, 1.18)
-            ps.pop("cstart", None); ps.pop("txt", None)
-            ps["cyc"] = ps.get("cyc", 0) + 1
+            _ub_end_cycle(p, ps, pr)
             dirty = True
     if dirty:
         await _ub_db(_ub_ps_save, ubid, st)
@@ -2962,13 +3294,14 @@ async def _ub_resend(ubid, st, chat, src, ch):
         await st["c"].send_message(chat, src)
         st["clast"][chat] = time.time()
         st["psent"].append(time.time())
+        _ub_day_n(st)["n"] += 1
         await _ub_db(ub_log, ubid, "ارسال مجدد بعد از عضویت", (ch or {}).get("title", ""), "n_out")
     except _ub_errs("SlowModeWaitError") as e:
         st["cblock"][chat] = time.time() + int(getattr(e, "seconds", 60)) + 3
     except _ub_errs("FloodWaitError") as e:
         await _ub_flood(ubid, st, int(getattr(e, "seconds", 60)), "FloodWait")
     except Exception as e:
-        log.warning("userbot resend: %r", e)
+        await _ub_catch(ubid, st, e, "resend")
 
 
 async def _ub_handle_group(ubid, st, ev):
@@ -3042,7 +3375,7 @@ async def _ub_handle_group(ubid, st, ev):
         sent.append(time.time())
         await _ub_db(ub_log, ubid, f"گروه «{ch['title'][:24]}» · {kind}", name, "n_ai" if kind == "پاسخ هوشمند" else "n_out")
     except Exception as e:
-        log.warning("userbot group-handler: %r", e)
+        await _ub_catch(ubid, st, e, "group-handler")
 
 
 def _ub_can_post(e):
@@ -3126,7 +3459,8 @@ async def _ub_a_start(d):
     ubid = str(d["_id"])
     await _ub_a_stop(ubid)
     api = ub_creds(d)
-    c = TelegramClient(StringSession(dec(d["session_enc"])), api[0], api[1], **UB_DEV)
+    # flood_sleep_threshold=0: خود Telethon هیچ FloodWait/SlowMode را بی‌صدا نخوابد؛ همه به کد ما می‌رسد، با دقت صبر می‌شود و در پنل دیده می‌شود
+    c = TelegramClient(StringSession(dec(d["session_enc"])), api[0], api[1], flood_sleep_threshold=0, **UB_DEV)
     await c.connect()
     if not await c.is_user_authorized():
         await c.disconnect()
@@ -3135,10 +3469,22 @@ async def _ub_a_start(d):
           "ps": {k: dict(v) for k, v in (d.get("ps") or {}).items() if isinstance(v, dict)}, "psent": deque(), "hold": 0, "clast": {}, "cblock": {},
           "fails": {}, "gsent": {}, "gcd": {}, "ucd": {}, "joined": set(), "jcd": {}, "resent": set(), "ubid": ubid, "mc": {}, "lastout": {}, "lerr": ""}
     for v in st["ps"].values():                         # دوره‌ی نیمه‌کاره‌ی قبل از ری‌استارت ادامه نمی‌یابد (ارسال تکراری نشود)
-        for k in ("pend", "cstart", "txt", "force"):
+        for k in ("pend", "cstart", "txt", "txts", "frc", "force"):
             v.pop(k, None)
+    # وضعیت نگهبان بعد از ری‌استارت یا خاموش/روشن‌کردن حفظ می‌شود؛ وگرنه ری‌استارت وسط FloodWait همان لحظه دوباره ارسال می‌کرد
+    ac = d.get("acct") if isinstance(d.get("acct"), dict) else {}
+    st["born"] = aware(d["created"]).timestamp() if d.get("created") else 0
+    st["pen"], st["pen_t"] = float(ac.get("pen") or 1.0), float(ac.get("pen_t") or 0)
+    st["fw"], st["aev"] = list(ac.get("fw") or []), list(ac.get("ev") or [])
+    if isinstance(ac.get("pd"), dict):
+        st["pd"] = dict(ac["pd"])
+    if float(ac.get("hold") or 0) > time.time():
+        st["hold"], st["hold_why"], st["hold_t0"], st["hold_on"] = float(ac["hold"]), str(ac.get("why") or "محدودیت تلگرام"), float(ac.get("t0") or 0), True
+    _ub_ev(st["aev"], "info", "یوزربات روشن شد" + (f"؛ محدودیت قبلی تلگرام تا {_ub_hhmm(st['hold'])} هنوز پابرجاست و رعایت می‌شود" if st["hold"] else ""))
     try:
         await asyncio.wait_for(c.get_dialogs(limit=300), 40)   # گرم کردن کش چت‌ها تا ارسال به شناسه‌ی گروه/کانال کار کند
+    except _ub_errs("FloodWaitError") as e:
+        await _ub_flood(ubid, st, int(getattr(e, "seconds", 60)), "FloodWait هنگام روشن‌شدن")
     except Exception:
         log.warning("userbot dialogs warmup failed")
 
@@ -3165,7 +3511,7 @@ def ub_start(d):
     """روشن کردن؛ خروجی: (True، None) یا (False، پیام)"""
     try:
         ub_run(_ub_a_start(d), 45)
-        db.userbots.update_one({"_id": d["_id"]}, {"$set": {"active": True, "revoked": False}})
+        db.userbots.update_one({"_id": d["_id"]}, {"$set": {"active": True, "revoked": False, "dead_why": ""}})
         return True, None
     except PermissionError:
         ub_revoked(d)
