@@ -1612,12 +1612,12 @@ document.addEventListener("toggle", e => { const d = e.target; if(d.classList?.c
 if(INIT){ const ping = () => { if(!document.hidden) api("/api/ping", "POST").catch(() => {}); }; setInterval(ping, 25000); document.addEventListener("visibilitychange", ping); }
 
 /* ═════════════════ یوزربات (اتصال اکانت شخصی تلگرام) ═════════════════ */
-Object.assign(S, { ub: null, ubErr: "", ubSel: null, ubTab: "feat", ubCfg: null });
+Object.assign(S, { ub: null, ubErr: "", ubSel: null, ubTab: "feat", ubCfg: null, ubDet: {}, ubDetA: false });
 const UB_SAFE = [["test", "آزمایشی — فقط برای تست (ریسک محدود شدن اکانت)"], ["safe", "محتاط — کندتر و کم‌خطرتر (پیشنهادی)"], ["balanced", "متعادل"], ["fast", "سریع — برای اکانت‌های قدیمی و فعال"]];
 const UB_SAFE_T = {test: "فقط برای تست کوتاه: حداقل ۳ دقیقه بین دو پیام به یک چت و تا ۳۰ ارسال در ساعت. بعد از تست حتماً به «محتاط» یا «متعادل» برگرد؛ در حالت آزمایشی احتمال محدود شدن اکانت بالاست.",
-  safe: "حداکثر ۱۲ ارسال زمان‌بندی‌شده در ساعت، حداقل ۱ ساعت فاصله بین دو پیام به یک چت، مکث ۳۰ تا ۹۰ ثانیه بین ارسال‌ها.",
-  balanced: "حداکثر ۲۴ ارسال در ساعت، حداقل ۳۰ دقیقه فاصله بین دو پیام به یک چت، مکث ۱۵ تا ۴۵ ثانیه بین ارسال‌ها.",
-  fast: "حداکثر ۴۰ ارسال در ساعت، حداقل ۱۵ دقیقه فاصله بین دو پیام به یک چت، مکث ۸ تا ۲۵ ثانیه بین ارسال‌ها."};
+  safe: "حداکثر ۱۲ ارسال در ساعت و ۱۲۰ در روز برای کل اکانت، حداقل ۱ ساعت فاصله بین دو پیام به یک چت، مکث ۳۰ تا ۹۰ ثانیه بین ارسال‌ها. بعد از هر محدودیت تلگرام خودکار آهسته‌تر می‌شود و اکانتِ تازه‌وصل‌شده چند روز با سقف کمتر گرم می‌شود.",
+  balanced: "حداکثر ۲۴ ارسال در ساعت و ۲۰۰ در روز، حداقل ۳۰ دقیقه فاصله بین دو پیام به یک چت، مکث ۱۵ تا ۴۵ ثانیه بین ارسال‌ها.",
+  fast: "حداکثر ۴۰ ارسال در ساعت و ۳۲۰ در روز، حداقل ۱۵ دقیقه فاصله بین دو پیام به یک چت، مکث ۸ تا ۲۵ ثانیه بین ارسال‌ها."};
 const UB_REPLY = [["mention", "فقط وقتی منشن یا ریپلای شدم (ایمن‌تر)"], ["kw", "به کلمه‌های کلیدی در همه‌ی پیام‌ها"], ["off", "پاسخ خودکار نداشته باشد (فقط مقصد پیام زمان‌بندی‌شده)"]];
 const UB_REPLY_T = {mention: "پاسخ هنگام منشن/ریپلای", kw: "پاسخ به کلمه‌های کلیدی", off: "فقط مقصد ارسال"};
 const UB_WHERE = [["pm", "فقط چت خصوصی"], ["group", "فقط گروه‌های انتخاب‌شده"], ["both", "هر دو"]];
@@ -1643,8 +1643,9 @@ document.addEventListener("contextmenu", e => { const b = e.target.closest?.(".u
 const ubFmtCd = sec => { sec = Math.max(0, Math.floor(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), x = sec % 60, p = n => String(n).padStart(2, "0"); return (h ? h + ":" : "") + p(m) + ":" + p(x); };
 const ubInWin = p => { let h = 12; try{ h = +new Date().toLocaleString("en-US", {timeZone: "Asia/Tehran", hour: "numeric", hour12: false}) % 24; }catch(_){} const a = p.from_h, b = p.to_h; if(a === b || (a === 0 && b === 24)) return true; return a < b ? (h >= a && h < b) : (h >= a || h < b); };
 setInterval(() => { document.querySelectorAll("[data-cd]").forEach(el => { const to = +el.dataset.cd, from = +el.dataset.from, n = Date.now() / 1000, left = to - n;
-  el.textContent = left > 0 ? ubFmtCd(left) : "الان"; const bar = el.closest(".ubc")?.querySelector(".ubpbar i"); if(bar && to > from) bar.style.width = Math.max(0, Math.min(100, (n - from) / (to - from) * 100)) + "%"; }); }, 1000);
-setInterval(() => { if(S.view === "userbot" && S.ubSel && S.ubTab === "posts" && !S.sheet && !document.hidden) api(`/api/userbots/${S.ubSel}`).then(d => { ubPut(d.item); if(S.view === "userbot" && S.ubTab === "posts" && !S.sheet) renderUserbot(); }).catch(() => {}); }, 12000);
+  el.textContent = left > 0 ? ubFmtCd(left) : "الان"; const bar = el.closest(".ubc")?.querySelector(".ubpbar i"); if(bar && to > from) bar.style.width = Math.max(0, Math.min(100, (n - from) / (to - from) * 100)) + "%"; });
+  document.querySelectorAll("[data-un]").forEach(el => { const left = +el.dataset.un - Date.now() / 1000; el.textContent = left > 0 ? ubFmtCd(left) : "الان"; }); }, 1000);
+setInterval(() => { if(S.view === "userbot" && S.ubSel && S.ubTab === "posts" && !S.sheet && !document.hidden) api(`/api/userbots/${S.ubSel}`).then(d => { ubPut(d.item); if(S.view === "userbot" && S.ubTab === "posts" && !S.sheet) renderUserbot(); }).catch(() => {}); }, 7000);
 const UB_ST = { running: ["روشن", "on"], stopped: ["خاموش", ""], revoked: ["نیاز به اتصال دوباره", "bad"] };
 const UB_WHO = [["all", "همه‌ی پیام‌های خصوصی"], ["contacts", "فقط مخاطب‌های من"], ["others", "فقط افراد خارج از مخاطبین"]];
 const UB_MODE = [["has", "شامل این کلمه باشد"], ["start", "با این کلمه شروع شود"], ["exact", "دقیقاً همین باشد"]];
@@ -1748,34 +1749,44 @@ function ubChatsHTML(x){
     <button class="b o sep-btn mt2" data-a="ubcadd"${full ? " disabled" : ""}>${IC.plus}افزودن گروه یا کانال</button>`;
 }
 
-const UB_CH = {ok: ["ok", "ارسال شد"], w: ["tok", "در انتظار (محدودیت)"], x: ["bad", "ناموفق"]};
+const UB_CH = {q: ["", "در صف"], ok: ["ok", "ارسال شد"], w: ["tok", "در انتظار"], x: ["bad", "رد شد / ناموفق"]};
+function ubPostDet(p, s, chats){
+  const rows = p.chats.map(id => { const h = chats.find(c => c.id === id); if(!h) return ""; const r = s.tg?.[String(id)];
+    const [k, lb] = h.err ? ["bad", "متوقف"] : r ? (UB_CH[r.s] || ["", "در صف"]) : ["", "نوبتش نرسیده"]; const why = h.err || r?.m || "";
+    return `<div class="ubtg"><div class="ubtg-r"><span class="ubchip ${k}">${lb}</span><b>${esc(h.title)}</b><small>${r?.t ? ubWhen(r.t) : ""}</small></div>${why ? `<div class="ubwhy">${esc(why)}</div>` : ""}</div>`; }).join("");
+  const ev = (s.ev || []).map(e => `<div class="ubev ${esc(e.k)}"><i></i><span>${esc(e.m)}${e.c ? ` · <b>${esc(e.c)}</b>` : ""}</span><small>${ubWhen(e.t)}</small></div>`).join("") || `<p class="muted" style="margin:6px 0">هنوز رویدادی ثبت نشده.</p>`;
+  return `<div class="ubdt"><div class="ubdt-h">وضعیت هر مقصد</div>${rows}<div class="ubdt-h">آخرین رویدادها</div>${ev}</div>`;
+}
 function ubPostCard(p, i, x){
   const s = x.ps?.[p.id] || {}, tn = Date.now() / 1000, chats = S.ubCfg.chats;
-  const bad = p.chats.filter(id => chats.find(h => h.id === id)?.err).length;
-  let st = ["ok", "در انتظار"];
-  if(!p.on) st = ["off", "غیرفعال"];
-  else if(s.pend && x.ph_max && x.ph >= x.ph_max) st = ["tok", "سقف ساعتی پر است"];
-  else if(s.pend) st = ["ac", "در حال ارسال"];
-  else if(x.hold > tn) st = ["tok", "محدودیت تلگرام"];
-  else if(bad) st = ["bad", "مقصد متوقف"];
-  else if((s.n || 0) >= p.daily) st = ["tok", "سقف امروز پر شد"];
-  else if(!ubInWin(p)) st = ["vio", "ساعت سکوت"];
-  const every = Math.max(60, p.every_min * 60), from = s.last || (s.next ? s.next - every : 0);
-  const cd = p.on && !s.pend && s.next ? `<div class="cdw"><span class="cd n" data-cd="${s.next}" data-from="${from}">--:--</span><small>تا ارسال بعدی</small></div>` : s.pend ? `<div class="cdw"><span class="cd n">${N(s.pend)}</span><small>مقصد در صف</small></div>` : `<div class="cdw"><span class="cd n">—</span></div>`;
-  const pct = s.next && s.next > from ? Math.max(0, Math.min(100, (tn - from) / (s.next - from) * 100)) : 0;
+  const T = s.stt || {c: p.on ? "ok" : "off", t: p.on ? "در انتظار" : "غیرفعال", m: "", u: s.next || 0, l: "تا ارسال بعدی", f: s.last || 0};
+  const to = T.u || 0, fr = T.f || to, open = !!S.ubDet[p.id];
+  const cd = to ? `<div class="cdw"><span class="cd n" data-cd="${to}" data-from="${fr}">--:--</span><small>${esc(T.l || "تا ارسال بعدی")}</small></div>` : s.pend ? `<div class="cdw"><span class="cd n">${N(s.pend)}</span><small>مقصد در صف</small></div>` : `<div class="cdw"><span class="cd n">—</span></div>`;
+  const pct = to > fr ? Math.max(0, Math.min(100, (tn - fr) / (to - fr) * 100)) : 0;
   const chips = p.chats.map(id => { const h = chats.find(c => c.id === id); if(!h) return ""; const r = s.tg?.[String(id)]; const k = h.err ? "bad" : r ? UB_CH[r.s]?.[0] || "" : "";
-    return `<span class="ubchip ${k}" title="${esc(h.err || (r ? UB_CH[r.s]?.[1] + " · " + ubWhen(r.t) : "هنوز ارسال نشده"))}">${esc(h.title.slice(0, 18))}</span>`; }).join("");
-  return `<div class="ubc ${st[0]}" role="button" tabindex="0" data-a="ubpedit" data-i="${i}">
-    <div class="ubc-h"><b>${esc(p.name)}</b><span class="ubchip ${st[0]}">${st[1]}</span></div>
+    return `<span class="ubchip ${k}" title="${esc(h.err || r?.m || (r ? UB_CH[r.s]?.[1] + " · " + ubWhen(r.t) : "هنوز ارسال نشده"))}">${esc(h.title.slice(0, 18))}</span>`; }).join("");
+  return `<div class="ubc ${T.c}" role="button" tabindex="0" data-a="ubpedit" data-i="${i}">
+    <div class="ubc-h"><b>${esc(p.name)}</b><span class="ubchip ${T.c}">${esc(T.t)}</span></div>
     <div class="ubc-m">${cd}<div class="ubc-s"><div><b class="n ok">${N(s.ok || 0)}</b><small>ارسال شد</small></div><div><b class="n bad">${N(s.bad || 0)}</b><small>ناموفق</small></div><div><b class="n">${N(s.n || 0)}/${N(p.daily)}</b><small>امروز</small></div></div></div>
     <div class="ubpbar"><i style="width:${pct}%"></i></div>
+    ${T.m ? `<div class="ubw ${T.c}">${esc(T.m)}</div>` : ""}
     <div class="ubc-c">${chips}</div>
-    <div class="ubc-f"><small>${ubEveryT(p.every_min)}${p.media ? " · فایل" : ""} · ${String(p.from_h).padStart(2, "0")}–${String(p.to_h).padStart(2, "0")}</small>${s.err ? `<small class="bad">${esc(s.err)}</small>` : s.last ? `<small>آخرین دوره: ${ubWhen(s.last)}</small>` : ""}</div></div>`;
+    <div class="ubc-f"><small>${ubEveryT(p.every_min)}${p.media ? " · فایل" : ""} · ${String(p.from_h).padStart(2, "0")}–${String(p.to_h).padStart(2, "0")}</small>${s.err ? `<small class="bad">${esc(s.err)}</small>` : s.last ? `<small>آخرین دوره: ${ubWhen(s.last)}</small>` : ""}</div>
+    <button type="button" class="ubdet" data-a="ubpdet" data-id="${esc(p.id)}">${open ? "بستن جزئیات" : "جزئیات: وضعیت هر مقصد و رویدادها"}</button>${open ? ubPostDet(p, s, chats) : ""}</div>`;
+}
+
+function ubAcctHTML(x){
+  const a = x.acct; if(!a) return "";
+  const ev = (a.ev || []).map(e => `<div class="ubev ${esc(e.k)}"><i></i><span>${esc(e.m)}</span><small>${ubWhen(e.t)}</small></div>`).join("") || `<p class="muted" style="margin:6px 0">هنوز رویدادی ثبت نشده.</p>`;
+  return `<div class="ubacct ${a.c}"><div class="ubacct-h"><span class="ubchip ${a.c}">${esc(a.t)}</span>${a.u ? `<span class="n ubun" data-un="${a.u}">--:--</span>` : ""}</div>
+    <p>${esc(a.m)}</p>
+    <div class="ubacct-s"><div><b class="n">${N(a.ph)}/${N(a.ph_max)}</b><small>این ساعت</small></div><div><b class="n">${N(a.pd)}/${N(a.pd_max)}</b><small>امروز</small></div><div><b class="n">${a.pen > 1.05 ? "×" + (+a.pen).toFixed(1) : "عادی"}</b><small>ضریب احتیاط</small></div><div><b class="n">${N(a.fw)}</b><small>فلود ۲۴ساعت</small></div></div>
+    <button type="button" class="ubdet" data-a="ubadet">${S.ubDetA ? "بستن رویدادهای اکانت" : "رویدادهای اکانت"}</button>${S.ubDetA ? `<div class="ubdt">${ev}</div>` : ""}</div>`;
 }
 
 function ubPostsHTML(x){
   const posts = S.ubCfg.posts, full = posts.length >= (x.lim?.posts || 20), none = !S.ubCfg.chats.length;
-  return `<div class="sec">${ubH("پیام‌های زمان‌بندی‌شده", "هر مورد یک زمان‌بندی است: بعد از ذخیره منتظر نوبتش می‌ماند و هر نوبت به همه‌ی مقصدها با مکث تصادفی و صف ارسال می‌شود. اگر تلگرام صبر بخواهد (اسلو‌مود یا فلود)، یوزربات صبر می‌کند و دوباره تلاش می‌کند. برای ارسال فوری، داخل هر کارت «ذخیره و ارسال همین حالا» را بزن.")}</div>
+  return `${ubAcctHTML(x)}<div class="sec">${ubH("پیام‌های زمان‌بندی‌شده", "هر مورد یک زمان‌بندی است: بعد از ذخیره منتظر نوبتش می‌ماند و هر نوبت به همه‌ی مقصدها با مکث تصادفی و صف ارسال می‌شود. اگر تلگرام صبر بخواهد (اسلو‌مود یا فلود)، یوزربات دقیقاً همان‌قدر صبر می‌کند، بعدش مدتی آهسته‌تر ادامه می‌دهد و هر اتفاق (موفق، رد شده، خطا) با دلیلش در «جزئیات» همین کارت ثبت می‌شود. برای ارسال فوری، داخل هر کارت «ذخیره و ارسال همین حالا» را بزن.")}</div>
     ${posts.length ? posts.map((p, i) => ubPostCard(p, i, x)).join("") : `<div class="empty" style="padding:22px 16px"><p class="muted">${none ? "اول از تب «گروه‌ها و کانال‌ها» مقصد اضافه کن." : "زمان‌بندی‌ای نساخته‌ای."}</p></div>`}
     <button class="b o sep-btn mt2" data-a="ubpadd"${full || none ? " disabled" : ""}>${IC.plus}زمان‌بندی جدید</button>`;
 }
@@ -1803,7 +1814,7 @@ async function ubCommit(fn, msg = "ذخیره شد"){
   const d = await api(`/api/userbots/${S.ubSel}/config`, "PUT", {config: cfg});
   ubPut(d.item); S.ubCfg = ubNorm(d.item.config); toast(msg); haptic("ok");
 }
-const ubNorm = c => { c = cp(c || {}); c.chats ||= []; c.posts ||= []; c.rules ||= []; c.safe ||= "balanced"; c.join = Object.assign({mode: "off", daily: 5}, c.join || {}); c.away ||= {on: false, text: "", gap_h: 6}; c.cmds ||= {on: true}; c.ai = Object.assign({on: false, prompt: "", daily: 20, gdaily: 30, disclose: true}, c.ai || {}); return c; };
+const ubNorm = c => { c = cp(c || {}); c.chats ||= []; c.posts ||= []; c.rules ||= []; c.safe ||= "safe"; c.join = Object.assign({mode: "off", daily: 5}, c.join || {}); c.away ||= {on: false, text: "", gap_h: 6}; c.cmds ||= {on: true}; c.ai = Object.assign({on: false, prompt: "", daily: 20, gdaily: 30, disclose: true}, c.ai || {}); return c; };
 const ubOpen = id => { const it = S.ub.items.find(x => x.id === id); if(!it) return; S.ubSel = id; S.ubTab = "feat"; S.ubCfg = ubNorm(it.config); renderUserbot(); scrollTo(0, 0);
   api(`/api/userbots/${id}`).then(d => { ubPut(d.item); if(S.view === "userbot" && S.ubSel === id && S.ubTab === "log") renderUserbot(); }).catch(() => {}); };
 
@@ -1823,6 +1834,8 @@ Object.assign(A, {
     D = {i: null, id: "", name: "", chats: [], text: "", media: "", fmt: "html", mode: "seq", every_min: 360, from_h: 8, to_h: 23, daily: 4, on: true, rp: false, rwin: 30, rnone: "plain", nl: false, mg: false, lg: false, lgs: "both", fb: "text", fwd: ""}; renderSheet(); },
   ubpedit: el => { ubRead(); const i = +el.dataset.i, p = S.ubCfg.posts[i]; if(!p) return; S.sheet = {kind: "ubpost"};
     D = {i, id: p.id, name: p.name, chats: [...p.chats], text: p.texts.join("\n---\n"), media: p.media || "", fmt: p.fmt || "html", mode: p.mode, every_min: p.every_min, from_h: p.from_h, to_h: p.to_h, daily: p.daily, on: p.on, rp: !!p.rp, rwin: p.rwin || 30, rnone: p.rnone || "plain", nl: !!p.nl, mg: !!p.mg, lg: !!p.lg, lgs: p.lgs || "both", fb: p.fb || "text", fwd: p.fwd || ""}; renderSheet(); },
+  ubpdet: el => { const id = el.dataset.id; S.ubDet[id] = !S.ubDet[id]; renderUserbot(); },
+  ubadet: () => { S.ubDetA = !S.ubDetA; renderUserbot(); },
   ubrefresh: el => busy(el, async () => { const d = await api(`/api/userbots/${S.ubSel}`); ubPut(d.item); renderUserbot(); }),
   ubpower: el => {
     const x = ubItem(); if(!x) return;
@@ -1839,6 +1852,6 @@ document.addEventListener("input", e => {
   if(e.target.id === "ubp-q"){ const q = e.target.value.trim().toLowerCase(); document.querySelectorAll(".ubpick").forEach(r => { r.style.display = !q || r.dataset.t.includes(q) ? "" : "none"; }); }
 });
 document.addEventListener("keydown", e => {
-  if(e.key === "Enter" || e.key === " "){ const r = e.target.closest?.(".ubrow"); if(r){ e.preventDefault(); A.ubopen(r); } const q = e.target.closest?.(".ubc"); if(q){ e.preventDefault(); A.ubpedit(q); } }
+  if(e.key === "Enter" || e.key === " "){ const r = e.target.closest?.(".ubrow"); if(r){ e.preventDefault(); A.ubopen(r); } const q = e.target.closest?.(".ubc"); if(q && !e.target.closest("button")){ e.preventDefault(); A.ubpedit(q); } }
   if(e.key === "Enter" && e.target.id?.startsWith("uc-")){ e.preventDefault(); document.querySelector('[data-sh="ubsend"],[data-sh="ubverify"],[data-sh="ubpwgo"]')?.click(); }
 });

@@ -1573,3 +1573,30 @@ button{max-width:100%}
 .pvlim[hidden],.pvbadge[hidden],.pvmods[hidden]{display:none!important}
 .lqi{background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 7%,var(--sf2)),var(--sf2));border-style:solid;border-color:color-mix(in srgb,var(--ac) 22%,var(--line))}
 .lqi .lqt span{white-space:normal;overflow:visible;font-size:11.5px}
+
+/* ───── یوزربات: وضعیت شفاف کارت‌ها و بنر اکانت ───── */
+.ubw{margin:10px 0 0;padding:8px 11px;border-radius:12px;font-size:12px;line-height:1.8;background:var(--sf2);color:var(--mut);border:1px solid var(--line2)}
+.ubw.ok{color:var(--ok)}.ubw.ac{color:var(--ac)}.ubw.vio{color:var(--vio)}
+.ubw.tok{color:var(--tok);border-color:color-mix(in srgb,var(--tok) 35%,transparent)}
+.ubw.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
+.ubdet{display:block;width:100%;margin-top:10px;padding:8px;border-radius:12px;font-size:12px;color:var(--mut);background:transparent;border:1px dashed var(--line);cursor:pointer}
+.ubdt{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--sf2);border:1px solid var(--line2);cursor:default}
+.ubdt-h{font-size:11.5px;font-weight:700;color:var(--mut);margin:10px 0 6px}.ubdt-h:first-child{margin-top:0}
+.ubtg{padding:6px 0;border-bottom:1px solid var(--line2)}
+.ubtg-r{display:flex;align-items:center;gap:8px}
+.ubtg-r b{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ubtg-r small{flex:none;color:var(--mut);font-size:10.5px}
+.ubwhy{margin-top:4px;font-size:11.5px;color:var(--mut);line-height:1.7}
+.ubev{display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:12px;line-height:1.7}
+.ubev i{flex:none;width:8px;height:8px;margin-top:7px;border-radius:50%;background:var(--mut)}
+.ubev span{flex:1;min-width:0}.ubev small{flex:none;margin-top:2px;color:var(--mut);font-size:10.5px}
+.ubev.ok i{background:var(--ok)}.ubev.drop i,.ubev.dead i{background:var(--bad)}
+.ubev.flood i,.ubev.wait i,.ubev.cap i{background:var(--tok)}.ubev.skip i{background:var(--vio)}
+.ubacct{margin-bottom:14px;padding:14px;border-radius:var(--r-lg);background:var(--sf);border:1px solid var(--line);border-inline-start:4px solid var(--ok);box-shadow:var(--sh-1)}
+.ubacct.off{border-inline-start-color:var(--mut)}.ubacct.bad{border-inline-start-color:var(--bad)}
+.ubacct.tok{border-inline-start-color:var(--tok)}.ubacct.ac{border-inline-start-color:var(--ac)}
+.ubacct-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ubacct-h .ubun{font-size:20px;font-weight:700;direction:ltr;font-variant-numeric:tabular-nums}
+.ubacct p{margin:10px 0;font-size:12.5px;line-height:1.8;color:var(--mut)}
+.ubacct-s{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.ubacct-s b{display:block;font-size:14px}.ubacct-s small{color:var(--mut);font-size:10px}
