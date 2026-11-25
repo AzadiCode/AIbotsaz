@@ -474,7 +474,7 @@ function aidClose(silent){
   el.classList.remove("show");
   $("#aidscrim")?.classList.remove("on");
   clearTimeout(aidCloseT);
-  aidCloseT = setTimeout(() => { if(!S.aid.on) el.innerHTML = ""; }, 320);
+  aidCloseT = setTimeout(() => { if(!S.aid.on){ el.classList.remove("on"); el.innerHTML = ""; } }, 320);
   aidPill();
   if(!silent) haptic();
 }
