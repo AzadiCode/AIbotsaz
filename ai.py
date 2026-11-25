@@ -3641,9 +3641,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, [], "planned", 0)
         _limits = list(getattr(_plan_meta, "limits", []) or [])
         if _limits and cb and getattr(cb, "jid", None) and current is None:
-            approved_wants = {str(x.get("want") or "").strip().casefold()
-                              for x in (getattr(_plan_meta, "approved_limits", []) or [])}
-            new_limits = [x for x in _limits if str(x.get("want") or "").strip().casefold() not in approved_wants]
+            new_limits = builder_agent.unapproved_limits(_limits, getattr(_plan_meta, "approved_limits", []))
             if new_limits:
                 raise PreflightReview(new_limits)
 
