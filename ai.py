@@ -3577,11 +3577,20 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             _fast = _module_build(prompt, cb, nodes_cap, current)
             if _fast:
                 _fast_issues = builder_agent.audit_config(_fast[1])
+                _fast_qa = []
                 if not _fast_issues:
+                    try:
+                        _fast_qa = audit_requirements(prompt, _fast[1], acc)
+                    except Exception as _fast_qa_exc:
+                        log.warning("module candidate QA unavailable; falling back to full task pipeline: %s",
+                                    str(_fast_qa_exc)[:240])
+                        _fast_qa = [{"want": "ممیزی مستقل خروجی ماژول", "why": "ممیزی مستقل انجام نشد؛ مسیر سریع اجازه تحویل بدون ممیزی را ندارد.",
+                                     "upgrade": "اجرای مسیر کامل برنامه‌ریزی و ساخت وظیفه‌ای."}]
+                if not _fast_issues and not _fast_qa:
                     _gap.items = []
                     return _fast
-                log.warning("module build rejected by deterministic capability audit: %s",
-                            [x.get("code") for x in _fast_issues[:8]])
+                log.warning("module build rejected by QA; falling back to full task pipeline. deterministic=%s model_qa=%s",
+                            [x.get("code") for x in _fast_issues[:8]], len(_fast_qa))
         plan = _plan_build_tasks(prompt, current, acc)
         cfg = copy.deepcopy(current) if current is not None else {
             "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",
