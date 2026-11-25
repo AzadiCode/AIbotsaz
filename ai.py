@@ -2193,14 +2193,13 @@ class Progress:
     def model_fallback(self, n, model, total):
         # Persist model/provider attempts for transparent post-build diagnostics and resumable jobs.
         attempt = {"attempt": int(n), "model": str(model)[:100], "phase": str(self.phase)[:40], "at": time.time()}
-        if not self.model_attempts or self.model_attempts[-1].get("model") != attempt["model"] or self.model_attempts[-1].get("phase") != attempt["phase"]:
-            self.model_attempts.append(attempt)
-            self.model_attempts = self.model_attempts[-80:]
-            try:
-                db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}},
-                                   {"$set": {"build_diagnostics.model_attempts": self.model_attempts}})
-            except Exception:
-                log.exception("could not persist model attempt diagnostics")
+        self.model_attempts.append(attempt)
+        self.model_attempts = self.model_attempts[-80:]
+        try:
+            db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}},
+                               {"$set": {"build_diagnostics.model_attempts": self.model_attempts}})
+        except Exception:
+            log.exception("could not persist model attempt diagnostics")
         # پیشرفت مرحله‌ای: اگر یک ارائه‌دهنده رد کند/قطع شود، کاربر روی ۲٪ ثابت نمی‌ماند.
         self.d["model_try"] = int(n)
         self.d["model_total"] = int(total)
