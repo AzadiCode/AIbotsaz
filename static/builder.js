@@ -1626,7 +1626,7 @@ bpubSheet = function(){
 Object.assign(A, {
   simrunall: () => {
     closeSheet();
-    S.view = "studio"; S.btab = "ai"; closeSheet(); render();
+    S.newbot = 0; S.view = "studio"; closeSheet(); render();
     setTimeout(() => {
       A.simopen();
       const scens = (() => { try{ return JSON.parse(localStorage.getItem("azadi.sim." + S.cur.id) || "[]"); }catch(_){ return []; } })();

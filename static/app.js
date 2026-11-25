@@ -19,7 +19,7 @@ const WK = (() => { try{
 const API_BASE = "";
 
 let S = {
-  view: "create", btab: "stats", atab: "wallet", sbot: null,
+  view: "studio", btab: "stats", atab: "wallet", sbot: null, newbot: 0,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
   ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null, emojis: undefined
@@ -175,12 +175,12 @@ async function load(){
     return;
   }
   const want = new URLSearchParams(location.search).get("bot"), hit = want && S.bots.find(b => b.id === want);   // لینک مستقیم از چت ربات مادر
-  if(hit){ S.cur = hit; S.view = "studio"; S.sbot = hit.id; S.ideas = []; S.stats = null; }
+  if(hit){ S.cur = hit; S.view = "studio"; S.sbot = hit.id; S.newbot = 0; S.ideas = []; S.stats = null; }
   render();
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
 
-const TABS = [["create", "spark", "ساخت"], ["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["miniapp", "layers", "مینی‌اپ"], ["media", "photo", "رسانه"], ["userbot", "person", "یوزربات"], ["account", "wallet", "حساب"]];
+const TABS = [["bots", "bot", "ربات‌ها"], ["studio", "studio", "استودیو"], ["miniapp", "layers", "مینی‌اپ"], ["media", "photo", "رسانه"], ["userbot", "person", "یوزربات"], ["account", "wallet", "حساب"]];   // تب «ساخت» حذف شد؛ ساخت داخل استودیو است
 $("#dpanel").innerHTML = TABS.map(([k, ic, t]) => `<button class="dn" data-go="${k}" aria-label="${t}" title="${t}">${IC[ic]}</button>`).join("");
 function setDock(on){ $("#dock").classList.toggle("open", on); $("#dscrim").classList.toggle("on", on); }
 document.addEventListener("click", e => {
@@ -219,7 +219,7 @@ function renderTop(){
 function render(){
   renderTop();
   if(S.view !== "studio" && typeof SIM !== "undefined" && SIM.on){ SIM.on = false; $("#simwrap")?.remove(); }   // شبیه‌ساز فقط داخل استودیو باز می‌ماند
-  document.documentElement.classList.toggle("st-lock", S.view === "studio");
+  document.documentElement.classList.toggle("st-lock", S.view === "studio" && !S.newbot && S.bots.length > 0 && !!S.cur);   // فقط بوم گرافیکی قفل اسکرول دارد؛ فرم ساخت جدید عادی اسکرول می‌شود
   VIEWS[S.view]();
   const cur = S.view === "bot" ? "bots" : S.view;
   document.querySelectorAll(".dn").forEach(el => el.classList.toggle("on", el.dataset.go === cur));
@@ -231,13 +231,15 @@ function goTo(where){
 }
 function stGo(where){
   closeSheet();
+  if(where === "create"){ where = "studio"; S.newbot = 1; }   // «ساخت با AI» در استودیو ادغام شد؛ تب جداگانه ندارد
+  else if(where === "studio"){ S.newbot = 0; }
   if(S.view === "bot" && where !== "studio"){ S.cur = null; S.ideas = []; }
   S.view = where; render(); scrollTo({top: 0, behavior: "smooth"}); haptic();
   if(where === "userbot") ubLoad();
-  if(["create", "bots", "account"].includes(where)) sync().then(ok => {
+  if(["bots", "account"].includes(where)) sync().then(ok => {
     if(!ok || S.view !== where) return;
     renderTop();
-    if(where !== "create" && !document.activeElement?.matches?.("input,textarea,select")) render();
+    if(!document.activeElement?.matches?.("input,textarea,select")) render();
   });
 }
 const tabsHTML = (list, cur, act) => `<div class="tabs" role="tablist">${list.map(([k, t]) => `<button class="tab${k === cur ? " on" : ""}" role="tab" aria-selected="${k === cur}" data-a="${act}" data-k="${k}">${t}</button>`).join("")}</div>`;
@@ -393,7 +395,7 @@ function showBuildFailure(r){
 function applyBuiltBot(r, was){
   if(!r.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
   S.wallet = r.wallet || S.wallet; S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
-  S.cur = r.bot; S.view = "studio"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null;
+  S.cur = r.bot; S.view = "studio"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null; S.newbot = 0;
   render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? `، ${r.cost} توکن` : "")); haptic("ok"); scrollTo(0, 0);
 }
 function showBuildReview(r){
@@ -416,7 +418,7 @@ function showBuildReview(r){
 }
 
 function submitPrompt(){
-  const ta = $("#prompt"), p = ta.value.trim(), botId = S.cur?.id || null;
+  const ta = $("#prompt"), p = ta.value.trim(), botId = (S.newbot || !S.bots.length) ? null : (S.cur?.id || null);
   if(p.length < 5) return toast("توضیح بیشتری بنویس");
   const cost = needCost(!!botId);
   if(S.wallet.tokens < cost) return openBuy(`این کار حداقل ${cost} توکن می‌خواهد و موجودی تو ${S.wallet.tokens} توکن است.`);
@@ -488,7 +490,7 @@ function renderCreate(){
   $("#prompt")?.addEventListener("input", planPreview);
   if(S.bps === undefined){
     S.bps = null;
-    api("/api/blueprints").then(d => { S.bps = d.items || []; if(S.view === "create") render(); }).catch(() => { S.bps = []; });
+    api("/api/blueprints").then(d => { S.bps = d.items || []; if(S.view === "studio" && (S.newbot || !S.bots.length)) render(); }).catch(() => { S.bps = []; });
   }
 }
 
@@ -536,7 +538,7 @@ function archMade(d){
   const b = D?.bp;
   S.bots = [d.bot, ...S.bots.filter(x => x.id !== d.bot.id)];
   if(d.wallet) S.wallet = d.wallet;
-  S.cur = d.bot; S.sbot = d.bot.id;
+  S.cur = d.bot; S.sbot = d.bot.id; S.newbot = 0;
   S.sheet = {kind: "info"};
   const cards = (d.cards || []).map(x => `<div class="vdl">${digitsHTML(x)}</div>`).join("");
   const steps = (d.steps || []).map(x => `<div class="steps2">← ${digitsHTML(x)}</div>`).join("");
@@ -550,7 +552,7 @@ function archMade(d){
 /* متن نمونه که خودش تایپ می‌شود؛ تنها حرکت خودکار صفحه */
 function startTyper(){
   const ta = $("#prompt"), id = ++startTyper.id;
-  if(!ta || S.view !== "create" || reduced()) return;
+  if(!ta || reduced()) return;
   let i = 0, k = 0, hold = 0;
   (function tick(){
     if(id !== startTyper.id || !ta.isConnected) return;
@@ -585,7 +587,7 @@ const kindOf = b => b.pay ? "pay" : b.app !== undefined ? "app" : b.goto !== und
 function renderBot(){
   const b = S.cur;
   if(S.btab === "studio"){
-    S.view = "studio";
+    S.newbot = 0; S.view = "studio";
     return renderStudio();               // «ساخت با AI» در استودیو ادغام شد؛ این تب نقشهٔ ربات را باز می‌کند
   }
   const body = ({stats: tabStats, publish: tabPublish, more: tabMore}[S.btab] || tabStats)(b);
@@ -817,7 +819,7 @@ const A = {
     }
     if(!d.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
     S.wallet = d.wallet || S.wallet; S.bots = [d.bot, ...S.bots.filter(b => b.id !== d.bot.id)];
-    S.cur = d.bot; S.view = "studio"; S.sbot = d.bot.id; S.fresh = true; S.ideas = d.ideas || []; S.stats = null;
+    S.cur = d.bot; S.view = "studio"; S.sbot = d.bot.id; S.fresh = true; S.ideas = d.ideas || []; S.stats = null; S.newbot = 0;
     render(); bumpTokens(); toast(`نسخه‌ی تأییدشده ساخته شد${d.cost ? `، ${d.cost} توکن` : ""}`); haptic("ok"); scrollTo(0, 0);
   }),
   reviewno: el => busy(el, async () => {
@@ -841,7 +843,7 @@ const A = {
   closefail: () => closeSheet(),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
   idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
-  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "studio"; S.sbot = S.cur.id; S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
+  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.newbot = 0; S.view = "studio"; S.sbot = S.cur.id; S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
   back: () => { S.view = "bots"; S.cur = null; S.ideas = []; closeSheet(); render(); scrollTo(0, 0); sync().then(ok => { if(ok && S.view === "bots") render(); }); },
   btab: el => { if(S.busy) return toast("کار قبلی هنوز تمام نشده؛ کمی صبر کن"); S.btab = el.dataset.k; renderBot(); },
   atab: el => { S.atab = el.dataset.k; renderAccount(); },
@@ -921,8 +923,8 @@ Object.assign(A, {
     S.bots.length && sync();
     archMade(d);
   }),
-  madetest: () => { closeSheet(); const b = S.cur; S.view = "studio"; ST.botId = null; closeSheet(); render(); setTimeout(() => A.simopen(), 350); },
-  madebot: () => { closeSheet(); S.view = "studio"; render(); scrollTo(0, 0); },
+  madetest: () => { closeSheet(); const b = S.cur; S.newbot = 0; S.view = "studio"; ST.botId = null; closeSheet(); render(); setTimeout(() => A.simopen(), 350); },
+  madebot: () => { closeSheet(); S.newbot = 0; S.view = "studio"; render(); scrollTo(0, 0); },
   archedgo: el => busy(el, async () => {
     const req = ($("#arch-req")?.value || "").trim();
     if(req.length < 4) return toast("بنویس چه چیزی عوض شود");
@@ -989,7 +991,7 @@ document.addEventListener("change", e => {
 document.addEventListener("focusin", e => {
   if(!e.target.matches?.("input,textarea,select")) return;
   setDock(false); $("#dock").classList.add("hide");
-  if(e.target.id === "prompt" && S.view === "create") e.target.placeholder = "رباتی که لازم داری را توضیح بده…";
+  if(e.target.id === "prompt" && (S.view === "create" || S.newbot || !S.bots.length)) e.target.placeholder = "رباتی که لازم داری را توضیح بده…";
 });
 document.addEventListener("focusout", () => setTimeout(() => { if(!document.activeElement?.matches?.("input,textarea,select")) $("#dock").classList.remove("hide"); }, 150));
 
@@ -1102,10 +1104,10 @@ const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""'
   return ["time,section,name,username,answers", ...items.map(r => [r.t, r.title, r.name, r.un, (r.qa || []).map(([a, b]) => a + ": " + b).join(" | ") || r.text].map(q).join(","))].join("\n"); };
 
 Object.assign(A, {
-  studio: () => { const b = S.cur; if(!b) return toast("اول یک ربات انتخاب کن"); S.view = "studio"; S.sbot = b.id; closeSheet(); render(); },
+  studio: () => { const b = S.cur; if(!b) return toast("اول یک ربات انتخاب کن"); S.newbot = 0; S.view = "studio"; S.sbot = b.id; closeSheet(); render(); },
   stback: () => stGuardClose(() => { stSaveNow(); S.view = "bot"; S.btab = "stats"; closeSheet(); render(); scrollTo(0, 0); }),
   stbots: () => stGuardClose(() => { stSaveNow(); S.view = "studio"; S.cur = null; S.sbot = null; ST.botId = null; render(); }),
-  spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.view = "studio"; ST.botId = null; render(); },
+  spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.newbot = 0; S.view = "studio"; ST.botId = null; render(); },
   stadd: () => addNode(),
   stzin: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1.22, true); },
   stzout: () => { const cv = $("#stc"); if(cv) stZoomAt(cv.clientWidth / 2, cv.clientHeight / 2, 1 / 1.22, true); },
@@ -1147,7 +1149,7 @@ Object.assign(A, {
       try{
         const d = await api(`/api/templates/${el.dataset.id}/create`, "POST");
         if(d.wallet) S.wallet = d.wallet;
-        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "studio"; S.sbot = d.bot.id; S.fresh = true; S.ideas = []; S.stats = null;
+        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "studio"; S.sbot = d.bot.id; S.fresh = true; S.ideas = []; S.stats = null; S.newbot = 0;
         render(); bumpTokens(); celebrate(); toast("قالب آماده شد" + (d.cost ? `، ${d.cost} توکن` : "")); scrollTo(0, 0);
       }catch(e){ if(e.status === 402){ if(e.data?.wallet){ S.wallet = e.data.wallet; renderTop(); } openBuy(e.message); } else throw e; }
     }); },

@@ -615,15 +615,16 @@ function stHintHTML(){
   return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
 }
 function renderStudio(){
-  if(!S.bots.length){
-    $("#app").innerHTML = `<div class="empty" style="padding-top:70px"><div class="ib big">${IC.studio}</div><h2>استودیو</h2><p class="muted">اول یک ربات بساز؛ بعد اینجا بخش‌هایش را ویرایش می‌کنی و به هم وصل می‌کنی.</p><button class="b sm" data-go="create">ساخت ربات</button></div>`;
+  if(S.newbot || !S.bots.length){          // «ساخت با AI» داخل استودیو ادغام شد؛ فرم کامل ساخت (پیش‌نمایش زنده + قالب‌ها + نقشه‌ها) همین‌جاست
+    renderCreate();
     return;
   }
   let bot = S.cur && S.bots.find(b => b.id === S.cur.id) ? S.cur : (S.sbot ? S.bots.find(b => b.id === S.sbot) : null);
   if(!bot){
     $("#app").innerHTML = `<div class="st-picker"><div class="ph"><h1>استودیو</h1></div>
       <p class="muted" style="margin:-4px 4px 14px">رباتی را که می‌خواهی ویرایش کنی انتخاب کن. بخش‌هایش را می‌بینی، تغییر می‌دهی و با سیم به هم وصل می‌کنی.</p>
-      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} بخش</span></span>${goIc}</button>`).join("")}</div></div>`;
+      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} بخش</span></span>${goIc}</button>`).join("")}</div>
+      ${S.bots.length < (S.cfg?.max_bots || 10) ? `<button class="b o sep-btn" data-go="create">${IC.plus}ربات جدید — همین‌جا در استودیو بساز</button>` : ""}</div></div>`;
     return;
   }
   S.cur = bot; S.sbot = bot.id;
@@ -1705,7 +1706,7 @@ async function refreshWallet(waitInc){
     if(!waitInc || S.wallet.tokens > t0) break;
   }
   if(S.sheet?.kind === "buy") closeSheet();
-  if(S.view === "create" || S.view === "account") render();
+  if(S.view === "account" || (S.view === "studio" && (S.newbot || !S.bots.length))) render();
 }
 async function buyPack(id, btn){
   busy(btn, async () => {
