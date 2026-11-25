@@ -99,11 +99,15 @@ def audit_config(cfg: dict) -> list[dict]:
                         "message": f"اکشن «{op}» آرگومان‌های لازم را ندارد: {', '.join(missing)}.",
                         "node": "",
                     })
-            elif op not in CONDITION_OPS and op:
+            elif op not in CONDITION_OPS and op not in {x.get("k") for x in getattr(_caps, "CAPS_DO", [])}:
                 issues.append({"code": "unknown_action", "severity": "blocker",
                                "message": f"اکشن «{op}» در قرارداد شناخته‌شده موتور ثبت نشده است."})
         for value in _strings(item):
             reads.update(VAR_RE.findall(value))
+        if op in CONDITION_OPS and item.get("var"):
+            reads.add(str(item["var"]))
+        if op in {"add", "clear", "disc"} and item.get("var"):
+            reads.add(str(item["var"]))
         if op in {"set", "add", "random", "pick", "dice", "calc", "db_get", "db_inc"} and item.get("var"):
             writes.add(str(item["var"]))
         if op == "disc" and item.get("var"):
