@@ -3840,7 +3840,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         except Exception as exc:
             deterministic_issues = builder_agent.audit_config(cfg)
             _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
-                                    "deterministic_repair_failed", len(plan),
+                                    "deterministic_repair_failed", len(repair_plan),
                                     f"{type(exc).__name__}: {str(exc)[:450]}")
             log.warning("deterministic repair failed; remaining issues will be disclosed: %s", str(exc)[:240])
             all_gaps = _merge_gap_items(all_gaps, [{
@@ -3857,6 +3857,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
                 "deterministic_audit_failed", len(repair_plan),
                 "; ".join(x.get("code", "") for x in deterministic_issues[:10])
             )
+        plan = repair_plan
     # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
     all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
     if guard:
