@@ -822,6 +822,15 @@ def mk_watch(uid, chat, jid):
                     + hx(detail) + "\n\n"
                     f"💳 هزینه در صورت تأیید ساخت: {review_cost} توکن\n\n"
                     "می‌تونی نسخه‌ی نزدیک به درخواستت رو با آگاهی از این محدودیت‌ها بسازی، یا درخواست رو لغو کنی. لغو درخواست رایگانه.")
+            _diag = j.get("build_state") or {}
+            _attempts = (j.get("build_diagnostics") or {}).get("model_attempts") or []
+            _models = list(dict.fromkeys(str(x.get("model") or "") for x in _attempts if x.get("model")))
+            body += "\n\n🧪 <b>خلاصه فنی</b>\nمرحله: " + hx(_diag.get("phase") or "تحلیل اولیه")
+            body += f"\nوظایف تکمیل‌شده: {len(_diag.get('completed') or [])} از {len(_diag.get('plan') or [])}"
+            if _models:
+                body += "\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+            if _diag.get("last_error"):
+                body += "\nآخرین خطا: " + hx(str(_diag.get("last_error"))[:350])
             kb = mk_kb([mk_btn("✅ ادامه ساخت با جایگزین‌ها" if pre else "✅ ساخت نسخه با محدودیت‌های بالا", f"mk:review:yes:{jid}")],
                        [mk_btn("❌ لغو درخواست (بدون کسر توکن)", f"mk:review:no:{jid}")])
             mk_show(uid, chat, body, kb)
