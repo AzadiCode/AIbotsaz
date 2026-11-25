@@ -3588,6 +3588,11 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             raise RuntimeError("تصمیم‌های تأییدشدهٔ کاربر از دیتابیس خوانده نشد؛ ساخت بدون آن‌ها ادامه پیدا نمی‌کند")
 
     state = _load_build_state(cb, prompt, current)
+    if state and getattr(_plan_meta, "approved_limits", []) and not (state.get("completed") or []) and state.get("phase") == "planned":
+        # The preflight checkpoint was created before the user approved substitutions.
+        # Re-plan once with the approval context; never execute the stale pre-approval plan.
+        log.info("Replanning preflight-approved job with accepted substitutions")
+        state = None
     if state:
         plan = state["plan"]
         cfg = copy.deepcopy(state["cfg"])
