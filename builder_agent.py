@@ -120,6 +120,26 @@ def audit_config(cfg: dict) -> list[dict]:
 
     nodes = cfg.get("nodes") or {}
     vars_declared = set((cfg.get("vars") or {}).keys()) | set((cfg.get("globals") or {}).keys())
+    if not isinstance(cfg.get("start"), str) or cfg.get("start") not in nodes:
+        issues.append({"code": "invalid_start_node", "severity": "blocker", "message": "گره شروع تعریف نشده یا به نودی ناموجود اشاره می‌کند."})
+    if cfg.get("fallback") and cfg.get("fallback") not in nodes:
+        issues.append({"code": "invalid_fallback_node", "severity": "blocker", "message": f"گره جایگزین «{cfg.get('fallback')}» وجود ندارد."})
+    for command, target in (cfg.get("commands") or {}).items():
+        if target not in nodes:
+            issues.append({"code": "invalid_command_target", "severity": "blocker", "message": f"دستور «{command}» به نود ناموجود «{target}» متصل است."})
+    for node_id, node in nodes.items():
+        if not isinstance(node, dict):
+            issues.append({"code": "invalid_node", "severity": "blocker", "message": f"ساختار نود «{node_id}» معتبر نیست."})
+            continue
+        if node.get("next") and node["next"] not in nodes:
+            issues.append({"code": "invalid_navigation_target", "severity": "blocker", "message": f"نود «{node_id}» به مقصد ناموجود «{node['next']}» اشاره می‌کند."})
+        for route in node.get("route") or []:
+            if isinstance(route, dict) and route.get("goto") and route["goto"] not in nodes:
+                issues.append({"code": "invalid_navigation_target", "severity": "blocker", "message": f"مسیر نود «{node_id}» به مقصد ناموجود «{route['goto']}» اشاره می‌کند."})
+        for row in node.get("buttons") or []:
+            for button in row if isinstance(row, list) else []:
+                if isinstance(button, dict) and button.get("goto") and button["goto"] not in nodes:
+                    issues.append({"code": "invalid_button_target", "severity": "blocker", "message": f"دکمه در نود «{node_id}» به مقصد ناموجود «{button['goto']}» اشاره می‌کند."})
     reads: set[str] = set()
     writes: set[str] = set()
     used_ops: set[str] = set()
