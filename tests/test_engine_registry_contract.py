@@ -52,13 +52,13 @@ class EngineRegistryContractTests(unittest.TestCase):
                 continue
             if action not in explicit:
                 missing.append(action)
-        self.assertEqual(missing, set())
+        self.assertEqual(missing, [])
 
     def test_engine_condition_evaluator_covers_registry(self):
         check = function_node("engine.py", "check")
         constants = {node.value for node in ast.walk(check) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
         missing = {item["k"] for item in caps.CAPS_IF} - constants
-        self.assertEqual(missing, [])
+        self.assertEqual(missing, set())
 
     def test_required_action_arguments_are_a_subset_of_supported_arguments(self):
         for item in caps.CAPS_DO:
