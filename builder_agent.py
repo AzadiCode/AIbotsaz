@@ -145,6 +145,8 @@ def audit_config(cfg: dict) -> list[dict]:
     used_ops: set[str] = set()
     for value in _strings(nodes):
         reads.update(VAR_RE.findall(value))
+    for value in _strings(cfg.get("on_ref") or []):
+        reads.update(VAR_RE.findall(value))
     for item in _logic_items(cfg):
         op = str(item.get("op") or "")
         if op:
