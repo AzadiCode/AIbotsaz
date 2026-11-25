@@ -1600,3 +1600,9 @@ button{max-width:100%}
 .ubacct p{margin:10px 0;font-size:12.5px;line-height:1.8;color:var(--mut)}
 .ubacct-s{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .ubacct-s b{display:block;font-size:14px}.ubacct-s small{color:var(--mut);font-size:10px}
+/* ── دستیار استودیو: پچ قطعی روی کانفیگ فعلی (رایگان) ── */
+.st-assist{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:6px 10px;background:color-mix(in srgb,var(--sf) 82%,transparent);border:1px solid var(--line);border-radius:14px}
+.st-assist .ib{flex:0 0 auto;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;color:var(--ac)}
+.st-assist .ib svg{width:18px;height:18px}
+.st-assist input{flex:1 1 auto;min-width:0;background:transparent;border:none;outline:none;color:inherit;font:inherit;padding:4px 0}
+.st-assist input::placeholder{opacity:.55}

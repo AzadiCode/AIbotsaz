@@ -352,6 +352,97 @@ def api_arch_apply(uid, bot_id):
     return jsonify(bot=public(bot2), cards=applied, wallet=wallet_info(uid))
 
 
+# ───────────────────────── دستیار استودیو: پچ قطعی روی کانفیگ فعلی ─────────────────────────
+def _assist_spec(bot, req):
+    """روتر کلیدواژه‌ای روی درخواست؛ فقط قابلیت‌های کاتالوگ. خروجی: Spec یا None."""
+    import catalog as _cat
+    spec = _cat.keyword_spec(req)
+    if not spec or not spec.get("features"):
+        return None
+    return spec
+
+
+@app.post("/api/bots/<bot_id>/assist")
+@authed
+def api_assist(uid, bot_id):
+    """پیش‌نمایش دستیار استودیو (رایگان و بدون LLM): قابلیت‌های کاتالوگ به کانفیگ فعلی اضافه می‌شوند.
+    خروجی mode=spec (قطعی/رایگان) یا mode=none (قابلیت آماده‌ای پیدا نشد؛ ویرایش با هوش مصنوعی)."""
+    import catalog as _cat
+    import copy
+    from ai import sanitize
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    req = str((request.get_json(silent=True) or {}).get("request") or "").strip()[:1500]
+    if len(req) < 4:
+        return jsonify(error="چه چیزی اضافه یا عوض شود؟ کوتاه بنویس"), 400
+    if not rate_ok(f"assist:{uid}", 20, 60):
+        return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
+    spec = _assist_spec(bot, req)
+    if not spec:
+        return jsonify(mode="none")
+    current = bot["config"]
+    try:
+        cfg_new = _compile_patch(current, spec)
+    except Exception as e:
+        return jsonify(mode="none", reason=str(e)[:200])
+    preview = _cat.preview_spec(spec)
+    new_nodes = [nid for nid in cfg_new["nodes"] if nid not in (current.get("nodes") or {})]
+    titles = [(cfg_new["nodes"][nid].get("title") or nid) for nid in new_nodes[:8]]
+    w = []
+    try:
+        sanitize(copy.deepcopy(cfg_new), strict=False, warns=w, nodes_cap=limits_of(uid)["nodes"])
+    except Exception as e:
+        return jsonify(mode="none", reason=str(e)[:200])
+    return jsonify(mode="spec", free=True, spec={"name": spec["name"], "features": [{"type": f} for f, _ in spec["features"]]},
+                   preview=preview, new_nodes=titles, count=len(new_nodes), warns=w[:3])
+
+
+def _compile_patch(current, spec):
+    """کامپایل قطعی + ادغام با پیشوند در ربات موجود؛ کیف فقط اگر هنوز سکه‌ای در ربات نیست."""
+    import catalog as _cat
+    from ai import sanitize
+    _thinking, cfg, _ideas = _cat.compile_spec(spec, current=current)
+    return sanitize(cfg, strict=False)
+
+
+@app.post("/api/bots/<bot_id>/assist/apply")
+@authed
+def api_assist_apply(uid, bot_id):
+    """اعمال پچ قطعی دستیار: کانفیگ از سرور دوباره کامپایل و اعتبارسنجی می‌شود (ورودی کلاینت فقط
+    انتخاب قابلیت‌هاست)؛ نسخهٔ برگشت در versions ذخیره می‌شود. هزینه: صفر توکن."""
+    import catalog as _cat
+    from core import perks_of
+    bot = get_bot(bot_id, uid)
+    if not bot:
+        return jsonify(error="ربات پیدا نشد"), 404
+    raw = (request.get_json(silent=True) or {}).get("spec") or {}
+    if not isinstance(raw, dict) or not isinstance(raw.get("features"), list):
+        return jsonify(error="قابلیتی برای اعمال انتخاب نشده"), 400
+    try:
+        import json as _json
+        spec = _cat.parse_spec(_json.dumps({"name": raw.get("name") or "افزوده‌ها", "features": raw["features"][:12]}, ensure_ascii=False))
+    except _cat.SpecError as e:
+        return jsonify(error="انتخاب نامعتبر: " + str(e)[:160]), 400
+    if not spec["features"]:
+        return jsonify(error="قابلیتی برای اعمال انتخاب نشده"), 400
+    try:
+        cfg = _compile_patch(bot["config"], spec)
+    except Exception as e:
+        return jsonify(error="اعمال ممکن نشد: " + str(e)[:200]), 400
+    db.bots.update_one({"_id": bot["_id"], "owner": uid}, {
+        "$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now()},
+        "$push": {"versions": {"$each": [bot["config"]], "$slice": -(MAX_VERSIONS + perks_of(uid)["ver"])}}})
+    doc = db.bots.find_one({"_id": bot["_id"]})
+    try:
+        sync_commands(doc, cfg)
+    except Exception:
+        log.exception("sync_commands failed after assist apply")
+    names = "، ".join(_cat.CATALOG[f].fa for f, _ in spec["features"])
+    return jsonify(bot=public(doc), cards=["افزوده شد: " + names],
+                   note="اگر پشیمان شدی، با دکمهٔ «برگشت به نسخهٔ قبلی» همهٔ این تغییر برمی‌گردد.", wallet=wallet_info(uid))
+
+
 # ───────────────────────── ماموریت‌ها ─────────────────────────
 @app.post("/api/tasks/<tid>/claim")
 @authed
@@ -468,15 +559,21 @@ def api_modules(uid):
 @app.post("/api/plan")
 @authed
 def api_plan(uid):
-    """پیش‌نمایش آنی (بدون توکن): درخواست چه ماژول‌هایی می‌سازد و کدام بخش‌ها از توان موتور بیرون است"""
+    """پیش‌نمایش آنی (بدون توکن): درخواست چه قابلیت‌های کاتالوگ/ماژول‌هایی می‌سازد و کدام بخش‌ها از توان موتور بیرون است"""
     from planner import plan_request
     from ai import _static_limits
     from modules import MODULES
+    import catalog as _cat
     d = request.get_json(silent=True) or {}
     prompt = str(d.get("prompt") or "")[:6000]
     pr = plan_request(prompt)
-    return jsonify(modules=[{"id": i, "fa": MODULES[i].fa, "params": p} for i, p in pr.items], name=pr.name,
-                   confidence=round(pr.confidence, 2), instant=bool(pr.items and pr.confidence >= 0.35),
+    spec = _cat.keyword_spec(prompt)
+    spec_ids = [f for f, _ in ((spec or {}).get("features") or [])]
+    spec_fa = [(_cat.CATALOG[f].fa if f in _cat.CATALOG else f) for f in spec_ids]
+    return jsonify(modules=[{"id": i, "fa": MODULES[i].fa, "params": p} for i, p in pr.items],
+                   spec=spec_fa, name=(spec or {}).get("name") or pr.name,
+                   confidence=round(pr.confidence, 2),
+                   instant=bool((pr.items and pr.confidence >= 0.35) or spec_ids),
                    limits=_static_limits(prompt))
 
 
@@ -510,6 +607,8 @@ def api_job(uid, jid):
             out["build_phase"] = str(state.get("phase") or "")[:60]
     elif j["status"] == "review":
         out.update(gaps=j.get("gaps", []), cost=int(j.get("cost") or 0), prompt=j.get("prompt", ""), preflight=bool(j.get("preflight")))
+        if j.get("preview"):
+            out["preview"] = j["preview"]
     elif j["status"] == "cancelled":
         out["message"] = "درخواست لغو شد؛ توکنی کسر نشد."
     return jsonify(out)

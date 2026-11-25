@@ -2807,12 +2807,14 @@ def sub_hook(bot_id):
                 except (ValueError, TypeError):
                     pass
                 return "ok"
-            if data.startswith("g:"):                                   # مرکز بازی
+            if data.startswith("g:"):                                   # مرکز بازی (فقط ربات‌هایی که بازی را روشن کرده‌اند)
                 import games as _games_mod
                 if _games_mod.gcfg(cfg):
                     _games_mod.cb(bot, token, cfg, chat_id, user, data, m.get("message_id"))
-                tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
-                return "ok"
+                    tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
+                    return "ok"
+                # مرکز بازی خاموش است؛ «g:» این دکمهٔ دارای do/join است و باید از مسیر
+                # اصلی زیر اجرا شود (پیش‌تر همین‌جا بی‌اثر رد می‌شد و اکشن دکمه اجرا نمی‌شد).
             if data.startswith("cp:") and (m.get("chat") or {}).get("type") in ("group", "supergroup"):   # کپچای گروه
                 mod_captcha_cb(bot, bot_id, token, cfg, cq)
                 return "ok"

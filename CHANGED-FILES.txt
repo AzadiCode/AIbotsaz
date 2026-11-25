@@ -1,0 +1,46 @@
+فایل‌های تغییرکرده یا ساخته‌شده — BUILD 3.7.0 (خط ساخت Spec ← Compiler)
+=====================================================================
+
+جدید (۶ فایل):
+  catalog.py                     کاتالوگ enum بسته + کامپایلر قطعی Spec←کانفیگ + روتر کلیدواژه‌ای
+                                 + ترمیم قطعی + پیش‌نمایش + کلاس‌بندی CATALOG_MISSING + ۳ قالب جامع
+  tests/__init__.py
+  tests/harness.py               شبیه‌ساز بدون تلگرام برای موتور واقعی (engine.py)
+  tests/test_catalog.py          تست پذیرش همه‌ی قابلیت‌های کاتالوگ روی موتور (۲۶ تست)
+  tests/test_modules.py          بازسازی پوشهٔ tests: ساخت همهٔ ماژول‌ها + ۴۰ ترکیب + شبیه‌سازی منطق (۹ تست)
+  tests/test_assist_api.py       تست سرتاسری دستیار استودیو (API) + /api/plan (۴ تست)
+
+تغییرکرده (۱۳ فایل):
+  ai.py                          مسیر اصلی spec_build (یک فراخوانی LLM فقط برای انتخاب Spec از enum بسته)؛
+                                 حذف ممیز LLM (audit_requirements) و جایگزینی با ترمیم قطعی؛
+                                 ۵ قالب دست‌نویس → ۳ قالب جامع (کامپایلری)؛ _qc_log (لاگ کیفیت)؛ ۴۱۶۶ → ۳۷۹۱ خط
+  app.py                         دستیار استودیو: POST /api/bots/<id>/assist و /assist/apply (رایگان،
+                                 با نسخهٔ برگشت)؛ /api/plan با پیش‌نمایش کاتالوگ؛ preview در وضعیت review
+  mother.py                      گزارش دوگانهٔ ادمین (kind/evidence/severity/feature/criterion + شمارش
+                                 تکرار)؛ BUILD_DEFECT در qclog؛ ویزارد دکمه‌ای بدون LLM («انتخاب سریع»)؛
+                                 پیش‌نمایش ✔/🟡/❌ در جریان چت
+  engine.py                      فقط یک اصلاح ضروری: callbackهای «g:» دکمه‌های دارای do/join وقتی مرکز بازی
+                                 خاموش است از مسیر اصلی اجرا می‌شوند (قبلاً بی‌اثر رد می‌شدند و اکشن
+                                 دکمه اجرا نمی‌شد). بقیهٔ موتور دست‌نخورده.
+  caps.py                         BUILD 3.6.0 → 3.7.0 (تازه‌سازی کش)
+  index.html                     ۷ فایل اسکریپت → ۳ فایل (app.js + studio.js + builder.js)
+  README.md                      توضیح خط ساخت Spec←Compiler + ساختار فایل‌های تازه
+  MODULES_README.md              مکان جدید ماژول‌ها: fallback
+  static/app.js                  حذف تب جداگانهٔ «هوش مصنوعی»؛ ورود پس از ساخت → استودیو؛
+                                 پیش‌نمایش ✔/🟡/❌ در شیت بازبینی؛ پیش‌نمایش ساخت آنی با کاتالوگ
+  static/studio.js               ادغام studio+studio2+studio3 + نوار دستیار (پچ قطعی رایگان روی
+                                 کانفیگ فعلی + پیش‌نمایش + اعمال + برگشت با versions) + پنل ارتقای AI
+  static/builder.js              ادغام builder+builder2+builder3 (بدون تغییر منطق)
+  static/style.css               استایل نوار دستیار استودیو
+
+حذف‌شده (۴ فایل — روی GitHub پاکشان کن):
+  static/studio2.js   (در studio.js ادغام شد)
+  static/studio3.js   (در studio.js ادغام شد)
+  static/builder2.js  (در builder.js ادغام شد)
+  static/builder3.js  (در builder.js ادغام شد)
+
+تست‌ها (از ریشهٔ پروژه):
+  python tests/test_catalog.py    → 26 PASS
+  python tests/test_modules.py    → 9 PASS
+  python tests/test_assist_api.py → 4 PASS
+  python test_guard.py            → 58 checks ALL PASSED
