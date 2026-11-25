@@ -45,6 +45,8 @@ class BuildPipelineContractTests(unittest.TestCase):
     def test_preflight_approval_is_persisted_and_stale_plan_is_rebuilt(self):
         callback = function_text("mother.py", "mother_callback")
         self.assertIn('"preflight_ok": True', callback)
+        self.assertIn('"preflight": False', callback)
+        self.assertIn('"preflight": True', function_text("mother.py", "gen_job"))
         self.assertIn('"approved_limits": list(job.get("approved_limits") or []) + list(job.get("gaps") or [])', callback)
         ai_source = (ROOT / "ai.py").read_text(encoding="utf-8")
         self.assertIn("builder_agent.requires_approval_replan", ai_source)
