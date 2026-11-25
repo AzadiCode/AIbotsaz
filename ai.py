@@ -3577,6 +3577,15 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     if cb:
         cb.fa = lang == "fa"
     _gap.items = []
+    _plan_meta.approved_limits = []
+    if cb and getattr(cb, "jid", None):
+        try:
+            _approval = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1, "approved_limits": 1}) or {}
+            if _approval.get("preflight_ok"):
+                _plan_meta.approved_limits = _take_gaps(_approval.get("approved_limits") or [])
+        except Exception:
+            log.exception("could not load approved preflight substitutions")
+            raise RuntimeError("تصمیم‌های تأییدشدهٔ کاربر از دیتابیس خوانده نشد؛ ساخت بدون آن‌ها ادامه پیدا نمی‌کند")
 
     state = _load_build_state(cb, prompt, current)
     if state:
@@ -3597,7 +3606,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
             if not _job0.get("preflight_ok"):
                 raise PreflightReview(_early)
-        if AI_MODULES:
+        if AI_MODULES and not getattr(_plan_meta, 'approved_limits', []):
             _fast = _module_build(prompt, cb, nodes_cap, current)
             if _fast:
                 _fast_issues = builder_agent.audit_config(_fast[1])
