@@ -180,11 +180,11 @@ def audit_config(cfg: dict) -> list[dict]:
                     issues.append({
                         "code": "action_missing_args", "severity": "blocker",
                         "message": f"اکشن «{op}» آرگومان‌های لازم را ندارد: {', '.join(missing)}.",
-                        "node": "",
+                        "node": "", "action": op,
                     })
             elif op not in CONDITION_OPS and op not in {x.get("k") for x in getattr(_caps, "CAPS_DO", [])}:
                 issues.append({"code": "unknown_action", "severity": "blocker",
-                               "message": f"اکشن «{op}» در قرارداد شناخته‌شده موتور ثبت نشده است."})
+                               "message": f"اکشن «{op}» در قرارداد شناخته‌شده موتور ثبت نشده است.", "action": op})
         if op in CONDITION_OPS and item.get("var"):
             reads.add(str(item["var"]))
         if op in {"add", "clear", "disc"} and item.get("var"):
@@ -210,7 +210,7 @@ def audit_config(cfg: dict) -> list[dict]:
     allowed_ops = set(manifest.get("actions") or [])
     for op in sorted(used_ops - allowed_ops - CONDITION_OPS):
         issues.append({"code": "engine_capability_mismatch", "severity": "blocker",
-                       "message": f"اکشن «{op}» در رجیستری قابلیت‌های موتور وجود ندارد."})
+                       "message": f"اکشن «{op}» در رجیستری قابلیت‌های موتور وجود ندارد.", "action": op})
 
     # Deduplicate without losing stable order.
     result, seen = [], set()
@@ -239,7 +239,9 @@ def unapproved_limits(discovered, approved):
 def gaps_from_issues(issues: list[dict]) -> list[dict]:
     """Convert deterministic findings to the existing user/admin gap-report contract."""
     return [{
-        "want": f"تعریف متغیر {issue['variable']}" if issue.get("variable") else f"رفع خطای {issue.get('code', 'builder_audit')}",
+        "want": (f"تعریف متغیر {issue['variable']}" if issue.get("variable")
+                 else f"اصلاح اکشن {issue['action']}" if issue.get("action")
+                 else f"رفع خطای {issue.get('code', 'builder_audit')}"),
         "why": issue.get("message", "نقص فنی شناسایی شد."),
         "upgrade": "اصلاح همان بخش، اجرای مجدد اعتبارسنجی و آزمون پذیرش؛ تا آن زمان خروجی تأیید نشود.",
         "code": issue.get("code", "builder_audit"),
