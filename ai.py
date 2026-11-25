@@ -3636,9 +3636,11 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, [], "planned", 0)
         _limits = list(getattr(_plan_meta, "limits", []) or [])
         if _limits and cb and getattr(cb, "jid", None) and current is None:
-            _job = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
-            if not _job.get("preflight_ok"):
-                raise PreflightReview(_limits)
+            approved_wants = {str(x.get("want") or "").strip().casefold()
+                              for x in (getattr(_plan_meta, "approved_limits", []) or [])}
+            new_limits = [x for x in _limits if str(x.get("want") or "").strip().casefold() not in approved_wants]
+            if new_limits:
+                raise PreflightReview(new_limits)
 
     task_map = {str(t.get("id")): t for t in plan}
     # Reconcile duplicate/corrupted task IDs defensively before execution.
