@@ -2924,6 +2924,9 @@ def audit_requirements(prompt, cfg, acc, approved_limits=None):
         "All gap fields must be in Persian. Output ONLY JSON in this schema: "
         '{"status":"pass"|"review","gaps":[{"want":"...","why":"...","upgrade":"..."}]}.'
     )
+    if approved_limits:
+        system += (" The user explicitly approved these substitutions: " + json.dumps(approved_limits, ensure_ascii=False) +
+                   ". Verify that the accepted alternative is actually implemented. Do not flag the original exact feature as missing if the accepted alternative is implemented; do flag an omitted or fake alternative.")
     # ممیز باید علاوه بر فهرست اکشن‌ها، محدودیت‌های واقعی مثل پرداخت، گروه/کانال و بازی زنده را هم بداند.
     limits_match = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
     reasoning_match = re.search(r"REASONING PROTOCOL.*?(?=\nDesign rules:)", SYSTEM_PROMPT, re.S)
@@ -3737,7 +3740,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         cb.stage("audit", 82.0)
     _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "pre_audit", len(plan))
     try:
-        qa_gaps = audit_requirements(prompt, cfg, acc)
+        qa_gaps = audit_requirements(prompt, cfg, acc, getattr(_plan_meta, 'approved_limits', []))
     except Exception as exc:
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
                                 "audit_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
@@ -3761,7 +3764,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             ideas = (ideas + [x for x in rideas if x not in ideas])[:3]
             all_gaps = _merge_gap_items(all_gaps, rgaps, limit=12)
             cfg, warns_after, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
-            qa_gaps = audit_requirements(prompt, cfg, acc)
+            qa_gaps = audit_requirements(prompt, cfg, acc, getattr(_plan_meta, 'approved_limits', []))
             all_gaps = _merge_gap_items(all_gaps,
                 [{"want": "اعتبارسنجی کانفیگ نهایی", "why": x, "upgrade": "رفع هشدار و اجرای دوبارهٔ آزمون پذیرش."} for x in warns_after], limit=12)
             _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repair_requirements_done", len(plan))
