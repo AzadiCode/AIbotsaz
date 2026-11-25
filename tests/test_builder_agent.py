@@ -1,6 +1,6 @@
 import unittest
 
-from builder_agent import audit_config, capability_manifest, requires_approval_replan, unapproved_limits
+from builder_agent import audit_config, capability_manifest, gaps_from_issues, requires_approval_replan, unapproved_limits
 
 
 class BuilderAgentAuditTests(unittest.TestCase):
@@ -111,6 +111,14 @@ class BuilderAgentAuditTests(unittest.TestCase):
         self.assertIn("undeclared_variable", codes)
         self.assertIn("unknown_action", codes)
         self.assertIn("action_missing_args", codes)
+
+    def test_distinct_unknown_actions_remain_distinct_in_gap_report(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["do"] = [{"op": "play_dice"}, {"op": "check_pick"}]
+        gaps = gaps_from_issues(audit_config(cfg))
+        wants = {x["want"] for x in gaps}
+        self.assertIn("اصلاح اکشن play_dice", wants)
+        self.assertIn("اصلاح اکشن check_pick", wants)
 
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
