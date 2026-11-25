@@ -74,6 +74,43 @@ def _strings(value: Any):
             yield from _strings(child)
 
 
+def _logic_items(cfg: dict):
+    """Yield only actual action/condition objects, never arbitrary user data dictionaries."""
+    found = []
+
+    def actions(value):
+        if isinstance(value, list):
+            found.extend(x for x in value if isinstance(x, dict) and x.get("op"))
+
+    def condition(value):
+        if not isinstance(value, dict):
+            return
+        if value.get("op"):
+            found.append(value)
+        for key in ("all", "any"):
+            for child in value.get(key) or []:
+                condition(child)
+        if isinstance(value.get("not"), dict):
+            condition(value["not"])
+
+    for node in (cfg.get("nodes") or {}).values():
+        if not isinstance(node, dict):
+            continue
+        actions(node.get("do"))
+        condition(node.get("when"))
+        for row in node.get("buttons") or []:
+            for button in row if isinstance(row, list) else []:
+                if isinstance(button, dict):
+                    actions(button.get("do"))
+                    condition(button.get("when"))
+        for route in node.get("route") or []:
+            if isinstance(route, dict):
+                actions(route.get("do"))
+                condition(route.get("when"))
+    actions(cfg.get("on_ref"))
+    return found
+
+
 def audit_config(cfg: dict) -> list[dict]:
     """Find deterministic configuration defects; never infer feature coverage from labels."""
     issues: list[dict] = []
@@ -86,7 +123,9 @@ def audit_config(cfg: dict) -> list[dict]:
     reads: set[str] = set()
     writes: set[str] = set()
     used_ops: set[str] = set()
-    for item in _walk(nodes):
+    for value in _strings(nodes):
+        reads.update(VAR_RE.findall(value))
+    for item in _logic_items(cfg):
         op = str(item.get("op") or "")
         if op:
             used_ops.add(op)
@@ -102,8 +141,6 @@ def audit_config(cfg: dict) -> list[dict]:
             elif op not in CONDITION_OPS and op not in {x.get("k") for x in getattr(_caps, "CAPS_DO", [])}:
                 issues.append({"code": "unknown_action", "severity": "blocker",
                                "message": f"اکشن «{op}» در قرارداد شناخته‌شده موتور ثبت نشده است."})
-        for value in _strings(item):
-            reads.update(VAR_RE.findall(value))
         if op in CONDITION_OPS and item.get("var"):
             reads.add(str(item["var"]))
         if op in {"add", "clear", "disc"} and item.get("var"):
