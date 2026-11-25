@@ -150,7 +150,12 @@ def caps_public():
 # پرامپت هوش مصنوعی از همین ساخته می‌شود تا AI قابلیت ناموجود نسازد.
 def caps_ai_text():
     ev = "؛ ".join(f"{e['fa']} ({e['k']})" for e in CAPS_EVENTS)
-    ac = "؛ ".join(f"{a['fa']} — op={a['k']}" + (f" با {' و '.join(a.get('args', []))}" if a.get("args") else "") for a in CAPS_DO)
+    ac = "؛ ".join(
+        f"{a['fa']} — op={a['k']}"
+        + (f" با پارامترهای {' و '.join(a.get('args', []))}" if a.get("args") else "")
+        + (f" (اجباری: {' و '.join(a.get('required', []))})" if a.get("required") else " (بدون پارامتر اجباری)")
+        for a in CAPS_DO
+    )
     gm = "، ".join(g["k"] for g in CAPS_GAMES)
     return (f"رویدادهای موتور: {ev}\n"
             f"اکشن‌های موتور (فقط این‌ها): {ac}\n"
