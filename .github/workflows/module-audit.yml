@@ -1,0 +1,20 @@
+name: Deterministic module compiler audit
+
+on:
+  push:
+    branches: ["agentic-builder-overhaul"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  module-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Compile project
+        run: python -m compileall -q .
+      - name: Audit real module compiler outputs
+        run: python -m unittest discover -s tests -p "test_module_builds_audit.py" -v

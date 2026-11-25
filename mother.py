@@ -822,6 +822,20 @@ def mk_watch(uid, chat, jid):
                     + hx(detail) + "\n\n"
                     f"💳 هزینه در صورت تأیید ساخت: {review_cost} توکن\n\n"
                     "می‌تونی نسخه‌ی نزدیک به درخواستت رو با آگاهی از این محدودیت‌ها بسازی، یا درخواست رو لغو کنی. لغو درخواست رایگانه.")
+            _diag = j.get("build_state") or {}
+            _attempts = (j.get("build_diagnostics") or {}).get("model_attempts") or []
+            _models = list(dict.fromkeys(str(x.get("model") or "") for x in _attempts if x.get("model")))
+            body += "\n\n🧪 <b>خلاصه فنی</b>\nمرحله: " + hx(_diag.get("phase") or "تحلیل اولیه")
+            body += f"\nوظایف تکمیل‌شده: {len(_diag.get('completed') or [])} از {len(_diag.get('plan') or [])}"
+            if _models:
+                body += "\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+            if _diag.get("retry_counts"):
+                body += "\nتلاش مجدد وظایف: " + hx(json.dumps(_diag.get("retry_counts"), ensure_ascii=False))
+            _usage = j.get("build_usage") or {}
+            if _usage:
+                body += f"\nتوکن‌های مصرف‌شده: ورودی {int(_usage.get('prompt_tokens') or 0)} / خروجی {int(_usage.get('completion_tokens') or 0)}"
+            if _diag.get("last_error"):
+                body += "\nآخرین خطا: " + hx(str(_diag.get("last_error"))[:350])
             kb = mk_kb([mk_btn("✅ ادامه ساخت با جایگزین‌ها" if pre else "✅ ساخت نسخه با محدودیت‌های بالا", f"mk:review:yes:{jid}")],
                        [mk_btn("❌ لغو درخواست (بدون کسر توکن)", f"mk:review:no:{jid}")])
             mk_show(uid, chat, body, kb)
@@ -840,11 +854,36 @@ def mk_watch(uid, chat, jid):
                 body = ("ساخت به‌دلیل خطای مدل/اعتبارسنجی متوقف شد؛ هیچ ربات ناقصی ذخیره نشد و توکنی کسر نشد.\n\n"
                         + hx(j.get("error") or "خطای نامشخص")
                         + f"\n\nپیشرفت حفظ‌شده: {completed} از {total} وظیفه. با ادامه، فقط وظایف باقی‌مانده اجرا می‌شوند.")
+                _diag = j.get("build_state") or {}
+                _attempts = (j.get("build_diagnostics") or {}).get("model_attempts") or []
+                _models = list(dict.fromkeys(str(x.get("model") or "") for x in _attempts if x.get("model")))
+                body += "\n\n🧪 <b>خلاصه فنی</b>\nمرحله: " + hx(_diag.get("phase") or "نامشخص")
+                if _models:
+                    body += "\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+                if _diag.get("retry_counts"):
+                    body += "\nتلاش مجدد وظایف: " + hx(json.dumps(_diag.get("retry_counts"), ensure_ascii=False))
+                _usage = j.get("build_usage") or {}
+                if _usage:
+                    body += f"\nتوکن‌های مصرف‌شده: ورودی {int(_usage.get('prompt_tokens') or 0)} / خروجی {int(_usage.get('completion_tokens') or 0)}"
+                if _diag.get("last_error"):
+                    body += "\nآخرین خطای ثبت‌شده: " + hx(str(_diag.get("last_error"))[:350])
                 kb = mk_kb([mk_btn("ادامه از آخرین checkpoint", f"mk:resume:{jid}")],
                            [mk_btn("شروع درخواست جدید", "mk:new")])
                 mk_show(uid, chat, body, kb)
             else:
-                mk_render(uid, chat, "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد.")
+                body = "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد."
+                _diag = j.get("build_state") or {}
+                _attempts = (j.get("build_diagnostics") or {}).get("model_attempts") or []
+                _models = list(dict.fromkeys(str(x.get("model") or "") for x in _attempts if x.get("model")))
+                body += "\n\n🧪 <b>خلاصه فنی</b>\nمرحله: " + hx(_diag.get("phase") or "نامشخص")
+                if _models:
+                    body += "\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+                _usage = j.get("build_usage") or {}
+                if _usage:
+                    body += f"\nتوکن‌های مصرف‌شده: ورودی {int(_usage.get('prompt_tokens') or 0)} / خروجی {int(_usage.get('completion_tokens') or 0)}"
+                if _diag.get("last_error"):
+                    body += "\nآخرین خطای ثبت‌شده: " + hx(str(_diag.get("last_error"))[:350])
+                mk_render(uid, chat, body)
     except Exception:
         log.exception("chat build watcher crashed")
     finally:
@@ -955,14 +994,14 @@ def mother_callback(cq):
             ack("درخواست لغو شد؛ توکنی کسر نشد.")
             return mk_show(uid, chat, "درخواست لغو شد؛ رباتی ساخته نشد و هیچ توکنی کسر نشد.", MK_NEW, cmid)
         if job.get("preflight"):
-            # تأیید قبل از ساخت: همان برنامهٔ ذخیره‌شده ادامه پیدا می‌کند (برنامه‌ریزی دوباره انجام نمی‌شود)
+            # تأیید محدودیت‌ها: تصمیم کاربر ذخیره می‌شود و برنامه با جایگزین‌های تأییدشده دوباره ساخته می‌شود
             st2 = mk_get(uid) or {}
             prompt2 = job.get("prompt") or st2.get("prompt") or ""
             reserve = reserve_cost(prompt2, None, uid)
             if balance(uid) < reserve:
                 return ack(f"موجودی کافی نیست؛ برای ساخت تا سقف {reserve} توکن لازم است.", True)
             changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
-                {"$set": {"status": "running", "preflight_ok": True, "t": now()}, "$unset": {"error": ""}})
+                {"$set": {"status": "running", "preflight_ok": True, "preflight": False, "approved_limits": list(job.get("approved_limits") or []) + list(job.get("gaps") or []), "t": now()}, "$unset": {"error": ""}})
             if not changed:
                 return ack("این درخواست قبلاً پردازش شده است.", True)
             mk_put(uid, step="building", job=jid)
@@ -1069,7 +1108,7 @@ def _split_telegram_text(value, limit=3500):
     return chunks
 
 
-def report_gaps(uid, bot, prompt, items):
+def report_gaps(uid, bot, prompt, items, diagnostics=None):
     """ثبت و ارسال گزارش کامل محدودیت‌ها برای ادمین، با حفظ تمام متن درخواست کاربر."""
     if not items:
         return
@@ -1077,7 +1116,9 @@ def report_gaps(uid, bot, prompt, items):
         u = db.users.find_one({"_id": uid}) or {}
         who = f"{u.get('tg_name') or ''} {('@' + u['tg_user']) if u.get('tg_user') else ''}".strip() or "بدون نام"
         full_prompt = str(prompt or "")
-        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt, "items": items, "t": now()}
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt,
+                   "items": items, "diagnostics": diagnostics, "t": now()}
         gap_id = db.gaps.insert_one(gap_doc).inserted_id
         lines = [
             "🚨 گزارش محدودیت ربات‌ساز هوشمند Azadi",
@@ -1092,6 +1133,24 @@ def report_gaps(uid, bot, prompt, items):
         ]
         for i, x in enumerate(items, 1):
             lines += ["", f"{i}) خواسته: {x.get('want') or '-'}", f"چرا انجام نشد: {x.get('why') or '-'}", f"راهکار ارتقا: {x.get('upgrade') or '-'}"]
+        if diagnostics:
+            lines += ["", "🧪 گزارش فنی اجرای ساخت:"]
+            for label, key in (("شناسه کار", "job_id"), ("مرحله", "phase"),
+                               ("وظایف تکمیل‌شده", "completed_tasks"), ("کل وظایف", "total_tasks"),
+                               ("خطای آخر", "last_error")):
+                value = diagnostics.get(key)
+                if value not in (None, "", [], {}):
+                    lines.append(f"{label}: {value}")
+            if diagnostics.get("completed_task_ids"):
+                lines.append("وظایف تکمیل‌شده: " + ", ".join(map(str, diagnostics["completed_task_ids"][:20])))
+            if diagnostics.get("retry_counts"):
+                lines.append("تلاش مجدد: " + json.dumps(diagnostics["retry_counts"], ensure_ascii=False))
+            if diagnostics.get("usage"):
+                lines.append("مصرف مدل: " + json.dumps(diagnostics["usage"], ensure_ascii=False))
+            if diagnostics.get("model_attempts"):
+                lines.append("تاریخچه مدل‌ها:")
+                for attempt in diagnostics["model_attempts"][-25:]:
+                    lines.append(f"• {attempt.get('model', '?')} | {attempt.get('phase', '?')} | تلاش {attempt.get('attempt', '?')}")
         report_text = "\n".join(lines)
         chunks = _split_telegram_text(report_text)
         kb = {"inline_keyboard": [[
@@ -1197,6 +1256,27 @@ def gap_admin_message(msg):
     db.settings.delete_one({"_id": key})
     return True
 
+def _job_build_diagnostics(jid, phase_override=None):
+    """Collect persisted execution facts for transparent user/admin reporting."""
+    job = db.jobs.find_one({"_id": jid}, {
+        "build_state": 1, "build_diagnostics": 1, "build_usage": 1, "error": 1
+    }) or {}
+    state = job.get("build_state") or {}
+    plan = state.get("plan") or []
+    completed = state.get("completed") or []
+    return {
+        "job_id": str(jid),
+        "phase": phase_override or state.get("phase") or "unknown",
+        "completed_tasks": len(completed),
+        "total_tasks": len(plan),
+        "completed_task_ids": completed[:30],
+        "retry_counts": state.get("retry_counts") or {},
+        "last_error": state.get("last_error") or job.get("error") or "",
+        "model_attempts": (job.get("build_diagnostics") or {}).get("model_attempts") or [],
+        "usage": job.get("build_usage") or {},
+    }
+
+
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: تا پایان کار چیزی از موجودی کم نمی‌شه؛ در پایان فقط هزینه‌ی واقعی (حداکثر سقف رزرو) کسر می‌شه"""
     acc = []
@@ -1216,6 +1296,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         except PreflightReview as pr:
             # قبل از تلف‌کردن زمان و توکن: محدودیت‌ها را همین حالا به کاربر بگو و تصمیمش را بپرس
+            report_gaps(uid, bot, prompt, pr.limits, diagnostics=_job_build_diagnostics(jid, "preflight_review"))
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now()}})
             return
@@ -1230,7 +1311,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         gaps = list(getattr(_gap, "items", []) or [])
         if gaps and bot_id:
             # نسخهٔ موجود را با خروجی‌ای که ممیزی نتوانسته تأیید کند بازنویسی نکن.
-            report_gaps(uid, bot, prompt, gaps)
+            report_gaps(uid, bot, prompt, gaps, diagnostics=_job_build_diagnostics(jid))
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "error",
                 "error": "ارتقا اعمال نشد؛ بررسی نهایی چند نقص احتمالی پیدا کرد و برای جلوگیری از خراب شدن ربات قبلی، هیچ تغییری ذخیره و هیچ توکنی کسر نشد. گزارش برای بررسی ثبت شد."
@@ -1243,7 +1324,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
                 "gaps": gaps, "prompt": prompt, "cost": int(cost), "t_review": now()
             }})
             if changed:
-                report_gaps(uid, None, prompt, gaps)
+                report_gaps(uid, None, prompt, gaps, diagnostics=_job_build_diagnostics(jid))
             return
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return
@@ -1368,7 +1449,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             # گزارش فنی همیشه در انتهای گزارش می‌آید؛ حداکثر دو مورد محدودیت قبلی نیز حفظ می‌شود.
             pending_gaps = [g for g in pending_gaps if g.get("want") != technical_gap["want"]]
             pending_gaps = pending_gaps[:2] + [technical_gap]
-            report_gaps(uid, bot, prompt, pending_gaps)
+            report_gaps(uid, bot, prompt, pending_gaps, diagnostics=_job_build_diagnostics(jid))
         except Exception:
             log.exception("failed to deliver fallback gap report")
         msg = "ساخت کامل نشد و هیچ توکنی کسر نشد. گزارش خطا برای بررسی ثبت شد. لطفاً دوباره تلاش کن یا درخواستت را کوتاه‌تر و واضح‌تر بنویس."

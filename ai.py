@@ -29,6 +29,8 @@ from urllib.parse import urlparse
 
 import requests
 
+import builder_agent
+
 from core import (
     AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS, AI_MODEL, BILLING, calc_cost, cut, db, _DIG,
     EDIT_COST, est_tokens, GEN_COST, _int, log, MAX_GLOBALS, MAX_NODES, MAX_PROMPT, MAX_STAFF,
@@ -331,7 +333,7 @@ BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "l
             "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday", "ticket_no")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled", "sub")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
-ACT_OPS = ("set", "add", "clear", "random", "notify", "remind",
+ACT_OPS = ("set", "add", "clear", "cset", "cadd", "cclear", "random", "notify", "remind",
            "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch", "game_play",
            "calc", "disc", "sub_add", "sub_del")
 F_TYPES = ("text", "number", "phone", "email", "photo", "photo_optional")
@@ -2122,6 +2124,11 @@ class Progress:
         self.task_i = 0
         self.task_n = 0
         self.task_title = ""
+        try:
+            _previous = db.jobs.find_one({"_id": jid}, {"build_diagnostics.model_attempts": 1}) or {}
+            self.model_attempts = list(((_previous.get("build_diagnostics") or {}).get("model_attempts") or []))[-80:]
+        except Exception:
+            self.model_attempts = []
         self.deadline = time.monotonic() + max(90, _int("AI_BUILD_DEADLINE", 900))
         self.flush(True)
 
@@ -2184,6 +2191,15 @@ class Progress:
             self.last_model = None
 
     def model_fallback(self, n, model, total):
+        # Persist model/provider attempts for transparent post-build diagnostics and resumable jobs.
+        attempt = {"attempt": int(n), "model": str(model)[:100], "phase": str(self.phase)[:40], "at": time.time()}
+        self.model_attempts.append(attempt)
+        self.model_attempts = self.model_attempts[-80:]
+        try:
+            db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}},
+                               {"$set": {"build_diagnostics.model_attempts": self.model_attempts}})
+        except Exception:
+            log.exception("could not persist model attempt diagnostics")
         # پیشرفت مرحله‌ای: اگر یک ارائه‌دهنده رد کند/قطع شود، کاربر روی ۲٪ ثابت نمی‌ماند.
         self.d["model_try"] = int(n)
         self.d["model_total"] = int(total)
@@ -2879,8 +2895,9 @@ def _qa_trim(value, max_string=420):
     return value
 
 
-def audit_requirements(prompt, cfg, acc):
+def audit_requirements(prompt, cfg, acc, approved_limits=None):
     """ممیزی مستقلِ تطابق کانفیگ با درخواست؛ خطای ممیزی نباید به‌عنوان موفقیت پنهان شود."""
+    approved_limits = [x for x in (approved_limits or []) if isinstance(x, dict)]
     view = _qa_trim(cfg, 420)
     encoded = json.dumps(view, ensure_ascii=False, separators=(",", ":"))
     if len(encoded) > 56000:
@@ -2906,15 +2923,20 @@ def audit_requirements(prompt, cfg, acc):
         "All gap fields must be in Persian. Output ONLY JSON in this schema: "
         '{"status":"pass"|"review","gaps":[{"want":"...","why":"...","upgrade":"..."}]}.'
     )
+    if approved_limits:
+        system += (" The user explicitly approved these substitutions: " + json.dumps(approved_limits, ensure_ascii=False) +
+                   ". Verify that the accepted alternative is actually implemented. Do not flag the original exact feature as missing if the accepted alternative is implemented; do flag an omitted or fake alternative.")
     # ممیز باید علاوه بر فهرست اکشن‌ها، محدودیت‌های واقعی مثل پرداخت، گروه/کانال و بازی زنده را هم بداند.
     limits_match = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
     reasoning_match = re.search(r"REASONING PROTOCOL.*?(?=\nDesign rules:)", SYSTEM_PROMPT, re.S)
     engine_contract = "\n\n".join(x.group(0) for x in (limits_match, reasoning_match) if x)
     engine_contract += "\n\n" + _caps_mod.caps_ai_text()
+    engine_contract += "\n\nMACHINE-READABLE ENGINE CAPABILITY MANIFEST:\n" + json.dumps(builder_agent.capability_manifest(), ensure_ascii=False)
     payload = {
         "original_user_request": str(prompt or "")[:MAX_PROMPT],
         "engine_capabilities_and_limits": engine_contract,
         "normalized_config_to_audit": view,
+        "user_approved_substitutions": approved_limits,
     }
     cb = getattr(_prog, "cb", None)
     if cb:
@@ -3089,11 +3111,14 @@ def _plan_build_tasks(prompt, current, acc):
         cb.stage("analyze", 5.0)
     current_summary = _config_task_summary(current) if current else None
     payload = {"user_request": str(prompt or "")[:MAX_PROMPT], "mode": "update existing bot" if current else "new bot",
-               "current_config_summary": current_summary}
+               "current_config_summary": current_summary, "approved_limit_substitutions": list(getattr(_plan_meta, "approved_limits", []) or [])}
     try:
         _plan_meta.limits = []
         _lm = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
         _plan_system = TASK_PLAN_SYSTEM + ("\n\n" + _lm.group(0) if _lm else "")
+        if getattr(_plan_meta, "approved_limits", []):
+            _plan_system += ("\n\nThe user has explicitly approved these substitutions. Plan and implement the stated alternatives. "
+                             "Do not silently omit an alternative. If an alternative is also impossible, return it as a NEW limit for fresh approval.")
         txt, usage = llm_run([{"role": "system", "content": _plan_system},
                               {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
                              900, temperature=0.1, timeout=40, max_models=3, total_timeout=90)
@@ -3283,6 +3308,7 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
             "current_task": task,
             "all_tasks": [{"id": x.get("id"), "title": x.get("title"), "node_ids": x.get("node_ids", [])} for x in plan],
             "completed_tasks": completed,
+            "approved_limit_substitutions": list(getattr(_plan_meta, "approved_limits", []) or []),
             "current_config_summary": _config_task_summary(cfg, task.get("node_ids")),
             "patch_contract": {
                 "config": "partial config patch; omit unchanged values",
@@ -3550,8 +3576,22 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     if cb:
         cb.fa = lang == "fa"
     _gap.items = []
+    _plan_meta.approved_limits = []
+    if cb and getattr(cb, "jid", None):
+        try:
+            _approval = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1, "approved_limits": 1}) or {}
+            if _approval.get("preflight_ok"):
+                _plan_meta.approved_limits = _take_gaps(_approval.get("approved_limits") or [])
+        except Exception:
+            log.exception("could not load approved preflight substitutions")
+            raise RuntimeError("تصمیم‌های تأییدشدهٔ کاربر از دیتابیس خوانده نشد؛ ساخت بدون آن‌ها ادامه پیدا نمی‌کند")
 
     state = _load_build_state(cb, prompt, current)
+    if builder_agent.requires_approval_replan(state, getattr(_plan_meta, "approved_limits", [])):
+        # The preflight checkpoint was created before the user approved substitutions.
+        # Re-plan once with the approval context; never execute the stale pre-approval plan.
+        log.info("Replanning preflight-approved job with accepted substitutions")
+        state = None
     if state:
         plan = state["plan"]
         cfg = copy.deepcopy(state["cfg"])
@@ -3570,11 +3610,24 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
             if not _job0.get("preflight_ok"):
                 raise PreflightReview(_early)
-        if AI_MODULES:
+        if AI_MODULES and not getattr(_plan_meta, 'approved_limits', []):
             _fast = _module_build(prompt, cb, nodes_cap, current)
             if _fast:
-                _gap.items = []
-                return _fast
+                _fast_issues = builder_agent.audit_config(_fast[1])
+                _fast_qa = []
+                if not _fast_issues:
+                    try:
+                        _fast_qa = audit_requirements(prompt, _fast[1], acc)
+                    except Exception as _fast_qa_exc:
+                        log.warning("module candidate QA unavailable; falling back to full task pipeline: %s",
+                                    str(_fast_qa_exc)[:240])
+                        _fast_qa = [{"want": "ممیزی مستقل خروجی ماژول", "why": "ممیزی مستقل انجام نشد؛ مسیر سریع اجازه تحویل بدون ممیزی را ندارد.",
+                                     "upgrade": "اجرای مسیر کامل برنامه‌ریزی و ساخت وظیفه‌ای."}]
+                if not _fast_issues and not _fast_qa:
+                    _gap.items = []
+                    return _fast
+                log.warning("module build rejected by QA; falling back to full task pipeline. deterministic=%s model_qa=%s",
+                            [x.get("code") for x in _fast_issues[:8]], len(_fast_qa))
         plan = _plan_build_tasks(prompt, current, acc)
         cfg = copy.deepcopy(current) if current is not None else {
             "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",
@@ -3587,9 +3640,9 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, [], "planned", 0)
         _limits = list(getattr(_plan_meta, "limits", []) or [])
         if _limits and cb and getattr(cb, "jid", None) and current is None:
-            _job = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
-            if not _job.get("preflight_ok"):
-                raise PreflightReview(_limits)
+            new_limits = builder_agent.unapproved_limits(_limits, getattr(_plan_meta, "approved_limits", []))
+            if new_limits:
+                raise PreflightReview(new_limits)
 
     task_map = {str(t.get("id")): t for t in plan}
     # Reconcile duplicate/corrupted task IDs defensively before execution.
@@ -3700,7 +3753,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         cb.stage("audit", 82.0)
     _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "pre_audit", len(plan))
     try:
-        qa_gaps = audit_requirements(prompt, cfg, acc)
+        qa_gaps = audit_requirements(prompt, cfg, acc, getattr(_plan_meta, 'approved_limits', []))
     except Exception as exc:
         _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
                                 "audit_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
@@ -3724,7 +3777,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             ideas = (ideas + [x for x in rideas if x not in ideas])[:3]
             all_gaps = _merge_gap_items(all_gaps, rgaps, limit=12)
             cfg, warns_after, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
-            qa_gaps = audit_requirements(prompt, cfg, acc)
+            qa_gaps = audit_requirements(prompt, cfg, acc, getattr(_plan_meta, 'approved_limits', []))
             all_gaps = _merge_gap_items(all_gaps,
                 [{"want": "اعتبارسنجی کانفیگ نهایی", "why": x, "upgrade": "رفع هشدار و اجرای دوبارهٔ آزمون پذیرش."} for x in warns_after], limit=12)
             _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repair_requirements_done", len(plan))
@@ -3743,6 +3796,67 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     _left = [x for x in _fix_structure_deterministically(cfg) if not x.startswith("variables that are read but never set")]
     if _left:
         all_gaps = _merge_gap_items(all_gaps, [{"want": _lint_want, "why": x[:300], "upgrade": "اصلاح مسیر در ویرایشگر."} for x in _left[:2]], limit=12)
+    # Deterministic checks are independent of the model-based requirements audit.
+    # Give the builder one bounded repair attempt, then verify the repaired config again.
+    deterministic_issues = builder_agent.audit_config(cfg)
+    if deterministic_issues:
+        deterministic_task = {
+            "id": "repair_deterministic_audit",
+            "title": "رفع خطاهای قطعی ساختار و قابلیت",
+            "scope": "فقط این خطاهای قطعی را در کانفیگ اصلاح کن؛ قابلیت‌های سالم را حذف یا بازنویسی نکن. اگر یک عملیات در رجیستری موتور وجود ندارد، آن را با نزدیک‌ترین عملیات واقعاً پشتیبانی‌شده جایگزین کن یا به‌عنوان محدودیت جدید گزارش بده: " + json.dumps(deterministic_issues, ensure_ascii=False),
+            "acceptance": ["رفع تمام خطاهای قطعی قابل اصلاح", "حفظ مسیرها و قابلیت‌های قبلی", "عدم استفاده از عملیات خارج از رجیستری موتور"],
+            "node_ids": [],
+        }
+        repair_plan = plan + [deterministic_task]
+        _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                                "deterministic_repair", len(plan))
+        try:
+            patch, dthinking, dideas, dgaps = _task_patch_call(
+                prompt, deterministic_task, repair_plan, len(plan), cfg, completed, lang, media_ids, acc,
+                feedback="This is a deterministic validator repair. Fix each listed issue with the smallest safe patch. Do not claim success unless the final config satisfies the validator."
+            )
+            cfg = _merge_config_patch(cfg, patch)
+            if dthinking:
+                thinking = dthinking
+            ideas = (ideas + [x for x in dideas if x not in ideas])[:3]
+            all_gaps = _merge_gap_items(all_gaps, dgaps, limit=12)
+            cfg, deterministic_warns, feature_changes2, requested_staff2 = _finalize_task_config(
+                prompt, cfg, lang, media_ids, nodes_cap
+            )
+            feature_changes.extend(feature_changes2)
+            requested_staff = list(dict.fromkeys(requested_staff + requested_staff2))
+            if deterministic_warns:
+                all_gaps = _merge_gap_items(all_gaps, [
+                    {"want": "اعتبارسنجی پس از ترمیم قطعی", "why": str(x)[:450],
+                     "upgrade": "اصلاح هشدار باقی‌مانده و اجرای مجدد آزمون پذیرش."}
+                    for x in deterministic_warns
+                ], limit=12)
+            deterministic_issues = builder_agent.audit_config(cfg)
+            qa_gaps = audit_requirements(prompt, cfg, acc, getattr(_plan_meta, "approved_limits", []))
+            completed.append("repair_deterministic_audit")
+            _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                                    "deterministic_repair_done", len(repair_plan))
+        except Exception as exc:
+            deterministic_issues = builder_agent.audit_config(cfg)
+            _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                                    "deterministic_repair_failed", len(repair_plan),
+                                    f"{type(exc).__name__}: {str(exc)[:450]}")
+            log.warning("deterministic repair failed; remaining issues will be disclosed: %s", str(exc)[:240])
+            all_gaps = _merge_gap_items(all_gaps, [{
+                "want": "ترمیم خطاهای قطعی اعتبارسنج",
+                "why": f"تلاش ترمیم خودکار موفق نشد: {type(exc).__name__}: {str(exc)[:350]}",
+                "upgrade": "بررسی گزارش فنی و اصلاح مرحله‌ای همان بخش؛ خروجی تا عبور از اعتبارسنج تأیید نمی‌شود."
+            }], limit=12)
+        if deterministic_issues:
+            all_gaps = _merge_gap_items(
+                all_gaps, builder_agent.gaps_from_issues(deterministic_issues), limit=12
+            )
+            _checkpoint_build_state(
+                cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                "deterministic_audit_failed", len(repair_plan),
+                "; ".join(x.get("code", "") for x in deterministic_issues[:10])
+            )
+        plan = repair_plan
     # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
     all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
     if guard:
