@@ -82,6 +82,16 @@ class BuilderAgentAuditTests(unittest.TestCase):
         discovered = [{"want": "feature A"}, {"want": "feature B"}]
         self.assertEqual([x["want"] for x in unapproved_limits(discovered, approved)], ["feature B"])
 
+    def test_missing_navigation_target_is_blocking(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["buttons"] = [[{"text": "Next", "goto": "missing_node"}]]
+        self.assertIn("invalid_button_target", {x["code"] for x in audit_config(cfg)})
+
+    def test_missing_start_node_is_blocking(self):
+        cfg = self.base()
+        cfg["start"] = "missing_start"
+        self.assertIn("invalid_start_node", {x["code"] for x in audit_config(cfg)})
+
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
         self.assertTrue(manifest["available"])
