@@ -1,6 +1,6 @@
 import unittest
 
-from builder_agent import audit_config, capability_manifest
+from builder_agent import audit_config, capability_manifest, requires_approval_replan, unapproved_limits
 
 
 class BuilderAgentAuditTests(unittest.TestCase):
@@ -69,6 +69,18 @@ class BuilderAgentAuditTests(unittest.TestCase):
         cfg["nodes"]["start"]["do"] = [{"op": "db_add", "table": "records",
                                          "data": {"op": "teleport", "score": "{score}"}}]
         self.assertNotIn("unknown_action", {x["code"] for x in audit_config(cfg)})
+
+    def test_approved_preflight_invalidates_stale_empty_checkpoint(self):
+        state = {"phase": "planned", "completed": [], "plan": [{"id": "foundation"}]}
+        self.assertTrue(requires_approval_replan(state, [{"want": "feature X"}]))
+        state["completed"] = ["foundation"]
+        self.assertFalse(requires_approval_replan(state, [{"want": "feature X"}]))
+        self.assertFalse(requires_approval_replan({"phase": "planned", "completed": []}, []))
+
+    def test_new_limit_requires_fresh_approval(self):
+        approved = [{"want": "feature A"}]
+        discovered = [{"want": "feature A"}, {"want": "feature B"}]
+        self.assertEqual([x["want"] for x in unapproved_limits(discovered, approved)], ["feature B"])
 
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
