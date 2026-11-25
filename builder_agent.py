@@ -32,6 +32,8 @@ ACTION_ARGS = {
     "sub_add": ("plan", "days"), "sub_del": ("plan",),
 }
 DYNAMIC_SUFFIXES = ("_ok", "_off", "_save", "_err")
+CONDITION_OPS = {"==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled", "sub", "=", "eq", "ne", "gt", "gte", "lt", "lte"}
+NON_ACTION_OPS = CONDITION_OPS | {"if", "else", "route"}
 
 
 def capability_manifest() -> dict:
@@ -97,7 +99,7 @@ def audit_config(cfg: dict) -> list[dict]:
                         "message": f"اکشن «{op}» آرگومان‌های لازم را ندارد: {', '.join(missing)}.",
                         "node": "",
                     })
-            elif op not in {"", "if", "else", "route"}:
+            elif op not in NON_ACTION_OPS and op:
                 issues.append({"code": "unknown_action", "severity": "blocker",
                                "message": f"اکشن «{op}» در قرارداد شناخته‌شده موتور ثبت نشده است."})
         for value in _strings(item):
@@ -121,7 +123,7 @@ def audit_config(cfg: dict) -> list[dict]:
 
     manifest = capability_manifest()
     allowed_ops = set(manifest.get("actions") or [])
-    for op in sorted(used_ops - allowed_ops):
+    for op in sorted(used_ops - allowed_ops - NON_ACTION_OPS):
         issues.append({"code": "engine_capability_mismatch", "severity": "blocker",
                        "message": f"اکشن «{op}» در رجیستری قابلیت‌های موتور وجود ندارد."})
 
