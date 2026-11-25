@@ -239,7 +239,7 @@ def unapproved_limits(discovered, approved):
 def gaps_from_issues(issues: list[dict]) -> list[dict]:
     """Convert deterministic findings to the existing user/admin gap-report contract."""
     return [{
-        "want": issue.get("variable") and f"تعریف متغیر {issue['variable']}" or "اعتبارسنجی فنی خروجی",
+        "want": f"تعریف متغیر {issue['variable']}" if issue.get("variable") else f"رفع خطای {issue.get('code', 'builder_audit')}",
         "why": issue.get("message", "نقص فنی شناسایی شد."),
         "upgrade": "اصلاح همان بخش، اجرای مجدد اعتبارسنجی و آزمون پذیرش؛ تا آن زمان خروجی تأیید نشود.",
         "code": issue.get("code", "builder_audit"),
