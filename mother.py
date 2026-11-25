@@ -962,7 +962,7 @@ def mother_callback(cq):
             if balance(uid) < reserve:
                 return ack(f"موجودی کافی نیست؛ برای ساخت تا سقف {reserve} توکن لازم است.", True)
             changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
-                {"$set": {"status": "running", "preflight_ok": True, "t": now()}, "$unset": {"error": ""}})
+                {"$set": {"status": "running", "preflight_ok": True, "approved_limits": list(job.get("approved_limits") or []) + list(job.get("gaps") or []), "t": now()}, "$unset": {"error": ""}})
             if not changed:
                 return ack("این درخواست قبلاً پردازش شده است.", True)
             mk_put(uid, step="building", job=jid)
