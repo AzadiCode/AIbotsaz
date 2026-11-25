@@ -871,7 +871,19 @@ def mk_watch(uid, chat, jid):
                            [mk_btn("شروع درخواست جدید", "mk:new")])
                 mk_show(uid, chat, body, kb)
             else:
-                mk_render(uid, chat, "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد.")
+                body = "ساخت ربات ناموفق بود. " + hx(j.get("error") or "زمان ساخت بیش از حد طول کشید.") + " هزینه‌ای از شما کسر نشد."
+                _diag = j.get("build_state") or {}
+                _attempts = (j.get("build_diagnostics") or {}).get("model_attempts") or []
+                _models = list(dict.fromkeys(str(x.get("model") or "") for x in _attempts if x.get("model")))
+                body += "\\n\\n🧪 <b>خلاصه فنی</b>\\nمرحله: " + hx(_diag.get("phase") or "نامشخص")
+                if _models:
+                    body += "\\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+                _usage = j.get("build_usage") or {}
+                if _usage:
+                    body += f"\\nتوکن‌های مصرف‌شده: ورودی {int(_usage.get('prompt_tokens') or 0)} / خروجی {int(_usage.get('completion_tokens') or 0)}"
+                if _diag.get("last_error"):
+                    body += "\\nآخرین خطای ثبت‌شده: " + hx(str(_diag.get("last_error"))[:350])
+                mk_render(uid, chat, body)
     except Exception:
         log.exception("chat build watcher crashed")
     finally:
