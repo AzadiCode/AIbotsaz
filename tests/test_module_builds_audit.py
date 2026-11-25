@@ -5,7 +5,7 @@ from builder_agent import audit_config
 
 
 def build_module_plan(module_id):
-    selected = {module_id}
+    selected = set(module_id) if isinstance(module_id, (list, tuple, set)) else {module_id}
     changed = True
     while changed:
         changed = False
@@ -29,6 +29,19 @@ class CompiledModuleAuditTests(unittest.TestCase):
         for module_id in sorted(planner.MODULES):
             with self.subTest(module=module_id):
                 plan = build_module_plan(module_id)
+                _, cfg, _ = planner.compile_plan(plan)
+                issues = audit_config(cfg)
+                self.assertEqual(issues, [], msg=f"modules={plan.ids}; issues={issues}")
+
+    def test_common_multi_module_combinations_pass_audit(self):
+        combinations = [
+            ["wallet", "daily", "referral", "miner", "wheel", "puzzle", "sponsor", "forced_join", "member_orders", "coin_shop", "owner_panel"],
+            ["ads", "shop", "support", "faq", "about", "links"],
+            ["group_manager", "quiz", "ai_assistant", "links", "faq"],
+        ]
+        for combination in combinations:
+            with self.subTest(modules=combination):
+                plan = build_module_plan(combination)
                 _, cfg, _ = planner.compile_plan(plan)
                 issues = audit_config(cfg)
                 self.assertEqual(issues, [], msg=f"modules={plan.ids}; issues={issues}")
