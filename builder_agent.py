@@ -90,7 +90,7 @@ def audit_config(cfg: dict) -> list[dict]:
         op = str(item.get("op") or "")
         if op:
             used_ops.add(op)
-            required = ACTION_ARGS.get(op)
+            required = next((x.get("required", []) for x in getattr(_caps, "CAPS_DO", []) if x.get("k") == op), ACTION_ARGS.get(op, ()))
             if required:
                 missing = [key for key in required if key not in item or item.get(key) in (None, "")]
                 if missing:
@@ -99,7 +99,7 @@ def audit_config(cfg: dict) -> list[dict]:
                         "message": f"اکشن «{op}» آرگومان‌های لازم را ندارد: {', '.join(missing)}.",
                         "node": "",
                     })
-            elif op not in NON_ACTION_OPS and op:
+            elif op not in CONDITION_OPS and op:
                 issues.append({"code": "unknown_action", "severity": "blocker",
                                "message": f"اکشن «{op}» در قرارداد شناخته‌شده موتور ثبت نشده است."})
         for value in _strings(item):
@@ -123,7 +123,7 @@ def audit_config(cfg: dict) -> list[dict]:
 
     manifest = capability_manifest()
     allowed_ops = set(manifest.get("actions") or [])
-    for op in sorted(used_ops - allowed_ops - NON_ACTION_OPS):
+    for op in sorted(used_ops - allowed_ops - CONDITION_OPS):
         issues.append({"code": "engine_capability_mismatch", "severity": "blocker",
                        "message": f"اکشن «{op}» در رجیستری قابلیت‌های موتور وجود ندارد."})
 
