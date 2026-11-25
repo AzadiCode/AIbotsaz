@@ -64,6 +64,12 @@ class BuilderAgentAuditTests(unittest.TestCase):
         cfg["nodes"]["start"]["do"] = [{"op": "sub_add"}]
         self.assertNotIn("unknown_action", {x["code"] for x in audit_config(cfg)})
 
+    def test_user_data_key_named_op_is_not_treated_as_an_action(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["do"] = [{"op": "db_add", "table": "records",
+                                         "data": {"op": "teleport", "score": "{score}"}}]
+        self.assertNotIn("unknown_action", {x["code"] for x in audit_config(cfg)})
+
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
         self.assertTrue(manifest["available"])
