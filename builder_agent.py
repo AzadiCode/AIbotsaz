@@ -162,9 +162,9 @@ def audit_config(cfg: dict) -> list[dict]:
     reads: set[str] = set()
     writes: set[str] = set()
     used_ops: set[str] = set()
-    for value in _strings(nodes):
+    for value in _variable_strings(nodes):
         reads.update(VAR_RE.findall(value))
-    for value in _strings(cfg.get("on_ref") or []):
+    for value in _variable_strings(cfg.get("on_ref") or []):
         reads.update(VAR_RE.findall(value))
     for item in _logic_items(cfg):
         op = str(item.get("op") or ("==" if "var" in item else ""))
