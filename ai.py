@@ -29,6 +29,8 @@ from urllib.parse import urlparse
 
 import requests
 
+import builder_agent
+
 from core import (
     AI_API_KEY, AI_BASE_URL, AI_CHAT_MODEL, AI_MAX_TOKENS, AI_MODEL, BILLING, calc_cost, cut, db, _DIG,
     EDIT_COST, est_tokens, GEN_COST, _int, log, MAX_GLOBALS, MAX_NODES, MAX_PROMPT, MAX_STAFF,
@@ -3573,8 +3575,12 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         if AI_MODULES:
             _fast = _module_build(prompt, cb, nodes_cap, current)
             if _fast:
-                _gap.items = []
-                return _fast
+                _fast_issues = builder_agent.audit_config(_fast[1])
+                if not _fast_issues:
+                    _gap.items = []
+                    return _fast
+                log.warning("module build rejected by deterministic capability audit: %s",
+                            [x.get("code") for x in _fast_issues[:8]])
         plan = _plan_build_tasks(prompt, current, acc)
         cfg = copy.deepcopy(current) if current is not None else {
             "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",
@@ -3743,6 +3749,18 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     _left = [x for x in _fix_structure_deterministically(cfg) if not x.startswith("variables that are read but never set")]
     if _left:
         all_gaps = _merge_gap_items(all_gaps, [{"want": _lint_want, "why": x[:300], "upgrade": "اصلاح مسیر در ویرایشگر."} for x in _left[:2]], limit=12)
+    # Deterministic checks are independent of the model-based requirements audit.
+    # A failed audit is disclosed and prevents silent approval of a structurally unsafe candidate.
+    deterministic_issues = builder_agent.audit_config(cfg)
+    if deterministic_issues:
+        all_gaps = _merge_gap_items(
+            all_gaps, builder_agent.gaps_from_issues(deterministic_issues), limit=12
+        )
+        _checkpoint_build_state(
+            cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
+            "deterministic_audit_failed", len(plan),
+            "; ".join(x.get("code", "") for x in deterministic_issues[:10])
+        )
     # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
     all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
     if guard:
