@@ -92,6 +92,11 @@ class BuilderAgentAuditTests(unittest.TestCase):
         cfg["start"] = "missing_start"
         self.assertIn("invalid_start_node", {x["code"] for x in audit_config(cfg)})
 
+    def test_implicit_equality_condition_checks_variable_declaration(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["when"] = {"var": "undeclared", "value": "1"}
+        self.assertIn("undeclared_variable", {x["code"] for x in audit_config(cfg)})
+
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
         self.assertTrue(manifest["available"])
