@@ -48,6 +48,22 @@ class BuilderAgentAuditTests(unittest.TestCase):
         issues = audit_config(cfg)
         self.assertIn("unknown_action", {x["code"] for x in issues})
 
+    def test_chat_scoped_action_is_registered(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["do"] = [{"op": "cset", "var": "room_score", "value": "1"}]
+        self.assertNotIn("unknown_action", {x["code"] for x in audit_config(cfg)})
+
+    def test_condition_variable_must_be_declared(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["when"] = {"op": "==", "var": "missing_score", "value": "0"}
+        issues = audit_config(cfg)
+        self.assertIn("undeclared_variable", {x["code"] for x in issues})
+
+    def test_optional_registry_action_is_not_misclassified(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["do"] = [{"op": "sub_add"}]
+        self.assertNotIn("unknown_action", {x["code"] for x in audit_config(cfg)})
+
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
         self.assertTrue(manifest["available"])
