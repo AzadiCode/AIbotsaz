@@ -2124,6 +2124,11 @@ class Progress:
         self.task_i = 0
         self.task_n = 0
         self.task_title = ""
+        try:
+            _previous = db.jobs.find_one({"_id": jid}, {"build_diagnostics.model_attempts": 1}) or {}
+            self.model_attempts = list(((_previous.get("build_diagnostics") or {}).get("model_attempts") or []))[-80:]
+        except Exception:
+            self.model_attempts = []
         self.deadline = time.monotonic() + max(90, _int("AI_BUILD_DEADLINE", 900))
         self.flush(True)
 
@@ -2186,6 +2191,16 @@ class Progress:
             self.last_model = None
 
     def model_fallback(self, n, model, total):
+        # Persist model/provider attempts for transparent post-build diagnostics and resumable jobs.
+        attempt = {"attempt": int(n), "model": str(model)[:100], "phase": str(self.phase)[:40], "at": time.time()}
+        if not self.model_attempts or self.model_attempts[-1].get("model") != attempt["model"] or self.model_attempts[-1].get("phase") != attempt["phase"]:
+            self.model_attempts.append(attempt)
+            self.model_attempts = self.model_attempts[-80:]
+            try:
+                db.jobs.update_one({"_id": self.jid, "status": {"$in": ["running", "saving"]}},
+                                   {"$set": {"build_diagnostics.model_attempts": self.model_attempts}})
+            except Exception:
+                log.exception("could not persist model attempt diagnostics")
         # پیشرفت مرحله‌ای: اگر یک ارائه‌دهنده رد کند/قطع شود، کاربر روی ۲٪ ثابت نمی‌ماند.
         self.d["model_try"] = int(n)
         self.d["model_total"] = int(total)
