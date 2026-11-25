@@ -2896,8 +2896,9 @@ def _qa_trim(value, max_string=420):
     return value
 
 
-def audit_requirements(prompt, cfg, acc):
+def audit_requirements(prompt, cfg, acc, approved_limits=None):
     """ممیزی مستقلِ تطابق کانفیگ با درخواست؛ خطای ممیزی نباید به‌عنوان موفقیت پنهان شود."""
+    approved_limits = [x for x in (approved_limits or []) if isinstance(x, dict)]
     view = _qa_trim(cfg, 420)
     encoded = json.dumps(view, ensure_ascii=False, separators=(",", ":"))
     if len(encoded) > 56000:
@@ -2933,6 +2934,7 @@ def audit_requirements(prompt, cfg, acc):
         "original_user_request": str(prompt or "")[:MAX_PROMPT],
         "engine_capabilities_and_limits": engine_contract,
         "normalized_config_to_audit": view,
+        "user_approved_substitutions": approved_limits,
     }
     cb = getattr(_prog, "cb", None)
     if cb:
@@ -3304,6 +3306,7 @@ def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media
             "current_task": task,
             "all_tasks": [{"id": x.get("id"), "title": x.get("title"), "node_ids": x.get("node_ids", [])} for x in plan],
             "completed_tasks": completed,
+            "approved_limit_substitutions": list(getattr(_plan_meta, "approved_limits", []) or []),
             "current_config_summary": _config_task_summary(cfg, task.get("node_ids")),
             "patch_contract": {
                 "config": "partial config patch; omit unchanged values",
