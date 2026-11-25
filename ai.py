@@ -2913,6 +2913,7 @@ def audit_requirements(prompt, cfg, acc):
     reasoning_match = re.search(r"REASONING PROTOCOL.*?(?=\nDesign rules:)", SYSTEM_PROMPT, re.S)
     engine_contract = "\n\n".join(x.group(0) for x in (limits_match, reasoning_match) if x)
     engine_contract += "\n\n" + _caps_mod.caps_ai_text()
+    engine_contract += "\n\nMACHINE-READABLE ENGINE CAPABILITY MANIFEST:\n" + json.dumps(builder_agent.capability_manifest(), ensure_ascii=False)
     payload = {
         "original_user_request": str(prompt or "")[:MAX_PROMPT],
         "engine_capabilities_and_limits": engine_contract,
