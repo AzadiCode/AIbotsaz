@@ -3798,17 +3798,65 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
     if _left:
         all_gaps = _merge_gap_items(all_gaps, [{"want": _lint_want, "why": x[:300], "upgrade": "اصلاح مسیر در ویرایشگر."} for x in _left[:2]], limit=12)
     # Deterministic checks are independent of the model-based requirements audit.
-    # A failed audit is disclosed and prevents silent approval of a structurally unsafe candidate.
+    # Give the builder one bounded repair attempt, then verify the repaired config again.
     deterministic_issues = builder_agent.audit_config(cfg)
     if deterministic_issues:
-        all_gaps = _merge_gap_items(
-            all_gaps, builder_agent.gaps_from_issues(deterministic_issues), limit=12
-        )
-        _checkpoint_build_state(
-            cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
-            "deterministic_audit_failed", len(plan),
-            "; ".join(x.get("code", "") for x in deterministic_issues[:10])
-        )
+        deterministic_task = {
+            "id": "repair_deterministic_audit",
+            "title": "رفع خطاهای قطعی ساختار و قابلیت",
+            "scope": "فقط این خطاهای قطعی را در کانفیگ اصلاح کن؛ قابلیت‌های سالم را حذف یا بازنویسی نکن. اگر یک عملیات در رجیستری موتور وجود ندارد، آن را با نزدیک‌ترین عملیات واقعاً پشتیبانی‌شده جایگزین کن یا به‌عنوان محدودیت جدید گزارش بده: " + json.dumps(deterministic_issues, ensure_ascii=False),
+            "acceptance": ["رفع تمام خطاهای قطعی قابل اصلاح", "حفظ مسیرها و قابلیت‌های قبلی", "عدم استفاده از عملیات خارج از رجیستری موتور"],
+            "node_ids": [],
+        }
+        repair_plan = plan + [deterministic_task]
+        _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                                "deterministic_repair", len(plan))
+        try:
+            patch, dthinking, dideas, dgaps = _task_patch_call(
+                prompt, deterministic_task, repair_plan, len(plan), cfg, completed, lang, media_ids, acc,
+                feedback="This is a deterministic validator repair. Fix each listed issue with the smallest safe patch. Do not claim success unless the final config satisfies the validator."
+            )
+            cfg = _merge_config_patch(cfg, patch)
+            if dthinking:
+                thinking = dthinking
+            ideas = (ideas + [x for x in dideas if x not in ideas])[:3]
+            all_gaps = _merge_gap_items(all_gaps, dgaps, limit=12)
+            cfg, deterministic_warns, feature_changes2, requested_staff2 = _finalize_task_config(
+                prompt, cfg, lang, media_ids, nodes_cap
+            )
+            feature_changes.extend(feature_changes2)
+            requested_staff = list(dict.fromkeys(requested_staff + requested_staff2))
+            if deterministic_warns:
+                all_gaps = _merge_gap_items(all_gaps, [
+                    {"want": "اعتبارسنجی پس از ترمیم قطعی", "why": str(x)[:450],
+                     "upgrade": "اصلاح هشدار باقی‌مانده و اجرای مجدد آزمون پذیرش."}
+                    for x in deterministic_warns
+                ], limit=12)
+            deterministic_issues = builder_agent.audit_config(cfg)
+            qa_gaps = audit_requirements(prompt, cfg, acc, getattr(_plan_meta, "approved_limits", []))
+            completed.append("repair_deterministic_audit")
+            _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                                    "deterministic_repair_done", len(repair_plan))
+        except Exception as exc:
+            deterministic_issues = builder_agent.audit_config(cfg)
+            _checkpoint_build_state(cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                                    "deterministic_repair_failed", len(plan),
+                                    f"{type(exc).__name__}: {str(exc)[:450]}")
+            log.warning("deterministic repair failed; remaining issues will be disclosed: %s", str(exc)[:240])
+            all_gaps = _merge_gap_items(all_gaps, [{
+                "want": "ترمیم خطاهای قطعی اعتبارسنج",
+                "why": f"تلاش ترمیم خودکار موفق نشد: {type(exc).__name__}: {str(exc)[:350]}",
+                "upgrade": "بررسی گزارش فنی و اصلاح مرحله‌ای همان بخش؛ خروجی تا عبور از اعتبارسنج تأیید نمی‌شود."
+            }], limit=12)
+        if deterministic_issues:
+            all_gaps = _merge_gap_items(
+                all_gaps, builder_agent.gaps_from_issues(deterministic_issues), limit=12
+            )
+            _checkpoint_build_state(
+                cb, prompt, current, repair_plan, completed, cfg, thinking, ideas, all_gaps,
+                "deterministic_audit_failed", len(repair_plan),
+                "; ".join(x.get("code", "") for x in deterministic_issues[:10])
+            )
     # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
     all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
     if guard:
