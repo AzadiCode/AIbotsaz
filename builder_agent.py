@@ -178,6 +178,20 @@ def audit_config(cfg: dict) -> list[dict]:
     return result
 
 
+def requires_approval_replan(state, approved_limits):
+    """A preflight-only checkpoint is stale after the user approves a substitution."""
+    return bool(isinstance(state, dict) and approved_limits
+                and state.get("phase") == "planned" and not (state.get("completed") or []))
+
+
+def unapproved_limits(discovered, approved):
+    """Return newly discovered limitations that have not received explicit user approval."""
+    approved_wants = {str(x.get("want") or "").strip().casefold()
+                      for x in (approved or []) if isinstance(x, dict)}
+    return [x for x in (discovered or []) if isinstance(x, dict)
+            and str(x.get("want") or "").strip().casefold() not in approved_wants]
+
+
 def gaps_from_issues(issues: list[dict]) -> list[dict]:
     """Convert deterministic findings to the existing user/admin gap-report contract."""
     return [{
