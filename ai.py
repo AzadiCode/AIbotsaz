@@ -333,7 +333,7 @@ BUILTINS = ("name", "first_name", "last_name", "full_name", "username", "id", "l
             "bot_name", "bot_username", "text", "param", "visits", "refs", "ref_link", "date", "time", "hour", "weekday", "ticket_no")
 OPS = ("==", "!=", ">", ">=", "<", "<=", "contains", "empty", "filled", "sub")
 OP_ALIASES = {"=": "==", "eq": "==", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
-ACT_OPS = ("set", "add", "clear", "random", "notify", "remind",
+ACT_OPS = ("set", "add", "clear", "cset", "cadd", "cclear", "random", "notify", "remind",
            "dice", "pick", "db_add", "db_get", "db_set", "db_inc", "db_del", "fetch", "game_play",
            "calc", "disc", "sub_add", "sub_del")
 F_TYPES = ("text", "number", "phone", "email", "photo", "photo_optional")
