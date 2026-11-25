@@ -76,6 +76,20 @@ def _strings(value: Any):
             yield from _strings(child)
 
 
+def _variable_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        db_line = "table" in value and "line" in value
+        for key, child in value.items():
+            if db_line and key == "line":
+                continue
+            yield from _variable_strings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _variable_strings(child)
+
+
 def _logic_items(cfg: dict):
     """Yield only actual action/condition objects, never arbitrary user data dictionaries."""
     found = []
