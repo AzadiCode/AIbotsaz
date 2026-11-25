@@ -1217,6 +1217,27 @@ def gap_admin_message(msg):
     db.settings.delete_one({"_id": key})
     return True
 
+def _job_build_diagnostics(jid, phase_override=None):
+    """Collect persisted execution facts for transparent user/admin reporting."""
+    job = db.jobs.find_one({"_id": jid}, {
+        "build_state": 1, "build_diagnostics": 1, "build_usage": 1, "error": 1
+    }) or {}
+    state = job.get("build_state") or {}
+    plan = state.get("plan") or []
+    completed = state.get("completed") or []
+    return {
+        "job_id": str(jid),
+        "phase": phase_override or state.get("phase") or "unknown",
+        "completed_tasks": len(completed),
+        "total_tasks": len(plan),
+        "completed_task_ids": completed[:30],
+        "retry_counts": state.get("retry_counts") or {},
+        "last_error": state.get("last_error") or job.get("error") or "",
+        "model_attempts": (job.get("build_diagnostics") or {}).get("model_attempts") or [],
+        "usage": job.get("build_usage") or {},
+    }
+
+
 def gen_job(jid, uid, bot_id, prompt, reserve):
     """کار پس‌زمینه: تا پایان کار چیزی از موجودی کم نمی‌شه؛ در پایان فقط هزینه‌ی واقعی (حداکثر سقف رزرو) کسر می‌شه"""
     acc = []
@@ -1236,6 +1257,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         except PreflightReview as pr:
             # قبل از تلف‌کردن زمان و توکن: محدودیت‌ها را همین حالا به کاربر بگو و تصمیمش را بپرس
+            report_gaps(uid, bot, prompt, pr.limits, diagnostics=_job_build_diagnostics(jid, "preflight_review"))
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now()}})
             return
@@ -1250,7 +1272,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         gaps = list(getattr(_gap, "items", []) or [])
         if gaps and bot_id:
             # نسخهٔ موجود را با خروجی‌ای که ممیزی نتوانسته تأیید کند بازنویسی نکن.
-            report_gaps(uid, bot, prompt, gaps)
+            report_gaps(uid, bot, prompt, gaps, diagnostics=_job_build_diagnostics(jid))
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "error",
                 "error": "ارتقا اعمال نشد؛ بررسی نهایی چند نقص احتمالی پیدا کرد و برای جلوگیری از خراب شدن ربات قبلی، هیچ تغییری ذخیره و هیچ توکنی کسر نشد. گزارش برای بررسی ثبت شد."
@@ -1263,7 +1285,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
                 "gaps": gaps, "prompt": prompt, "cost": int(cost), "t_review": now()
             }})
             if changed:
-                report_gaps(uid, None, prompt, gaps)
+                report_gaps(uid, None, prompt, gaps, diagnostics=_job_build_diagnostics(jid))
             return
         if not db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {"status": "saving"}}):
             return
@@ -1388,7 +1410,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             # گزارش فنی همیشه در انتهای گزارش می‌آید؛ حداکثر دو مورد محدودیت قبلی نیز حفظ می‌شود.
             pending_gaps = [g for g in pending_gaps if g.get("want") != technical_gap["want"]]
             pending_gaps = pending_gaps[:2] + [technical_gap]
-            report_gaps(uid, bot, prompt, pending_gaps)
+            report_gaps(uid, bot, prompt, pending_gaps, diagnostics=_job_build_diagnostics(jid))
         except Exception:
             log.exception("failed to deliver fallback gap report")
         msg = "ساخت کامل نشد و هیچ توکنی کسر نشد. گزارش خطا برای بررسی ثبت شد. لطفاً دوباره تلاش کن یا درخواستت را کوتاه‌تر و واضح‌تر بنویس."
