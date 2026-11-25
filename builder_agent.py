@@ -87,7 +87,7 @@ def _logic_items(cfg: dict):
     def condition(value):
         if not isinstance(value, dict):
             return
-        if value.get("op"):
+        if value.get("op") or "var" in value:
             found.append(value)
         for key in ("all", "any"):
             for child in value.get(key) or []:
@@ -153,7 +153,7 @@ def audit_config(cfg: dict) -> list[dict]:
     for value in _strings(cfg.get("on_ref") or []):
         reads.update(VAR_RE.findall(value))
     for item in _logic_items(cfg):
-        op = str(item.get("op") or "")
+        op = str(item.get("op") or ("==" if "var" in item else ""))
         if op:
             used_ops.add(op)
             if op == "remind" and item.get("goto") and item["goto"] not in nodes:
