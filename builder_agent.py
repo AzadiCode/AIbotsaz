@@ -46,6 +46,8 @@ def capability_manifest() -> dict:
         "events": [x.get("k") for x in getattr(_caps, "CAPS_EVENTS", [])],
         "conditions": [x.get("k") for x in getattr(_caps, "CAPS_IF", [])],
         "actions": [x.get("k") for x in getattr(_caps, "CAPS_DO", [])],
+        "action_contracts": [{"k": x.get("k"), "args": x.get("args", []), "required": x.get("required", x.get("args", []))}
+                             for x in getattr(_caps, "CAPS_DO", [])],
         "buttons": [x.get("k") for x in getattr(_caps, "CAPS_BTNS", [])],
         "blocks": [x.get("k") for x in getattr(_caps, "CAPS_BLOCKS", [])],
         "games": [x.get("k") for x in getattr(_caps, "CAPS_GAMES", [])],
