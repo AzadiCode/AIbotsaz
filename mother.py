@@ -829,6 +829,11 @@ def mk_watch(uid, chat, jid):
             body += f"\nوظایف تکمیل‌شده: {len(_diag.get('completed') or [])} از {len(_diag.get('plan') or [])}"
             if _models:
                 body += "\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+            if _diag.get("retry_counts"):
+                body += "\nتلاش مجدد وظایف: " + hx(json.dumps(_diag.get("retry_counts"), ensure_ascii=False))
+            _usage = j.get("build_usage") or {}
+            if _usage:
+                body += f"\nتوکن‌های مصرف‌شده: ورودی {int(_usage.get('prompt_tokens') or 0)} / خروجی {int(_usage.get('completion_tokens') or 0)}"
             if _diag.get("last_error"):
                 body += "\nآخرین خطا: " + hx(str(_diag.get("last_error"))[:350])
             kb = mk_kb([mk_btn("✅ ادامه ساخت با جایگزین‌ها" if pre else "✅ ساخت نسخه با محدودیت‌های بالا", f"mk:review:yes:{jid}")],
@@ -855,6 +860,11 @@ def mk_watch(uid, chat, jid):
                 body += "\n\n🧪 <b>خلاصه فنی</b>\nمرحله: " + hx(_diag.get("phase") or "نامشخص")
                 if _models:
                     body += "\nمدل‌های استفاده‌شده: " + hx(", ".join(_models[:8]))
+                if _diag.get("retry_counts"):
+                    body += "\nتلاش مجدد وظایف: " + hx(json.dumps(_diag.get("retry_counts"), ensure_ascii=False))
+                _usage = j.get("build_usage") or {}
+                if _usage:
+                    body += f"\nتوکن‌های مصرف‌شده: ورودی {int(_usage.get('prompt_tokens') or 0)} / خروجی {int(_usage.get('completion_tokens') or 0)}"
                 if _diag.get("last_error"):
                     body += "\nآخرین خطای ثبت‌شده: " + hx(str(_diag.get("last_error"))[:350])
                 kb = mk_kb([mk_btn("ادامه از آخرین checkpoint", f"mk:resume:{jid}")],
