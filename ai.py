@@ -3112,6 +3112,9 @@ def _plan_build_tasks(prompt, current, acc):
         _plan_meta.limits = []
         _lm = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
         _plan_system = TASK_PLAN_SYSTEM + ("\n\n" + _lm.group(0) if _lm else "")
+        if getattr(_plan_meta, "approved_limits", []):
+            _plan_system += ("\n\nThe user has explicitly approved these substitutions. Plan and implement the stated alternatives. "
+                             "Do not silently omit an alternative. If an alternative is also impossible, return it as a NEW limit for fresh approval.")
         txt, usage = llm_run([{"role": "system", "content": _plan_system},
                               {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
                              900, temperature=0.1, timeout=40, max_models=3, total_timeout=90)
