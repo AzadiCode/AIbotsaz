@@ -3107,7 +3107,7 @@ def _plan_build_tasks(prompt, current, acc):
         cb.stage("analyze", 5.0)
     current_summary = _config_task_summary(current) if current else None
     payload = {"user_request": str(prompt or "")[:MAX_PROMPT], "mode": "update existing bot" if current else "new bot",
-               "current_config_summary": current_summary}
+               "current_config_summary": current_summary, "approved_limit_substitutions": list(getattr(_plan_meta, "approved_limits", []) or [])}
     try:
         _plan_meta.limits = []
         _lm = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
