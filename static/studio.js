@@ -610,23 +610,46 @@ function stPaintWorld(){
 }
 
 /* ── ورود به استودیو ── */
+/* استودیو از همان اول کامل باز می‌شود؛ هیچ گاهی جلویش را نمی‌گیرد.
+   اگر هنوز رباتی وجود ندارد، همان ظاهر کامل استودیو با بوم خالی و دو مسیر ساخت (دستی و هوش مصنوعی) دیده می‌شود. */
 function stHintHTML(){
   try{ if(localStorage.getItem("azadi.studio.hint") === "1") return ""; }catch(_){}
   return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
 }
+/* حالت خالی: استودیوی کامل + بوم خالی؛ ساخت دستی یا پنل «ساخت با هوش مصنوعی» */
+function renderStudioEmpty(){
+  const full = S.bots.length >= (S.cfg?.max_bots || 10);
+  const tpls = (S.templates || []).length && !full ? `
+    <div class="ste-tpl">
+      <span class="ste-tplcap">یا با قالب آماده شروع کن:</span>
+      <div class="ste-tpls">${S.templates.map(t => `<button type="button" class="ste-tplb" data-a="tpl" data-id="${esc(t.id)}"><span class="ib">${IC[t.icon] || IC.bot}</span>${esc(t.title)}<small>${t.cost ? N(t.cost) + " توکن" : "رایگان"}</small></button>`).join("")}</div>
+    </div>` : "";
+  $("#app").innerHTML = `
+    <div class="studio" id="stu">
+      <div class="st-bar">
+        <button class="iconb" data-a="stback" aria-label="بازگشت">${IC.back}</button>
+        <div class="st-title static"><span class="tt"><b>استودیو</b><small>اینجا ربات را می‌بینی و می‌سازی</small></span></div>
+        <button class="iconb ai" data-a="aidraw" aria-label="ساخت با هوش مصنوعی" title="ساخت با هوش مصنوعی">${IC.spark}</button>
+      </div>
+      <div class="st-canvas" id="stc">
+        <div class="st-world" id="stw"></div>
+        <div class="st-empty">
+          <div class="ste-ic">${IC.bot}</div>
+          <h2>استودیو خالی است</h2>
+          <p>یک ربات خالی بساز و خودت با بخش‌ها و سیم‌ها مسیرش را چیده کن، یا توضیح بده تا هوش مصنوعی کامل بسازد. هر دو مسیر همین‌جا باز است.</p>
+          <div class="ste-btns">
+            <button class="b" data-a="aidraw">${IC.spark}ساخت با هوش مصنوعی</button>
+            <button class="b o" data-a="newmanual">${IC.plus}ربات دستی — خالی شروع کن</button>
+          </div>
+          ${tpls}
+        </div>
+      </div>
+    </div>`;
+}
 function renderStudio(){
-  if(S.newbot || !S.bots.length){          // «ساخت با AI» داخل استودیو ادغام شد؛ فرم کامل ساخت (پیش‌نمایش زنده + قالب‌ها + نقشه‌ها) همین‌جاست
-    renderCreate();
-    return;
-  }
   let bot = S.cur && S.bots.find(b => b.id === S.cur.id) ? S.cur : (S.sbot ? S.bots.find(b => b.id === S.sbot) : null);
-  if(!bot){
-    $("#app").innerHTML = `<div class="st-picker"><div class="ph"><h1>استودیو</h1></div>
-      <p class="muted" style="margin:-4px 4px 14px">رباتی را که می‌خواهی ویرایش کنی انتخاب کن. بخش‌هایش را می‌بینی، تغییر می‌دهی و با سیم به هم وصل می‌کنی.</p>
-      <div class="group sep">${S.bots.map(b => `<button class="gi" data-a="spick" data-id="${esc(b.id)}"><span class="dot ${b.active ? "on" : ""}"></span><span class="gt"><b>${esc(b.name)}</b><span class="${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"} · ${N(Object.keys(b.config.nodes).length)} بخش</span></span>${goIc}</button>`).join("")}</div>
-      ${S.bots.length < (S.cfg?.max_bots || 10) ? `<button class="b o sep-btn" data-go="create">${IC.plus}ربات جدید — همین‌جا در استودیو بساز</button>` : ""}</div></div>`;
-    return;
-  }
+  if(!bot && S.bots.length){ bot = S.bots[0]; }        // بدون صفحه‌ی انتخاب: آخرین ربات، خودکار باز می‌شود؛ تغییر ربات از نوار بالا است
+  if(!bot) return renderStudioEmpty();
   S.cur = bot; S.sbot = bot.id;
   if(ST.botId !== bot.id){ ST.botId = bot.id; stLoad(); }
   const nodes = Object.keys(bot.config.nodes).length;
@@ -642,6 +665,7 @@ function renderStudio(){
         <button class="iconb" data-a="simopen" aria-label="تست زنده (شبیه‌ساز)" title="تست زنده‌ی ربات بدون هزینه">${IC.play}</button>
         <button class="iconb" data-a="dropen" aria-label="چرا کار نمی‌کند؟" title="دکتر ربات: چرا کار نمی‌کند؟">${S2IC.doctor}</button>
         <button class="iconb" data-a="pbopen" aria-label="مشکل‌ها" title="مشکل‌ها و رفع یک‌ضربه‌ای">${IC.heal}</button>
+        <button class="iconb ai" data-a="aidraw" aria-label="ساخت و ارتقا با هوش مصنوعی" title="ساخت و ارتقا با هوش مصنوعی">${IC.spark}</button>
         <button class="b sm" id="stadd" data-a="stadd">${IC.plus}بخش جدید</button>
       </div>
       <div class="st-assist" id="stai">
@@ -672,15 +696,6 @@ function renderStudio(){
           <button class="tb lbl" data-a="selsel" title="انتخاب چند بخش برای کپی یا حذف">${IC.copy}<span>انتخاب</span></button>
         </div>
       </div>
-    </div>
-    <div class="fgap"></div>
-    <div class="panel mt" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 12px">
-      <span class="ib">${IC.spark}</span>
-      <div style="flex:1;min-width:0"><b style="font-size:13px;display:block;line-height:1.6">ساخت با هوش مصنوعی / ارتقای کامل ربات</b><span class="muted" style="font-size:11.5px;line-height:1.7;display:block">توضیح بده؛ علاوه بر دستیار رایگان، کل ساخت و ارتقا با هوش مصنوعی هم همین‌جا انجام می‌شود.</span></div>
-      <textarea id="prompt" maxlength="${(S.cfg?.max_prompt) || 4000}" aria-label="درخواست ارتقا" placeholder="چه چیزی عوض شود؟ مثلاً: بازی تاس با شرط اضافه کن" style="flex:1 0 100%;min-height:64px"></textarea>
-      <div id="live"></div>
-      <div class="fgap"></div>
-      <button class="b sm" data-a="gen">${IC.spark}ارتقا با AI</button>
     </div>`;
   ST.sig = {}; ST.els = new Map(); ST.q = ""; ST.w = null; ST.rect = null;
   const cv0 = $("#stc");
@@ -1706,7 +1721,7 @@ async function refreshWallet(waitInc){
     if(!waitInc || S.wallet.tokens > t0) break;
   }
   if(S.sheet?.kind === "buy") closeSheet();
-  if(S.view === "account" || (S.view === "studio" && (S.newbot || !S.bots.length))) render();
+  if(S.view === "account" || (S.view === "studio" && !S.bots.length)) render();   // فقط حالت خالی استودیو و حساب رندر دوباره می‌شود؛ بوم باز دست نمی‌خورد
 }
 async function buyPack(id, btn){
   busy(btn, async () => {
@@ -2292,7 +2307,6 @@ function wtSaveAll(){
 }
 Object.assign(SHEETS, {
   wt: {html: wtSheet, read(){ if(D.new !== null) wtReadEdit(); }, save: wtSaveAll},
-  arch: {html: () => (typeof archSheet === "function" ? archSheet() : "")},
 });
 
 Object.assign(A, {
