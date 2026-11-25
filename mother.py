@@ -972,7 +972,7 @@ def mother_callback(cq):
             ack("درخواست لغو شد؛ توکنی کسر نشد.")
             return mk_show(uid, chat, "درخواست لغو شد؛ رباتی ساخته نشد و هیچ توکنی کسر نشد.", MK_NEW, cmid)
         if job.get("preflight"):
-            # تأیید قبل از ساخت: همان برنامهٔ ذخیره‌شده ادامه پیدا می‌کند (برنامه‌ریزی دوباره انجام نمی‌شود)
+            # تأیید محدودیت‌ها: تصمیم کاربر ذخیره می‌شود و برنامه با جایگزین‌های تأییدشده دوباره ساخته می‌شود
             st2 = mk_get(uid) or {}
             prompt2 = job.get("prompt") or st2.get("prompt") or ""
             reserve = reserve_cost(prompt2, None, uid)
