@@ -16,7 +16,7 @@ class BuilderAgentAuditTests(unittest.TestCase):
                 "start": {
                     "text": "Score: {score}",
                     "buttons": [],
-                    "actions": [{"op": "add", "var": "score", "value": "1"}],
+                    "do": [{"op": "add", "var": "score", "value": "1"}],
                 }
             },
         }
@@ -32,9 +32,21 @@ class BuilderAgentAuditTests(unittest.TestCase):
 
     def test_missing_action_argument_is_blocking(self):
         cfg = self.base()
-        cfg["nodes"]["start"]["actions"] = [{"op": "add", "var": "score"}]
+        cfg["nodes"]["start"]["do"] = [{"op": "add", "var": "score"}]
         issues = audit_config(cfg)
         self.assertIn("action_missing_args", {x["code"] for x in issues})
+
+
+    def test_condition_operators_are_not_misclassified_as_actions(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["when"] = {"op": "==", "var": "score", "value": "0"}
+        self.assertEqual(audit_config(cfg), [])
+
+    def test_unknown_action_is_blocking(self):
+        cfg = self.base()
+        cfg["nodes"]["start"]["do"] = [{"op": "teleport"}]
+        issues = audit_config(cfg)
+        self.assertIn("unknown_action", {x["code"] for x in issues})
 
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
