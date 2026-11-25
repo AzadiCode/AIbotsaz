@@ -754,6 +754,37 @@ def api_template_create(uid, tid):
     return jsonify(bot=public(bot), wallet=wallet_info(uid), cost=cost)
 
 
+@app.post("/api/bots/new")
+@authed
+def api_bot_new(uid):
+    """ساخت دستی رباتِ خالی در استودیو — بدون هوش مصنوعی و بدون مصرف توکن.
+    کاربر از همین اول استودیو را کامل می‌بیند و اسکلت ربات (شروع + پاسخ پیش‌فرض) را می‌گیرد
+    تا مسیرها را خودش دستی بسازد؛ ارتقای هوشمند هم جداگانه از پنل «ساخت با هوش مصنوعی» در دسترس است."""
+    ensure_user(uid)
+    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
+        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با خرید اشتراک Premium یا Pro، سقفت بیشتر می‌شه."), 400
+    name = str((request.get_json(silent=True) or {}).get("name") or "").strip()[:40] or "ربات من"
+    skeleton = {
+        "name": name, "start": "start", "fallback": "fallback",
+        "nodes": {
+            "start": {"title": "شروع", "text": "سلام! به ربات من خوش اومدی. از دکمه‌های زیر انتخاب کن.",
+                      "buttons": [[{"text": "درباره ربات", "goto": "about"}]]},
+            "about": {"title": "درباره", "text": "این بخش را از استودیو ویرایش کن؛ هر بخش یک پیام از ربات است.",
+                      "buttons": [[{"text": "بازگشت به شروع", "goto": "start"}]]},
+            "fallback": {"title": "متوجه نشدم", "text": "متوجه پیامت نشدم؛ لطفاً از دکمه‌های زیر استفاده کن.", "buttons": []},
+        },
+    }
+    try:
+        cfg = sanitize(skeleton, strict=True, nodes_cap=limits_of(uid)["nodes"])
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    bot = new_bot_doc(uid, cfg, "")
+    if REF_ON == "create":
+        settle_referral(uid)
+    log.info("manual bot created: uid=%s bot=%s", uid, bot["_id"])
+    return jsonify(bot=public(bot), wallet=wallet_info(uid), cost=0)
+
+
 @app.post("/api/bots/<bot_id>/undo")
 @authed
 def api_undo(uid, bot_id):
