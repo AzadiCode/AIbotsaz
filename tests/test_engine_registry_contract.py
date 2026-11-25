@@ -52,7 +52,7 @@ class EngineRegistryContractTests(unittest.TestCase):
                 continue
             if action not in explicit:
                 missing.append(action)
-        self.assertEqual(missing, [])
+        self.assertEqual(missing, set())
 
     def test_engine_condition_evaluator_covers_registry(self):
         check = function_node("engine.py", "check")
