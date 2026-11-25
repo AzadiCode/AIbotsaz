@@ -133,6 +133,9 @@ def audit_config(cfg: dict) -> list[dict]:
             continue
         if node.get("next") and node["next"] not in nodes:
             issues.append({"code": "invalid_navigation_target", "severity": "blocker", "message": f"نود «{node_id}» به مقصد ناموجود «{node['next']}» اشاره می‌کند."})
+        pay = node.get("pay")
+        if isinstance(pay, dict) and pay.get("goto") and pay["goto"] not in nodes:
+            issues.append({"code": "invalid_payment_target", "severity": "blocker", "message": f"مسیر پس از پرداخت در نود «{node_id}» به مقصد ناموجود «{pay['goto']}» اشاره می‌کند."})
         for route in node.get("route") or []:
             if isinstance(route, dict) and route.get("goto") and route["goto"] not in nodes:
                 issues.append({"code": "invalid_navigation_target", "severity": "blocker", "message": f"مسیر نود «{node_id}» به مقصد ناموجود «{route['goto']}» اشاره می‌کند."})
@@ -151,6 +154,9 @@ def audit_config(cfg: dict) -> list[dict]:
         op = str(item.get("op") or "")
         if op:
             used_ops.add(op)
+            if op == "remind" and item.get("goto") and item["goto"] not in nodes:
+                issues.append({"code": "invalid_reminder_target", "severity": "blocker",
+                               "message": f"مقصد یادآور «{item['goto']}» وجود ندارد."})
             required = next((x.get("required", []) for x in getattr(_caps, "CAPS_DO", []) if x.get("k") == op), ACTION_ARGS.get(op, ()))
             if required:
                 missing = [key for key in required if key not in item or item.get(key) in (None, "")]
