@@ -1069,7 +1069,7 @@ def _split_telegram_text(value, limit=3500):
     return chunks
 
 
-def report_gaps(uid, bot, prompt, items):
+def report_gaps(uid, bot, prompt, items, diagnostics=None):
     """ثبت و ارسال گزارش کامل محدودیت‌ها برای ادمین، با حفظ تمام متن درخواست کاربر."""
     if not items:
         return
@@ -1077,7 +1077,9 @@ def report_gaps(uid, bot, prompt, items):
         u = db.users.find_one({"_id": uid}) or {}
         who = f"{u.get('tg_name') or ''} {('@' + u['tg_user']) if u.get('tg_user') else ''}".strip() or "بدون نام"
         full_prompt = str(prompt or "")
-        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt, "items": items, "t": now()}
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt,
+                   "items": items, "diagnostics": diagnostics, "t": now()}
         gap_id = db.gaps.insert_one(gap_doc).inserted_id
         lines = [
             "🚨 گزارش محدودیت ربات‌ساز هوشمند Azadi",
@@ -1092,6 +1094,24 @@ def report_gaps(uid, bot, prompt, items):
         ]
         for i, x in enumerate(items, 1):
             lines += ["", f"{i}) خواسته: {x.get('want') or '-'}", f"چرا انجام نشد: {x.get('why') or '-'}", f"راهکار ارتقا: {x.get('upgrade') or '-'}"]
+        if diagnostics:
+            lines += ["", "🧪 گزارش فنی اجرای ساخت:"]
+            for label, key in (("شناسه کار", "job_id"), ("مرحله", "phase"),
+                               ("وظایف تکمیل‌شده", "completed_tasks"), ("کل وظایف", "total_tasks"),
+                               ("خطای آخر", "last_error")):
+                value = diagnostics.get(key)
+                if value not in (None, "", [], {}):
+                    lines.append(f"{label}: {value}")
+            if diagnostics.get("completed_task_ids"):
+                lines.append("وظایف تکمیل‌شده: " + ", ".join(map(str, diagnostics["completed_task_ids"][:20])))
+            if diagnostics.get("retry_counts"):
+                lines.append("تلاش مجدد: " + json.dumps(diagnostics["retry_counts"], ensure_ascii=False))
+            if diagnostics.get("usage"):
+                lines.append("مصرف مدل: " + json.dumps(diagnostics["usage"], ensure_ascii=False))
+            if diagnostics.get("model_attempts"):
+                lines.append("تاریخچه مدل‌ها:")
+                for attempt in diagnostics["model_attempts"][-25:]:
+                    lines.append(f"• {attempt.get('model', '?')} | {attempt.get('phase', '?')} | تلاش {attempt.get('attempt', '?')}")
         report_text = "\n".join(lines)
         chunks = _split_telegram_text(report_text)
         kb = {"inline_keyboard": [[
