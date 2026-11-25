@@ -97,6 +97,21 @@ class BuilderAgentAuditTests(unittest.TestCase):
         cfg["nodes"]["start"]["when"] = {"var": "undeclared", "value": "1"}
         self.assertIn("undeclared_variable", {x["code"] for x in audit_config(cfg)})
 
+    def test_previous_broken_game_pattern_is_blocked(self):
+        cfg = self.base()
+        cfg["vars"] = {}
+        cfg["nodes"]["start"]["text"] = "امتیاز: {score}"
+        cfg["nodes"]["start"]["do"] = [
+            {"op": "play_dice"},
+            {"op": "check_pick"},
+            {"op": "dice"},
+            {"op": "pick"},
+        ]
+        codes = {x["code"] for x in audit_config(cfg)}
+        self.assertIn("undeclared_variable", codes)
+        self.assertIn("unknown_action", codes)
+        self.assertIn("action_missing_args", codes)
+
     def test_manifest_matches_registry(self):
         manifest = capability_manifest()
         self.assertTrue(manifest["available"])
