@@ -35,7 +35,7 @@ const AIP = {
     if(!this.el) return;
     this.open = false;
     this.el.classList.remove("on");
-    if(this._pollT){ clearTimeout(this._pollT); this._pollT = null; }
+    this._liveStop();
   },
 
   html(){
@@ -72,13 +72,83 @@ const AIP = {
 
   out(html){ const o = this.el?.querySelector("#aip-out"); if(o) o.innerHTML = html; },
 
+  /* وضعیت شغلی: یا جعبهٔ ساخت زندهٔ کامل (الگوی lq صفحهٔ ساخت) یا بازگرداندن آخرین پیش‌نمایش */
   busy(on, label){
     const btn = this.el?.querySelector('[data-aip="build"]');
     if(btn) btn.disabled = !!on;
-    this.out(on ? `<div class="aip-prog">${IC.bot} ${esc(label || "در حال کار…")}</div>` : this._lastOut || "");
+    if(on){
+      this._lv = {t0: Date.now(), target: 0, shown: 0, st: "", real: false, done: false};
+      this.out(this.liveHTML(label));
+      this._liveTimers();
+    }else{
+      this._liveStop();
+      this.out(this._lastOut || "");
+    }
   },
 
-  /* ── پیش‌نمایش Spec: شفاف و قبل از هر هزینه‌ای ── */
+  /* جعبهٔ پیشرفت ساخت — همان الگوی «lq» صفحهٔ ساخت: سرعت + درصد + زمان + نوار + مرحله‌ها */
+  liveHTML(title){
+    const t = esc(title || "در حال ساخت ربات");
+    return `<div class="lq aip-live" role="status" aria-busy="true" aria-label="${t}">
+      <div class="lqh">${RB}<div class="lqt"><b>${t}</b><span class="lqs aip-lqs">${THINK[0]}</span></div>
+        <div class="lqp"><b class="aip-pc">0%</b><small class="aip-tm">0:00</small></div></div>
+      <div class="lqbar ind"><i></i></div>
+      <ol class="lqst">${LQ_STEPS.map(x => `<li><i></i>${x}</li>`).join("")}</ol>
+      <div class="lqn aip-lqn" hidden></div></div>`;
+  },
+
+  _liveTimers(){
+    this._liveStop(true);
+    const root = this.el?.querySelector(".aip-live");
+    if(!root || !this._lv) return;
+    const sub = root.querySelector(".aip-lqs"), pc = root.querySelector(".aip-pc"),
+          bar = root.querySelector(".lqbar"), tm = root.querySelector(".aip-tm");
+    let pool = [], last = THINK[0];
+    const next = () => { if(!pool.length){ pool = THINK.slice().sort(() => Math.random() - .5); if(pool[pool.length - 1] === last) pool.reverse(); } return last = pool.pop(); };
+    this._lvT = setInterval(() => {
+      if(!root.isConnected){ this._liveStop(); return; }
+      if(!this._lv.real) sub.textContent = next();
+    }, 2800);
+    this._lvC = setInterval(() => {
+      if(!root.isConnected){ this._liveStop(); return; }
+      const el = Math.floor((Date.now() - this._lv.t0) / 1000);
+      tm.textContent = FAD(Math.floor(el / 60) + ":" + String(el % 60).padStart(2, "0"));
+      if(this._lv.real){
+        const d = this._lv.target - this._lv.shown;
+        this._lv.shown = reduced() ? this._lv.target : this._lv.shown + d * .12 + (Math.abs(d) < .4 && this._lv.shown < 96 ? .02 : 0);
+        this._lv.shown = Math.min(this._lv.shown, this._lv.done ? 100 : 99);
+        pc.textContent = FAD(Math.round(this._lv.shown)) + "%";
+        bar.firstElementChild.style.width = this._lv.shown + "%";
+      }
+    }, 100);
+  },
+
+  _liveStop(soft){
+    if(this._lvT){ clearInterval(this._lvT); this._lvT = null; }
+    if(this._lvC){ clearInterval(this._lvC); this._lvC = null; }
+    if(!soft) this._lv = null;
+  },
+
+  /* به‌روزرسانی زندهٔ پیشرفت از سرور — همان قرارداد liveUpdate صفحهٔ ساخت */
+  liveUpd(pr){
+    const root = this.el?.querySelector(".aip-live");
+    if(!root || !pr || !this._lv) return;
+    this._lv.real = true; this._lv.target = Math.max(this._lv.target, +pr.p || 0);
+    root.querySelector(".lqbar").classList.remove("ind");
+    if(pr.st && pr.st !== this._lv.st){
+      this._lv.st = pr.st;
+      root.querySelector(".aip-lqs").textContent = LQ_LBL[pr.st] || LQ_LBL.analyze;
+      const idx = LQ_IDX[pr.st] ?? 0;
+      root.querySelectorAll(".lqst li").forEach((li, i) => { li.classList.toggle("done", i < idx); li.classList.toggle("on", i === idx); });
+    }
+    const n = root.querySelector(".aip-lqn");
+    if(pr.task_n){
+      n.hidden = false;
+      n.textContent = `وظیفه ${FAD(Math.max(0, Number(pr.task_i || 0)))} از ${FAD(pr.task_n)}${pr.task_title ? ` · ${pr.task_title}` : ""}`;
+    }else if(pr.n > 0){ n.hidden = false; n.textContent = `${FAD(pr.n)} بخش ساخته شد` + (pr.ti ? ` · آخرین: ${pr.ti}` : ""); }
+  },
+
+  /* ── پیش‌نمایش Spec: شفاف و قبل از هر هزینه‌ای — همان الگوی باکس «پیش‌نمایش ساخت» صفحهٔ ساخت ── */
   async preview(){
     const p = (this.el?.querySelector("#aip-prompt")?.value || "").trim();
     if(p.length < 5) return toast("توضیح بیشتری بنویس");
@@ -91,22 +161,30 @@ const AIP = {
   },
 
   renderPreview(d){
-    if(!d.instant){
-      return `<p class="muted">${esc(d.message || "روتر قطعی مطمئن نیست.")}</p>` +
-        (d.limits || []).map(l => this.limitRow(l)).join("");
-    }
     const pv = d.preview || {};
-    const ok = (pv.ok || []).map(x => `<div class="aip-ok">✔ ${esc(x.fa)}</div>`).join("");
-    const lim = (pv.engine_limit || []).map(l => this.limitRow(l)).join("");
-    const miss = (d.limits || []).filter(l => !pv.engine_limit?.some(x => x.want === l.want)).map(l => this.limitRow(l)).join("");
-    return `${ok ? `<div class="sub">قابلیت‌های قابل اجرا (کامپایلر قطعی)</div>${ok}` : ""}` +
-      (lim ? `<div class="sub">❌ غیرقابل اجرا با موتور فعلی</div>${lim}` : "") +
-      (miss ? `<div class="sub">🟡 موارد نیازمند بررسی</div>${miss}` : "") +
-      `<p class="muted">لغو رایگان است؛ ساخت فقط پس از تأیید این پیش‌نمایش و با تست پذیرش موتور تحویل می‌شود.</p>`;
-  },
-
-  limitRow(l){
-    return `<div class="aip-no">❌ ${esc(l.want || "")}<small>${esc(l.why || "")}</small><small>${esc(l.upgrade || "")}</small></div>`;
+    const instant = !!d.instant;
+    const name = d.spec?.name || "";
+    const subs = instant
+      ? (name ? `«${esc(name)}» · ` : "") + `${N((pv.ok || []).length)} قابلیت شناسایی شد`
+      : esc(d.message || "قابلیتی آماده‌ای پیدا نشد؛ هوش مصنوعی طراحی می‌کند");
+    const feats = (pv.features && pv.features.length ? pv.features : (pv.ok || [])).slice(0, 18);
+    const chips = feats.map((x, i) => `<span class="pvm" style="animation-delay:${i * 45}ms">${esc(x.fa || x.id)}</span>`).join("");
+    /* محدودیت‌ها: ❌ محدودیت موتور + سایر محدودیت‌های شناخته‌شده، بدون تکرار بر اساس «want» */
+    const seen = {}, lims = [];
+    (pv.engine_limit || []).concat(d.limits || []).forEach(l => {
+      const k = (l && l.want) || ""; if(!k || seen[k]) return; seen[k] = 1; lims.push(l);
+    });
+    const limHTML = lims.length
+      ? `<div class="pvlim">${lims.map(x => `<div><b>${esc(x.want || "")}</b><span>${esc(x.why || "")}</span>${x.upgrade ? `<span>راهکار: ${esc(x.upgrade)}</span>` : ""}</div>`).join("")}</div>`
+      : "";
+    return `<div class="lqi aip-pv">
+      <div class="lqih">${RB}<div class="lqt"><b>پیش‌نمایش ساخت</b><span class="aip-pvs">${subs}</span></div>
+        <span class="pvbadge ${instant ? "ok" : "ai"}">${instant ? "ساخت آنی" : "ساخت با هوش مصنوعی"}</span></div>
+      ${chips ? `<div class="pvmods">${chips}</div>` : ""}
+      ${limHTML}
+      <ol class="lqst">${LQ_STEPS.map(t => `<li><i></i>${t}</li>`).join("")}</ol>
+    </div>
+    <p class="aip-note">لغو رایگان است؛ ساخت فقط پس از تأیید این پیش‌نمایش و با تست پذیرش موتور تحویل می‌شود.</p>`;
   },
 
   /* ── ساخت/ارتقا با خط Spec (کمترین مصرف مدل) ── */
@@ -157,7 +235,7 @@ const AIP = {
         err.buildPhase = r.build_phase || "";
         throw err;
       }
-      if(i % 3 === 0 && r.prog?.p != null) this.out(`<div class="aip-prog">${IC.bot} ${esc(LQ_LBL[r.prog.st] || "در حال ساخت")} · ${N(Math.round(r.prog.p))}%</div>`);
+      if(r.prog) this.liveUpd(r.prog);
     }
     throw new Error("ساخت بیش از حد طول کشید؛ checkpoint ذخیره شده است.");
   },

@@ -1623,7 +1623,7 @@ button{max-width:100%}
 /* ═════════ پنل کشویی دستیار هوش مصنوعی در استودیو (BUILD 3.6.0 — بازطراحی) ═════════
    دسکتاپ: پنل جانبی کنار استودیو · موبایل: Bottom Sheet شناور بالای نوار ابزار پایین */
 .aiwrap{position:fixed;top:calc(58px + env(safe-area-inset-top));bottom:calc(64px + env(safe-area-inset-bottom));
-  inset-inline-start:10px;width:min(380px,calc(100vw - 20px));z-index:220;
+  inset-inline-start:10px;width:min(420px,calc(100vw - 24px));z-index:220;
   background:var(--sf);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 60px rgba(0,0,0,.45);
   display:flex;flex-direction:column;overflow:hidden;
   transform:translateX(-115%);opacity:0;pointer-events:none;
@@ -1652,13 +1652,16 @@ button{max-width:100%}
 .aiwrap .aip-foot .b{width:100%;min-height:44px;padding:8px 10px;font-size:12.5px;font-weight:700;line-height:1.55;border-radius:12px}
 .aiwrap .aip-foot .b svg{width:15px;height:15px}
 @media (max-width:350px){.aiwrap .aip-foot{grid-template-columns:1fr}}
-/* خروجی پیش‌نمایش/پیشرفت */
-.aiwrap .aip-out{display:flex;flex-direction:column;gap:6px}
-.aiwrap .aip-out .sub{margin-top:6px}
-.aiwrap .aip-ok{background:color-mix(in srgb,var(--ok) 8%,transparent);border:1px solid color-mix(in srgb,var(--ok) 25%,transparent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.7}
-.aiwrap .aip-no{background:color-mix(in srgb,var(--bad) 7%,transparent);border:1px solid color-mix(in srgb,var(--bad) 25%,transparent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.7;display:flex;flex-direction:column;gap:3px}
-.aiwrap .aip-no small{opacity:.75}
-.aiwrap .aip-prog{background:color-mix(in srgb,var(--ac) 8%,transparent);border:1px solid color-mix(in srgb,var(--ac) 25%,transparent);border-radius:10px;padding:10px 12px;font-size:12px;display:flex;align-items:center;gap:8px}
+/* خروجی پیش‌نمایش/پیشرفت — همان الگوی باکس «پیش‌نمایش ساخت» و جعبهٔ ساخت زندهٔ صفحهٔ ساخت */
+.aiwrap .aip-out{display:flex;flex-direction:column;gap:8px}
+.aiwrap .aip-out .lq,.aiwrap .aip-out .lqi{margin-top:0}
+.aiwrap .aip-out .lqh .rb{width:24px;height:24px}
+.aiwrap .aip-out .lqh .lqt b{font-size:13px}
+.aiwrap .aip-out .lqp b{font-size:14px}
+.aiwrap .aip-out .lqn{margin-top:10px}
+.aiwrap .aip-out .pvlim{max-height:120px}
+.aiwrap .aip-pv .lqt b{font-size:13px}
+.aip-note{margin:0;font-size:11.5px;line-height:1.85;color:var(--mut)}
 .aiwrap .aip-mod{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
 .aiwrap .aip-mod input{margin-top:3px}
 .aiwrap .aip-mod b{font-size:13px}
@@ -1666,7 +1669,7 @@ button{max-width:100%}
 /* موبایل: Bottom Sheet — عرض کامل، لبه‌ها با فاصله، بالای نوار ابزار پایین استودیو */
 @media (max-width:720px){
   .aiwrap{inset-inline:8px;top:auto;bottom:calc(62px + env(safe-area-inset-bottom));width:auto;
-    max-height:72vh;max-height:min(72dvh,620px);border-radius:18px}
+    max-height:78vh;max-height:min(78dvh,680px);border-radius:18px}
   .aiwrap:not(.on){transform:translateY(120%)}
 }
 @media (prefers-reduced-motion:reduce){
