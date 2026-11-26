@@ -17,6 +17,7 @@ spec.py — استاندارد Spec: قرارداد کوچک و قابل پیش�
 
 import json
 import re
+import copy
 
 from modules import MODULES, BuildError, normalize_text, clean_params, _clean_text
 
@@ -143,7 +144,7 @@ def _salvage_requirement_rows(reqs, salvaged):
     return rows
 
 
-def validate_spec(obj, require_requirements=False, expected_intent=None):
+def validate_spec(obj, require_requirements=False, expected_intent=None, request_context=""):
     """
     JSON خام → Spec اعتبارسنجی‌شده.
     مراحل: ساختار → نسخه/نیت → نام → قابلیت‌ها (Enum + پارامترها) → وابستگی‌ها → متن‌ها.
@@ -157,6 +158,11 @@ def validate_spec(obj, require_requirements=False, expected_intent=None):
             raise SpecError("خروجی مدل JSON معتبر نیست", [f"json: {e}"])
     if not isinstance(obj, dict):
         raise SpecError("Spec باید یک شیء JSON باشد")
+    # Validation and normalization must not mutate caller-owned LLM payloads.
+    # The same decoded response may be evaluated under different request contexts
+    # (retry, checkpoint restore, unit tests); leaking reconciled links/statuses
+    # from one pass into the next can falsely mark unrelated requirements covered.
+    obj = copy.deepcopy(obj)
     errors = []
 
     # 1) ساختار کلی
@@ -171,12 +177,15 @@ def validate_spec(obj, require_requirements=False, expected_intent=None):
     # پس از بررسی سایر فیلدهای واقعی، نسخه را همیشه به نسخهٔ جاری نرمال می‌کنیم.
     # این کار اعتبارسنجی features/requirements/params را تضعیف نمی‌کند.
     obj["version"] = SPEC_VERSION
-    intent = str(obj.get("intent") or "create").strip().lower()
-    if intent not in ("create", "edit"):
-        errors.append("intent باید create یا edit باشد")
-        intent = expected_intent or "create"
-    if expected_intent in ("create", "edit") and intent != expected_intent:
-        errors.append(f"intent با وضعیت درخواست هماهنگ نیست؛ مقدار مورد انتظار {expected_intent} است")
+    model_intent = str(obj.get("intent") or "").strip().lower()
+    # Operation mode is owned by the application, not the LLM. When a current
+    # bot document is supplied, the save path is an edit/merge; when no current
+    # bot exists, it is a create. A model interpreting the user's verb «بساز»
+    # as create must not invalidate an otherwise correct edit Spec.
+    if expected_intent in ("create", "edit"):
+        intent = expected_intent
+    else:
+        intent = model_intent if model_intent in ("create", "edit") else "create"
     obj["intent"] = intent
 
     # 3) نام ربات
@@ -185,6 +194,11 @@ def validate_spec(obj, require_requirements=False, expected_intent=None):
 
     # 4) قابلیت‌ها: Enum + پارامترها
     feats = obj.get("features")
+    if feats is None and require_requirements and isinstance(obj.get("requirements"), list):
+        # Some models express the requirement-to-module relation only on each
+        # requirement and omit the top-level feature array. Recover it below from
+        # the canonical catalogue before deciding that the Spec is incomplete.
+        feats = []
     if not isinstance(feats, list):
         raise SpecError("فهرست قابلیت‌ها نامعتبر است", ["features باید فهرست JSON باشد"])
     if len(feats) > 12:
@@ -286,6 +300,36 @@ def validate_spec(obj, require_requirements=False, expected_intent=None):
             if unknown_links:
                 errors.append(f"قابلیت {f['type']} به شناسه نیازمندی ناموجود وصل شده: {', '.join(unknown_links[:4])}")
             f["req"] = [rid for rid in f["req"] if rid in valid_rids]
+    # Reconcile before enforcing bidirectional feature links. This ordering is
+    # essential: previously a Spec with a valid requirement but an omitted/missing
+    # feature link was rejected here, so the later catalog reconciliation in
+    # ask_spec() never got a chance to recover an already-registered module.
+    if reqs is not None:
+        try:
+            import coverage as _coverage
+            repairable = {"features": out_feats, "requirements": reqs}
+            _coverage.reconcile_spec(repairable, request_context)
+            out_feats = repairable.get("features") or out_feats
+            reqs = repairable.get("requirements") or reqs
+        except Exception:
+            # Recovery is best-effort. It must never hide schema or compiler errors;
+            # the normal coverage gate will classify remaining requirements.
+            pass
+
+        # Re-run transitive dependency closure after recovery: a module recovered
+        # from a requirement must receive the same dependencies as a model-selected
+        # module before it reaches the compiler.
+        chosen_after_recovery = {f["type"] for f in out_feats}
+        changed = True
+        while changed:
+            changed = False
+            for mid in list(chosen_after_recovery):
+                for dep in MODULES[mid].requires:
+                    if dep not in chosen_after_recovery:
+                        out_feats.append({"type": dep, "params": {}, "req": [], "note": ""})
+                        chosen_after_recovery.add(dep)
+                        changed = True
+
     selected = {f["type"] for f in out_feats}
     backref = {}
     for f in out_feats:
@@ -303,9 +347,17 @@ def validate_spec(obj, require_requirements=False, expected_intent=None):
         if r["status"] == "covered":
             hit = mapped & selected
             if not hit:
-                # نیازمندی پوشش‌داده‌شده بدون هیچ قابلیت اجرایی: مدل خواسته را حذف کرده؛ تحویل بی‌صدا ممنوع
-                errors.append(f"نیازمندی «{r['want'][:60]}» پوشش داده شد ادعا شده اما هیچ قابلیت اجرایی برای آن انتخاب نشده")
-            r["features"] = sorted(hit)
+                # Do not turn a missing feature link into a fatal Spec parse error.
+                # A parseable Spec must reach deterministic coverage classification:
+                # it can recover an existing module, retry a BUILD_DEFECT, or ask the
+                # user to review a genuine CATALOG_MISSING item. It can never be built
+                # as covered without a selected executable module.
+                r["status"] = "catalog_missing"
+                r["why"] = (r.get("why") or
+                    "مدل این نیازمندی را پوشش‌داده‌شده اعلام کرده بود، اما هیچ قابلیت اجرایی به آن متصل نشده است؛ پوشش باید توسط کاتالوگ و اعتبارسنجی قطعی تعیین شود.")
+                r["features"] = []
+            else:
+                r["features"] = sorted(hit)
         else:
             r["features"] = sorted(mapped & selected)
     obj["requirements"] = reqs
@@ -446,10 +498,11 @@ def spec_prompt(prompt_text, current_summary="", lang="fa"):
     return [{"role": "system", "content": sys_part}, {"role": "user", "content": user_part}]
 
 
-def parse_llm_spec(text, require_requirements=False, expected_intent=None):
+def parse_llm_spec(text, require_requirements=False, expected_intent=None, request_context=""):
     """پاسخ مدل → Spec اعتبارسنجی‌شده. در مسیر AI، requirements و intent اجباری‌اند."""
     from ai import _extract_json_object
     raw = _extract_json_object(str(text or ""))
     if not raw:
         raise SpecError("پاسخ مدل JSON نداشت")
-    return validate_spec(raw, require_requirements=require_requirements, expected_intent=expected_intent)
+    return validate_spec(raw, require_requirements=require_requirements, expected_intent=expected_intent,
+                         request_context=request_context)

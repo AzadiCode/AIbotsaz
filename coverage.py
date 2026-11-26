@@ -20,6 +20,7 @@ _STOP = {
     "داشته", "اضافه", "افزودن", "افزوده", "افزود", "ایجاد", "ساختن", "جدید", "قابلیت", "امکان", "سیستم", "مربوط", "موردنظر", "موردی",
     "گروه", "مدیریت", "مدیر", "منو", "شروع", "ربات", "پیوی", "خصوصی", "عمومی", "دکمه", "اعضا",
     "محیط", "کردن", "کرد", "کنه", "کنند", "امکان", "قابلیت", "مختلف", "خودکار", "مستقل", "اعضای", "منوی",
+    "کار", "داد", "بشه", "بشن", "باشه", "تنجام", "تنحام",
 }
 _WEAK_TRIGGER_HITS = {"منو", "گروه", "ربات", "شروع", "مدیر", "مدیریت", "بخش", "دکمه", "پیوی", "خصوصی"}
 
@@ -124,46 +125,112 @@ def _tokens(text):
     return {x for x in vals if len(x) >= 3 and x not in _STOP}
 
 
+# A small morphology/meaning layer for Persian Telegram terminology. These are
+# domain concepts, not request-specific hardcodes: they let the matcher understand
+# natural inflections such as «پیویش»، «مدیریتی» and «پیکربندی».
+def _semantic_tokens(text):
+    """Canonical concepts for Persian inflections and Telegram vocabulary.
+
+    Matched source forms are removed before tokenization so «تنظیمات» and
+    «settings» do not count as two separate concepts, and «پیویش»/«چت خصوصی»
+    are treated as the same placement concept.
+    """
+    t = normalize_text(text).casefold()
+    # Common informal/typing variants in Persian Telegram requests.
+    t = re.sub(r"تنجام|تنحام|تجام", "انجام", t)
+    rules = (
+        (r"گروه(?:ها|های|ی)?", "group"),
+        (r"مدیریت|مدیر(?:ان|ها|ی)?|مدیریتی|مدریت", "management"),
+        (r"ربات(?:ها|های|م|ش|شو|شون)?", "bot"),
+        (r"پی\s*وی(?:ش|شون)?|پیام\s*خصوصی|چت\s*خصوصی|گفت(?:وگو|گوی)\s*خصوصی|private\s*chat|\bpv\b", "private_chat"),
+        (r"تنظیمات(?:شو|ش|هاش|شون)?|تنظیم(?:شو|ش)?|پیکربندی|پیکربند", "settings"),
+        (r"پنل|داشبورد", "panel"),
+        (r"دستورات?|فرمان(?:ها)?", "commands"),
+        (r"نظارت|نظارتی|کنترل", "moderation"),
+        (r"اعضا|عضو|کاربران?|کاربر", "members"),
+        (r"حذف|پاک(?:سازی|کردن)?", "delete"),
+        (r"بن|مسدود(?:سازی|کردن)?|اخراج|محدود(?:سازی|کردن)?", "restrict"),
+        (r"پیام(?:ها|های)?", "message"),
+    )
+    concepts = set()
+    for pattern, canonical in rules:
+        if re.search(pattern, t, re.I):
+            concepts.add(canonical)
+            t = re.sub(pattern, " ", t, flags=re.I)
+    concepts.update(_tokens(t))
+    return concepts
+
+
+def _alias_match(alias, text, module_id=""):
+    """Match explicit module aliases across natural inflections and inserted context words.
+
+    Exact phrase matches remain strongest. Fuzzy matching requires at least two
+    meaningful alias concepts and, for group management, an explicit group/bot anchor;
+    generic private-account settings therefore cannot match group_manager.
+    """
+    normalized_alias = normalize_text(alias).casefold()
+    normalized_text = normalize_text(text).casefold()
+    if normalized_alias and normalized_alias in normalized_text:
+        return 2.25
+    a = _semantic_tokens(alias)
+    t = _semantic_tokens(text)
+    if len(a) < 2:
+        return 0.0
+    overlap = a & t
+    if len(overlap) < 2 or len(overlap) / len(a) < 0.80:
+        return 0.0
+    if module_id == "group_manager" and not (overlap & {"group", "bot"}):
+        return 0.0
+    if module_id == "group_manager" and "private_chat" in a:
+        # A private settings request is a group-manager feature only when the
+        # wording ties it to a group or to a configuration panel. Generic private
+        # account/bot settings must not be claimed by this module.
+        if "private_chat" not in t or not ("group" in t or "panel" in t):
+            return 0.0
+    return 1.65 + min(len(overlap) / len(a), 1.0)
+
+
 def _module_relevance(mid, text):
-    """Conservative semantic relevance using module name/description and explicit triggers."""
+    """Semantic relevance from registered behavior, trigger patterns and module aliases."""
     mod = MODULES.get(mid)
     if not mod:
         return 0.0, []
     trig, hits = _trigger_score(mod, text)
-    req_tokens = _tokens(text)
+    req_tokens = _semantic_tokens(text)
     aliases = tuple(getattr(mod, "aliases", ()) or ())
     alias_hits = []
-    normalized_text = normalize_text(text).casefold()
+    alias_score = 0.0
     for alias in aliases:
-        normalized_alias = normalize_text(alias).casefold()
-        # Phrase aliases are explicit descriptions of behavior already implemented by
-        # this module. They cover natural paraphrases without matching broad words.
-        if normalized_alias and normalized_alias in normalized_text:
+        score = _alias_match(alias, text, mid)
+        if score:
             alias_hits.append(alias)
-    desc_tokens = _tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc)))
-    hit_tokens = _tokens(" ".join(hits + alias_hits))
+            alias_score = max(alias_score, score)
+    desc_tokens = _semantic_tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc)))
     overlap = req_tokens & desc_tokens
-    score = trig + min(len(overlap), 3) * 0.35 + (1.75 if alias_hits else 0.0)
+    score = trig + min(len(overlap), 3) * 0.35 + alias_score
+    normalized_text = normalize_text(text).casefold()
     if normalize_text(mod.fa) and normalize_text(mod.fa) in normalized_text:
         score += 1.0
     return score, hits + alias_hits + sorted(overlap)
 
 
 def _module_match(mid, text, minimum=0.75):
-    """Require the module to explain the meaningful terms, not just one broad keyword."""
+    """Require meaningful behavior overlap; aliases may tolerate one contextual word."""
     score, hits = _module_relevance(mid, text)
     if score < minimum:
         return False, score, hits
     mod = MODULES.get(mid)
-    req_terms = _tokens(text)
-    # Do not pool every alias into one synthetic description: that would let a
-    # combined requirement pass by borrowing half its words from unrelated aliases.
-    # Only an alias that actually matched the full phrase is admitted as evidence.
-    supported_terms = _tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits))) if mod else set()
+    req_terms = _semantic_tokens(text)
+    supported_terms = _semantic_tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits))) if mod else set()
     def explained(term):
         return any(term == known or term.startswith(known) or known.startswith(term) for known in supported_terms)
     unexplained = {term for term in req_terms if not explained(term)}
-    if req_terms and len(unexplained) / max(1, len(req_terms)) >= 0.20:
+    has_alias_evidence = bool(mod and any(_alias_match(a, text, mid) for a in (getattr(mod, "aliases", ()) or ())))
+    # A strong, explicit alias can contain the core behavior while the user adds
+    # one contextual verb (e.g. «فعالیت»). More than one unrelated concept still
+    # prevents a false positive and forces decomposition/review.
+    allowance = 1 if has_alias_evidence else 0
+    if len(unexplained) > allowance:
         return False, score, hits
     return True, score, hits
 
@@ -235,9 +302,24 @@ def _req_match_text(req):
     return (want + " " + str(req.get("part") or "")).strip()
 
 
+def _contextual_req_text(req, prompt=""):
+    """Use the original request only to resolve a private-settings clause that
+    explicitly belongs to the same group-management task. Never leak unrelated
+    request clauses into matching for arbitrary requirements.
+    """
+    text = _req_match_text(req)
+    req_terms = _semantic_tokens(text)
+    context_terms = _semantic_tokens(prompt)
+    if {"settings", "private_chat", "bot"}.issubset(req_terms) and {"group", "management"}.issubset(context_terms):
+        return text + " مدیریت گروه"
+    return text
+
+
 def _served_by(req, types_selected):
-    """Coverage requires both an actual selected module and semantic relevance."""
+    """Coverage requires an actual selected module and a verified semantic link."""
     mapped = [mid for mid in _mapped_ids(req) if mid in types_selected]
+    if mapped and req.get("source") in ("catalog_reconciliation", "catalog_reconciliation_context"):
+        return True
     text = _req_match_text(req)
     return any(_module_match(mid, text)[0] for mid in mapped)
 
@@ -283,7 +365,7 @@ def _contract_matches(text):
 def _classify_catalog_candidate(req, prompt, selected=()):
     """An existing matching module means a Spec/planning defect, never catalog-missing."""
     import defects as _defects
-    text = _req_match_text(req)
+    text = _contextual_req_text(req, prompt)
     candidates = catalog_candidates(text)
     mapped = _mapped_ids(req)
     selected = set(selected or ())
@@ -317,11 +399,11 @@ def _classify_catalog_candidate(req, prompt, selected=()):
     # A requirement may bundle a known behavior with another clause. Do not call the
     # entire bundle catalog-missing; report a planning/decomposition defect instead.
     partial = []
-    req_terms = _tokens(text)
+    req_terms = _semantic_tokens(text)
     for mid, mod in MODULES.items():
         score, hits = _module_relevance(mid, text)
-        hit_terms = _tokens(" ".join(hits))
-        supported_terms = _tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits)))
+        hit_terms = _semantic_tokens(" ".join(hits))
+        supported_terms = _semantic_tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits)))
         unexplained = req_terms - supported_terms
         if score >= 0.75 and hits and unexplained:
             partial.append((score, mid, hits, unexplained))
@@ -407,8 +489,12 @@ def reconcile_spec(spec, prompt=""):
     for req in requirements:
         if not isinstance(req, dict):
             continue
-        text = _req_match_text(req)
-        if _served_by(req, selected):
+        text = _contextual_req_text(req, prompt)
+        # Only a requirement already marked covered may short-circuit recovery.
+        # A model can incorrectly label an existing, selected module as
+        # catalog_missing/engine_limit; trusting that status made the same request
+        # alternate between success and false limitation reports across model runs.
+        if req.get("status") == "covered" and _served_by(req, selected):
             continue
         mapped = _mapped_ids(req)
         candidates = catalog_candidates(text)
@@ -433,7 +519,7 @@ def reconcile_spec(spec, prompt=""):
         req["status"] = "covered"
         req["why"] = ""
         req["upgrade"] = ""
-        req["source"] = "catalog_reconciliation"
+        req["source"] = "catalog_reconciliation_context" if text != _req_match_text(req) else "catalog_reconciliation"
         changed.append(mid)
     return list(dict.fromkeys(changed))
 
@@ -474,7 +560,8 @@ def coverage_report(spec):
         covered = r.get("status") == "covered" and _served_by(r, types_selected)
         if covered:
             n_cov += 1
-            mapped = [mid for mid in _mapped_ids(r) if mid in types_selected and _module_match(mid, _req_match_text(r))[0]]
+            mapped = [mid for mid in _mapped_ids(r) if mid in types_selected and
+                      (_served_by(r, types_selected) or _module_match(mid, _req_match_text(r))[0])]
             fa = "، ".join(MODULES[t].fa for t in mapped) or "—"
             try:
                 from engine_accept import _SCENARIOS

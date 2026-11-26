@@ -77,7 +77,7 @@ class RequirementQualityTests(unittest.TestCase):
                "status": "catalog_missing", "features": []}
         defect = cov.classify_uncovered(req)
         self.assertEqual(defect["kind"], "BUILD_DEFECT")
-        self.assertIn("تفکیک", defect["evidence"])
+        self.assertEqual(defect.get("suggested_capability"), "group_manager")
 
     def test_static_limit_does_not_leak_between_requirements(self):
         seen = []
@@ -252,6 +252,246 @@ class RequirementQualityTests(unittest.TestCase):
         report = cov.coverage_report(about)
         self.assertEqual(report["requirements"][0]["verification"], "structural_only")
         self.assertFalse(report["all_behavior_verified"])
+
+
+    def test_operation_intent_is_authoritative_not_model_supplied(self):
+        payload = {
+            "version": "v1", "intent": "create", "name": "مدیر گروه", "features": [],
+            "requirements": [{"id": "r1", "want": "مدیریت گروه", "part": "گروه",
+                              "status": "covered", "features": ["group_manager"]}],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True, expected_intent="edit")
+        self.assertEqual(validated["intent"], "edit")
+        self.assertIn("group_manager", [f["type"] for f in validated["features"]])
+
+    def test_actual_group_request_variants_match_existing_module(self):
+        variants = (
+            "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
+            "فعالیت و مدیریت ربات در داخل گروه",
+            "مدیریت و نظارت ربات در گروه",
+        )
+        for want in variants:
+            with self.subTest(want=want):
+                self.assertIn("group_manager", [x["id"] for x in cov.catalog_candidates(want)])
+
+    def test_actual_private_group_settings_variants_match_existing_module(self):
+        variants = (
+            "دسترسی به پنل تنظیمات و پیکربندی ربات در محیط پی‌وی",
+            "انجام تنظیمات ربات از طریق پیام خصوصی (PV)",
+            "دسترسی به پنل تنظیمات ربات در چت خصوصی پیوی",
+        )
+        for want in variants:
+            with self.subTest(want=want):
+                self.assertIn("group_manager", [x["id"] for x in cov.catalog_candidates(want)])
+
+    def test_original_combined_request_matches_group_module(self):
+        want = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        self.assertIn("group_manager", [x["id"] for x in cov.catalog_candidates(want)])
+
+    def test_personal_private_account_settings_do_not_match_group_manager(self):
+        want = "تنظیمات حساب شخصی از طریق پیام خصوصی"
+        self.assertNotIn("group_manager", [x["id"] for x in cov.catalog_candidates(want)])
+
+    def test_spec_recovers_missing_top_level_features_before_coverage_validation(self):
+        payload = {
+            "intent": "create", "name": "مدیر گروه", "features": [],
+            "requirements": [
+                {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه", "part": "گروه",
+                 "status": "covered", "features": []},
+                {"id": "r2", "want": "دسترسی به پنل تنظیمات و پیکربندی ربات در محیط پی‌وی", "part": "پیوی",
+                 "status": "covered", "features": []},
+            ],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True, expected_intent="edit")
+        self.assertEqual(validated["intent"], "edit")
+        self.assertEqual([f["type"] for f in validated["features"]], ["group_manager"])
+        self.assertEqual([r["status"] for r in validated["requirements"]], ["covered", "covered"])
+        self.assertEqual([r["features"] for r in validated["requirements"]],
+                         [["group_manager"], ["group_manager"]])
+        self.assertEqual(cov.unmet_items(validated), [])
+
+    def test_spec_recovers_feature_named_on_requirement_but_omitted_from_feature_array(self):
+        payload = {
+            "intent": "create", "name": "مدیر گروه", "features": [],
+            "requirements": [{"id": "r1", "want": "فعالیت و مدیریت ربات در داخل گروه", "part": "گروه",
+                              "status": "covered", "features": ["group_manager"]}],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True, expected_intent="edit")
+        self.assertEqual([f["type"] for f in validated["features"]], ["group_manager"])
+        self.assertEqual(validated["requirements"][0]["status"], "covered")
+
+    def test_unlinked_covered_requirement_becomes_reviewable_gap_not_spec_crash(self):
+        payload = {
+            "intent": "create", "name": "x", "features": [],
+            "requirements": [{"id": "r1", "want": "قابلیت خیالی برای کنترل ذهن کاربران", "part": "گروه",
+                              "status": "covered", "features": []}],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True, expected_intent="create")
+        self.assertEqual(validated["requirements"][0]["status"], "catalog_missing")
+        gaps = cov.unmet_items(validated)
+        self.assertEqual(len(gaps), 1)
+        self.assertEqual(gaps[0]["kind"], "CATALOG_MISSING")
+
+
+    def test_realistic_production_spec_variants_are_recovered_before_retry_failure(self):
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {
+            "version": "BUILD 3.6.2", "intent": "create", "name": "ربات من", "features": [],
+            "requirements": [
+                {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
+                 "part": "محیط گروه", "status": "covered", "features": []},
+                {"id": "r2", "want": "دسترسی به پنل تنظیمات و پیکربندی ربات در محیط پی‌وی",
+                 "part": "پیوی", "status": "covered", "features": []},
+            ],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True,
+                                        expected_intent="edit", request_context=context)
+        self.assertEqual(validated["intent"], "edit")
+        self.assertEqual([f["type"] for f in validated["features"]], ["group_manager"])
+        self.assertEqual([r["status"] for r in validated["requirements"]], ["covered", "covered"])
+        self.assertEqual(cov.unmet_items(validated, context), [])
+        report = cov.coverage_report(validated)
+        self.assertEqual(report["covered"], 2)
+        self.assertTrue(all("مدیر گروه" in r["evidence"] for r in report["requirements"]))
+
+    def test_private_settings_clause_uses_only_relevant_original_group_context(self):
+        request = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"features": [], "requirements": [
+            {"id": "r1", "want": "فعالیت و مدیریت ربات در داخل گروه", "part": "گروه",
+             "status": "covered", "features": []},
+            {"id": "r2", "want": "تنظیمات ربات در گفتگوی خصوصی", "part": "پیوی",
+             "status": "covered", "features": []},
+        ]}
+        with_context = spec.validate_spec(payload, require_requirements=True,
+                                          expected_intent="create", request_context=request)
+        self.assertEqual([r["status"] for r in with_context["requirements"]], ["covered", "covered"])
+        without_context = spec.validate_spec(payload, require_requirements=True,
+                                             expected_intent="create", request_context="تنظیمات حساب شخصی در پیوی")
+        self.assertEqual(without_context["requirements"][1]["status"], "catalog_missing")
+
+
+    def test_model_catalog_missing_status_cannot_override_existing_selected_module(self):
+        # Models are inconsistent about status fields. If the actual module is
+        # registered and semantically matches, deterministic reconciliation wins.
+        phrases = (
+            "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
+            "دسترسی به پنل تنظیمات و پیکربندی ربات در محیط پی‌وی",
+            "تنظیمات ربات در چت خصوصی (پی‌وی)",
+        )
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        for status in ("catalog_missing", "engine_limit"):
+            for want in phrases:
+                with self.subTest(status=status, want=want):
+                    payload = {
+                        "intent": "create", "name": "ربات من",
+                        "features": [{"type": "group_manager", "params": {}, "req": ["r1"]}],
+                        "requirements": [{"id": "r1", "want": want, "part": "گروه/پیوی",
+                                          "status": status, "features": ["group_manager"]}],
+                    }
+                    validated = spec.validate_spec(payload, require_requirements=True,
+                                                   expected_intent="edit", request_context=context)
+                    self.assertEqual(validated["intent"], "edit")
+                    self.assertEqual(validated["requirements"][0]["status"], "covered")
+                    self.assertEqual(validated["requirements"][0]["features"], ["group_manager"])
+                    self.assertEqual(cov.unmet_items(validated, context), [])
+
+    def test_exact_report_payloads_parse_and_reconcile_deterministically(self):
+        import json
+        import sys
+        import types
+        from unittest.mock import patch
+
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        responses = [
+            {
+                "intent": "create", "name": "ربات من", "features": [],
+                "requirements": [
+                    {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
+                     "part": "محیط گروه", "status": "covered", "features": []},
+                    {"id": "r2", "want": "دسترسی به پنل تنظیمات و پیکربندی ربات در محیط پی‌وی",
+                     "part": "پیوی", "status": "covered", "features": []},
+                ],
+            },
+            {
+                "intent": "edit", "name": "ربات من", "features": [],
+                "requirements": [
+                    {"id": "r1", "want": "فعالیت و مدیریت ربات در داخل گروه",
+                     "part": "گروه", "status": "catalog_missing", "features": []},
+                    {"id": "r2", "want": "تنظیمات ربات در چت خصوصی (پی‌وی)",
+                     "part": "پیوی", "status": "catalog_missing", "features": []},
+                ],
+            },
+            {
+                "intent": "create", "name": "ربات من",
+                "features": [{"type": "group_manager", "params": {}, "req": ["r1", "r2"]}],
+                "requirements": [
+                    {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
+                     "part": "گروه", "status": "engine_limit", "features": ["group_manager"]},
+                    {"id": "r2", "want": "دسترسی به پنل تنظیمات ربات از طریق پیام خصوصی",
+                     "part": "پیوی", "status": "catalog_missing", "features": ["group_manager"]},
+                ],
+            },
+        ]
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            for raw_obj in responses:
+                with self.subTest(response=raw_obj):
+                    raw = json.dumps(raw_obj, ensure_ascii=False)
+                    parsed = spec.parse_llm_spec(raw, require_requirements=True,
+                                                  expected_intent="edit", request_context=context)
+                    self.assertEqual(parsed["intent"], "edit")
+                    self.assertIn("group_manager", [f["type"] for f in parsed["features"]])
+                    self.assertTrue(all(r["status"] == "covered" for r in parsed["requirements"]))
+                    self.assertEqual(cov.unmet_items(parsed, context), [])
+
+    def test_validation_does_not_mutate_reused_model_payload(self):
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"features": [], "requirements": [
+            {"id": "r1", "want": "فعالیت و مدیریت ربات در داخل گروه", "part": "گروه",
+             "status": "covered", "features": []},
+            {"id": "r2", "want": "تنظیمات ربات در گفتگوی خصوصی", "part": "پیوی",
+             "status": "covered", "features": []},
+        ]}
+        original = __import__("copy").deepcopy(payload)
+        with_context = spec.validate_spec(payload, require_requirements=True,
+                                          expected_intent="create", request_context=context)
+        without_context = spec.validate_spec(payload, require_requirements=True,
+                                             expected_intent="create", request_context="تنظیمات حساب شخصی در پیوی")
+        self.assertEqual(payload, original)
+        self.assertEqual([r["status"] for r in with_context["requirements"]], ["covered", "covered"])
+        self.assertEqual(without_context["requirements"][1]["status"], "catalog_missing")
+
+
+    def test_combined_group_and_private_settings_requirement_is_recovered_when_one_module_covers_both(self):
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {
+            "intent": "create", "name": "ربات من", "features": [],
+            "requirements": [{
+                "id": "r1",
+                "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه و امکان تغییر تنظیمات ربات از طریق پیام خصوصی (PV)",
+                "part": "گروه و پیوی", "status": "catalog_missing", "features": [],
+            }],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True,
+                                       expected_intent="edit", request_context=context)
+        self.assertEqual([f["type"] for f in validated["features"]], ["group_manager"])
+        self.assertEqual(validated["requirements"][0]["status"], "covered")
+        self.assertEqual(validated["requirements"][0]["features"], ["group_manager"])
+        self.assertEqual(cov.unmet_items(validated, context), [])
+
+    def test_exact_private_settings_report_phrase_is_not_catalog_missing_in_group_context(self):
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {
+            "intent": "create", "name": "ربات من", "features": [],
+            "requirements": [{"id": "r1", "want": "امکان تغییر تنظیمات ربات از طریق پیام خصوصی (PV)",
+                              "part": "پیوی", "status": "catalog_missing", "features": []}],
+        }
+        validated = spec.validate_spec(payload, require_requirements=True,
+                                       expected_intent="edit", request_context=context)
+        self.assertEqual(validated["requirements"][0]["status"], "covered")
+        self.assertEqual(validated["requirements"][0]["features"], ["group_manager"])
+
 
 
 if __name__ == "__main__":

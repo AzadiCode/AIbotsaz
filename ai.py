@@ -3124,7 +3124,8 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
             if acc is not None:
                 _record_usage(acc, usage)
             sp = _spec.parse_llm_spec(txt, require_requirements=True,
-                                      expected_intent="edit" if current is not None else "create")  # مدل حق تغییر نوع عملیات یا حذف نیازمندی را ندارد
+                                      expected_intent="edit" if current is not None else "create",
+                                      request_context=prompt)  # intent از مسیر ذخیره‌سازی تعیین می‌شود؛ بازپیوند کاتالوگ با متن درخواست انجام می‌شود
             import coverage as _coverage
             recovered = _coverage.reconcile_spec(sp, prompt)
             if recovered:
@@ -3181,8 +3182,9 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
     detail = (("؛ ".join(last_err.errors[:3])) if isinstance(last_err, _spec.SpecError)
               else (str(last_err)[:220] or "پاسخ نامعتبر")) if last_err else "پاسخ نامعتبر"
     raise RuntimeError(
-        "هیچ مدلی پاسخ معتبری برای برنامه‌ریزی Spec نداد؛ آخرین علت: %s — توکنی کسر نشد و هیچ خروجی نامعتبری ذخیره نشد. "
-        "اگر آزمون مدل‌ها سالم را نشان می‌دهد، این خطا یعنی بودجه/قالب پاسخ کافی نبوده، نه خرابی مدل." % detail)
+        "پس از دو تلاش کنترل‌شده، Spec قابل اعتبارسنجی تولید نشد؛ آخرین علت: %s. "
+        "این خطا به‌تنهایی خرابی مدل یا کمبود بودجه را ثابت نمی‌کند؛ جزئیات مرحله و پاسخ برای عیب‌یابی ثبت شده است. "
+        "توکنی کسر نشد و خروجی نامعتبر ذخیره نشد." % detail)
 
 
 def _spec_checkpoint(cb, prompt, current, sp, phase, last_error="", coverage=None):
@@ -3215,7 +3217,9 @@ def _load_spec_checkpoint(cb, prompt, current):
             return None
         import spec as _spec
         try:
-            return _spec.validate_spec(copy.deepcopy(st["spec"]))
+            return _spec.validate_spec(copy.deepcopy(st["spec"]),
+                                       expected_intent="edit" if current is not None else "create",
+                                       request_context=prompt)
         except Exception:
             return None
     except Exception:
@@ -3293,6 +3297,9 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             log.info("router spec: %s (confidence %.2f — بدون فراخوانی مدل)", pr.ids, pr.confidence)
         else:
             sp = ask_spec(prompt, lang, acc, current)      # در شکست کامل، خطای صریح با علت واقعی
+        # The operation type is decided by the selected persistence target, not by
+        # the model's interpretation of natural-language verbs.
+        sp["intent"] = "edit" if current is not None else "create"
         _spec_checkpoint(cb, prompt, current, sp, "spec_ready")
 
     # Reconcile checkpoints as well as fresh Specs; this is generic catalog matching,
