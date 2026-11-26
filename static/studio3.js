@@ -262,24 +262,7 @@ wtSaveAll = function(){
   }, "قانون‌های گروه ذخیره شد"));
 };
 
-/* ── حالت‌های هوش مصنوعی: توضیح بده / بهتر کن / ترجمه کن ── */
-Object.assign(A, {
-  aimode: el => busy(el, async () => {
-    const mode = el.dataset.m;
-    const d = await api(`/api/bots/${S.cur.id}/ai/mode`, "POST", {mode});
-    if(d.wallet) S.wallet = d.wallet;
-    if(mode === "translate"){
-      S.bots = S.bots.map(x => x.id === d.bot.id ? d.bot : x); S.cur = d.bot;
-      renderTop(); render(); toast("ترجمه شد؛ با «برگشت به نسخه‌ی قبلی» قابل برگشت است"); haptic("ok");
-      return;
-    }
-    S.sheet = {kind: "info"};
-    showSheet(head(mode === "explain" ? "این ربات چه می‌کند؟" : "پیشنهادهای بهتر شدن") +
-      `<div class="panel">${digitsHTML(d.text).replace(/\n/g, "<br>")}</div><div class="fgap"></div>`);
-  }),
-});
-
-/* ── دکمه‌های ابزار تازه + حالت‌های AI در تب هوش مصنوعی ── */
+/* ── دکمه‌های ابزار تازه در نوار پایین استودیو ── */
 const _scopeBar0 = scopeBarInject;
 scopeBarInject = function(){
   _scopeBar0();
@@ -290,12 +273,4 @@ scopeBarInject = function(){
       <button class="tb lbl" data-a="chanopen" title="پست کانال">${IC.mega}<span>پست کانال</span></button>
       <button class="tb lbl" data-a="connopen" title="اتصال‌ها: اینلاین، وب‌هوک، RSS">${IC.open}<span>اتصال‌ها</span></button>`);
   }
-};
-const _tabAI0 = tabAI;
-tabAI = function(b){
-  let h = _tabAI0(b);
-  h += `<div class="chips" style="margin-top:8px"><button class="chip" data-a="aimode" data-m="explain">توضیح بده این ربات چه کار می‌کند</button>
-    <button class="chip" data-a="aimode" data-m="improve">بهبود تجربه‌ی کاربر</button>
-    <button class="chip" data-a="aimode" data-m="translate">ترجمه‌ی همه‌ی متن‌ها</button></div>`;
-  return h;
 };

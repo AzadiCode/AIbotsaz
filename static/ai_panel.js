@@ -42,27 +42,31 @@ const AIP = {
     const cur = S.cur, nodes = cur ? Object.keys(cur.config.nodes).length : 0;
     return `
     <header class="aih">
-      <b>${IC.spark} دستیار ساخت</b>
-      <button class="iconb" data-aip="close" aria-label="بستن">✕</button>
+      <span class="aih-ic">${IC.spark}</span>
+      <b>دستیار ساخت</b>
+      <button class="iconb" data-aip="close" aria-label="بستن">${IC.x}</button>
     </header>
     <div class="aib">
-      <p class="muted">${cur ? `پروژهٔ باز: <b>${esc(cur.name)}</b> · ${N(nodes)} بخش — درخواستت روی همین پروژه اعمال می‌شود و با «برگشت به نسخهٔ قبلی» قابل بازگشت است.` : "پروژه‌ای باز نیست."}</p>
+      <p class="muted">${cur ? `پروژهٔ باز: <b>${esc(cur.name)}</b> · ${N(nodes)} بخش — درخواستت روی همین پروژه اعمال می‌شود.` : "پروژه‌ای باز نیست."}</p>
       <textarea id="aip-prompt" maxlength="4000" placeholder="مثلاً: یک بازی حدس عدد با کیف سکه و رتبه‌بندی اضافه کن"></textarea>
-      <div class="bar">
-        <button class="b" data-aip="preview">پیش‌نمایش</button>
-        <button class="b o" data-aip="build">${IC.spark}${cur ? "ارتقای این ربات" : "ساخت ربات"}</button>
-      </div>
-      <div class="bar">
-        <button class="b sm" data-aip="wizard">${IC.layers}ویزارد بدون هوش مصنوعی</button>
-        <button class="b sm" data-aip="tpls">سه قالب آماده</button>
-      </div>
       <div id="aip-out" class="aip-out"></div>
-    </div>`;
+    </div>
+    <footer class="aip-foot">
+      <button class="b" data-aip="build">${IC.spark}${cur ? "ارتقای این ربات" : "ساخت ربات"}</button>
+      <button class="b o" data-aip="preview">پیش‌نمایش</button>
+      <button class="b o" data-aip="tpls">${IC.layers}سه قالب آماده</button>
+      <button class="b o" data-aip="wizard">${IC.layers}ویزارد بدون هوش مصنوعی</button>
+    </footer>`;
   },
 
   render(){
     if(!this.el) return;
     this.el.innerHTML = this.html();
+    const ta = this.el.querySelector("#aip-prompt");
+    if(ta){
+      ta.value = this._prompt || "";
+      ta.addEventListener("input", () => { this._prompt = ta.value; });
+    }
     this.el.querySelectorAll("[data-aip]").forEach(b => b.addEventListener("click", () => this.act(b.dataset.aip, b)));
   },
 

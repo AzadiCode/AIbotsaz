@@ -19,7 +19,7 @@ const WK = (() => { try{
 const API_BASE = "";
 
 let S = {
-  view: "studio", btab: "ai", atab: "wallet", sbot: null,
+  view: "studio", btab: "home", atab: "wallet", sbot: null,
   bots: [], wallet: { tokens: 0, streak: 0, can_claim: false, next_reward: 2, refs: 0 }, cfg: {}, packs: [], media: [], used: 0,
   ref: { link: "", count: 0 }, joined: null, templates: [], admin: false, subs: [], cur: null, busy: false, fresh: false,
   ideas: [], sheet: null, uploads: [], stats: null, pickKey: null, tasks: [], plan: null, emojis: undefined
@@ -175,7 +175,7 @@ async function load(){
     return;
   }
   const want = new URLSearchParams(location.search).get("bot"), hit = want && S.bots.find(b => b.id === want);   // لینک مستقیم از چت ربات مادر
-  if(hit){ S.cur = hit; S.view = "bot"; S.btab = "ai"; S.sbot = hit.id; S.ideas = []; S.stats = null; }
+  if(hit){ S.cur = hit; S.view = "bot"; S.btab = "home"; S.sbot = hit.id; S.stats = null; }
   render();
 }
 async function sync(){ try{ takeMe(await api("/api/me")); return true; }catch(_){ return false; } }
@@ -231,7 +231,7 @@ function goTo(where){
 }
 function stGo(where){
   closeSheet();
-  if(S.view === "bot" && where !== "studio"){ S.cur = null; S.ideas = []; }
+  if(S.view === "bot" && where !== "studio"){ S.cur = null; }
   S.view = where; render(); scrollTo({top: 0, behavior: "smooth"}); haptic();
   if(where === "userbot") ubLoad();
   if(["bots", "account"].includes(where)) sync().then(ok => {
@@ -393,7 +393,7 @@ function showBuildFailure(r){
 function applyBuiltBot(r, was){
   if(!r.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
   S.wallet = r.wallet || S.wallet; S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
-  S.cur = r.bot; S.view = "bot"; S.btab = "ai"; S.sbot = r.bot.id; S.fresh = true; S.ideas = r.ideas || []; S.stats = null;
+  S.cur = r.bot; S.view = "bot"; S.btab = "home"; S.sbot = r.bot.id; S.stats = null;
   render(); bumpTokens(); if(!was) celebrate(); toast((was ? "ربات ارتقا پیدا کرد" : "ربات ساخته شد") + (r.cost ? `، ${r.cost} توکن` : "")); haptic("ok"); scrollTo(0, 0);
 }
 function showBuildReview(r){
@@ -575,50 +575,24 @@ const kindOf = b => b.pay ? "pay" : b.app !== undefined ? "app" : b.goto !== und
 
 function renderBot(){
   const b = S.cur;
-  const body = ({ai: tabAI, stats: tabStats, publish: tabPublish, more: tabMore}[S.btab] || tabAI)(b);
+  const body = ({home: tabHome, stats: tabStats, publish: tabPublish, more: tabMore}[S.btab] || tabHome)(b);
   $("#app").innerHTML = `
     <div class="bh2"><button class="iconb" data-a="back" aria-label="بازگشت">${IC.back}</button>
       <div class="bt"><h1>${esc(b.name)}</h1><span class="muted ${b.active ? "ltr" : ""}">${b.active ? "@" + esc(b.username) : "هنوز فعال نشده"}</span></div>
       <button class="iconb" data-sa="bot" aria-label="تنظیمات ربات">${IC.gear}</button></div>
-    ${tabsHTML([["ai", "هوش مصنوعی"], ["stats", "آمار"], ["publish", "انتشار"], ["more", "بیشتر"]], S.btab, "btab")}
+    ${tabsHTML([["home", "خانه"], ["stats", "آمار"], ["publish", "انتشار"], ["more", "بیشتر"]], S.btab, "btab")}
     ${body}`;
-  if(S.btab === "ai"){
-    if(S.fresh && b.thinking){ typeText($("#think .tt"), b.thinking); $("#think").scrollIntoView({behavior: "smooth", block: "nearest"}); }
-    S.fresh = false;
-  }
   if(S.btab === "stats" && b.active){ if(S.stats?._id === b.id) paintStats(S.stats); loadStats(); }
 }
-function tabAI(b){
-  const c = S.cfg;
-  let h = `<div class="console slim">
-      <textarea id="prompt" maxlength="${c.max_prompt || 4000}" aria-label="درخواست ارتقا" placeholder="چه چیزی عوض شود؟ مثلاً: بخش پرسش‌های متداول اضافه کن"></textarea>
-      <div class="cfoot"><div class="gauge"><span class="cost">مصرف توکن ${costTxt(true)}</span></div><button class="b" id="gen" data-a="gen">${IC.spark}ارتقا</button></div>
-    </div>
-    <div id="live"></div>
-    <div class="think${b.thinking ? " show" : ""}" id="think"><span class="tt">${S.fresh ? "" : digitsHTML(b.thinking || "")}</span></div>`;
-  if(S.ideas.length) h += `<div class="ideas">${S.ideas.map((t, i) => `<button class="chip" data-a="idea" data-i="${i}">${esc(t)}</button>`).join("")}</div>`;
-  if(!b.active) h += `<div class="note"><div class="dt"><b>ربات هنوز فعال نیست</b>برای شروع کار، فعالش کن.</div><button class="b sm" data-a="btab" data-k="publish">فعال‌سازی</button></div>`;
-  h += `<div class="panel mt" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
-      <span class="ib">${IC.studio}</span>
-      <div style="flex:1;min-width:0"><b style="font-size:14px;display:block;line-height:1.6">استودیو</b><span class="muted" style="font-size:12px;line-height:1.7;display:block">نقشه‌ی ربات؛ بخش‌ها را با سیم به هم وصل کن.</span></div>
-      <button class="b sm" data-a="studio" style="flex:1 0 100%">ورود به استودیو</button></div>`;
-  if(b.versions) h += `<button class="b t mt" id="undo" data-a="undo">برگشت به نسخه‌ی قبلی</button>`;
-  h += `<div class="panel mt"><b>تغییر با گفتگو <button class="b t" data-a="help" data-h="edit" style="min-width:26px;height:26px;padding:0 8px">؟</button></b><p class="muted mt">بگو چه چیزی عوض شود؛ پیشنهادها را تک‌تک می‌بینی و خودت تأیید می‌کنی. (${costTxt(true)} توکن)</p>
-    <div class="fgap"></div><textarea id="arch-req" maxlength="1500" style="min-height:64px" placeholder="مثلاً: بخش پرسش‌های متداول اضافه کن"></textarea>
-    <div class="fgap"></div><button class="b sm" data-a="archedgo">${IC.spark}اعمال تغییر</button></div>`;
-  return h;
-}
-/* کارت‌های تغییر: خروجی معمار به‌صورت جمله‌های فارسی؛ برگشت کامل با یک دکمه */
-function archCards(d){
-  S.cur = d.bot; S.bots = S.bots.map(x => x.id === d.bot.id ? d.bot : x);
-  if(d.wallet) S.wallet = d.wallet;
-  S.sheet = {kind: "info"};
-  showSheet(head("تغییرها اعمال شد") + `
-    ${(d.cards || []).map(x => `<div class="vdl">${digitsHTML(x)}</div>`).join("")}
-    <p class="muted mt">اگر پشیمان شدی، با یک لمس کل این تغییر برمی‌گردد.</p>
-    <div class="bar"><button class="b o" data-a="archrev">${IC.refresh}برگشت این تغییر</button>
-      <button class="b" data-a="archdone">تمام</button></div><div class="fgap"></div>`);
-  bumpTokens(); renderTop();
+/* ═════════ صفحه‌ی ربات: فقط دو کارت «وضعیت ربات» و «استودیو» ═════════
+   مسیرهای قدیمی هوش مصنوعی (فرم ارتقا، تغییر با گفتگو، برگشت نسخه) حذف شده‌اند؛
+   تنها محل دستیار ساخت، پنل کشویی داخل استودیو است. */
+function tabHome(b){
+  const status = b.active
+    ? `<div class="bcard"><span class="dot on"></span><div class="bc-t"><b>ربات فعال است</b><span class="bc-user ltr">@${esc(b.username)}</span><span class="muted bc-d">تغییرها فوری اعمال می‌شوند.</span></div><button class="b sm o" data-a="openbot">${IC.open}باز کردن ربات</button></div>`
+    : `<div class="bcard"><span class="dot"></span><div class="bc-t"><b>ربات هنوز فعال نیست</b><span class="muted bc-d">برای شروع کار، فعالش کن.</span></div><button class="b sm" data-a="btab" data-k="publish">فعال‌سازی</button></div>`;
+  return `<div class="botcards">${status}
+    <div class="bcard"><span class="ib">${IC.studio}</span><div class="bc-t"><b>استودیو</b><span class="muted bc-d">نقشه‌ی ربات؛ بخش‌ها را با هم وصل کن.</span></div><button class="b sm" data-a="studio">ورود به استودیو</button></div></div>`;
 }
 const statCells = rows => rows.map(([k, v]) => `<div class="stat"><div class="k">${k}</div>${N(v)}</div>`).join("");
 function tabStats(b){
@@ -663,19 +637,6 @@ function tabMore(b){
     </div>
     <button class="b r mt2" data-a="del">${IC.trash}حذف ربات</button>`;
 }
-function typeText(el, text){
-  const id = ++typeText.id;
-  if(!el) return;
-  if(reduced()){ el.innerHTML = digitsHTML(text); return; }
-  let i = 0; el.textContent = "";
-  (function step(){
-    if(id !== typeText.id || !el.isConnected) return;
-    i = Math.min(text.length, i + 2); el.textContent = text.slice(0, i);
-    if(i < text.length) setTimeout(step, 16); else el.innerHTML = digitsHTML(text);
-  })();
-}
-typeText.id = 0;
-
 /* ═════════════════ رسانه ═════════════════ */
 function renderMedia(){
   const c = S.cfg, pct = Math.min(100, Math.round(S.used / (c.media_quota_mb * 1048576) * 100));
@@ -826,7 +787,7 @@ const A = {
     }
     if(!d.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
     S.wallet = d.wallet || S.wallet; S.bots = [d.bot, ...S.bots.filter(b => b.id !== d.bot.id)];
-    S.cur = d.bot; S.view = "bot"; S.btab = "ai"; S.sbot = d.bot.id; S.fresh = true; S.ideas = d.ideas || []; S.stats = null;
+    S.cur = d.bot; S.view = "bot"; S.btab = "home"; S.sbot = d.bot.id; S.stats = null;
     render(); bumpTokens(); toast(`نسخه‌ی تأییدشده ساخته شد${d.cost ? `، ${d.cost} توکن` : ""}`); haptic("ok"); scrollTo(0, 0);
   }),
   reviewno: el => busy(el, async () => {
@@ -849,9 +810,8 @@ const A = {
   }),
   closefail: () => closeSheet(),
   chip: el => { const t = $("#prompt"); t.value = EXAMPLES[+el.dataset.i][1]; t.focus(); },
-  idea: el => { const t = $("#prompt"); t.value = S.ideas[+el.dataset.i]; t.focus(); t.scrollIntoView({behavior: "smooth", block: "center"}); },
-  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "bot"; S.btab = "ai"; S.sbot = S.cur.id; S.ideas = []; S.stats = null; render(); scrollTo(0, 0); },
-  back: () => { S.view = "bots"; S.cur = null; S.ideas = []; closeSheet(); render(); scrollTo(0, 0); sync().then(ok => { if(ok && S.view === "bots") render(); }); },
+  open: el => { S.cur = S.bots.find(b => b.id === el.dataset.id); if(!S.cur) return; S.view = "bot"; S.btab = "home"; S.sbot = S.cur.id; S.stats = null; render(); scrollTo(0, 0); },
+  back: () => { S.view = "bots"; S.cur = null; closeSheet(); render(); scrollTo(0, 0); sync().then(ok => { if(ok && S.view === "bots") render(); }); },
   btab: el => { if(S.busy) return toast("کار قبلی هنوز تمام نشده؛ کمی صبر کن"); S.btab = el.dataset.k; renderBot(); },
   atab: el => { S.atab = el.dataset.k; renderAccount(); },
   daily: el => busy(el, async () => {
@@ -879,7 +839,7 @@ const A = {
     const d = await api("/api/admin/plan", "POST", {uid: v("#ap-uid"), plan: v("#ap-plan"), days: v("#ap-days")});
     toast(d.plan.id === "free" ? "اشتراک لغو شد" : `اشتراک ${d.plan.title} فعال شد (${d.plan.days_left} روز)`);
   }),
-  undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); S.ideas = []; render(); toast("برگشت داده شد"); }),
+  undo: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/undo`, "POST"); setBot(d.bot); render(); toast("برگشت داده شد"); }),
   act: el => { const t = $("#token").value.trim(); if(!t) return toast("توکن را وارد کن");
     busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/activate`, "POST", {token: t}); setBot(d.bot); render(); toast("ربات فعال شد"); haptic("ok"); }); },
   off: el => busy(el, async () => { const d = await api(`/api/bots/${S.cur.id}/deactivate`, "POST"); setBot(d.bot); render(); toast("ربات غیرفعال شد"); }),
@@ -895,12 +855,11 @@ const A = {
   copyref: () => navigator.clipboard?.writeText(S.ref.link).then(() => toast("لینک دعوت کپی شد"), () => toast(S.ref.link)),
   help: el => {
     const H = {
-      edit: ["تغییر با گفتگو", "درخواستت را بنویس تا هوش مصنوعی تغییرها را به‌صورت کارت‌های ساده پیشنهاد بدهد. هر کارت را تأیید یا رد کن؛ فقط تأییدشده‌ها اعمال می‌شوند و برای هر تغییر یک نسخه‌ی برگشت هم ساخته می‌شود."],
       studio: ["استودیو", "هر بخش یک پیام از ربات است. دایره‌ی کنار هر دکمه را روی بخش دیگری بکش تا مسیر آن دکمه ساخته شود. با «انتخاب» می‌توانی چند بخش را یک‌جا کپی یا حذف کنی."],
       tokens: ["توکن چیست؟", "ساخت و ارتقای ربات و پیام‌های هوشمند، توکن مصرف می‌کنند. توکن را از بسته‌های شارژ، جایزه‌ی روزانه و دعوت دوستان به‌دست می‌آوری. اگر ساخت ناموفق باشد، توکن به حسابت برمی‌گردد."],
       quota: ["سقف‌ها", "هر اشتراک برای تعداد ربات، بخش‌های هر ربات، بلوک مینی‌اپ و جدول داده سقف مشخصی دارد. با اشتراک Premium یا Pro این سقف‌ها بیشتر می‌شود."],
     };
-    const [t, x] = H[el.dataset.h] || H.edit;
+    const [t, x] = H[el.dataset.h] || H.studio;
     S.sheet = {kind: "info"};
     showSheet(head(t) + `<p style="line-height:2">${digitsHTML(x)}</p><div class="fgap"></div>`);
   },
@@ -931,48 +890,8 @@ Object.assign(A, {
     archMade(d);
   }),
   madetest: () => { closeSheet(); const b = S.cur; S.view = "studio"; ST.botId = null; closeSheet(); render(); setTimeout(() => A.simopen(), 350); },
-  madebot: () => { closeSheet(); S.view = "bot"; S.btab = "ai"; render(); scrollTo(0, 0); },
-  archedgo: el => busy(el, async () => {
-    const req = ($("#arch-req")?.value || "").trim();
-    if(req.length < 4) return toast("بنویس چه چیزی عوض شود");
-    const cost = needCost(true);
-    if(S.wallet.tokens < cost) return openBuy(`این تغییر حداقل ${cost} توکن می‌خواهد.`);
-    try{
-      const d = await api(`/api/bots/${S.cur.id}/archedit`, "POST", {request: req});
-      archPlan(d);                      // کارت‌ها قبل از ذخیره نمایش داده می‌شوند؛ تایید تک‌تک
-      bumpTokens(); renderTop();
-    }catch(e){ if(e.status === 402) openBuy(e.message); else toast(e.message); }
-  }),
-  archpick2: el => {
-    const i = +el.dataset.i;
-    const box = $(`#arch-op${i}`);
-    if(box) box.checked = !box.checked;
-    el.classList.toggle("on", box?.checked);
-  },
-  archapply: el => busy(el, async () => {
-    const ops = D.ops.filter((_, i) => $(`#arch-op${i}`)?.checked);
-    if(!ops.length) return toast("حداقل یک تغییر را تایید کن");
-    try{
-      const d = await api(`/api/bots/${S.cur.id}/archedit/apply`, "POST", {ops});
-      archCards(d);
-    }catch(e){ toast(e.message); }
-  }),
-  archrev: el => busy(el, async () => {
-    const d = await api(`/api/bots/${S.cur.id}/undo`, "POST");
-    setBot(d.bot); closeSheet(); render(); toast("برگشت داده شد");
-  }),
-  archdone: () => { closeSheet(); render(); },
+  madebot: () => { closeSheet(); S.view = "bot"; S.btab = "home"; render(); scrollTo(0, 0); },
 });
-function archPlan(d){
-  D = {ops: d.ops || []};
-  S.sheet = {kind: "info"};
-  showSheet(head("این تغییرها آماده است — تایید کن") + `
-    <p class="muted">هوش مصنوعی این تغییرها را پیشنهاد داده است. تیک آن‌هایی را که می‌خواهی بگذار و بقیه را بردار. هنوز چیزی ذخیره نشده.</p>
-    ${(d.ops || []).map((op, i) => `<button type="button" class="archcard on" data-a="archpick2" data-i="${i}">
-      <input type="checkbox" id="arch-op${i}" hidden checked><span class="tick">${IC.check}</span><span>${digitsHTML((d.cards || [])[i] || "تغییر پیشنهادی")}</span></button>`).join("")}
-    <div class="bar"><button class="b" data-a="archapply">${IC.spark}اعمال تاییدشده‌ها</button>
-      <button class="b o" data-a="archx">بی‌خیال</button></div><div class="fgap"></div>`);
-}
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-go]"); if(g) return goTo(g.dataset.go);
   const a = e.target.closest("[data-a]"); if(a) return A[a.dataset.a]?.(a);
@@ -1111,8 +1030,8 @@ const csvOf = items => { const q = v => '"' + String(v ?? "").replace(/"/g, '""'
   return ["time,section,name,username,answers", ...items.map(r => [r.t, r.title, r.name, r.un, (r.qa || []).map(([a, b]) => a + ": " + b).join(" | ") || r.text].map(q).join(","))].join("\n"); };
 
 Object.assign(A, {
-  studio: () => { const b = S.cur; if(!b) return toast("اول یک ربات انتخاب کن"); S.view = "studio"; S.btab = "ai"; S.sbot = b.id; closeSheet(); render(); },
-  stback: () => stGuardClose(() => { stSaveNow(); S.view = "bot"; S.btab = "ai"; closeSheet(); render(); scrollTo(0, 0); }),
+  studio: () => { const b = S.cur; if(!b) return toast("اول یک ربات انتخاب کن"); S.view = "studio"; S.btab = "home"; S.sbot = b.id; closeSheet(); render(); },
+  stback: () => stGuardClose(() => { stSaveNow(); S.view = "bot"; S.btab = "home"; closeSheet(); render(); scrollTo(0, 0); }),
   stbots: () => stGuardClose(() => { stSaveNow(); S.view = "studio"; S.cur = null; S.sbot = null; ST.botId = null; render(); }),
   spick: el => { const b = S.bots.find(x => x.id === el.dataset.id); if(!b) return; S.cur = b; S.sbot = b.id; S.view = "studio"; ST.botId = null; render(); },
   stadd: () => addNode(),
@@ -1156,7 +1075,7 @@ Object.assign(A, {
       try{
         const d = await api(`/api/templates/${el.dataset.id}/create`, "POST");
         if(d.wallet) S.wallet = d.wallet;
-        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "ai"; S.sbot = d.bot.id; S.fresh = true; S.ideas = []; S.stats = null;
+        S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.view = "bot"; S.btab = "home"; S.sbot = d.bot.id; S.stats = null;
         render(); bumpTokens(); celebrate(); toast("قالب آماده شد" + (d.cost ? `، ${d.cost} توکن` : "")); scrollTo(0, 0);
       }catch(e){ if(e.status === 402){ if(e.data?.wallet){ S.wallet = e.data.wallet; renderTop(); } openBuy(e.message); } else throw e; }
     }); },

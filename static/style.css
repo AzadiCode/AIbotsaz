@@ -187,6 +187,20 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .note .b.sm{flex:none;min-height:32px;padding:0 14px;font-size:12.5px}
 @keyframes noteDot{0%,100%{box-shadow:0 0 0 3px var(--toks)}50%{box-shadow:0 0 0 6px transparent}}
 
+/* ── کارت‌های صفحه‌ی ربات: «وضعیت ربات» + «استودیو» ── */
+.botcards{display:grid;gap:12px;margin-top:2px}
+.bcard{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:4px 12px;padding:14px;
+  border-radius:16px;background:var(--sf);border:1px solid var(--line);box-shadow:var(--sh-1,0 1px 4px rgba(0,0,0,.06))}
+.bcard>.dot{width:11px;height:11px}
+.bcard .ib{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--acs);color:var(--ac)}
+.bcard .ib svg{width:21px;height:21px}
+.bcard .bc-t{min-width:0;display:flex;flex-direction:column;gap:2px}
+.bcard .bc-t>b{font-size:14px;line-height:1.6;color:var(--ink)}
+.bcard .bc-user{font-size:12px;color:var(--mut);direction:ltr;unicode-bidi:isolate;align-self:flex-start}
+.bcard .bc-d{font-size:12px;line-height:1.7}
+.bcard .b{grid-column:1/-1;min-height:42px}
+.bcard .b.sm svg{width:16px;height:16px}
+
 /* ── انیمیشن ساخت ── */
 .build{display:flex;align-items:center;gap:12px;margin-top:12px;padding:9px 14px;min-height:46px;border-radius:14px;background:var(--sf);border:1px solid color-mix(in srgb,var(--ac) 38%,var(--line))}
 .bthink{flex:1;min-width:0;height:24px;position:relative;overflow:hidden;font-size:13px}
@@ -351,8 +365,12 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .studio{position:fixed;inset:0;z-index:31;display:flex;flex-direction:column;direction:rtl;
   background:var(--bg);background-image:none;color:var(--ink)}
-.st-bar{display:flex;align-items:center;gap:7px;padding:calc(6px + env(safe-area-inset-top)) 10px 6px;
+.st-bar{display:flex;align-items:center;flex-wrap:wrap;gap:7px;row-gap:6px;padding:calc(6px + env(safe-area-inset-top)) 10px 8px;
   border-bottom:1px solid var(--line);background:var(--sf)}
+/* هیچ دکمه‌ای در نوار بالا فشرده و عمودی نمی‌شود؛ سرریز به ردیف بعدی می‌رود */
+.st-bar .iconb,.st-bar .b.sm,.st-bar .st-title{flex-shrink:0}
+.st-bar .b.sm{white-space:nowrap;min-width:max-content}
+.st-bar .st-title{flex:1 1 120px;min-width:0}
 .st-title{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:4px 8px;border-radius:12px;text-align:right}
 .st-title:active{background:var(--acs)}
 .st-title .tt{flex:1;min-width:0}
@@ -435,10 +453,11 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
   max-width:calc(100% - 16px);overflow-x:auto;scrollbar-width:none}
 .st-tools::-webkit-scrollbar{display:none}
 @media (max-width:430px){.st-tools .tb.lbl span{display:none}.st-tools .tb.lbl{min-width:34px}}
-.st-tools .tb{display:grid;place-items:center;min-width:34px;height:38px;border-radius:11px;color:var(--ink)}
+.st-tools .tb{display:grid;place-items:center;min-width:34px;height:38px;border-radius:11px;color:var(--ink);flex:none;box-sizing:border-box}
 .st-tools .tb:active{background:var(--acs);transform:scale(.93)}
 .st-tools .tb svg{width:17px;height:17px}
-.st-tools .tb.lbl{width:auto;grid-auto-flow:column;gap:6px;padding:0 11px;font-size:12px;font-weight:700;color:var(--ac)}
+.st-tools .tb.lbl{width:auto;grid-auto-flow:column;align-items:center;gap:6px;padding:0 11px;margin:0;font-size:12px;font-weight:700;color:var(--ac);white-space:nowrap}
+.st-tools .st-z{flex:none}
 .st-tools .sep{width:1px;height:20px;background:var(--line);margin:0 3px}
 .st-z{min-width:44px;text-align:center;font-size:11.5px;color:var(--mut)}
 .st-energy{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;
@@ -1601,26 +1620,55 @@ button{max-width:100%}
 .ubacct-s{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .ubacct-s b{display:block;font-size:14px}.ubacct-s small{color:var(--mut);font-size:10px}
 
-/* ═════════ پنل کشویی دستیار هوش مصنوعی در استودیو (BUILD 3.6.0) ═════════ */
-.aiwrap{position:fixed;top:calc(60px + env(safe-area-inset-top));bottom:calc(68px + env(safe-area-inset-bottom));inset-inline-start:12px;width:min(420px,calc(100vw - 24px));z-index:220;
-  background:var(--bg2,#16181f);border:1px solid var(--ln,#2a2d3a);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);
-  display:flex;flex-direction:column;transform:translateX(-115%) scale(.98);opacity:0;pointer-events:none;transition:transform .28s cubic-bezier(.2,.9,.3,1),opacity .2s}
-[dir="rtl"] .aiwrap{transform:translateX(-115%)}
+/* ═════════ پنل کشویی دستیار هوش مصنوعی در استودیو (BUILD 3.6.0 — بازطراحی) ═════════
+   دسکتاپ: پنل جانبی کنار استودیو · موبایل: Bottom Sheet شناور بالای نوار ابزار پایین */
+.aiwrap{position:fixed;top:calc(58px + env(safe-area-inset-top));bottom:calc(64px + env(safe-area-inset-bottom));
+  inset-inline-start:10px;width:min(380px,calc(100vw - 20px));z-index:220;
+  background:var(--sf);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 60px rgba(0,0,0,.45);
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateX(-115%);opacity:0;pointer-events:none;
+  transition:transform .28s cubic-bezier(.2,.9,.3,1),opacity .2s}
+[dir="rtl"] .aiwrap{transform:translateX(115%)}
 .aiwrap.on{transform:none;opacity:1;pointer-events:auto}
-.aiwrap .aih{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--ln,#2a2d3a);font-weight:700}
-.aiwrap .aih .iconb{border:0;background:none;color:inherit;cursor:pointer;font:inherit}
-.aiwrap .aib{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;flex:1}
-.aiwrap textarea{min-height:88px;border-radius:12px;border:1px solid var(--ln,#2a2d3a);background:var(--bg,#0f1115);color:inherit;padding:10px 12px;font:inherit;resize:vertical}
+/* هدر جمع‌وجور: آیکون کوچک + عنوان در یک ردیف؛ دکمه بستن در سمت چپ */
+.aiwrap .aih{display:flex;align-items:center;gap:9px;padding:9px 10px 9px 12px;border-bottom:1px solid var(--line);flex:none;min-height:50px}
+.aiwrap .aih .aih-ic{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--acs);color:var(--ac);flex:none}
+.aiwrap .aih .aih-ic svg{width:16px;height:16px}
+.aiwrap .aih b{flex:1;min-width:0;font-size:14px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aiwrap .aih .iconb{width:32px;height:32px;border-radius:10px;flex:none;display:grid;place-items:center;color:var(--mut);box-shadow:none}
+.aiwrap .aih .iconb svg{width:16px;height:16px}
+.aiwrap .aih .iconb:active{background:var(--acs);color:var(--ink)}
+/* بدنه: فقط محتوای این بخش اسکرول می‌شود */
+.aiwrap .aib{overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.aiwrap .aib .muted{font-size:12px;line-height:1.8}
+.aiwrap .aib .muted b{color:var(--ink)}
+.aiwrap textarea{width:100%;min-height:72px;max-height:190px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);padding:10px 12px;font:inherit;font-size:13.5px;line-height:1.8;resize:vertical}
+.aiwrap textarea:focus{border-color:var(--ac)}
+/* فوتر ثابت: چهار عملیات در گرید دو ستونه؛ با اسکرول محتوا تداخل ندارد */
+.aiwrap .aip-foot{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--sf)}
+.aiwrap .aip-foot .b{width:100%;min-height:44px;padding:8px 10px;font-size:12.5px;font-weight:700;line-height:1.55;border-radius:12px}
+.aiwrap .aip-foot .b svg{width:15px;height:15px}
+@media (max-width:350px){.aiwrap .aip-foot{grid-template-columns:1fr}}
+/* خروجی پیش‌نمایش/پیشرفت */
 .aiwrap .aip-out{display:flex;flex-direction:column;gap:6px}
 .aiwrap .aip-out .sub{margin-top:6px}
-.aiwrap .aip-ok{background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.25);border-radius:10px;padding:8px 10px;font-size:12px}
-.aiwrap .aip-no{background:rgba(204,53,71,.07);border:1px solid rgba(204,53,71,.25);border-radius:10px;padding:8px 10px;font-size:12px;display:flex;flex-direction:column;gap:3px}
+.aiwrap .aip-ok{background:color-mix(in srgb,var(--ok) 8%,transparent);border:1px solid color-mix(in srgb,var(--ok) 25%,transparent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.7}
+.aiwrap .aip-no{background:color-mix(in srgb,var(--bad) 7%,transparent);border:1px solid color-mix(in srgb,var(--bad) 25%,transparent);border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.7;display:flex;flex-direction:column;gap:3px}
 .aiwrap .aip-no small{opacity:.75}
-.aiwrap .aip-prog{background:rgba(90,160,255,.08);border:1px solid rgba(90,160,255,.25);border-radius:10px;padding:10px 12px;font-size:12px;display:flex;align-items:center;gap:8px}
-.aiwrap .aip-mod{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--ln,#2a2d3a);border-radius:10px;cursor:pointer}
+.aiwrap .aip-prog{background:color-mix(in srgb,var(--ac) 8%,transparent);border:1px solid color-mix(in srgb,var(--ac) 25%,transparent);border-radius:10px;padding:10px 12px;font-size:12px;display:flex;align-items:center;gap:8px}
+.aiwrap .aip-mod{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
 .aiwrap .aip-mod input{margin-top:3px}
 .aiwrap .aip-mod b{font-size:13px}
 .aiwrap .aip-mod small{display:block;opacity:.7;font-size:11px}
+/* موبایل: Bottom Sheet — عرض کامل، لبه‌ها با فاصله، بالای نوار ابزار پایین استودیو */
 @media (max-width:720px){
-  .aiwrap{inset-inline:8px;width:auto;bottom:calc(76px + env(safe-area-inset-bottom));top:auto;max-height:62vh}
+  .aiwrap{inset-inline:8px;top:auto;bottom:calc(62px + env(safe-area-inset-bottom));width:auto;
+    max-height:72vh;max-height:min(72dvh,620px);border-radius:18px}
+  .aiwrap:not(.on){transform:translateY(120%)}
+}
+@media (prefers-reduced-motion:reduce){
+  .aiwrap{transition:opacity .15s}
 }

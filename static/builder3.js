@@ -118,7 +118,7 @@ bpubSheet = function(){
 Object.assign(A, {
   simrunall: () => {
     closeSheet();
-    S.view = "studio"; S.btab = "ai"; closeSheet(); render();
+    S.view = "studio"; S.btab = "home"; closeSheet(); render();
     setTimeout(() => {
       A.simopen();
       const scens = (() => { try{ return JSON.parse(localStorage.getItem("azadi.sim." + S.cur.id) || "[]"); }catch(_){ return []; } })();
