@@ -182,7 +182,7 @@ def validate_spec(obj):
             if reqs is not None and rid not in {x["id"] for x in reqs}:
                 errors.append(f"قابلیت {f['type']} به نیازمندی ناموجود «{rid}» وصل است")
     if reqs is None:
-        # Spec بدون نیازمندی (روتر/ویزارد/قالب/مدل قدیمی): هر قابلیت = یک نیازمندی قابل‌ردیابی
+        # Spec بدون نیازمندی (روتر/قالب/مدل قدیمی): هر قابلیت = یک نیازمندی قابل‌ردیابی
         reqs = [{"id": f"r{i}", "want": f"فعال‌سازی قابلیت «{MODULES[t].fa}»", "part": "منوی اصلی ربات",
                  "status": "covered", "features": [t], "why": "", "upgrade": "", "source": "auto"}
                 for i, t in enumerate(dict.fromkeys(selected), 1)]

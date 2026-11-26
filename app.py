@@ -507,7 +507,7 @@ def api_spec_preview(uid):
                 sp = _spec.spec_from_plan(pr)
             else:
                 return jsonify(instant=False, modules=[], limits=_static_limits(prompt),
-                               message="روتر قطعی مطمئن نیست؛ درخواست را دقیق‌تر کن یا از ویزارد دستی استفاده کن.")
+                               message="روتر قطعی مطمئن نیست؛ در ساخت اصلی، هوش مصنوعی درک و برنامه‌ریزی درخواست را انجام می‌دهد.")
         else:
             return jsonify(error="prompt یا features لازم است"), 400
         pv = _spec.preview_spec(sp)
@@ -517,45 +517,38 @@ def api_spec_preview(uid):
         return jsonify(error="قابلیت یا پارامتر نامعتبر: " + "؛ ".join(e.errors[:3])), 400
 
 
-@app.post("/api/wizard/compile")
+@app.post("/api/draft")
 @authed
-def api_wizard_compile(uid):
-    """ویزارد بدون هوش مصنوعی: انتخاب‌های کاربر مستقیماً به Spec استاندارد تبدیل و با کامپایلر قطعی ساخته می‌شوند.
-    هیچ LLM فراخوانی نمی‌شود؛ ساخت رایگان و قطعی است. خروجی فقط پس از sanitize/lint و تست پذیرش ذخیره می‌شود."""
+def api_draft(uid):
+    """پیش‌نویس خالی استودیو (بدون هوش مصنوعی و بدون هزینه): فقط برای ورود ویرایش دستی به استودیو.
+    این مسیر «ساخت ربات» نیست و هیچ انتخابی از کاربر نمی‌گیرد؛ ساخت ربات فقط از دستیار هوش مصنوعی/قالب‌ها انجام می‌شود.
+    خروجی همچنان از sanitize/lint و تست پذیرش عبور می‌کند."""
     import spec as _spec
     import engine_accept
-    from modules import MODULES, catalog
     import modlib  # noqa: F401
-    d = request.get_json(silent=True) or {}
     if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
         return jsonify(error=f"به سقف {max_bots(uid)} ربات رسیدی؛ یکی را حذف کن یا اشتراکت را ارتقا بده", need_plan=True), 402
-    feats = d.get("features")
-    if not isinstance(feats, list) or not feats:
-        return jsonify(error="حداقل یک قابلیت انتخاب کن"), 400
-    body = {"version": 1, "intent": "create", "name": str(d.get("name") or "ربات من")[:30],
-            "emoji": bool(d.get("emoji")), "payments": bool(d.get("payments")),
-            "features": feats, "texts": d.get("texts") or {}}
+    d = request.get_json(silent=True) or {}
+    body = {"version": 1, "intent": "create", "name": str(d.get("name") or "پیش‌نویس من")[:30],
+            "features": [{"type": "start_menu", "params": {}}], "texts": {}}
     try:
         sp = _spec.validate_spec(body)
-    except _spec.SpecError as e:
-        return jsonify(error="؛ ".join(e.errors[:3])), 400
-    try:
         thinking, cfg, ideas = _spec.compile_spec(sp)
     except Exception as exc:
-        log.exception("wizard compile failed")
-        return jsonify(error=f"کامپایلر خروجی معتبر نساخت ({str(exc)[:120]})؛ هیچ چیزی ذخیره نشد"), 500
+        log.exception("draft compile failed")
+        return jsonify(error=f"کامپایلر پیش‌نویس را نساخت ({str(exc)[:120]})؛ هیچ چیزی ذخیره نشد"), 500
     warns = []
     cfg = sanitize(cfg, strict=False, warns=warns)
     issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
     if warns or issues:
-        return jsonify(error="خطای داخلی خط ساخت (کامپایلر): " + (issues[0] if issues else warns[0])[:160]), 500
-    acc = engine_accept.run_acceptance(cfg, [f["type"] for f in sp["features"]])
+        return jsonify(error="خطای داخلی ساخت پیش‌نویس: " + (issues[0] if issues else warns[0])[:160]), 500
+    acc = engine_accept.run_acceptance(cfg, ["start_menu"])
     if acc:
-        return jsonify(error="تست پذیرش شکست خورد: " + acc[0].get("evidence", "")[:160]), 500
-    bot = new_bot_doc(uid, cfg, "ساخت با ویزارد دستی (بدون هوش مصنوعی): " + "، ".join(MODULES[f["type"]].fa for f in sp["features"] if f["type"] in MODULES))
+        return jsonify(error="تست پذیرش پیش‌نویس شکست خورد: " + acc[0].get("evidence", "")[:160]), 500
+    bot = new_bot_doc(uid, cfg, "پیش‌نویس خالی برای ویرایش دستی در استودیو (بدون هوش مصنوعی و بدون هزینه)")
     if REF_ON == "create":
         settle_referral(uid)
-    return jsonify(bot=public(bot), wallet=wallet_info(uid), ideas=ideas[:3], catalog=catalog())
+    return jsonify(bot=public(bot), wallet=wallet_info(uid), ideas=ideas[:3])
 
 
 @app.get("/api/roadmap")
@@ -591,7 +584,6 @@ def api_job(uid, jid):
         out.update(bot=public(b) if b else None, ideas=j.get("ideas", []), cost=j.get("cost", 0))
     elif j["status"] == "error":
         out["error"] = j.get("error", "ناموفق بود")
-        out["wizard"] = bool(j.get("wizard"))
         state = j.get("build_state") or {}
         can_resume = bool(j.get("kind") == "bot_build" and j.get("prompt")
                           and state.get("version") == 2 and isinstance(state.get("spec"), dict)

@@ -354,7 +354,7 @@ async function pollBuildJob(jid){
     if(r.status === "cancelled") throw new Error("درخواست لغو شد؛ رباتی ساخته نشد و توکنی کسر نشد.");
       if(r.status === "error"){
       const err = new Error(r.error || "ساخت ناموفق بود");
-      err.job = jid; err.canResume = !!r.can_resume; err.wizard = !!r.wizard;
+      err.job = jid; err.canResume = !!r.can_resume;
       err.completedTasks = Number(r.completed_tasks || 0); err.totalTasks = Number(r.total_tasks || 0);
       err.buildPhase = r.build_phase || "";
       throw err;
@@ -384,11 +384,10 @@ function showBuildFailure(r){
   const can = !!r.canResume && !!r.job;
   const progress = r.totalTasks > 0 ? `<p class="muted">پیشرفت ذخیره‌شده: ${N(r.completedTasks || 0)} از ${N(r.totalTasks)} وظیفه${r.buildPhase ? ` · مرحلهٔ آخر: ${esc(r.buildPhase)}` : ""}</p>` : "";
   S.pendingResume = can ? r.job : null; S.sheet = {kind: "info"};
-  const wiz = r.wizard ? `<button class="b o" data-a="wizgo">${IC.layers}ویزارد بدون هوش مصنوعی</button>` : "";
   showSheet(head(can ? "ساخت متوقف شد؛ پیشرفت حفظ شده" : "ساخت ناموفق بود") +
     `<p>${esc(r.message || r.error || "یک خطای فنی رخ داد.")}</p>${progress}` +
-    `<p class="muted">هیچ رباتی به‌عنوان خروجی موفق تحویل نشده است. ادامه، از آخرین checkpoint اجرا می‌شود؛ ویزارد دستی هم بدون هوش مصنوعی و بدون هزینه کار می‌کند.</p>` +
-    `<div class="bar">${can ? `<button class="b" data-a="resumejob" data-id="${esc(r.job)}">ادامه از آخرین checkpoint</button>` : ""}${wiz}<button class="b o" data-a="closefail">بستن</button></div><div class="fgap"></div>`);
+    `<p class="muted">هیچ رباتی به‌عنوان خروجی موفق تحویل نشده و هیچ توکنی کسر نشده است. ادامه، از آخرین checkpoint اجرا می‌شود.</p>` +
+    `<div class="bar">${can ? `<button class="b" data-a="resumejob" data-id="${esc(r.job)}">ادامه از آخرین checkpoint</button>` : ""}<button class="b o" data-a="closefail">بستن</button></div><div class="fgap"></div>`);
 }
 function applyBuiltBot(r, was){
   if(!r.bot) throw new Error("ساخت تأیید شد اما اطلاعات ربات دریافت نشد؛ صفحه را تازه‌سازی کن.");
@@ -563,7 +562,7 @@ function renderBots(){
   $("#app").innerHTML = `
     <div class="ph"><h1>ربات‌های من</h1><span class="cnt">${N(S.bots.length)}<span>از</span>${N(max)}</span></div>
     ${S.bots.length ? `<div class="group sep">${list}</div>${full ? "" : `<button class="b o sep-btn" data-go="studio">${IC.plus}ربات جدید در استودیو</button>`}`
-      : `<div class="empty"><div class="ib big">${IC.bot}</div><h2>هنوز رباتی نداری</h2><p class="muted">استودیو باز است؛ پروژهٔ خالی بساز یا از ویزارد/قالب استفاده کن.</p><button class="b sm" data-go="studio">رفتن به استودیو</button></div>`}`;
+      : `<div class="empty"><div class="ib big">${IC.bot}</div><h2>هنوز رباتی نداری</h2><p class="muted">استودیو باز است؛ با دستیار هوش مصنوعی رباتت را بساز یا از قالب‌ها شروع کن.</p><button class="b sm" data-go="studio">رفتن به استودیو</button></div>`}`;
 }
 
 /* ═════════════════ صفحه‌ی ربات ═════════════════ */

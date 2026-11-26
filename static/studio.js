@@ -615,8 +615,8 @@ function stHintHTML(){
   return `<div class="st-hint"><span><b>راهنما:</b> هر بخش یک پیامِ ربات است؛ رویش بزن تا ویرایشش کنی. از دایره‌ی کنار هر دکمه سیم بکش و به یک بخش دیگر وصلش کن تا با زدن آن دکمه، همان بخش نمایش داده شود.</span><button class="b sm" data-a="sthint">متوجه شدم</button></div>`;
 }
 function stDraftProvision(){
-  /* پیش‌نمایش قابل بازیابی: با ویزارد قطعی (بدون مدل، بدون هزینه) یک پروژهٔ خالی می‌سازد */
-  api("/api/wizard/compile", "POST", {name: "ربات من", features: [{type: "start_menu", params: {}}]})
+  /* پیش‌نمایش قابل بازیابی: با کامپایلر قطعی (بدون مدل، بدون هزینه) یک پروژهٔ خالی برای ویرایش دستی ساخته می‌شود */
+  api("/api/draft", "POST", {name: "پیش‌نویس من"})
     .then(d => {
       S._prov = false;
       if(d.bot){
@@ -628,8 +628,8 @@ function stDraftProvision(){
     .catch(e => {
       S._prov = false;
       $("#app").innerHTML = `<div class="empty" style="padding-top:70px"><div class="ib big">${IC.studio}</div><h2>استودیو</h2>
-        <p class="muted">${esc(e.message || "ساخت پروژهٔ خالی ممکن نشد.")}</p>
-        <div class="bar"><button class="b" data-a="wizgo">${IC.layers}ویزارد دستی</button>
+        <p class="muted">${esc(e.message || "آماده‌سازی پروژهٔ خالی ممکن نشد.")}</p>
+        <div class="bar"><button class="b" data-a="aiopen">${IC.spark}دستیار هوش مصنوعی</button>
         <button class="b o" data-a="tplsopen">قالب‌ها</button></div><div class="fgap"></div>`;
     });
 }
@@ -1900,7 +1900,6 @@ Object.assign(A, {
 Object.assign(A, {
   aiopen: () => { if(window.AIP) AIP.toggle(); else toast("پنل هوش مصنوعی بارگذاری نشده"); },
   tplsopen: () => { if(window.AIP) AIP.templates(); else toast("قالب‌ها در دسترس نیست"); },
-  wizgo: () => { closeSheet(); if(window.AIP) AIP.wizard(); },
   stbtn: el => {
     if(!$("#stc")) return;
     const id = el.dataset.n, n = S.cur.config.nodes[id]; if(!n) return;

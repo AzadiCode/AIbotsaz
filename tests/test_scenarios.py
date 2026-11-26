@@ -24,12 +24,12 @@ def T(name):
     return deco
 
 
-# ── ۱) ورود کاربر جدید به استودیو بدون ربات: پیش‌نمایش خالی با ویزارد ──
-@T("01 new user -> studio draft (wizard, no AI)")
+# ── ۱) ورود کاربر جدید به استودیو بدون ربات: پیش‌نویس خالی با کامپایلر قطعی ──
+@T("01 new user -> studio draft (deterministic, no AI)")
 def _():
     import app
-    with app.app.test_request_context("/api/wizard/compile", method="POST",
-                                      json={"name": "پیش‌نویس من", "features": [{"type": "start_menu", "params": {}}]},
+    with app.app.test_request_context("/api/draft", method="POST",
+                                      json={"name": "پیش‌نویس من"},
                                       environ_base={"HTTP_AUTHORIZATION": "Bearer t"}):
         # احراز هویت واقعی تلگرام لازم است؛ در این سطح سرویس، منطق مستقیم را می‌سنجیم
         import spec as _spec, engine_accept, modules, modlib  # noqa: F401
@@ -40,8 +40,8 @@ def _():
         assert not acc and cfg["nodes"]["start"], "پیش‌نویس خالی معتبر نیست"
 
 
-# ── ۲) ساخت دستی ربات ساده بدون AI (ویزارد) ──
-@T("02 manual wizard build (no LLM)")
+# ── ۲) کامپایل قطعی بدون AI (همان مسیری که /api/draft استفاده می‌کند) ──
+@T("02 deterministic compile (no LLM)")
 def _():
     import spec as _spec, engine_accept
     sp = _spec.validate_spec({"version": 1, "intent": "create", "name": "دستی",
@@ -122,7 +122,7 @@ def _():
 
 
 # ── ۹) خاموش بودن کامل سرویس مدل ──
-@T("09 model service down -> WizardNeeded")
+@T("09 model service down -> honest error with real cause")
 def _():
     import ai
     orig = ai.llm_post
@@ -132,17 +132,18 @@ def _():
     try:
         try:
             ai.ask_spec("یک ربات کاملاً بی‌سابقهٔ عجیب بساز", "fa", [])
-        except ai.WizardNeeded:
+        except RuntimeError as e:
+            assert "HTTP 503" in str(e), "علت واقعی باید در پیام خطا باشد"
             ok = True
         else:
             ok = False
     finally:
         ai.llm_post = orig
-    assert ok, "شکست کامل مدل باید WizardNeeded بدهد نه خروجی ناقص"
+    assert ok, "شکست کامل مدل باید خطای صریح با علت واقعی بدهد نه خروجی ناقص"
 
 
 # ── ۱۰) پاسخ نامعتبر مدل (بدون JSON) ──
-@T("10 invalid model JSON -> retry then WizardNeeded")
+@T("10 invalid model JSON -> retry then honest error")
 def _():
     import ai
     orig = ai.llm_post
@@ -154,10 +155,10 @@ def _():
     try:
         try:
             ai.ask_spec("رباط بازی بساز", "fa", [])
-        except ai.WizardNeeded:
-            pass
+        except RuntimeError as e:
+            assert "JSON" in str(e) or "نامعتبر" in str(e), "علت (JSON نامعتبر) باید در پیام باشد"
         else:
-            raise AssertionError("JSON نامعتبر باید به WizardNeeded ختم شود")
+            raise AssertionError("JSON نامعتبر باید به خطای صریح ختم شود")
         assert calls["n"] == 2, f"انتظار ۲ تلاش (اصلی + جایگزین) بود، {calls['n']} شد"
     finally:
         ai.llm_post = orig
@@ -175,16 +176,16 @@ def _():
         try:
             try:
                 ai.ask_spec("ربات بساز", "fa", [])
-            except ai.WizardNeeded:
-                pass
+            except RuntimeError as e:
+                assert code in str(e), f"{code}: علت واقعی باید در پیام باشد"
             else:
-                raise AssertionError(f"{code}: باید WizardNeeded شود")
+                raise AssertionError(f"{code}: باید خطای صریح شود")
         finally:
             ai.llm_post = orig
 
 
 # ── ۱۲) timeout مدل ──
-@T("12 model timeout -> WizardNeeded")
+@T("12 model timeout -> honest error")
 def _():
     import ai
     orig = ai.llm_post
@@ -194,10 +195,10 @@ def _():
     try:
         try:
             ai.ask_spec("ربات بساز", "fa", [])
-        except ai.WizardNeeded:
-            pass
+        except RuntimeError as e:
+            assert "timeout" in str(e).lower() or "read timeout" in str(e), "علت timeout باید در پیام باشد"
         else:
-            raise AssertionError("timeout باید WizardNeeded بدهد")
+            raise AssertionError("timeout باید خطای صریح بدهد")
     finally:
         ai.llm_post = orig
 

@@ -46,7 +46,7 @@ from core import (
     APP_URL, wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID, PLAN_RANK, plan_of, PLANS,
 )
 from ai import (
-    ask_llm, PreflightReview, WizardNeeded, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
+    ask_llm, PreflightReview, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
 )
 from engine import ai_postcharge, ai_precheck, allowed_updates, sync_commands, to_jalali
 
@@ -1269,12 +1269,6 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now()}})
             return
-        except WizardNeeded as wn:
-            # هیچ مدلی پاسخ معتبر نداد؛ مسیر ویزارد بدون هوش مصنوعی پیشنهاد می‌شود. توکنی کسر نمی‌شود.
-            db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
-                "status": "error", "wizard": True,
-                "error": "مدل هوش مصنوعی در دسترس نبود یا پاسخ معتبر نداد؛ ساخت از ویزارد دستی (بدون هوش مصنوعی) ادامه می‌یابد و هیچ توکنی کسر نشد. " + str(wn)[:200]}})
-            return
         if BILLING == "fixed":
             cost = int(reserve)
         else:
@@ -1437,7 +1431,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             report_gaps(uid, bot, prompt, pending_gaps)
         except Exception:
             log.exception("failed to deliver fallback gap report")
-        msg = "ساخت کامل نشد و هیچ توکنی کسر نشد. گزارش خطا برای بررسی ثبت شد. لطفاً دوباره تلاش کن یا درخواستت را کوتاه‌تر و واضح‌تر بنویس."
+        msg = "ساخت کامل نشد و هیچ توکنی کسر نشد. علت واقعی: " + f"{type(e).__name__}: {str(e)}"[:220] + " گزارش خطا برای بررسی ثبت شد؛ اگر مدل‌ها در آزمون سالم‌اند، همین علت را به پشتیبانی بده."
         if DEBUG:
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}})

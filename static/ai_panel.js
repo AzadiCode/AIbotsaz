@@ -4,7 +4,6 @@
    نقش: نسخهٔ جمع‌وجور اما کامل دستیار ساخت، داخل محیط استودیو:
    • ساخت از صفر / توسعهٔ پروژهٔ فعلی با یک درخواست (خط Spec → کامپایلر قطعی → تست پذیرش)
    • پیش‌نمایش شفاف قبل از ساخت: ✔ قابل اجرا · ❌ محدودیت موتور · 🧩 بدون ماژول آماده
-   • ویزارد کاملاً دستی (بدون هوش مصنوعی و بدون هزینه)
    • سه قالب جامع
    باز/بسته‌کردن پنل هیچ وضعیت استودیو، ویرایش باز یا تغییرات ذخیره‌نشده را از بین نمی‌برد.
    ═══════════════════════════════════════════════════════════════ */
@@ -55,7 +54,6 @@ const AIP = {
       <button class="b" data-aip="build">${IC.spark}${cur ? "ارتقای این ربات" : "ساخت ربات"}</button>
       <button class="b o" data-aip="preview">پیش‌نمایش</button>
       <button class="b o" data-aip="tpls">${IC.layers}سه قالب آماده</button>
-      <button class="b o" data-aip="wizard">${IC.layers}ویزارد بدون هوش مصنوعی</button>
     </footer>`;
   },
 
@@ -224,7 +222,7 @@ const AIP = {
       this._liveStop();
       if(e.status === 402){ this.close(); return openBuy(e.message); }
       this.close();
-      showBuildFailure({job: e.job, canResume: e.canResume, wizard: e.wizard, error: e.message,
+      showBuildFailure({job: e.job, canResume: e.canResume, error: e.message,
                         completedTasks: e.completedTasks, totalTasks: e.totalTasks, buildPhase: e.buildPhase});
     }
   },
@@ -239,7 +237,7 @@ const AIP = {
       if(r.status === "cancelled") throw new Error("درخواست لغو شد؛ توکنی کسر نشد.");
       if(r.status === "error"){
         const err = new Error(r.error || "ساخت ناموفق بود");
-        err.job = jid; err.canResume = !!r.can_resume; err.wizard = !!r.wizard;
+        err.job = jid; err.canResume = !!r.can_resume;
         err.completedTasks = Number(r.completed_tasks || 0); err.totalTasks = Number(r.total_tasks || 0);
         err.buildPhase = r.build_phase || "";
         throw err;
@@ -247,49 +245,6 @@ const AIP = {
       if(r.prog) this.liveUpd(r.prog);
     }
     throw new Error("ساخت بیش از حد طول کشید؛ checkpoint ذخیره شده است.");
-  },
-
-  /* ── ویزارد کاملاً دستی: بدون مدل، بدون توکن ── */
-  async wizard(){
-    this.close();
-    let mods = S._mods;
-    if(!mods){
-      try{
-        const d = await api("/api/modules");
-        mods = S._mods = d.modules || [];
-      }catch(e){ return toast("کاتالوگ بارگذاری نشد"); }
-    }
-    const cats = {};
-    mods.forEach(m => (cats[m.cat] = cats[m.cat] || []).push(m));
-    const rows = Object.entries(cats).map(([c, ms]) =>
-      `<div class="sub">${esc(c)}</div>` + ms.map(m =>
-        `<label class="aip-mod"><input type="checkbox" value="${esc(m.id)}" data-req="${esc((m.requires || []).join(","))}">
-         <span><b>${esc(m.fa)}</b><small>${esc(m.desc || "")}</small></span></label>`).join("")).join("");
-    S.sheet = { kind: "info" };
-    showSheet(head("ویزارد بدون هوش مصنوعی") +
-      `<p class="muted">قابلیت‌ها را انتخاب کن؛ انتخاب‌ها مستقیماً به همان Spec استاندارد تبدیل و با کامپایلر قطعی (بدون مدل و بدون هزینه) ساخته می‌شوند.</p>
-       <input id="wiz-name" class="fa" placeholder="نام ربات" maxlength="30" value="${esc(S.cur?.name || "ربات من")}">
-       <div class="fgap"></div>${rows}<div class="fgap"></div>
-       <div class="bar"><button class="b" data-a="wizgo2">${IC.layers}ساخت قطعی</button></div><div class="fgap"></div>`);
-    Object.assign(A, {
-      wizgo2: el => busy(el, async () => {
-        const picked = [...document.querySelectorAll(".aip-mod input:checked")].map(x => x.value);
-        if(!picked.length) return toast("حداقل یک قابلیت انتخاب کن");
-        /* وابستگی‌ها (مثل کیف سکه) خودکار در اعتبارسنجی Spec اضافه می‌شوند */
-        const feats = picked.map(id => ({ type: id, params: {} }));
-        try{
-          const d = await api("/api/wizard/compile", "POST", { name: $("#wiz-name")?.value || "ربات من", features: feats });
-          closeSheet();
-          if(d.bot){
-            S.bots = [d.bot, ...S.bots]; S.cur = d.bot; S.sbot = d.bot.id;
-            S._mods = d.catalog || S._mods;
-            if(d.wallet) S.wallet = d.wallet;
-            S.view = "studio"; render(); bumpTokens();
-            toast("با ویزارد دستی ساخته شد — بدون هوش مصنوعی و بدون هزینه");
-          }
-        }catch(e){ toast(e.message || "ساخت ممکن نشد"); }
-      }),
-    });
   },
 
   /* ── سه قالب جامع (Spec-محور و قطعی) ── */
@@ -311,7 +266,6 @@ const AIP = {
     if(a === "close") this.close();
     else if(a === "preview") this.preview();
     else if(a === "build") this.build();
-    else if(a === "wizard") this.wizard();
     else if(a === "tpls") this.templates();
   },
 };

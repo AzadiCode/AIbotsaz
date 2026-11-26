@@ -2034,7 +2034,16 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max
             # provider cannot consume all fallback opportunities.
             remaining_providers = max(1, len(models) - idx + 1)
             candidate_budget = min(float(timeout), left_total / remaining_providers)
-            per_model_timeout = min(candidate_budget, float(max(8, _int("AI_MODEL_TIMEOUT", 35))), _job_remaining(candidate_budget))
+            # بودجهٔ واقعی فراخوان به مدل می‌رسد؛ سقفِ صریح فقط اگر مدیر AI_MODEL_TIMEOUT را در env گذاشته باشد.
+            # (سقف پیش‌فرض ۳۵ثانیه‌ایِ قدیمی، تنها فراخوانی مدلِ خط ساخت — تولید Spec چند‌هزارتوکنی — را
+            #  به‌طور قطعی می‌کشت؛ در حالی که آزمون ۱۰۰توکنی مدل‌ها سالم بود.)
+            per_model_timeout = min(candidate_budget, _job_remaining(candidate_budget))
+            env_model_cap = str(os.environ.get("AI_MODEL_TIMEOUT", "")).strip()
+            if env_model_cap:
+                try:
+                    per_model_timeout = min(per_model_timeout, max(8, int(env_model_cap)))
+                except ValueError:
+                    pass
             candidate_deadline = time.monotonic() + per_model_timeout
             try:
                 result = _llm_post_one(messages, max_tokens, temperature, per_model_timeout, candidate)
@@ -3004,10 +3013,6 @@ def _fix_structure_deterministically(cfg):
 # ممیزی نهایی LLM وجود ندارد؛ تأیید نهایی با تست پذیرش روی موتور واقعی (engine_accept) انجام می‌شود.
 
 
-class WizardNeeded(RuntimeError):
-    """هیچ مدلی پاسخ معتبر نداد؛ مسیر ویزارد بدون هوش مصنوعی باید اجرا شود. هیچ توکنی کسر نمی‌شود."""
-
-
 def _spec_current_summary(current):
     """خلاصهٔ کوتاه پروژهٔ فعلی برای Spec ویرایش (intent=edit).
     منوی شروع هم داخل خلاصه می‌آید تا مدل بداند کاربر «کدام بخش» را می‌خواهد و چه قابلیتی از قبل هست؛
@@ -3026,17 +3031,22 @@ def _spec_current_summary(current):
 
 def ask_spec(prompt, lang="fa", acc=None, current=None):
     """یک فراخوانی مدل برای تولید Spec؛ اگر JSON/Schema/پوشش نامعتبر بود یک تلاش جایگزین با بازخورد خطاها؛
-    اگر باز هم نامعتبر بود WizardNeeded (ویزارد بدون AI). خروجی مدل هرگز مستقیم وارد موتور نمی‌شود."""
+    اگر باز هم نامعتبر بود، خطا با علت واقعی گزارش می‌شود (بدون تحویل خروجی نامعتبر). خروجی مدل هرگز مستقیم وارد موتور نمی‌شود.
+    بودجهٔ زمانی واقعی: AI_SPEC_TIMEOUT (پیش‌فرض ۱۵۰s) برای هر مدل و AI_SPEC_TOTAL_TIMEOUT (پیش‌فرض ۴۲۰s)
+    برای کل فاز؛ این بودجه باید برای تولید JSON کامل با مدل‌های رایگان کافی باشد."""
     import spec as _spec
     cb = getattr(_prog, "cb", None)
     msgs = _spec.spec_prompt(prompt, _spec_current_summary(current), lang)
+    spec_timeout = max(30, _int("AI_SPEC_TIMEOUT", 150))
+    spec_total = max(spec_timeout, _int("AI_SPEC_TOTAL_TIMEOUT", 420))
     last_err = None
-    for attempt in (0, 1):          # ۱) مدل ترجیحی  ۲) یک مدل جایگزین (با بازخورد خطاهای قبلی)
+    for attempt in (0, 1):          # ۱) مدل ترجیحی  ۲) مدل‌های جایگزین (با بازخورد خطاهای قبلی)
         try:
             if cb:
                 cb.stage("analyze", 14.0 + 4.0 * attempt)
-            txt, usage = llm_post(msgs, 2000, temperature=0.2, timeout=90,
-                                  max_models=1 if attempt == 0 else None)
+            txt, usage = llm_post(msgs, 3000, temperature=0.2, timeout=spec_timeout,
+                                  max_models=1 if attempt == 0 else None,
+                                  total_timeout=spec_total)
             if acc is not None:
                 _record_usage(acc, usage)
             sp = _spec.parse_llm_spec(txt)          # JSON → Schema → Enum → پارامترها → نیازمندی‌ها
@@ -3057,11 +3067,14 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
                     "\nهمان درخواست را دوباره و فقط به‌صورت JSON بده؛ همهٔ خواسته‌های کاربر در requirements باشند و هر covered به یک قابلیت انتخابی وصل شود."}]
         except ThinkLang:
             raise
-        except Exception as e:                     # خطای ارائه‌دهنده/شبکه: فقط یک مدل جایگزین، نه حلقه
+        except Exception as e:                     # خطای ارائه‌دهنده/شبکه: فقط مدل‌های جایگزین، نه حلقه
             last_err = e
             log.warning("مدل برای Spec پاسخ نداد (تلاش %s): %s: %s", attempt + 1, type(e).__name__, str(e)[:200])
-    raise WizardNeeded("پاسخ مدل‌ها برای برنامه‌ریزی معتبر نبود (%s)؛ مسیر ویزارد بدون هوش مصنوعی اجرا می‌شود."
-                       % (("؛ ".join(last_err.errors[:3])) if isinstance(last_err, _spec.SpecError) else (str(last_err)[:160] or "JSON نامعتبر")))
+    detail = (("؛ ".join(last_err.errors[:3])) if isinstance(last_err, _spec.SpecError)
+              else (str(last_err)[:220] or "پاسخ نامعتبر")) if last_err else "پاسخ نامعتبر"
+    raise RuntimeError(
+        "هیچ مدلی پاسخ معتبری برای برنامه‌ریزی Spec نداد؛ آخرین علت: %s — توکنی کسر نشد و هیچ خروجی نامعتبری ذخیره نشد. "
+        "اگر آزمون مدل‌ها سالم را نشان می‌دهد، این خطا یعنی بودجه/قالب پاسخ کافی نبوده، نه خرابی مدل." % detail)
 
 
 def _spec_checkpoint(cb, prompt, current, sp, phase, last_error="", coverage=None):
@@ -3167,7 +3180,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
                 cb.stage("analyze", 24.0)
             log.info("router spec: %s (confidence %.2f — بدون فراخوانی مدل)", pr.ids, pr.confidence)
         else:
-            sp = ask_spec(prompt, lang, acc, current)      # WizardNeeded در صورت شکست کامل
+            sp = ask_spec(prompt, lang, acc, current)      # در شکست کامل، خطای صریح با علت واقعی
         _spec_checkpoint(cb, prompt, current, sp, "spec_ready")
 
         # ── ۳.۵) کنترل پوشش نیازمندی‌ها (قبل از کامپایل): خواستهٔ اجرا‌نشده قبل از ساخت اعلام و تصمیم با کاربر است ──

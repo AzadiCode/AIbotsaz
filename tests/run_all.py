@@ -340,9 +340,9 @@ def _():
     _check_cfg(cfg, ["wallet", "dice", "leaderboard"])
 
 
-@T("pipeline:wizard-needed-when-models-fail")
+@T("pipeline:honest-failure-when-models-fail")
 def _():
-    """با خراب‌کردن عمدی llm_post، خط ساخت باید WizardNeeded بدهد نه خروجی ناقص."""
+    """با خراب‌کردن عمدی llm_post، خط ساخت باید با علت واقعی شکست را گزارش کند نه خروجی ناقص یا ویزارد."""
     import ai as _ai
     orig = _ai.llm_post
     def _broken(*a, **k):
@@ -351,10 +351,11 @@ def _():
     try:
         try:
             _ai.ask_spec("یک ربات غریب خیلی عجیب نامعمول بی‌سابقه بساز", "fa", [])
-        except _ai.WizardNeeded:
-            pass
+        except RuntimeError as e:
+            assert "HTTP 500" in str(e), "پیام خطا باید علت واقعی آخرین خطا را داشته باشد"
+            assert "توکنی کسر نشد" in str(e)
         else:
-            raise AssertionError("شکست مدل باید WizardNeeded بدهد")
+            raise AssertionError("شکست مدل باید خطای صریح بدهد")
     finally:
         _ai.llm_post = orig
 

@@ -12,7 +12,7 @@ tests/test_coverage.py — سناریوهای هدفمند «اصلاحیه بن
      ۴-الف) الگوی قطعی (درگاه بانکی) → ENGINE_LIMIT قبل از صرف توکن؛ گزارش ادمین؛ بدون ربات و بدون کسر
      ۴-ب) اعلام صادقانهٔ مدل (CATALOG_MISSING) → توقف پیش از ساخت؛ پس از پذیرش کاربر فقط بقیه ساخته می‌شود
      ۴-ج) نگهبان عمومی‌سازی: ادعای پوشش با قابلیت‌های عمومی رد می‌شود؛ تحویل ربات عمومی ممنوع
-     ۴-د) مدل نیازمندی را حذف کند → SpecError → تلاش جایگزین با بازخورد → WizardNeeded (بدون تحویل ناقص)
+     ۴-د) مدل نیازمندی را حذف کند → SpecError → تلاش جایگزین با بازخورد → خطای صادقانه (بدون تحویل ناقص)
 """
 import json
 import os
@@ -264,8 +264,8 @@ def _():
         ai.llm_post = orig
 
 
-# ── ۴-د) مدل نیازمندی را حذف کند: retry با بازخورد → WizardNeeded؛ بدون تحویل ناقص ──
-@T("04d dropped requirement -> retry with feedback -> WizardNeeded, no partial delivery")
+# ── ۴-د) مدل نیازمندی را حذف کند: retry با بازخورد → خطای صادقانه؛ بدون تحویل ناقص ──
+@T("04d dropped requirement -> retry with feedback -> honest error, no partial delivery")
 def _():
     import ai, mother
     uid = "u_cov_d"
@@ -286,7 +286,8 @@ def _():
         j = core.db.jobs.find_one({"_id": jid})
         assert stub.calls == 2, f"باید دو تلاش با بازخورد می‌شد: {stub.calls}"
         assert len(stub.msgs) == 3 and "ایرادها" in stub.msgs[-1]["content"], "بازخورد خطاها به تلاش دوم نرسید"
-        assert j["status"] == "error" and j.get("wizard"), f"وضعیت: {j['status']}"
+        assert j["status"] == "error", f"وضعیت: {j['status']}"
+        assert "پوشش داده شد ادعا شده" in (j.get("error") or ""), "خطای کاربر باید علت واقعی (حذف نیازمندی) را بگوید"
         assert core.db.bots.count_documents({"owner": uid}) == 0, "نسخهٔ ناقص تحویل شد"
         u = core.db.users.find_one({"_id": uid})
         assert (u.get("tokens") or 0) == 5000, "توکن کسر شد"
