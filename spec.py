@@ -33,6 +33,27 @@ ALIASES = {
     "game.quiz": "quiz",
     "game.wheel": "wheel",
     "bot.start_menu": "start_menu",
+    # نام‌های نزدیک رایجِ مدل‌ها به ماژول‌های واقعی کاتالوگ (ترمیم قطعی نام؛ هیچ قابلیت تازه‌ای اضافه نمی‌شود)
+    "start": "start_menu",
+    "menu": "start_menu",
+    "main_menu": "start_menu",
+    "about_us": "about",
+    "store": "shop",
+    "market": "shop",
+    "balance": "wallet",
+    "coin_wallet": "wallet",
+    "wallet_coins": "wallet",
+    "daily_gift": "daily",
+    "gift_daily": "daily",
+    "daily_reward": "daily",
+    "invite": "referral",
+    "referrals": "referral",
+    "ref": "referral",
+    "ranking": "leaderboard",
+    "rank": "leaderboard",
+    "group_admin": "group_manager",
+    "group_manage": "group_manager",
+    "support_ticket": "support",
 }
 # هر ماژول ثبت‌شده به‌همراه نام استانداردش قابل انتخاب است
 def _ensure_catalog():
@@ -79,6 +100,49 @@ def _allowed_param_keys(mod):
     return {s["k"] for s in mod.params}
 
 
+def _salvage_requirement_rows(reqs, salvaged):
+    """قابلیت‌های خارج از کاتالوگ → ردیف نیازمندی صادقانهٔ catalog_missing (قطعی؛ بدون LLM).
+    قاعده: هیچ خواسته‌ای به‌خاطر «نام قابلیت نادرستِ مدل» نباید کل ساخت را بشکند و هیچ خواسته‌ای هم بی‌صدا حذف نشود.
+      • ردیف نیازمندی که همهٔ ادعاهایش قابلیت‌های خارج از کاتالوگ بود → catalog_missing صادقانه می‌شود.
+      • برای قابلیت salvage‌شده که ردیف شناخته‌شده‌ای نداشت → ردیف تازه با want از note مدل ساخته می‌شود.
+    خروجی: فهرست ردیف‌های تازه (reqs درجا هم اصلاح می‌شود)."""
+    stypes = {s["type"] for s in salvaged if s.get("type") and s["type"] != "؟"}
+    rows = []
+    seen_ids = {r.get("id") for r in reqs}
+    if stypes:
+        for r in reqs:
+            if r.get("status") != "covered":
+                continue
+            claimed = {str(x) for x in (r.get("features") or [])}
+            if claimed and claimed <= stypes:
+                r["status"] = "catalog_missing"
+                r["why"] = r.get("why") or (
+                    "قابلیت‌های «" + "، ".join(sorted(claimed)) + "» در کاتالوگ ربات‌ساز وجود ندارند؛ "
+                    "این خواسته در خروجی اجرا نمی‌شود و صادقانه ثبت شد.")
+                r["features"] = []
+    n = 0
+    for s in salvaged:
+        ftype = s.get("type") or "؟"
+        linked = [rid for rid in (s.get("req") or []) if rid in seen_ids]
+        if linked and any(r.get("id") in linked and r.get("status") == "catalog_missing" for r in reqs):
+            continue          # خواستهٔ همین قابلیت از قبل به‌صورت صادقانه ثبت شده است
+        want = s.get("note") or f"قابلیت «{ftype}»"
+        if any(r.get("want") == want for r in reqs):
+            continue
+        n += 1
+        rid = f"s{n}"
+        while rid in seen_ids:
+            n += 1
+            rid = f"s{n}"
+        seen_ids.add(rid)
+        rows.append({"id": rid, "want": want, "part": "—", "status": "catalog_missing",
+                     "features": [],
+                     "why": f"قابلیت «{ftype}» در کاتالوگ ربات‌ساز وجود ندارد؛ به‌جای رد کل درخواست، "
+                            "این خواسته صادقانه ثبت شد و در خروجی اجرا نمی‌شود.",
+                     "upgrade": "", "source": "salvage"})
+    return rows
+
+
 def validate_spec(obj):
     """
     JSON خام → Spec اعتبارسنجی‌شده.
@@ -115,18 +179,26 @@ def validate_spec(obj):
     # 4) قابلیت‌ها: Enum + پارامترها
     feats = obj.get("features")
     if not isinstance(feats, list) or not feats:
-        raise SpecError("حداقل یک قابلیت لازم است", ["features خالی یا نامعتبر است"])
+        raise SpecError("حداقل یک قابلیت لازم است",
+                        ["features خالی یا نامعتبر است — حداقل یک قابلیت واقعی از کاتالوگ در features لازم است"])
     if len(feats) > 12:
         errors.append("حداکثر ۱۲ قابلیت در یک ساخت")
         feats = feats[:12]
-    out_feats, seen = [], []
+    out_feats, seen, salvaged = [], [], []
     for f in feats:
         if not isinstance(f, dict):
             errors.append("هر قابلیت باید شیء JSON باشد")
             continue
         t = _feature_type(f.get("type"))
         if not t:
-            errors.append(f"قابلیت «{f.get('type')}» خارج از کاتالوگ است")
+            # ترمیم قطعی: قابلیت خارج از کاتالوگ کل Spec را نمی‌شکند؛ خواستهٔ آن صادقانه catalog_missing می‌شود.
+            # (ریشهٔ واقعی «هیچ مدلی پاسخ معتبری نداد»: مدل قابلیتی می‌ساخت که در کاتالوگ نیست و کل خروجی رد می‌شد)
+            salvaged.append({
+                "type": str(f.get("type") or "؟").strip()[:40],
+                "note": _clean_text(f.get("note") or "", 300),
+                "req": [str(x).strip()[:20] for x in (f.get("req") if isinstance(f.get("req"), list) else [])
+                        if str(x).strip()][:6],
+            })
             continue
         mod = MODULES[t]
         allowed = _allowed_param_keys(mod)
@@ -136,7 +208,7 @@ def validate_spec(obj):
             errors.append(f"پارامترهای {t} باید شیء JSON باشد")
         extra = set(params) - allowed
         if extra:
-            errors.append(f"پارامترهای ناشناخته در {t}: {', '.join(sorted(extra))}")
+            # ترمیم قطعی بی‌صدا: کلیدهای ناشناختهٔ پارامتر همان‌جا رد می‌شوند؛ شکاندن کل Spec کارکرد ندارد
             params = {k: v for k, v in params.items() if k in allowed}
         # نیازمندی‌های متصل به این قابلیت (ردیابی تا خروجی) + note صادقانهٔ مدل حفظ می‌شود
         f_reqs = f.get("req") if isinstance(f.get("req"), list) else []
@@ -150,10 +222,10 @@ def validate_spec(obj):
             kept = next(x for x in out_feats if x["type"] == t)
             kept["req"] = list(dict.fromkeys(kept["req"] + dup["req"]))[:6]
         seen.append(t)
-        # کلیدهای اضافه روی خود قابلیت رد می‌شود (قرارداد: params فقط زیر کلید params)
-        if set(f) - {"type", "params", "note", "req"}:
-            errors.append(f"کلیدهای اضافه روی قابلیت {t} رد شد")
     if not out_feats:
+        if salvaged:
+            errors.append("هیچ قابلیت واقعی کاتالوگ در features انتخاب نشده — برای ساخت، حداقل یک قابلیت از کاتالوگ لازم است؛ "
+                          "خواسته‌های خارج از کاتالوگ باید در requirements با status=catalog_missing ثبت شوند، نه در features")
         raise SpecError("هیچ قابلیت معتبری در Spec نبود", errors)
 
     # 5) وابستگی‌ها: قابلیت‌های لازم خودکار و بی‌صدا اضافه می‌شوند (رفع قطعی، نه خطا)
@@ -174,18 +246,23 @@ def validate_spec(obj):
         errors += req_errs
     else:
         reqs = None
+    # پیوندهای req به نیازمندی ناموجود: ترمیم قطعی بی‌صدا (حذف پیوند)؛ شکاندن کل Spec کارکرد ندارد
+    if reqs is not None:
+        valid_rids = {x["id"] for x in reqs}
+        for f in out_feats:
+            f["req"] = [rid for rid in f["req"] if rid in valid_rids]
     selected = {f["type"] for f in out_feats}
     backref = {}
     for f in out_feats:
         for rid in f["req"]:
             backref.setdefault(rid, []).append(f["type"])
-            if reqs is not None and rid not in {x["id"] for x in reqs}:
-                errors.append(f"قابلیت {f['type']} به نیازمندی ناموجود «{rid}» وصل است")
     if reqs is None:
         # Spec بدون نیازمندی (روتر/قالب/مدل قدیمی): هر قابلیت = یک نیازمندی قابل‌ردیابی
         reqs = [{"id": f"r{i}", "want": f"فعال‌سازی قابلیت «{MODULES[t].fa}»", "part": "منوی اصلی ربات",
                  "status": "covered", "features": [t], "why": "", "upgrade": "", "source": "auto"}
                 for i, t in enumerate(dict.fromkeys(selected), 1)]
+    # 5.6) salvage: قابلیت‌های خارج از کاتالوگ → ردیف نیازمندی صادقانهٔ catalog_missing (ترمیم قطعی؛ بدون شکستن Spec)
+    reqs += _salvage_requirement_rows(reqs, salvaged)
     for r in reqs:
         mapped = set(r.get("features") or []) | set(backref.get(r["id"]) or [])
         if r["status"] == "covered":

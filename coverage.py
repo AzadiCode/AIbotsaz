@@ -143,10 +143,11 @@ def classify_uncovered(req, prompt=""):
     except Exception:
         cap = None
 
-    # ۲) اثبات با الگوهای قطعی قبل از ساخت
+    # ۲) اثبات با الگوهای قطعی قبل از ساخت (برای هر وضعیتی؛ کلید پذیرش کاربر در همهٔ مسیرها یکسان می‌ماند)
     sl = _static_limit_for(want, prompt)
-    if sl and st != "catalog_missing":
-        return _defects.defect("ENGINE_LIMIT", sl.get("feature") or "", want,
+    if sl:
+        # want از منبع قطعی (_STATIC_LIMITS) می‌آید تا کلید پذیرش کاربر در پیش‌بررسی و اینجا یکسان بماند
+        return _defects.defect("ENGINE_LIMIT", sl.get("feature") or "", sl.get("want") or want,
                                why_model or sl.get("why") or "", severity="high", stage="spec",
                                suggested_capability=sl.get("feature") or "",
                                upgrade=req.get("upgrade") or sl.get("upgrade") or "")
@@ -166,7 +167,12 @@ def unmet_items(spec, prompt=""):
         if not isinstance(r, dict):
             continue
         if r.get("status") == "covered":
-            if _served_by(r, types_selected):
+            served = _served_by(r, types_selected)
+            if served and _static_limit_for(r.get("want") or "", ""):
+                # اثبات قطعی محدودیت موتور روی متن همان خواسته: ادعای پوشش با هر قابلیتی باطل است
+                # (ریشهٔ «ربات ساخته شد ولی ناقص بود»: مدل پوشش خواستهٔ اجرانشدنی را با قابلیت غیرعمومی جواب می‌زد)
+                served = False
+            if served:
                 continue
             # ادعای پوشش بی‌پشتوانه: مدل خواسته را حذف کرده و با قابلیت عمومی پر کرده است → پوشش رد می‌شود
             r = dict(r, status="catalog_missing",

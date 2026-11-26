@@ -122,13 +122,55 @@ def _():
     raise AssertionError("قابلیت خارج از کاتالوگ رد نشد")
 
 
-@T("spec:reject-unknown-param")
+@T("spec:reject-unknown-feature-alone")
 def _():
+    """تنها قابلیت خارج از کاتالوگ و بدون هیچ قابلیت واقعی: ربات خالی قابل ساخت نیست → خطای صادقانه با پیام قابل‌اقدام."""
     try:
-        spec.validate_spec({"version": 1, "intent": "create", "name": "x", "features": [{"type": "dice", "params": {"junk": 1}}]})
-    except spec.SpecError:
+        spec.validate_spec({"version": 1, "intent": "create", "name": "x", "features": [{"type": "brain_surgery"}]})
+    except spec.SpecError as e:
+        assert any("کاتالوگ" in x for x in e.errors), e.errors
         return
-    raise AssertionError("پارامتر ناشناخته رد نشد")
+    raise AssertionError("Spec بدون هیچ قابلیت واقعی نباید معتبر می‌شد")
+
+
+@T("spec:unknown-param-dropped-deterministically")
+def _():
+    """کلیدهای ناشناختهٔ پارامتر به‌صورت قطعی رد (حذف) می‌شوند؛ شکاندن کل Spec به‌خاطر آشغالِ پارامتری کارکرد ندارد.
+    (ریشهٔ واقعی «هر دفعه یک گزارش متفاوت»: مدل اغلب یک کلید اضافه می‌نویسد و کل ساخت رد می‌شد)"""
+    sp = spec.validate_spec({"version": 1, "intent": "create", "name": "x",
+                             "features": [{"type": "dice", "params": {"junk": 1, "sides": 12}}]})
+    d = next(f for f in sp["features"] if f["type"] == "dice")
+    assert "junk" not in d["params"] and d["params"].get("sides") == 12, \
+        f"ترمیم پارامتر نادرست بود: {d['params']}"
+
+
+@T("spec:salvage-out-of-catalog-feature-to-honest-requirement (root-cause of 3 real reports)")
+def _():
+    """گزارش واقعی ۶b0809f2/6b080a27: مدل قابلیت «scheduler» می‌ساخت که در کاتالوگ نیست → کل Spec رد و
+    «هیچ مدلی پاسخ معتبری نداد». رفتار درست: قابلیت نامعتبر از features خارج و خواسته‌اش صادقانه
+    catalog_missing ثبت می‌شود؛ بقیهٔ Spec زنده می‌ماند و تصمیم پذیرش با کاربر است."""
+    sp = spec.validate_spec({
+        "version": 1, "intent": "create", "name": "ربات مدیریت", "features": [
+            {"type": "scheduler", "req": ["r1"], "note": "در سر وقت‌های مشخص پست در کانال"},
+            {"type": "group_manager", "req": ["r2"]}],
+        "requirements": [
+            {"id": "r1", "want": "در سر وقت‌های مشخص پست در کانال بگذارد", "status": "covered", "features": ["scheduler"]},
+            {"id": "r2", "want": "مدیریت گروه", "status": "covered", "features": ["group_manager"]}],
+        "texts": {}})
+    types = [f["type"] for f in sp["features"]]
+    assert "scheduler" not in types and "group_manager" in types, types
+    r1 = next(r for r in sp["requirements"] if r["id"] == "r1")
+    assert r1["status"] == "catalog_missing" and not r1["features"], r1
+    r2 = next(r for r in sp["requirements"] if r["id"] == "r2")
+    assert r2["status"] == "covered" and r2["features"] == ["group_manager"], r2
+    # coverage: خواستهٔ اجرانشدنی باید قبل از ساخت با اثبات قطعی ENGINE_LIMIT اعلام شود
+    import coverage as _cov
+    unmet = _cov.unmet_items(sp, "پست در سر وقت‌های مشخص در کانال")
+    assert unmet and unmet[0]["kind"] == "ENGINE_LIMIT", unmet
+    # کلید پذیرش با پیش‌بررسی یکسان است (canonical want از همان _STATIC_LIMITS)
+    import ai as _ai
+    early = _ai._static_limits("در سر وقت‌های مشخص پست در کانال بگذارد")
+    assert early and unmet[0]["want"] == early[0]["want"], (unmet[0]["want"], early[0]["want"])
 
 
 @T("spec:reject-unknown-toplevel")
