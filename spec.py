@@ -164,15 +164,13 @@ def validate_spec(obj, require_requirements=False, expected_intent=None):
         errors.append("کلیدهای ناشناخته در Spec؛ فقط version/intent/name/emoji/payments/features/texts/requirements مجاز است")
         obj = {k: v for k, v in obj.items() if k in ("version", "intent", "name", "emoji", "payments", "features", "texts", "requirements")}
 
-    # 2) نسخه و نیت (اصلاح قطعی بی‌صدا؛ نه رد)
-    try:
-        incoming_version = int(obj.get("version") or 0)
-    except (TypeError, ValueError):
-        errors.append("version باید عدد معتبر باشد")
-        incoming_version = SPEC_VERSION
-    if incoming_version != SPEC_VERSION:
-        # The schema is intentionally backward-compatible for older Spec versions.
-        obj["version"] = SPEC_VERSION
+    # 2) نسخه و نیت
+    # نسخهٔ Spec بخشی از قرارداد داخلی برنامه است، نه یک نیازمندی معنایی که
+    # مدل باید دقیقاً serialize کند. مدل‌های مختلف ممکن است 1، 1.0، "1"،
+    # "v1" یا حتی متن توضیحی برگردانند. هیچ‌یک نباید یک Spec سالم را رد کند.
+    # پس از بررسی سایر فیلدهای واقعی، نسخه را همیشه به نسخهٔ جاری نرمال می‌کنیم.
+    # این کار اعتبارسنجی features/requirements/params را تضعیف نمی‌کند.
+    obj["version"] = SPEC_VERSION
     intent = str(obj.get("intent") or "create").strip().lower()
     if intent not in ("create", "edit"):
         errors.append("intent باید create یا edit باشد")
@@ -427,8 +425,9 @@ def spec_prompt(prompt_text, current_summary="", lang="fa"):
         "\nکاتالوگ ماژول‌های آماده و قابل تولید:\n" + cats +
         "\n\nدانش قراردادی موتور درباره توانایی‌های بدون ماژول آماده:\n" + engine_knowledge +
         "\nقاعده وضعیت: ready یعنی ماژول آماده؛ engine_only یعنی موتور primitive دارد اما ماژول آماده ندارد (catalog_missing)؛ unsupported فقط یعنی موتور صریحاً پشتیبانی نمی‌کند (engine_limit).\n"
+        "\nنسخهٔ Spec را تولید نکن؛ این فیلد را حذف کن چون برنامه آن را هنگام اعتبارسنجی تنظیم می‌کند.\n"
         "\nقالب خروجی (فقط JSON):\n" +
-        '{"version":1,"intent":"' + intent + '","name":"نام کوتاه ربات","emoji":false,"payments":false,'
+        '{"intent":"' + intent + '","name":"نام کوتاه ربات","emoji":false,"payments":false,'
         '"requirements":[{"id":"r1","want":"رفتار دقیق موردنظر کاربر","part":"محل/بخش","status":"covered","features":["شناسه واقعی قابلیت"]}],'
         '"features":[{"type":"شناسه واقعی کاتالوگ","params":{},"req":["r1"],"note":""}],'
         '"texts":{}}\n'

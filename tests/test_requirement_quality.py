@@ -112,6 +112,59 @@ class RequirementQualityTests(unittest.TestCase):
         self.assertIn("group_manager", result.ids)
         self.assertLess(result.rest_ratio, 0.95)
 
+    def test_spec_version_is_normalized_instead_of_rejecting_valid_content(self):
+        # The version field is protocol metadata. Variations from different LLMs
+        # must not reject an otherwise valid Spec. Semantic fields remain validated.
+        versions = [1, 1.0, "1", "1.0", "v1", "spec-v1", "Spec version 1", None, "BUILD 3.6.2"]
+        payloads = [{"version": version, "intent": "create", "name": "x",
+                     "features": [{"type": "dice", "req": ["r1"]}],
+                     "requirements": [{"id": "r1", "want": "بازی تاس",
+                                       "status": "covered", "features": ["dice"]}]}
+                    for version in versions]
+        payloads.append({"intent": "create", "name": "x",
+                         "features": [{"type": "dice", "req": ["r1"]}],
+                         "requirements": [{"id": "r1", "want": "بازی تاس",
+                                           "status": "covered", "features": ["dice"]}]})
+        for payload in payloads:
+            with self.subTest(version=payload.get("version", "<missing>")):
+                validated = spec.validate_spec(payload, require_requirements=True,
+                                                expected_intent="create")
+                self.assertEqual(validated["version"], spec.SPEC_VERSION)
+                self.assertIn("dice", [f["type"] for f in validated["features"]])
+
+    def test_malformed_version_does_not_bypass_semantic_validation(self):
+        payload = {"version": "Spec v1", "intent": "create", "name": "x",
+                   "features": [{"type": "dice", "params": ["invalid"]}],
+                   "requirements": [{"id": "r1", "want": "بازی تاس",
+                                     "status": "covered", "features": ["dice"]}]}
+        with self.assertRaises(spec.SpecError):
+            spec.validate_spec(payload, require_requirements=True, expected_intent="create")
+
+    def test_llm_json_parser_accepts_non_numeric_protocol_version(self):
+        import json
+        import sys
+        import types
+        from unittest.mock import patch
+
+        raw = json.dumps({
+            "version": "BUILD 3.6.2", "intent": "create", "name": "بازی",
+            "features": [{"type": "dice", "req": ["r1"]}],
+            "requirements": [{"id": "r1", "want": "بازی تاس",
+                              "status": "covered", "features": ["dice"]}],
+        }, ensure_ascii=False)
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            validated = spec.parse_llm_spec(raw, require_requirements=True, expected_intent="create")
+        self.assertEqual(validated["version"], spec.SPEC_VERSION)
+        self.assertEqual(validated["features"][0]["type"], "dice")
+
+    def test_spec_prompt_does_not_ask_model_to_generate_protocol_version(self):
+        messages = spec.spec_prompt("یه ربات بازی بساز")
+        system_prompt = messages[0]["content"]
+        self.assertIn("نسخهٔ Spec را تولید نکن", system_prompt)
+        self.assertNotIn('{"version":', system_prompt)
+
     def test_spec_rejects_missing_requirements_in_ai_mode(self):
         with self.assertRaises(spec.SpecError):
             spec.validate_spec({"version": 1, "intent": "create", "name": "x",
