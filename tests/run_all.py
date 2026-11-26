@@ -359,6 +359,136 @@ def _():
         _ai.llm_post = orig
 
 
+# ───────────────────────── ۱۰) ارتقای ربات موجود: Patch ساختاریافته، برخورد شناسه، تکرارپذیری ─────────────────────────
+import copy as _copy
+
+
+def _upgrade_pr(mid, params=None):
+    """PlanResult تک‌قابلیتی برای ارتقا (همان چیزی که _merge_spec_current از Spec می‌سازد)."""
+    pr = planner.PlanResult()
+    pr.items = [(mid, modules.clean_params(modules.MODULES[mid], params or {}))]
+    pr.name, pr.confidence = "ارتقا", 1.0
+    return pr
+
+
+@T("upgrade:add-game-to-bot-with-existing-quiz (root-cause of reported failure)")
+def _():
+    """سناریوی واقعی گزارش‌شده: «یه بازی جدید هم به بخش شروع ربات اضافه کن» روی رباتی که از قبل quiz دارد.
+    رفتار قدیمی: BuildError «بخش تکراری: quiz» → «کامپایلر قطعی خروجی معتبر نساخت» → شکست کل ارتقا.
+    رفتار درست: نمونهٔ مستقل با شناسهٔ یکتا اضافه می‌شود؛ بخش‌های قبلی دست‌نخورده می‌مانند."""
+    _, old, _ = _compile("quiz")
+    pr = _upgrade_pr("quiz")
+    th, cfg, _ = planner.merge_plan(old, pr)          # نباید exception بدهد
+    added = set(cfg["nodes"]) - set(old["nodes"])
+    assert added, "هیچ بخش تازه‌ای اضافه نشد"
+    assert all(i.startswith("quiz") for i in added), f"بخش‌های تازه به نمونهٔ quiz تعلق ندارند: {added}"
+    assert not (set(added) & set(old["nodes"])), "شناسهٔ تازه با شناسهٔ قبلی برخورد دارد"
+    start = cfg["nodes"][cfg["start"]]
+    gotos = {b.get("goto") for row in start.get("buttons", []) for b in row}
+    assert gotos & added, f"دکمهٔ منوی شروع به نمونهٔ تازه وصل نشد: {sorted(gotos)}"
+    # متغیر امتیاز نمونهٔ تازه مستقل شده باشد
+    assert "qscore_2" in (cfg.get("vars") or {}), f"متغیر مستقل نمونهٔ دوم ساخته نشد: {cfg.get('vars')}"
+    # همهٔ ارجاع‌های داخل بخش‌های تازه به شناسه‌های معتبر اشاره کنند
+    for nid in added:
+        n = cfg["nodes"][nid]
+        for row in n.get("buttons", []):
+            for b in row:
+                g = b.get("goto")
+                assert not g or g in cfg["nodes"], f"مسیر شکسته در {nid}: {g}"
+    _check_cfg(cfg, ["quiz"])
+
+
+@T("upgrade:previous-nodes-and-vars-untouched-after-merge")
+def _():
+    """Patch فقط اضافه می‌کند: هیچ بخش/متغیر/دستور قبلی عوض یا حذف نمی‌شود؛
+    بخش شروع هم فقط دکمهٔ تازه می‌گیرد (دکمه‌ها و متن قبلی به‌همان ترتیب می‌مانند)."""
+    _, old, _ = _compile("dice")
+    before = _copy.deepcopy(old)
+    th, cfg, _ = planner.merge_plan(old, _upgrade_pr("quiz"))
+    start_id = before.get("start") or "start"
+    for nid, n in before["nodes"].items():
+        if nid == start_id:
+            continue
+        assert cfg["nodes"].get(nid) == n, f"بخش قبلی {nid} تغییر کرد"
+    old_start, new_start = before["nodes"][start_id], cfg["nodes"][start_id]
+    assert new_start.get("text") == old_start.get("text"), "متن بخش شروع عوض شد"
+    key = lambda b: (b.get("goto") or b.get("text") or "")
+    old_btns = [key(b) for row in old_start.get("buttons", []) for b in row]
+    new_btns = [key(b) for row in new_start.get("buttons", []) for b in row]
+    assert len(new_btns) > len(old_btns), "دکمهٔ تازه به منوی شروع اضافه نشد"
+    assert new_btns[:len(old_btns)] == old_btns, "دکمه‌های قبلی منو جابه‌جا یا حذف شدند"
+    for k, v in (before.get("vars") or {}).items():
+        assert (cfg.get("vars") or {}).get(k) == v, f"متغیر قبلی {k} عوض شد"
+    for k, v in (before.get("commands") or {}).items():
+        assert (cfg.get("commands") or {}).get(k) == v, f"دستور قبلی {k} عوض شد"
+    _check_cfg(cfg, ["dice", "quiz"])
+
+
+@T("upgrade:repeat-upgrade-creates-independent-instances")
+def _():
+    """تکرار همان درخواست ارتقا (یا Retry): هر بار نمونهٔ مستقل تازه؛ بدون برخورد و بدون شکست."""
+    _, old, _ = _compile("quiz")
+    pr = _upgrade_pr("quiz")
+    th1, cfg1, _ = planner.merge_plan(old, pr)
+    th2, cfg2, _ = planner.merge_plan(cfg1, pr)
+    new1 = set(cfg1["nodes"]) - set(old["nodes"])
+    new2 = set(cfg2["nodes"]) - set(cfg1["nodes"])
+    assert new1 and new2, "دومین ارتقا نمونهٔ تازه نساخت"
+    assert not (new1 & new2), "شناسه‌های دو نمونهٔ متوالی برخورد دارد"
+    _check_cfg(cfg2, ["quiz"])
+
+
+@T("upgrade:no-collision-keeps-original-ids (backward compat)")
+def _():
+    """بدون برخورد، شناسه‌ها عوض نمی‌شوند؛ کانفیگ‌های قدیمی سازگار می‌مانند."""
+    _, old, _ = _compile("daily")
+    th, cfg, _ = planner.merge_plan(old, _upgrade_pr("quiz"))
+    for must in ("quiz", "quiz_end", "quiz_again"):
+        assert must in cfg["nodes"], f"شناسهٔ استاندارد {must} نباید عوض می‌شد"
+    _check_cfg(cfg, ["daily", "quiz"])
+
+
+@T("upgrade:ask_llm-edit-path-end-to-end (model stubbed)")
+def _():
+    """مسیر واقعی ارتقا: ask_llm با کانفیگ فعلی؛ مدل quiz برمی‌گرداند و ربات قبلاً quiz دارد.
+    باید نمونهٔ مستقل ساخته شود، نه خطای «کامپایلر قطعی خروجی معتبر نساخت»."""
+    import json as _json
+    _, old, _ = _compile("quiz")
+    spec_json = {"version": 1, "intent": "edit", "name": "ارتقا",
+                 "features": [{"type": "quiz", "params": {}}], "texts": {}}
+    orig = ai.llm_post
+
+    def _fake_model(messages, max_tokens, **k):
+        return _json.dumps(spec_json, ensure_ascii=False), {"prompt_tokens": 10, "completion_tokens": 10}
+
+    ai.llm_post = _fake_model
+    try:
+        th, cfg, ideas = ai.ask_llm("یه بازی جدید هم به بخش شروع ربات اضافه کن", old)
+    finally:
+        ai.llm_post = orig
+    assert set(old["nodes"]) <= set(cfg["nodes"]), "بخش‌های قبلی در مسیر ارتقا حذف شدند"
+    assert set(cfg["nodes"]) - set(old["nodes"]), "نمونهٔ تازه ساخته نشد"
+    _check_cfg(cfg, ["quiz"])
+
+
+@T("spec:duplicate-feature-deduped-instead-of-failing")
+def _():
+    """قابلیت تکراری در Spec (دوبار quiz از مدل) → ترمیم قطعی؛ نه SpecError که کل درخواست را می‌شکند."""
+    sp = {"version": 1, "intent": "create", "name": "تست",
+          "features": [{"type": "quiz", "params": {}}, {"type": "quiz", "params": {}}], "texts": {}}
+    v = spec.validate_spec(sp)
+    types = [f["type"] for f in v["features"]]
+    assert types.count("quiz") == 1, f"تکرار حذف نشد: {types}"
+
+
+@T("upgrade:merged-config-runs-on-engine (acceptance on real engine)")
+def _():
+    """خروجی ادغام‌شده باید روی موتور واقعی کار کند: دکمهٔ نمونهٔ تازه از منو قابل اجراست و قدیمی هم سالم است."""
+    _, old, _ = _compile("quiz")
+    th, cfg, _ = planner.merge_plan(old, _upgrade_pr("quiz"))
+    cfg = _check_cfg(cfg, ["quiz"])     # sanitize + lint + acceptance کامل
+
+
 # ───────────────────────── اجرا ─────────────────────────
 def main():
     passed = failed = 0

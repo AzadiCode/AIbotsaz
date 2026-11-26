@@ -187,34 +187,43 @@ const AIP = {
     <p class="aip-note">لغو رایگان است؛ ساخت فقط پس از تأیید این پیش‌نمایش و با تست پذیرش موتور تحویل می‌شود.</p>`;
   },
 
-  /* ── ساخت/ارتقا با خط Spec (کمترین مصرف مدل) ── */
+  /* ── ساخت/ارتقا با خط Spec (کمترین مصرف مدل) ──
+     هر نتیجه (موفقیت/شکست/بازبینی/خرید) در شیت مرکزی نشان داده می‌شود؛ پنل قبل از آن
+     به‌صورت کنترل‌شده بسته می‌شود تا گزارش هرگز زیر پنل نماند. درخواست و وضعیت پروژه حفظ می‌شود. */
   async build(){
     const ta = this.el?.querySelector("#aip-prompt");
     const p = (ta?.value || "").trim();
     if(p.length < 5) return toast("توضیح بیشتری بنویس");
     const botId = S.cur?.id || null;
     const cost = needCost(!!botId);
-    if(S.wallet.tokens < cost) return openBuy(`این کار حداقل ${cost} توکن می‌خواهد.`);
+    if(S.wallet.tokens < cost) { this.close(); return openBuy(`این کار حداقل ${cost} توکن می‌خواهد.`); }
     this.busy(true, botId ? "در حال ارتقا…" : "در حال ساخت…");
     try{
       const r0 = await api("/api/generate", "POST", { prompt: p, bot_id: botId });
       if(r0.wallet) { S.wallet = r0.wallet; renderTop(); }
       const r = await this.poll(r0.job);
-      this.busy(false);
-      if(r.status === "review"){ showBuildReview(r); return; }
-      /* موفقیت: ربات به‌روز شد؛ در استودیو می‌مانیم و تاریخچه/برگشت در دسترس است */
+      this._liveStop();
+      if(r.status === "review"){
+        this.close();
+        showBuildReview(r);
+        return;
+      }
+      /* موفقیت: ربات به‌روز شد؛ پنل بسته می‌شود تا استودیوی به‌روزشده دیده شود؛ درخواست برای ادامهٔ کار می‌ماند */
       if(r.bot){
         S.wallet = r.wallet || S.wallet;
         S.bots = [r.bot, ...S.bots.filter(b => b.id !== r.bot.id)];
         S.cur = r.bot; S.sbot = r.bot.id;
         if(S.view !== "studio"){ S.view = "studio"; }
         render(); bumpTokens();
+        this._lastOut = "";
+        this.close();
         toast((botId ? "ربات ارتقا یافت" : "ربات ساخته شد") + (r.cost ? `، ${N(r.cost)} توکن` : "") + " — تست پذیرش موتور پاس شد");
         haptic("ok");
       }
     }catch(e){
-      this.busy(false);
-      if(e.status === 402) return openBuy(e.message);
+      this._liveStop();
+      if(e.status === 402){ this.close(); return openBuy(e.message); }
+      this.close();
       showBuildFailure({job: e.job, canResume: e.canResume, wizard: e.wizard, error: e.message,
                         completedTasks: e.completedTasks, totalTasks: e.totalTasks, buildPhase: e.buildPhase});
     }

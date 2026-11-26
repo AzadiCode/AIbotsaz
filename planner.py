@@ -235,33 +235,75 @@ def is_additive(prompt):
     return not _EDIT_RX.search(t)
 
 
+def _unique_id(base, taken):
+    """شناسهٔ یکتای قطعی و قابل پیش‌بینی: quiz → quiz_2 → quiz_3 …
+    شناسه‌های قبلی کانفیگ هرگز عوض نمی‌شوند؛ فقط نمونهٔ تازه پسوند می‌گیرد."""
+    base = str(base or "x")
+    if base not in taken:
+        return base
+    i = 2
+    while f"{base}_{i}" in taken:
+        i += 1
+    return f"{base}_{i}"
+
+
 def merge_plan(current, pr):
-    """افزودن ماژول‌ها به ربات موجود بدون دست‌زدن به بخش‌های قبلی. اگر شناسهٔ بخشی تکراری باشد BuildError (مسیر قدیمی اجرا می‌شود)."""
+    """اعمال Patch ساختاریافته روی ربات موجود (مسیر ارتقا): فقط افزودن؛ هیچ بخش، متغیر یا مسیر قبلی حذف/بازنویسی نمی‌شود.
+
+    برخورد شناسه (رفع ریشه‌ای «بخش تکراری: quiz»): رفتار قدیمی هر برخورد را با شکست کل کامپایل جواب می‌داد و
+    ارتقای ساده‌ای مثل «یه بازی جدید اضافه کن» روی رباتی که همین قابلیت را داشت همیشه شکست می‌خورد.
+    رفتار درست: نمونهٔ جدید با شناسهٔ یکتا (quiz → quiz_2) به‌عنوان نمونهٔ مستقل اضافه می‌شود؛
+    دکمه‌ها و مسیرهای داخل بخش‌های تازه با همان بازنویسی قطعی (rw) به شناسهٔ جدید وصل می‌شوند.
+    متغیرهای تازهٔ هم‌نام با متغیرهای فعلی هم مستقل می‌شوند (qscore → qscore_2) و فقط ارجاع‌های داخل
+    بخش‌های تازه ({var}، شرط‌ها، اکشن‌ها و مقصد ذخیرهٔ فرم) بازنویسی می‌شوند؛ رفتار قبلی ربات دست‌نخورده می‌ماند."""
     import copy
+    import re as _re
     thinking, new, ideas = compile_plan(pr)
     cfg = copy.deepcopy(current)
     nodes = cfg.setdefault("nodes", {})
     start_id = cfg.get("start") or "start"
     if start_id not in nodes:
         raise BuildError("ربات فعلی گره شروع ندارد")
+    taken = set(nodes.keys())
     rename = {"start": start_id}
     for nid in new["nodes"]:
         if nid == "start":
             continue
-        if nid in nodes:
-            raise BuildError("بخش تکراری: " + nid)
-        rename[nid] = nid
+        uid = _unique_id(nid, taken)
+        rename[nid] = uid
+        taken.add(uid)
+
+    # متغیرهای نمونهٔ تازه که در ربات فعلی هم‌نام‌اند → شناسهٔ مستقل؛ ارجاع‌های قدیمی به هیچ‌وجه عوض نمی‌شوند
+    var_rename = {}
+    for k in ("vars", "globals"):
+        for kk in (new.get(k) or {}):
+            if kk in (cfg.get(k) or {}):
+                var_rename[kk] = _unique_id(kk, taken | set(cfg.get("vars") or {}) | set(cfg.get("globals") or {}))
 
     def rw(o):
         if isinstance(o, dict):
-            return {k: (rename.get(v, v) if k in ("goto", "next") and isinstance(v, str) else rw(v)) for k, v in o.items()}
+            out = {}
+            for k, v in o.items():
+                if k == "var" and isinstance(v, str):
+                    out[k] = var_rename.get(v, v)                    # اکشن‌ها و شرط‌ها
+                elif k == "save" and isinstance(v, list):
+                    out[k] = [var_rename.get(x, x) if isinstance(x, str) else x for x in v]   # مقصد ذخیرهٔ فرم
+                elif k in ("goto", "next") and isinstance(v, str):
+                    out[k] = rename.get(v, v)                        # مسیر دکمه‌ها و routeها
+                else:
+                    out[k] = rw(v)
+            return out
         if isinstance(o, list):
             return [rw(x) for x in o]
+        if isinstance(o, str) and var_rename:
+            for old_v, new_v in var_rename.items():
+                o = _re.sub(r"\{" + _re.escape(old_v) + r"(\||\})", "{" + new_v + r"\1", o)
+            return o
         return o
 
     for nid, n in new["nodes"].items():
         if nid != "start":
-            nodes[nid] = rw(n)
+            nodes[rename[nid]] = rw(n)
     ns = rw(new["nodes"]["start"])
     btns = [b for row in ns.get("buttons", []) for b in row]
     st = nodes[start_id]
@@ -271,9 +313,8 @@ def merge_plan(current, pr):
         for i in range(0, len(btns), 2):
             rows.append(btns[i:i + 2])
     else:
-        mid = "mm_more"
-        if mid in nodes:
-            raise BuildError("بخش تکراری: " + mid)
+        mid = _unique_id("mm_more", taken)
+        taken.add(mid)
         extra = [btns[i:i + 2] for i in range(0, len(btns), 2)][:5] + [[{"text": "بازگشت", "goto": start_id}]]
         nodes[mid] = {"text": "امکانات بیشتر:", "buttons": extra, "title": "امکانات بیشتر"}
         link = {"text": "امکانات بیشتر", "goto": mid}
@@ -288,7 +329,7 @@ def merge_plan(current, pr):
         st["route"] = st["route"][:5]
     for k in ("vars", "globals"):
         for kk, vv in (new.get(k) or {}).items():
-            cfg.setdefault(k, {}).setdefault(kk, vv)
+            cfg.setdefault(k, {}).setdefault(var_rename.get(kk, kk), vv)
     for kk, vv in (new.get("commands") or {}).items():
         cfg.setdefault("commands", {}).setdefault(kk, rename.get(vv, vv))
     for k in ("desk", "join", "mod", "group"):
@@ -303,6 +344,12 @@ def merge_plan(current, pr):
         if new.get("ref_text"):
             cfg.setdefault("ref_text", new["ref_text"])
     names = "، ".join(MODULES[i].fa for i in pr.ids)
-    thinking = f"این قابلیت‌ها بدون تغییر بخش‌های قبلی به ربات اضافه شد: {names}. دکمهٔ ورود به منوی اصلی اضافه شد." + \
-        ("\n" + thinking.split("\n", 1)[1] if "\n" in thinking else "")
+    notes = thinking.split("\n", 1)[1] if "\n" in thinking else ""
+    renamed = sorted({o for o, n in rename.items() if o != n and o != "start"})
+    thinking = f"این قابلیت‌ها بدون تغییر بخش‌های قبلی به ربات اضافه شد: {names}. دکمهٔ ورود به منوی اصلی اضافه شد."
+    if renamed:
+        thinking += "\n• چون بخش‌هایی با همین نام از قبل وجود داشت، قابلیت به‌صورت نمونهٔ مستقل با شناسهٔ جدید (" + \
+            "، ".join(f"{o} → {rename[o]}" for o in renamed[:3]) + ") اضافه شد و بخش‌های قبلی دست‌نخورده ماندند."
+    if notes:
+        thinking += "\n" + notes
     return thinking, cfg, ideas

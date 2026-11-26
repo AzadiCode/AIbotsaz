@@ -134,7 +134,11 @@ def validate_spec(obj):
             params = {k: v for k, v in params.items() if k in allowed}
         out_feats.append({"type": t, "params": params})
         if t in seen and t not in ("start_menu",):
-            errors.append(f"قابلیت {t} تکراری است")
+            # ترمیم قطعی (نه خطا): قابلیت تکراری از مدل/روتر فقط بار اول نگه داشته می‌شود.
+            # کامپایلر برای هر ماژول شناسهٔ ثابت می‌سازد؛ دوبار ساختن همان ماژول در یک Spec
+            # «شناسهٔ بخش تکراری» می‌سازد و کل کامپایل را می‌شکند. نمونه‌های مستقل فقط از
+            # درخواست‌های ارتقای جداگانه (merge_plan با شناسهٔ یکتا) درست ساخته می‌شوند.
+            out_feats.pop()
         seen.append(t)
         # کلیدهای اضافه روی خود قابلیت رد می‌شود (قرارداد: params فقط زیر کلید params)
         if set(f) - {"type", "params", "note"}:

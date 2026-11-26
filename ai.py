@@ -3009,13 +3009,18 @@ class WizardNeeded(RuntimeError):
 
 
 def _spec_current_summary(current):
-    """خلاصهٔ کوتاه پروژهٔ فعلی برای Spec ویرایش (intent=edit)."""
+    """خلاصهٔ کوتاه پروژهٔ فعلی برای Spec ویرایش (intent=edit).
+    منوی شروع هم داخل خلاصه می‌آید تا مدل بداند کاربر «کدام بخش» را می‌خواهد و چه قابلیتی از قبل هست؛
+    این خلاصه فقط برای انتخاب قابلیت است؛ ساخت/ادغام همچنان با کامپایلر قطعی انجام می‌شود."""
     if not isinstance(current, dict):
         return ""
     nodes = current.get("nodes") or {}
+    start = nodes.get(current.get("start") or "start") or {}
+    menu = [str(b.get("text") or "")[:20] for row in (start.get("buttons") or []) for b in row][:10]
     titles = [str(n.get("title") or nid)[:24] for nid, n in list(nodes.items())[:14]]
-    return "نام: %s | بخش‌ها (%d): %s | متغیرها: %s" % (
+    return "نام: %s | بخش‌ها (%d): %s | منوی شروع: %s | متغیرها: %s" % (
         str(current.get("name") or "")[:30], len(nodes), "، ".join(titles),
+        "، ".join(menu) or "—",
         "، ".join(list((current.get("vars") or {}).keys())[:12]))
 
 
