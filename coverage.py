@@ -21,6 +21,9 @@ _STOP = {
     "گروه", "مدیریت", "مدیر", "منو", "شروع", "ربات", "پیوی", "خصوصی", "عمومی", "دکمه", "اعضا",
     "محیط", "کردن", "کرد", "کنه", "کنند", "امکان", "قابلیت", "مختلف", "خودکار", "مستقل", "اعضای", "منوی",
     "کار", "داد", "بشه", "بشن", "باشه", "تنجام", "تنحام",
+    # Common grammatical / framing words emitted by weaker Persian models.
+    # These do not change the requested behavior and must not defeat an exact alias.
+    "قابل", "تغییر", "طریق", "عملکرد", "عنوان", "ابزار", "اجرای", "خواهد",
 }
 _WEAK_TRIGGER_HITS = {"منو", "گروه", "ربات", "شروع", "مدیر", "مدیریت", "بخش", "دکمه", "پیوی", "خصوصی"}
 
@@ -77,12 +80,19 @@ def norm_requirements(raw):
         if len(part) > 120:
             errors.append(f"محل/بخش نیازمندی {rid} بیش از ۱۲۰ نویسه است")
             continue
+        source_quote = str(r.get("source_quote") or r.get("quote") or "").strip()
+        if len(source_quote) > 240:
+            errors.append(f"عبارت مستند نیازمندی {rid} بیش از ۲۴۰ نویسه است")
+            continue
         reqs.append({
             "id": rid, "want": want, "part": part,
+            "source_quote": source_quote,
             "status": st, "features": feats,
             "why": str(r.get("why") or "").strip()[:400],
             "upgrade": str(r.get("upgrade") or "").strip()[:300],
-            "source": str(r.get("source") or "model")[:30],
+            # Provenance is server-owned. Never trust a model-supplied value such as
+            # "salvage" or "catalog_reconciliation" to alter reporting semantics.
+            "source": "model",
         })
     if not reqs and not errors:
         errors.append("فهرست requirements خالی است")
@@ -159,6 +169,31 @@ def _semantic_tokens(text):
             t = re.sub(pattern, " ", t, flags=re.I)
     concepts.update(_tokens(t))
     return concepts
+
+
+# Internal implementation vocabulary must not be invented by the model as if
+# the user had requested it. It is allowed only when present in the original request.
+_TECHNICAL_MARKERS = {
+    "database": r"دیتابیس|پایگاه\s*داده|database|\bdb\b",
+    "connection": r"اتصال|وصل(?:کردن|شدن)?|ارتباط|connection|connect",
+    "custom_development": r"توسعه|پیاده\s*سازی|پیاده‌سازی|اختصاصی|custom\s*development|implementation",
+    "module": r"ماژول|module",
+    "catalog": r"کاتالوگ|catalog",
+    "compiler": r"کامپایلر|compiler",
+    "schema": r"اسکیما|schema",
+    "identifier": r"شناسه|identifier",
+}
+
+def unsupported_technical_terms(want, prompt):
+    """Technical implementation concepts in a model-written requirement that
+    the user did not mention. These are evidence of prompt/Spec contamination,
+    not new user requirements."""
+    want = normalize_text(str(want or "")).casefold()
+    prompt = normalize_text(str(prompt or "")).casefold()
+    if not want or not prompt:
+        return []
+    return [name for name, pattern in _TECHNICAL_MARKERS.items()
+            if re.search(pattern, want, re.I) and not re.search(pattern, prompt, re.I)]
 
 
 def _alias_match(alias, text, module_id=""):
@@ -302,26 +337,45 @@ def _req_match_text(req):
     return (want + " " + str(req.get("part") or "")).strip()
 
 
-def _contextual_req_text(req, prompt=""):
-    """Use the original request only to resolve a private-settings clause that
-    explicitly belongs to the same group-management task. Never leak unrelated
-    request clauses into matching for arbitrary requirements.
+def _req_match_variants(req, prompt=""):
+    """Return separate, grounded phrasings for matching one user requirement.
+
+    The model's concise `want` and its verbatim source quote are independent
+    evidence. The full prompt is used only to anchor a private-settings clause to
+    group management when both concepts occur in the same original request.
     """
-    text = _req_match_text(req)
-    req_terms = _semantic_tokens(text)
+    want = _req_match_text(req)
+    quote = str(req.get("source_quote") or "").strip()
+    variants = []
+    for value in (want, quote):
+        value = str(value or "").strip()
+        if value and value not in variants:
+            variants.append(value)
     context_terms = _semantic_tokens(prompt)
-    if {"settings", "private_chat", "bot"}.issubset(req_terms) and {"group", "management"}.issubset(context_terms):
-        return text + " مدیریت گروه"
-    return text
+    for value in tuple(variants):
+        terms = _semantic_tokens(value)
+        if unsupported_technical_terms(value, prompt):
+            continue
+        if {"settings", "private_chat"}.issubset(terms) and {"group", "management"}.issubset(context_terms):
+            # Add only the task anchor, not the other clauses from the whole prompt.
+            anchored = value + " تنظیمات گروه مدیریت"
+            if anchored not in variants:
+                variants.append(anchored)
+    return variants or [want]
 
 
-def _served_by(req, types_selected):
-    """Coverage requires an actual selected module and a verified semantic link."""
+def _contextual_req_text(req, prompt=""):
+    """Compatibility helper; prefer the strongest first variant."""
+    return _req_match_variants(req, prompt)[-1]
+
+
+def _served_by(req, types_selected, prompt=""):
+    """Coverage requires a selected module and a semantically relevant, user-grounded link."""
+    if unsupported_technical_terms(req.get("want") or "", prompt):
+        return False
     mapped = [mid for mid in _mapped_ids(req) if mid in types_selected]
-    if mapped and req.get("source") in ("catalog_reconciliation", "catalog_reconciliation_context"):
-        return True
-    text = _req_match_text(req)
-    return any(_module_match(mid, text)[0] for mid in mapped)
+    variants = _req_match_variants(req, prompt)
+    return any(_module_match(mid, text)[0] for mid in mapped for text in variants)
 
 
 def _static_limit_for(want, prompt):
@@ -365,11 +419,18 @@ def _contract_matches(text):
 def _classify_catalog_candidate(req, prompt, selected=()):
     """An existing matching module means a Spec/planning defect, never catalog-missing."""
     import defects as _defects
-    text = _contextual_req_text(req, prompt)
-    candidates = catalog_candidates(text)
+    variants = _req_match_variants(req, prompt)
+    text = variants[0]
+    candidates_by_id = {}
+    for variant in variants:
+        for candidate in catalog_candidates(variant):
+            old = candidates_by_id.get(candidate["id"])
+            if old is None or candidate["score"] > old["score"]:
+                candidates_by_id[candidate["id"]] = candidate
+    candidates = sorted(candidates_by_id.values(), key=lambda x: (-x["score"], x["id"]))
     mapped = _mapped_ids(req)
     selected = set(selected or ())
-    mapped_hits = [mid for mid in mapped if _module_match(mid, text)[0]]
+    mapped_hits = [mid for mid in mapped if any(_module_match(mid, value)[0] for value in variants)]
     if mapped_hits:
         chosen = mapped_hits[0]
         return _defects.build_defect(
@@ -399,14 +460,14 @@ def _classify_catalog_candidate(req, prompt, selected=()):
     # A requirement may bundle a known behavior with another clause. Do not call the
     # entire bundle catalog-missing; report a planning/decomposition defect instead.
     partial = []
-    req_terms = _semantic_tokens(text)
     for mid, mod in MODULES.items():
-        score, hits = _module_relevance(mid, text)
-        hit_terms = _semantic_tokens(" ".join(hits))
-        supported_terms = _semantic_tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits)))
-        unexplained = req_terms - supported_terms
-        if score >= 0.75 and hits and unexplained:
-            partial.append((score, mid, hits, unexplained))
+        for variant in variants:
+            req_terms = _semantic_tokens(variant)
+            score, hits = _module_relevance(mid, variant)
+            supported_terms = _semantic_tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits)))
+            unexplained = req_terms - supported_terms
+            if score >= 0.75 and hits and unexplained:
+                partial.append((score, mid, hits, unexplained))
     if partial:
         partial.sort(key=lambda x: (-x[0], x[1]))
         best = partial[0]
@@ -426,6 +487,15 @@ def classify_uncovered(req, prompt="", selected=()):
     import defects as _defects
     want = (req.get("want") or "").strip()
     mapped = _mapped_ids(req)
+
+    unsupported = unsupported_technical_terms(want, prompt)
+    if unsupported:
+        return _defects.build_defect(
+            mapped[0] if mapped else "", want,
+            "Spec جزئیات اجرایی/فنی‌ای را به نیازمندی افزوده که در متن اصلی کاربر وجود ندارد: " + ", ".join(unsupported),
+            stage="spec", severity="high", suggested_capability=mapped[0] if mapped else "",
+            acceptance_criteria=("نیازمندی فقط رفتار خواسته‌شده توسط کاربر را بیان کند", "source_quote مستقل و دقیق از متن درخواست داشته باشد"),
+            upgrade="اصلاح استخراج نیازمندی؛ حذف جزئیات فنی استنباط‌شده از ردیف خواسته‌های کاربر")
 
     # An existing relevant module takes precedence over a model's ENGINE_LIMIT/CATALOG_MISSING claim.
     existing = _classify_catalog_candidate(req, prompt, selected)
@@ -489,15 +559,24 @@ def reconcile_spec(spec, prompt=""):
     for req in requirements:
         if not isinstance(req, dict):
             continue
-        text = _contextual_req_text(req, prompt)
+        if unsupported_technical_terms(req.get("want") or "", prompt):
+            continue
+        variants = _req_match_variants(req, prompt)
+        text = variants[0]
         # Only a requirement already marked covered may short-circuit recovery.
         # A model can incorrectly label an existing, selected module as
         # catalog_missing/engine_limit; trusting that status made the same request
         # alternate between success and false limitation reports across model runs.
-        if req.get("status") == "covered" and _served_by(req, selected):
+        if req.get("status") == "covered" and _served_by(req, selected, prompt):
             continue
         mapped = _mapped_ids(req)
-        candidates = catalog_candidates(text)
+        candidates_by_id = {}
+        for variant in variants:
+            for candidate in catalog_candidates(variant):
+                old = candidates_by_id.get(candidate["id"])
+                if old is None or candidate["score"] > old["score"]:
+                    candidates_by_id[candidate["id"]] = candidate
+        candidates = sorted(candidates_by_id.values(), key=lambda x: (-x["score"], x["id"]))
         if mapped:
             mapped_candidates = [x for x in candidates if x["id"] in mapped]
             if mapped_candidates:
@@ -519,21 +598,23 @@ def reconcile_spec(spec, prompt=""):
         req["status"] = "covered"
         req["why"] = ""
         req["upgrade"] = ""
-        req["source"] = "catalog_reconciliation_context" if text != _req_match_text(req) else "catalog_reconciliation"
+        req["source"] = "catalog_reconciliation_context" if any(v != _req_match_text(req) for v in variants) else "catalog_reconciliation"
         changed.append(mid)
     return list(dict.fromkeys(changed))
 
 
-def covered_requirements(spec):
+def covered_requirements(spec, prompt=""):
+
     """Return only request requirements backed by a semantically relevant selected module."""
     selected = {f.get("type") for f in (spec.get("features") or []) if isinstance(f, dict)}
     return [r for r in (spec.get("requirements") or [])
-            if isinstance(r, dict) and r.get("status") == "covered" and _served_by(r, selected)]
+            if isinstance(r, dict) and r.get("status") == "covered" and _served_by(r, selected, prompt)]
 
 
-def has_meaningful_coverage(spec):
+def has_meaningful_coverage(spec, prompt=""):
+
     """A general shell/menu alone is not evidence that the user's core request was built."""
-    return bool(covered_requirements(spec))
+    return bool(covered_requirements(spec, prompt))
 
 
 def unmet_items(spec, prompt=""):
@@ -542,14 +623,15 @@ def unmet_items(spec, prompt=""):
     for r in spec.get("requirements") or []:
         if not isinstance(r, dict):
             continue
-        if r.get("status") == "covered" and _served_by(r, selected):
+        if r.get("status") == "covered" and _served_by(r, selected, prompt):
             if not _static_limit_for(r.get("want") or "", ""):
                 continue
         out.append(classify_uncovered(r, prompt, selected))
     return [x for x in out if isinstance(x, dict)]
 
 
-def coverage_report(spec):
+def coverage_report(spec, prompt=""):
+
     reqs = [r for r in (spec.get("requirements") or []) if isinstance(r, dict)]
     if not reqs:
         return None
@@ -557,11 +639,11 @@ def coverage_report(spec):
     items, n_cov = [], 0
     for r in reqs:
         dedicated = False
-        covered = r.get("status") == "covered" and _served_by(r, types_selected)
+        covered = r.get("status") == "covered" and _served_by(r, types_selected, prompt)
         if covered:
             n_cov += 1
             mapped = [mid for mid in _mapped_ids(r) if mid in types_selected and
-                      (_served_by(r, types_selected) or _module_match(mid, _req_match_text(r))[0])]
+                      (_served_by(r, types_selected, prompt) or _module_match(mid, _req_match_text(r))[0])]
             fa = "، ".join(MODULES[t].fa for t in mapped) or "—"
             try:
                 from engine_accept import _SCENARIOS

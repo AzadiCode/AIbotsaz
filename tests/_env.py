@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""tests/_env.py — بوت‌استرپ محیط تست: متغیرهای الزامی قبل از importهای پروژه."""
+"""Test-only environment defaults; no production settings are changed."""
 import os
 
 _DEFAULTS = {
@@ -8,8 +8,8 @@ _DEFAULTS = {
     "AI_BASE_URL": "https://ai.test.local",
     "AI_API_KEY": "test-key",
     "AI_MODEL": "test-model",
-    "MONGO_URI": "",            # خالی = mongomock در core
+    "MONGO_URI": "",  # Empty URI selects mongomock in core.
     "AI_MODULES": "1",
 }
-for k, v in _DEFAULTS.items():
-    os.environ.setdefault(k, v)
+for _key, _value in _DEFAULTS.items():
+    os.environ.setdefault(_key, _value)

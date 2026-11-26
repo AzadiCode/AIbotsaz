@@ -101,50 +101,34 @@ def _allowed_param_keys(mod):
     return {s["k"] for s in mod.params}
 
 
-def _salvage_requirement_rows(reqs, salvaged):
-    """قابلیت‌های خارج از کاتالوگ → ردیف نیازمندی صادقانهٔ catalog_missing (قطعی؛ بدون LLM).
-    قاعده: هیچ خواسته‌ای به‌خاطر «نام قابلیت نادرستِ مدل» نباید کل ساخت را بشکند و هیچ خواسته‌ای هم بی‌صدا حذف نشود.
-      • ردیف نیازمندی که همهٔ ادعاهایش قابلیت‌های خارج از کاتالوگ بود → catalog_missing صادقانه می‌شود.
-      • برای قابلیت salvage‌شده که ردیف شناخته‌شده‌ای نداشت → ردیف تازه با want از note مدل ساخته می‌شود.
-    خروجی: فهرست ردیف‌های تازه (reqs درجا هم اصلاح می‌شود)."""
-    stypes = {s["type"] for s in salvaged if s.get("type") and s["type"] != "؟"}
-    rows = []
-    seen_ids = {r.get("id") for r in reqs}
-    if stypes:
-        for r in reqs:
-            if r.get("status") != "covered":
-                continue
-            claimed = {str(x) for x in (r.get("features") or [])}
-            if claimed and claimed <= stypes:
-                r["status"] = "catalog_missing"
-                r["why"] = r.get("why") or (
-                    "قابلیت‌های «" + "، ".join(sorted(claimed)) + "» در کاتالوگ ربات‌ساز وجود ندارند؛ "
-                    "این خواسته در خروجی اجرا نمی‌شود و صادقانه ثبت شد.")
-                r["features"] = []
-    n = 0
-    for s in salvaged:
-        ftype = s.get("type") or "؟"
-        linked = [rid for rid in (s.get("req") or []) if rid in seen_ids]
-        if linked and any(r.get("id") in linked and r.get("status") == "catalog_missing" for r in reqs):
-            continue          # خواستهٔ همین قابلیت از قبل به‌صورت صادقانه ثبت شده است
-        want = s.get("note") or f"قابلیت «{ftype}»"
-        if any(r.get("want") == want for r in reqs):
-            continue
-        n += 1
-        rid = f"s{n}"
-        while rid in seen_ids:
-            n += 1
-            rid = f"s{n}"
-        seen_ids.add(rid)
-        rows.append({"id": rid, "want": want, "part": "—", "status": "catalog_missing",
-                     "features": [],
-                     "why": f"قابلیت «{ftype}» در کاتالوگ ربات‌ساز وجود ندارد؛ به‌جای رد کل درخواست، "
-                            "این خواسته صادقانه ثبت شد و در خروجی اجرا نمی‌شود.",
-                     "upgrade": "", "source": "salvage"})
-    return rows
+def _salvage_requirement_rows(reqs, salvaged, selected_features=(), selected_req_links=()):
+    """Never turn model-authored feature notes into user requirements.
+
+    Unknown feature IDs are diagnostics about the model's proposed implementation.
+    The only source of user intent is the explicit, source-grounded requirements
+    array. A genuine unsupported user request must already exist there as a row.
+    """
+    return []
 
 
-def validate_spec(obj, require_requirements=False, expected_intent=None, request_context=""):
+def _grounding_tokens(value):
+    text = normalize_text(value).casefold()
+    return re.findall(r"[a-z0-9_]+|[\u0600-\u06FF]+", text)
+
+
+def _quote_is_grounded(quote, request):
+    """Require a verbatim contiguous phrase from the user's original request."""
+    q = _grounding_tokens(quote)
+    source = _grounding_tokens(request)
+    if not q or not source or len(q) > len(source):
+        return False
+    for i in range(len(source) - len(q) + 1):
+        if source[i:i + len(q)] == q:
+            return True
+    return False
+
+
+def validate_spec(obj, require_requirements=False, expected_intent=None, request_context="", require_grounded_quotes=False):
     """
     JSON خام → Spec اعتبارسنجی‌شده.
     مراحل: ساختار → نسخه/نیت → نام → قابلیت‌ها (Enum + پارامترها) → وابستگی‌ها → متن‌ها.
@@ -279,9 +263,47 @@ def validate_spec(obj, require_requirements=False, expected_intent=None, request
 
     # 5.5) نیازمندی‌ها (Requirement Coverage): نرمال‌سازی + سازگاری با قابلیت‌های انتخابی
     reqs_raw = obj.get("requirements")
+    dropped_requirement_ids = set()
     if isinstance(reqs_raw, list) and reqs_raw:
         reqs, req_errs = _norm_requirements(reqs_raw)
         errors += req_errs
+        if require_grounded_quotes and request_context:
+            quote_owner = {}
+            grounded_reqs = []
+            dropped_requirement_ids = set()
+            import coverage as _coverage
+            import logging as _logging
+            _spec_log = _logging.getLogger("aibot")
+            for req in reqs:
+                quote = str(req.get("source_quote") or "").strip()
+                rid = req.get("id")
+                if not quote:
+                    errors.append(f"نیازمندی {rid} فاقد source_quote است؛ هر خواسته باید به عبارت واقعی درخواست کاربر مستند باشد")
+                    continue
+                if not _quote_is_grounded(quote, request_context):
+                    errors.append(f"source_quote نیازمندی {rid} در متن اصلی کاربر وجود ندارد؛ احتمالاً نیازمندی ساختگی یا جزئیات فنی تولیدشده توسط مدل است")
+                    continue
+                unsupported = _coverage.unsupported_technical_terms(req.get("want") or "", request_context)
+                if unsupported:
+                    # The user did not ask for these implementation details. Do not
+                    # turn a model's explanation (database/connection/custom module)
+                    # into a fake user requirement or let it poison an otherwise valid
+                    # Spec. Drop only this contaminated row; its original source quote
+                    # remains available to a separately grounded behavioral requirement.
+                    _spec_log.warning(
+                        "Dropped model-invented Spec requirement %s; unsupported technical terms=%s",
+                        rid, unsupported)
+                    dropped_requirement_ids.add(str(rid))
+                    continue
+                signature = " ".join(_grounding_tokens(quote))
+                if signature in quote_owner:
+                    errors.append(f"نیازمندی‌های {quote_owner[signature]} و {rid} از یک source_quote تکراری استفاده کرده‌اند؛ هر رفتار مستقل باید مستند جداگانه داشته باشد")
+                else:
+                    quote_owner[signature] = rid
+                    grounded_reqs.append(req)
+            reqs = grounded_reqs
+            if not reqs:
+                errors.append("هیچ نیازمندی رفتاریِ معتبر و مستند از متن کاربر باقی نماند؛ توضیحات فنی مدل جای خواسته کاربر را نمی‌گیرد")
     else:
         reqs = None
         if require_requirements:
@@ -296,7 +318,7 @@ def validate_spec(obj, require_requirements=False, expected_intent=None, request
                 normalized.append(canon or raw_id)
             r["features"] = list(dict.fromkeys(normalized))
         for f in out_feats:
-            unknown_links = [rid for rid in f["req"] if rid not in valid_rids]
+            unknown_links = [rid for rid in f["req"] if rid not in valid_rids and rid not in dropped_requirement_ids]
             if unknown_links:
                 errors.append(f"قابلیت {f['type']} به شناسه نیازمندی ناموجود وصل شده: {', '.join(unknown_links[:4])}")
             f["req"] = [rid for rid in f["req"] if rid in valid_rids]
@@ -340,8 +362,11 @@ def validate_spec(obj, require_requirements=False, expected_intent=None, request
         reqs = [{"id": f"r{i}", "want": f"فعال‌سازی قابلیت «{MODULES[t].fa}»", "part": "منوی اصلی ربات",
                  "status": "covered", "features": [t], "why": "", "upgrade": "", "source": "auto"}
                 for i, t in enumerate(dict.fromkeys(selected), 1)]
-    # 5.6) salvage: قابلیت‌های خارج از کاتالوگ → ردیف نیازمندی صادقانهٔ catalog_missing (ترمیم قطعی؛ بدون شکستن Spec)
-    reqs += _salvage_requirement_rows(reqs, salvaged)
+    # 5.6) Unknown feature ids may only affect a real, linked request requirement.
+    # Model-authored notes must never become fabricated user requirements.
+    selected_req_links = {rid for feature in out_feats for rid in (feature.get("req") or [])}
+    _salvage_requirement_rows(reqs, salvaged, selected_features=selected,
+                              selected_req_links=selected_req_links)
     for r in reqs:
         mapped = set(r.get("features") or []) | set(backref.get(r["id"]) or [])
         if r["status"] == "covered":
@@ -445,57 +470,79 @@ def preview_spec(spec):
 
 # ───────────────────────── تولید Spec با مدل (یک فراخوانی) ─────────────────────────
 def spec_prompt(prompt_text, current_summary="", lang="fa"):
-    """Build a requirement-complete prompt against the actual registered catalog."""
+    """Build a compact, grounded requirement prompt from the actual catalogue."""
     from modules import catalog
     from caps import CAPS_CONTRACT
-    lines = ["-" * 60]
-    for m in catalog():
-        ps = ", ".join(f"{s['k']}({s['kind']}, پیش‌فرض={str(s['default'])[:60]})" for s in m["params"]) or "بدون پارامتر"
-        aliases = "، ".join(m.get("aliases") or []) or "—"
-        lines.append(f"type={m['id']} | نام={m['fa']} | شرح رفتار واقعی={m['desc']} | عبارت‌های معادل درخواست={aliases} | دسته={m['cat']} | وابستگی={','.join(m['requires']) or 'هیچ'} | پارامترها={ps}")
-    cats = "\n".join(lines)
-    engine_only = [f"{c.get('id')} | {c.get('title')} | status={c.get('status')} | limits={'; '.join(map(str, c.get('limits') or []))[:180]}"
-                   for c in CAPS_CONTRACT.values() if c.get("status") in ("engine_only", "unsupported")]
-    engine_knowledge = "\n".join(engine_only[:40]) or "—"
+
+    lines = []
+    for module in catalog():
+        params = ",".join(f"{p['k']}:{p['kind']}" for p in (module.get("params") or []))
+        aliases = "،".join((module.get("aliases") or [])[:16])
+        desc = str(module.get("desc") or "")[:150]
+        lines.append(
+            f"{module['id']}|{module['fa']}|{desc}|alias:{aliases or '-'}|params:{params or '-'}"
+        )
+    catalog_text = "\n".join(lines)
+    contracts = []
+    for contract in CAPS_CONTRACT.values():
+        status = contract.get("status")
+        if status in ("engine_only", "unsupported"):
+            contracts.append(
+                f"{contract.get('id')}|{contract.get('title')}|{status}|" +
+                ";".join(map(str, contract.get("limits") or []))[:90]
+            )
+    engine_text = "\n".join(contracts[:20]) or "-"
     editing = bool(current_summary)
     intent = "edit" if editing else "create"
-    ask = (
-        "فقط قابلیت‌های ثبت‌شده در کاتالوگ زیر قابل انتخاب‌اند. قابلیت خارج از کاتالوگ را در features جعل نکن.\n"
-        "درخواست را به کوچک‌ترین نیازمندی‌های مستقل و قابل مشاهده برای کاربر تفکیک کن؛ هر رفتار، مقصد، شرط، ورودی و خروجی خواسته‌شده باید ردیف جداگانه داشته باشد.\n"
-        "فیلد part فقط محل قرارگیری/اجرای قابلیت (مثلاً منوی شروع یا پیوی) است و به‌تنهایی یک قابلیت نیست؛ انتخاب ماژول باید از روی want انجام شود.\n"
-        "هر نیازمندی باید دقیقاً به قابلیت‌هایی متصل شود که شرح رفتار واقعی آن‌ها همان نیازمندی را اجرا می‌کند. شباهت کلی موضوع کافی نیست.\n"
-        "قابلیت عمومی مانند منوی شروع، درباره ما، لینک، پشتیبانی و FAQ را فقط وقتی انتخاب کن که کاربر همان قابلیت را خواسته باشد؛ هرگز آن را جایگزین رفتار تخصصی نکن.\n"
-        "اگر قابلیت موجود در کاتالوگ دقیقاً مرتبط است، آن را انتخاب کن؛ حتی اگر نام کاربر با نام ماژول متفاوت باشد. اگر هیچ ماژول مرتبطی نیست، catalog_missing ثبت کن. ENGINE_LIMIT فقط وقتی مجاز است که در اطلاعات توانایی موتور، عدم پشتیبانی صریح ثبت شده باشد.\n"
-        "برای status=covered، دست‌کم یک feature مرتبط لازم است و همان feature باید با req به شناسه نیازمندی وصل شود. برای catalog_missing/engine_limit، features خالی باشد.\n"
+
+    instructions = (
+        "تو فقط برنامه‌ریز هستی؛ کد یا کانفیگ اجرایی تولید نکن. خروجی فقط یک JSON مطابق قرارداد زیر باشد.\n"
+        "درخواست کاربر را به نیازمندی‌های مستقل و قابل مشاهده برای کاربر تقسیم کن. هر requirement باید دقیقاً یک source_quote داشته باشد که عیناً، پیوسته و بدون بازنویسی از متن درخواست کاربر کپی شده باشد.\n"
+        "source_quote تنها مدرک مجاز برای اثبات اینکه خواسته واقعاً از کاربر آمده است. عبارت‌های نمونه، متن این دستور، شناسه‌های نمونه و توضیحات فنی خودت را هرگز به‌عنوان خواسته کاربر وارد نکن.\n"
+        "در requirements فقط رفتار یا نتیجه‌ای را ثبت کن که کاربر واقعاً خواسته است؛ تحلیل داخلی مثل نیاز به دیتابیس، اتصال، توسعه اختصاصی، Compiler، کاتالوگ یا شناسه ماژول، requirement کاربر نیست مگر صریحاً خودش خواسته باشد.\n"
+        "هر source_quote باید کوتاه‌ترین عبارت دقیق و مستقل از متن کاربر باشد؛ دو requirement نباید یک quote تکراری داشته باشند. want نباید مفهوم فنی یا رفتاری تازه‌ای اضافه کند که در درخواست کاربر نیست.\n"
+        "اگر یک بند دو رفتار مستقل دارد، آن را تفکیک کن و برای هرکدام quote دقیق و جداگانه بده. محل اجرا را فقط در part بنویس؛ محل اجرا را به رفتار جدید تبدیل نکن.\n"
+        "features فقط شناسه واقعی ماژول‌های فهرست‌شده باشد. هر feature باید req را به شناسه requirement مربوط وصل کند و هر requirement با وضعیت covered باید حداقل یک feature واقعی و مرتبط داشته باشد.\n"
+        "قابلیت عمومی مثل start_menu/about/support/faq جایگزین رفتار تخصصی نیست. اگر قابلیت آماده مرتبط وجود دارد حتماً همان را انتخاب کن. اگر وجود ندارد، فقط همان requirement مستند را catalog_missing ثبت کن. engine_limit فقط وقتی مجاز است که قرارداد موتور صریحاً unsupported اعلام کرده باشد.\n"
+        "فیلدهای ریشه: intent, name, emoji, payments, requirements, features, texts. intent باید همین مقدار از پیش تعیین‌شده باشد: " + intent + ".\n"
+        "هر عنصر requirements: id, want, source_quote, part, status, features, why, upgrade. هر عنصر features: type, params, req, note. نسخه Spec را ننویس.\n"
+        "نسخهٔ Spec را تولید نکن؛ برنامه آن را تنظیم می‌کند. پاسخ باید JSON معتبر باشد؛ هیچ توضیح یا Markdown بیرون JSON ننویس."
     )
     if editing:
-        ask += ("این درخواست ویرایش/توسعهٔ ربات موجود است، نه ساخت دوبارهٔ آن. فقط قابلیت‌هایی را در features بیاور که همین درخواست می‌خواهد اضافه یا توسعه دهد؛ ")
-        ask += ("قابلیت‌های موجود در خلاصه، زمینه و محدودیت نام‌گذاری هستند و نباید دوباره بی‌دلیل تولید شوند. شناسه‌ها و رفتارهای موجود را حفظ کن.\n")
-    cur = f"\nوضعیت ساختاری ربات فعلی (مرجع الزامی برای intent=edit):\n{current_summary[:6000]}\n" if editing else ""
-    sys_part = (
-        "تو معمار و برنامه‌ریز ربات تلگرام هستی. فقط Spec JSON معتبر تولید کن؛ کد یا کانفیگ موتور ننویس.\n" + ask +
-        "\nکاتالوگ ماژول‌های آماده و قابل تولید:\n" + cats +
-        "\n\nدانش قراردادی موتور درباره توانایی‌های بدون ماژول آماده:\n" + engine_knowledge +
-        "\nقاعده وضعیت: ready یعنی ماژول آماده؛ engine_only یعنی موتور primitive دارد اما ماژول آماده ندارد (catalog_missing)؛ unsupported فقط یعنی موتور صریحاً پشتیبانی نمی‌کند (engine_limit).\n"
-        "\nنسخهٔ Spec را تولید نکن؛ این فیلد را حذف کن چون برنامه آن را هنگام اعتبارسنجی تنظیم می‌کند.\n"
-        "\nقالب خروجی (فقط JSON):\n" +
-        '{"intent":"' + intent + '","name":"نام کوتاه ربات","emoji":false,"payments":false,'
-        '"requirements":[{"id":"r1","want":"رفتار دقیق موردنظر کاربر","part":"محل/بخش","status":"covered","features":["شناسه واقعی قابلیت"]}],'
-        '"features":[{"type":"شناسه واقعی کاتالوگ","params":{},"req":["r1"],"note":""}],'
-        '"texts":{}}\n'
-        "قوانین اجباری:\n"
-        "1) تعداد requirements با تعداد خواسته‌های مستقل کاربر برابر باشد؛ هیچ خواسته‌ای حذف، ادغام مبهم یا خلاصه نشود.\n"
-        "2) `want` باید رفتار قابل اجرا را توصیف کند، نه نام کلی مثل «ربات حرفه‌ای».\n"
-        "3) اگر یک جمله چند کار مستقل می‌خواهد، آن را به چند requirement تفکیک کن.\n"
-        "4) هر feature فقط به requirementهایی وصل شود که واقعاً همان feature اجرا می‌کند.\n"
-        "5) برای هر قابلیت، پارامترهای لازم را از متن درخواست استخراج کن؛ مقدار ساختگی یا محتوای نمونه را به‌عنوان داده واقعی کاربر نساز.\n"
-        "6) بخش/منوی عمومی یا قالب پیش‌فرض را برای پرکردن خروجی اضافه نکن، مگر برای شروع فنی لازم باشد؛ شروع فنی نباید به‌عنوان پوشش نیازمندی شمرده شود.\n"
-        "7) قابلیت موجود را به اشتباه catalog_missing اعلام نکن؛ ابتدا شناسه‌ها، نام فارسی، شرح و رفتار کاتالوگ را تطبیق بده.\n"
-        "8) برای هر بخش ناموجود، دلیل مشخص و راهکار واقعی بده؛ از عبارت‌های کلی خودداری کن.\n"
-        + cur
+        instructions += (
+            "\nاین توسعه ربات موجود است. فقط قابلیت‌های درخواست فعلی را در features قرار بده؛"
+            " ساختارهای فعلی صرفاً زمینه‌اند و نباید بی‌دلیل دوباره تولید یا حذف شوند."
+        )
+    current = ""
+    if editing and current_summary:
+        # The bot summary is already compact JSON. Never slice serialized JSON at an
+        # arbitrary character boundary: a truncated object makes the model infer a
+        # malformed or incomplete current project. Prune whole low-priority entries.
+        try:
+            summary_obj = json.loads(current_summary) if isinstance(current_summary, str) else current_summary
+        except Exception:
+            summary_obj = {"summary_text": str(current_summary)[:1200]}
+        if isinstance(summary_obj, dict):
+            def _pack_summary():
+                return json.dumps(summary_obj, ensure_ascii=False, separators=(",", ":"))
+            for key in ("relevant_nodes", "node_index", "vars", "globals", "commands"):
+                values = summary_obj.get(key)
+                while len(_pack_summary()) > 2300 and isinstance(values, list) and values:
+                    values.pop()
+                if key == "node_index" and isinstance(values, list):
+                    summary_obj["node_index_truncated"] = max(
+                        int(summary_obj.get("node_index_truncated") or 0),
+                        int(summary_obj.get("node_count") or 0) - len(values), 0)
+            current_json = _pack_summary()
+        else:
+            current_json = json.dumps(str(summary_obj)[:1200], ensure_ascii=False)
+        current = "\nخلاصهٔ ساختاری فعلی به‌صورت JSON معتبر (فقط زمینه، نه نیازمندی جدید):\n" + current_json
+    system = (
+        instructions + "\n\nکاتالوگ واقعی ماژول‌های آماده (فقط این شناسه‌ها مجازند):\n" +
+        catalog_text + "\n\nقرارداد توانایی‌های بدون ماژول آماده:\n" + engine_text + current
     )
-    user_part = f"درخواست کاربر (متن کامل و مرجع اصلی):\n{str(prompt_text or '')[:6000]}"
-    return [{"role": "system", "content": sys_part}, {"role": "user", "content": user_part}]
+    user = "متن اصلی درخواست کاربر؛ تنها منبع استخراج نیازمندی و source_quote:\n" + str(prompt_text or "")[:6000]
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
 def parse_llm_spec(text, require_requirements=False, expected_intent=None, request_context=""):
@@ -505,4 +552,5 @@ def parse_llm_spec(text, require_requirements=False, expected_intent=None, reque
     if not raw:
         raise SpecError("پاسخ مدل JSON نداشت")
     return validate_spec(raw, require_requirements=require_requirements, expected_intent=expected_intent,
-                         request_context=request_context)
+                         request_context=request_context,
+                         require_grounded_quotes=bool(require_requirements and request_context))

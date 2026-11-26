@@ -407,18 +407,18 @@ class RequirementQualityTests(unittest.TestCase):
                 "intent": "create", "name": "ربات من", "features": [],
                 "requirements": [
                     {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
-                     "part": "محیط گروه", "status": "covered", "features": []},
+                     "source_quote": "مدیریت گروه", "part": "محیط گروه", "status": "covered", "features": []},
                     {"id": "r2", "want": "دسترسی به پنل تنظیمات و پیکربندی ربات در محیط پی‌وی",
-                     "part": "پیوی", "status": "covered", "features": []},
+                     "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی", "status": "covered", "features": []},
                 ],
             },
             {
                 "intent": "edit", "name": "ربات من", "features": [],
                 "requirements": [
                     {"id": "r1", "want": "فعالیت و مدیریت ربات در داخل گروه",
-                     "part": "گروه", "status": "catalog_missing", "features": []},
+                     "source_quote": "در گروه کار کنه", "part": "گروه", "status": "catalog_missing", "features": []},
                     {"id": "r2", "want": "تنظیمات ربات در چت خصوصی (پی‌وی)",
-                     "part": "پیوی", "status": "catalog_missing", "features": []},
+                     "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی", "status": "catalog_missing", "features": []},
                 ],
             },
             {
@@ -426,9 +426,9 @@ class RequirementQualityTests(unittest.TestCase):
                 "features": [{"type": "group_manager", "params": {}, "req": ["r1", "r2"]}],
                 "requirements": [
                     {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در محیط گروه",
-                     "part": "گروه", "status": "engine_limit", "features": ["group_manager"]},
+                     "source_quote": "مدیریت گروه", "part": "گروه", "status": "engine_limit", "features": ["group_manager"]},
                     {"id": "r2", "want": "دسترسی به پنل تنظیمات ربات از طریق پیام خصوصی",
-                     "part": "پیوی", "status": "catalog_missing", "features": ["group_manager"]},
+                     "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی", "status": "catalog_missing", "features": ["group_manager"]},
                 ],
             },
         ]
@@ -492,6 +492,177 @@ class RequirementQualityTests(unittest.TestCase):
         self.assertEqual(validated["requirements"][0]["status"], "covered")
         self.assertEqual(validated["requirements"][0]["features"], ["group_manager"])
 
+
+
+    def test_llm_requirements_must_be_grounded_in_exact_user_text(self):
+        from unittest.mock import patch
+        import json, sys, types
+        request = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"intent": "create", "name": "مدیر گروه", "features": [],
+                   "requirements": [{"id": "r1", "want": "شناسه واقعی کاتالوگ",
+                                     "source_quote": "شناسه واقعی کاتالوگ", "status": "catalog_missing", "features": []}]}
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            with self.assertRaises(spec.SpecError) as caught:
+                spec.parse_llm_spec(json.dumps(payload, ensure_ascii=False), require_requirements=True,
+                                    expected_intent="create", request_context=request)
+        self.assertTrue(any("source_quote" in err for err in caught.exception.errors))
+
+    def test_unknown_feature_note_does_not_become_a_fabricated_requirement(self):
+        payload = {"version": 1, "intent": "create", "name": "مدیر گروه",
+                   "features": [{"type": "group_manager", "params": {}, "req": ["r1"]},
+                                {"type": "pv_group_db_custom", "params": {}, "req": [],
+                                 "note": "نیاز به توسعه اختصاصی برای اتصال تنظیمات PV به دیتابیس گروه"}],
+                   "requirements": [{"id": "r1", "want": "مدیریت گروه",
+                                     "source_quote": "مدیریت گروه", "status": "covered",
+                                     "features": ["group_manager"]}]}
+        validated = spec.validate_spec(payload, require_requirements=True, expected_intent="create")
+        self.assertEqual(len(validated["requirements"]), 1)
+        self.assertEqual(validated["requirements"][0]["want"], "مدیریت گروه")
+
+    def test_group_private_settings_report_phrase_is_recovered_from_user_quote(self):
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"version": 1, "intent": "create", "name": "مدیر گروه", "features": [],
+                   "requirements": [
+                       {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در گروه",
+                        "source_quote": "مدیریت گروه", "status": "covered", "features": []},
+                       {"id": "r2", "want": "تنظیمات ربات از طریق پیام خصوصی (PV) قابل تغییر باشد",
+                        "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "status": "covered", "features": []},
+                   ]}
+        validated = spec.validate_spec(payload, require_requirements=True, expected_intent="create",
+                                       request_context=context, require_grounded_quotes=True)
+        self.assertEqual([r["status"] for r in validated["requirements"]], ["covered", "covered"])
+        self.assertEqual([f["type"] for f in validated["features"]], ["group_manager"])
+
+
+    def test_engineering_note_is_dropped_without_poisoning_valid_user_requirements(self):
+        import json, sys, types
+        from unittest.mock import patch
+        request = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"intent": "create", "name": "مدیر گروه", "features": [{"type": "group_manager", "req": ["r1", "r2"]}],
+                   "requirements": [
+                       {"id": "r1", "want": "اجرای دستورات مدیریتی در گروه", "source_quote": "در گروه کار کنه", "status": "covered", "features": ["group_manager"]},
+                       {"id": "r2", "want": "نیاز به توسعه اختصاصی برای اتصال تنظیمات PV به دیتابیس گروه", "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "status": "covered", "features": ["group_manager"]},
+                   ]}
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            parsed = spec.parse_llm_spec(json.dumps(payload, ensure_ascii=False), require_requirements=True,
+                                         expected_intent="create", request_context=request)
+        self.assertEqual([r["id"] for r in parsed["requirements"]], ["r1"])
+        self.assertEqual([f["type"] for f in parsed["features"]], ["group_manager"])
+        self.assertEqual(cov.unmet_items(parsed, request), [])
+
+    def test_duplicate_source_quotes_cannot_split_one_user_clause_into_fake_requirements(self):
+        import json, sys, types
+        from unittest.mock import patch
+        request = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"intent": "create", "name": "مدیر گروه", "features": [],
+                   "requirements": [
+                       {"id": "r1", "want": "مدیریت گروه", "source_quote": "مدیریت گروه", "status": "covered", "features": []},
+                       {"id": "r2", "want": "تنظیمات خصوصی گروه", "source_quote": "مدیریت گروه", "status": "covered", "features": []},
+                   ]}
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            with self.assertRaises(spec.SpecError) as caught:
+                spec.parse_llm_spec(json.dumps(payload, ensure_ascii=False), require_requirements=True,
+                                    expected_intent="create", request_context=request)
+        self.assertTrue(any("source_quote تکراری" in err for err in caught.exception.errors))
+
+    def test_model_note_does_not_reconcile_an_unrequested_database_requirement(self):
+        context = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        req = {"id": "r2", "want": "نیاز به توسعه اختصاصی برای اتصال تنظیمات PV به دیتابیس گروه",
+               "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی",
+               "status": "covered", "features": ["group_manager"],
+               "source": "catalog_reconciliation_context"}
+        self.assertFalse(cov._served_by(req, {"group_manager"}, context))
+        defect = cov.classify_uncovered(req, context, {"group_manager"})
+        self.assertEqual(defect["kind"], "BUILD_DEFECT")
+        self.assertIn("database", defect["evidence"] or defect["why"])
+
+    def test_exact_real_request_parses_to_two_user_requirements_and_one_existing_module(self):
+        import json, sys, types
+        from unittest.mock import patch
+        request = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {"intent": "create", "name": "مدیر گروه", "features": [],
+                   "requirements": [
+                       {"id": "r1", "want": "مدیریت و نظارت ربات در گروه", "source_quote": "مدیریت گروه", "part": "گروه", "status": "covered", "features": []},
+                       {"id": "r2", "want": "تنظیمات ربات از طریق پیام خصوصی قابل تغییر باشد", "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی", "status": "covered", "features": []},
+                   ]}
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            parsed = spec.parse_llm_spec(json.dumps(payload, ensure_ascii=False), require_requirements=True,
+                                         expected_intent="create", request_context=request)
+        self.assertEqual(len(parsed["requirements"]), 2)
+        self.assertEqual([f["type"] for f in parsed["features"]], ["group_manager"])
+        self.assertEqual(cov.unmet_items(parsed, request), [])
+
+
+
+    def test_exact_latest_report_is_recovered_and_fabricated_pv_database_row_is_dropped(self):
+        import json, sys, types
+        from unittest.mock import patch
+        request = "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد"
+        payload = {
+            "intent": "create", "name": "ربات من",
+            "features": [{"type": "group_manager", "req": ["r1", "r2", "r3"]}],
+            "requirements": [
+                {"id": "r1", "want": "تنظیمات ربات از طریق پیام خصوصی (PV) قابل تغییر باشد",
+                 "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی",
+                 "status": "covered", "features": ["group_manager"]},
+                {"id": "r2", "want": "نیاز به توسعه اختصاصی برای اتصال تنظیمات PV به دیتابیس گروه",
+                 "source_quote": "در پیویش هم تنظیماتشو بشه تنجام داد", "part": "پیوی",
+                 "status": "covered", "features": ["group_manager"]},
+                {"id": "r3", "want": "اجرای دستورات مدیریتی و نظارتی در گروه",
+                 "source_quote": "در گروه کار کنه", "part": "گروه",
+                 "status": "covered", "features": ["group_manager"]},
+            ],
+        }
+        ai_stub = types.ModuleType("ai")
+        ai_stub._extract_json_object = lambda value: value
+        with patch.dict(sys.modules, {"ai": ai_stub}):
+            parsed = spec.parse_llm_spec(json.dumps(payload, ensure_ascii=False), require_requirements=True,
+                                         expected_intent="create", request_context=request)
+        self.assertEqual({r["id"] for r in parsed["requirements"]}, {"r1", "r3"})
+        self.assertEqual([f["type"] for f in parsed["features"]], ["group_manager"])
+        self.assertEqual(cov.unmet_items(parsed, request), [])
+
+
+    def test_model_cannot_forge_requirement_provenance(self):
+        rows, errors = cov.norm_requirements([{
+            "id": "r1", "want": "مدیریت گروه", "source": "salvage"
+        }])
+        self.assertFalse(errors)
+        self.assertEqual(rows[0]["source"], "model")
+
+    def test_spec_prompt_exposes_private_group_settings_alias(self):
+        system = spec.spec_prompt("یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد")[0]["content"]
+        self.assertIn("تنظیمات ربات از طریق پیام خصوصی", system)
+        self.assertIn("تنظیمات گروه در پیوی", system)
+
+    def test_edit_context_is_not_truncated_into_invalid_json(self):
+        import json
+        summary = json.dumps({"name": "ربات", "start": "start", "node_count": 5,
+                              "node_index": [[f"node_{i}", "عنوان"] for i in range(100)],
+                              "node_index_truncated": 0, "relevant_nodes": [],
+                              "vars": [f"v{i}" for i in range(40)], "globals": [], "commands": [],
+                              "configured_sections": ["group"]}, ensure_ascii=False)
+        system = spec.spec_prompt("یک قابلیت به ربات فعلی اضافه کن", summary)[0]["content"]
+        marker = "خلاصهٔ ساختاری فعلی به‌صورت JSON معتبر (فقط زمینه، نه نیازمندی جدید):\n"
+        packed = system.split(marker, 1)[1]
+        parsed = json.loads(packed)
+        self.assertEqual(parsed["name"], "ربات")
+        self.assertLessEqual(len(packed), 2300)
+
+    def test_spec_prompt_has_no_copyable_catalog_placeholder(self):
+        system = spec.spec_prompt("یه ربات مدیریت گروه بساز")[0]["content"]
+        self.assertNotIn("شناسه واقعی کاتالوگ", system)
+        self.assertNotIn("شناسه واقعی قابلیت", system)
+        self.assertIn("source_quote", system)
+        self.assertIn("source_quote تنها مدرک مجاز", system)
 
 
 if __name__ == "__main__":

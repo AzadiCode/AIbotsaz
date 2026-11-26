@@ -1938,7 +1938,7 @@ def _llm_post_one(messages, max_tokens, temperature, timeout, model):
 
 
 
-def _compact_messages_for_provider(messages):
+def _compact_messages_for_provider(messages, max_chars=None):
     """Split overlong message bodies into consecutive same-role messages without dropping any prompt text.
 
     Some free upstream providers enforce a maximum length per *single message*. The old
@@ -1947,7 +1947,8 @@ def _compact_messages_for_provider(messages):
     character and divides large bodies into bounded chunks. Consecutive system/user messages
     are valid in OpenAI-compatible Chat Completions APIs.
     """
-    cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
+    configured = max_chars if max_chars is not None else _int("AI_MAX_SINGLE_MESSAGE_CHARS", 5000)
+    cap = max(1000, min(7000, int(configured)))
 
     def chunks(value):
         remaining = value
@@ -2014,9 +2015,9 @@ def _rate_limit_retry(exc, messages, max_tokens, temperature, model):
 
 def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max_models=None, total_timeout=None):
     """فراخوانی سازگار با APIهای OpenAI؛ در خطای مدل، مدل بعدی AI_MODELS را امتحان می‌کند."""
-    message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
+    message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 5000)))
     if any(isinstance(m.get("content"), str) and len(m["content"]) > message_cap for m in messages):
-        messages = _compact_messages_for_provider(messages)
+        messages = _compact_messages_for_provider(messages, message_cap)
     errors = []
     models = _usable_models(model)
     if max_models is not None:
@@ -2050,7 +2051,10 @@ def llm_post(messages, max_tokens, temperature=0.4, timeout=120, model=None, max
             except Exception as first_exc:
                 if not _is_message_length_error(first_exc):
                     raise
-                compact_messages = _compact_messages_for_provider(messages)
+                # On an upstream single-message-size rejection, retry once with a
+                # genuinely smaller chunk size. Reusing the configured cap here used
+                # to recreate the same oversized payload and waste the provider retry.
+                compact_messages = _compact_messages_for_provider(messages, min(message_cap, 1800))
                 retry_left = candidate_deadline - time.monotonic()
                 if retry_left <= 1:
                     raise first_exc
@@ -2321,9 +2325,9 @@ def llm_stream(messages, max_tokens, temperature, cb, timeout=225, model=None):
 
 def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None, total_timeout=None):
     """فراخوانی مدل‌ها با بودجهٔ هر مدل و سقف تلاش قابل کنترل؛ برای کارهای وظیفه‌محور."""
-    message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200)))
+    message_cap = max(1000, min(7000, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 5000)))
     if any(isinstance(m.get("content"), str) and len(m["content"]) > message_cap for m in messages):
-        messages = _compact_messages_for_provider(messages)
+        messages = _compact_messages_for_provider(messages, message_cap)
     cb = getattr(_prog, "cb", None)
     models = _usable_models()
     if max_models is not None:
@@ -2360,7 +2364,10 @@ def llm_run(messages, max_tokens, temperature=0.4, timeout=None, max_models=None
             except Exception as first_exc:
                 if not _is_message_length_error(first_exc):
                     raise
-                compact_messages = _compact_messages_for_provider(messages)
+                # On an upstream single-message-size rejection, retry once with a
+                # genuinely smaller chunk size. Reusing the configured cap here used
+                # to recreate the same oversized payload and waste the provider retry.
+                compact_messages = _compact_messages_for_provider(messages, min(message_cap, 1800))
                 retry_left = candidate_deadline - time.monotonic()
                 if retry_left <= 1:
                     raise first_exc
@@ -3135,24 +3142,25 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
             # the model exactly one bounded correction opportunity before preflight.
             _planning_gaps = _coverage.unmet_items(sp, prompt)
             _planning_defects = [d for d in _planning_gaps if d.get("kind") == "BUILD_DEFECT"]
-            if _planning_defects and attempt == 0:
+            if _planning_defects:
                 last_err = _spec.SpecError("پوشش معنایی Spec ناقص یا مبهم است", [
-                    f"نیازمندی: {d.get('want', '')} | علت: {d.get('evidence', '')}"
+                    f"نیازمندی: {d.get('want', '')} | علت: {d.get('why') or d.get('evidence', '')}"
                     for d in _planning_defects[:4]])
-                if cb:
-                    cb.reject_last_model()
-                msgs = msgs + [{"role": "user", "content":
-                    "Spec از نظر JSON معتبر بود، اما نگاشت معنایی این نیازمندی‌ها قابل قبول نیست: "
-                    + "؛ ".join(last_err.errors[:4])
-                    + "\nدر پاسخ اصلاحی، هر رفتار مستقل را در یک requirement جدا قرار بده؛ محل قرارگیری را فقط در part بنویس؛ "
-                    "قابلیت عمومی را جای رفتار تخصصی قرار نده؛ قابلیت دقیقاً مرتبط را از کاتالوگ انتخاب و feature.req را به همان شناسه وصل کن. "
-                    "اگر یک بخش واقعاً ماژول آماده ندارد، فقط همان بخش را catalog_missing ثبت کن. درخواست اصلی را حذف یا ساده‌سازی نکن و فقط JSON کامل بده."}]
-                log.warning("Spec semantic coverage needs one correction attempt: %s", last_err.errors[:3])
-                continue
-            _salv = [r for r in (sp.get("requirements") or []) if r.get("source") == "salvage"]
-            if _salv:
-                log.warning("Spec salvage: %d قابلیت خارج از کاتالوگ به catalog_missing تبدیل شد: %s",
-                            len(_salv), [r.get("want") for r in _salv][:3])
+                if attempt == 0:
+                    if cb:
+                        cb.reject_last_model()
+                    msgs = msgs + [{"role": "user", "content":
+                        "Spec از نظر ساختار JSON معتبر بود، اما نگاشت این نیازمندی‌ها معتبر نیست: "
+                        + "؛ ".join(last_err.errors[:4])
+                        + "\nهر خواسته را از متن اصلی کاربر استخراج کن و source_quote را عیناً از همان متن کپی کن. "
+                        "عبارت‌های داخل دستور سیستم، شناسه‌های نمونه، توضیحات فنی و noteهای خودت را نیازمندی کاربر فرض نکن. "
+                        "برای هر رفتار مستقل یک requirement جدا بساز؛ هر requirement covered باید به ماژول واقعی و feature.req متصل باشد. "
+                        "ماژول موجود را با عبارت‌های معادل کاتالوگ پیدا کن. فقط JSON کامل بده."}]
+                    log.warning("Spec semantic coverage needs one correction attempt: %s", last_err.errors[:3])
+                    continue
+                # A second invalid semantic plan is an internal BUILD_DEFECT, not a
+                # user-facing catalog/engine limitation. Never pass it to the compiler.
+                raise last_err
             if cb:
                 cb.stage("analyze", 24.0)
             log.info("Spec produced by model: features=%s requirements=%d",
@@ -3320,7 +3328,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
 
     # Never deliver an empty/general shell when none of the user's actual requirements
     # maps to a meaningful registered capability. A technical start node is not coverage.
-    covered_requirements = _cov.covered_requirements(sp)
+    covered_requirements = _cov.covered_requirements(sp, prompt)
     if sp.get("requirements") and not covered_requirements:
         # Even if the user accepts a limitation, never produce an unrelated shell.
         # Partial builds are allowed only when at least one real requirement is covered.
@@ -3384,7 +3392,7 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         thinking = FALLBACK_THINKING
     # گزارش پوشش نیازمندی‌ها: هر خواستهٔ کاربر با شواهد قطعی (کامپایل + تست پذیرش موتور) تا خروجی ردیابی می‌شود
     import coverage as _cov
-    cov = _cov.coverage_report(sp)
+    cov = _cov.coverage_report(sp, prompt)
     if cov:
         thinking = _cov.coverage_thinking(thinking, cov)
     tail = " برای افزودن یا ویرایش، از دستیار استودیو استفاده کن."
