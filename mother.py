@@ -46,8 +46,7 @@ from core import (
     APP_URL, wallet_info, activate_plan, emoji_add, plan_from_payload, plan_info, PLAN_BY_ID, PLAN_RANK, plan_of, PLANS,
 )
 from ai import (
-    ask_llm, PreflightReview, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
-    _qc_log,
+    ask_llm, PreflightReview, WizardNeeded, _gap, has_foreign, llm_post, _prog, Progress, reserve_cost, scrub_foreign, typical_cost,
 )
 from engine import ai_postcharge, ai_precheck, allowed_updates, sync_commands, to_jalali
 
@@ -656,33 +655,10 @@ def mk_view(uid, st, note=""):
                 "4. BotFather یک توکن می‌فرستد (مثل <code>123456:ABC-xyz…</code>)؛ همان را کپی کن و همین‌جا بفرست.\n\n"
                 "توکن به‌صورت رمزنگاری‌شده ذخیره می‌شود و پیام تو بلافاصله از گفتگو پاک می‌شود." + tail), rows
     if step == "desc":
-        text = (f"{MK_TITLE}\nمرحله 2 از 3: توضیح ربات\nربات: {user}\n\n"
+        return (f"{MK_TITLE}\nمرحله 2 از 3: توضیح ربات\nربات: {user}\n\n"
                 "بنویسید ربات باید چه کاری انجام دهد و چه بخش‌ها و دکمه‌هایی داشته باشد. "
                 "هر چه توضیح کامل‌تر باشد، ربات دقیق‌تری ساخته می‌شود.\n\n"
-                "اگر می‌خواهید سریع و بدون هوش مصنوعی انتخاب کنید، دکمهٔ «انتخاب سریع (بدون AI)» را بزنید.\n\n"
-                "لطفاً توضیح را در قالب یک پیام متنی ارسال کنید." + tail)
-        return text, mk_kb([mk_btn("انتخاب سریع (بدون AI)", "mk:wiz")], [mk_btn("انصراف", "mk:x")])
-    if step == "wiz1":
-        text = (f"{MK_TITLE}\nمرحله 2 از 3: انتخاب سریع (بدون AI)\nربات: {user}\n\n"
-                "چه نوع رباتی می‌خواهید؟ سه نوع آماده و تست‌شده وجود دارد؛ "
-                "بازی‌ها را در مرحلهٔ بعد تک‌تک انتخاب می‌کنید. ساخت این مسیر قطعی و رایگان است." + tail)
-        return text, mk_kb([mk_btn("فروشگاه و کسب‌وکار", "mk:wizt:shop")],
-                           [mk_btn("بازی و اقتصاد سکه", "mk:wizt:game")],
-                           [mk_btn("مدیر گروه/کانال + پشتیبانی", "mk:wizt:manage")],
-                           [mk_btn("بازگشت به توضیح", "mk:wizx"), mk_btn("انصراف", "mk:x")])
-    if step == "wizgame":
-        sel = set(st.get("wiz_feats") or [])
-        on = lambda fid: ("✅ " if fid in sel else "")
-        text = (f"{MK_TITLE}\nمرحله 2 از 3: انتخاب سریع (بدون AI)\nربات: {user}\n\n"
-                "کدام بازی‌ها را داشته باشد؟ هر چندتا را می‌خواهی انتخاب کن (برای برداشتن، دوباره بزن) و بعد «ساخت» را بزن.\n\n"
-                "کیف سکه، هدیهٔ روزانه، دعوت دوستان و برترین‌ها خودکار برای اقتصاد بازی اضافه می‌شوند." + tail)
-        return text, mk_kb([mk_btn(on("game.dice") + "تاس", "mk:wtg:game.dice")],
-                           [mk_btn(on("game.guess") + "حدس عدد", "mk:wtg:game.guess")],
-                           [mk_btn(on("game.coinbet") + "شیر یا خط", "mk:wtg:game.coinbet")],
-                           [mk_btn(on("game.quiz") + "مسابقه", "mk:wtg:game.quiz")],
-                           [mk_btn(on("game.wheel") + "گردونهٔ شانس", "mk:wtg:game.wheel")],
-                           [mk_btn("ساخت ربات (رایگان)", "mk:wizgo")],
-                           [mk_btn("بازگشت", "mk:wizx"), mk_btn("انصراف", "mk:x")])
+                "لطفاً توضیح را در قالب یک پیام متنی ارسال کنید." + tail), MK_CANCEL
     if step == "confirm":
         prompt = st.get("prompt", "")
         reserve, have = reserve_cost(prompt, None, uid), wallet_info(uid)["tokens"]
@@ -750,13 +726,6 @@ def mother_flow(msg):
     mk_del(chat, msg.get("message_id"))                  # پیام کاربر پاک می‌شه تا چت تمیز بمونه
     if step == "building":
         mk_resume(uid, chat)
-        return True
-    if str(step or "").startswith("wiz"):
-        if len(text) >= 10:                               # توضیح متنی وسط ویزارد: همان را برای AI می‌فرستیم
-            mk_put(uid, step="confirm", prompt=text[:MAX_PROMPT])
-            mk_render(uid, chat)
-            return True
-        mk_render(uid, chat, "در این مرحله از دکمه‌ها استفاده کن؛ یا توضیح کامل خودت را بنویس تا با هوش مصنوعی ساخته شود.")
         return True
     if step in ("token", "activate"):
         m = re.search(r"\d{6,12}:[\w-]{30,50}", text)
@@ -839,30 +808,17 @@ def mk_watch(uid, chat, jid):
             mk_activate(uid, chat)
         elif j.get("status") == "review":
             gaps = j.get("gaps") or []
+            detail = "\n".join(f"• {x.get('want','')}: {x.get('why','')}" for x in gaps[:3])
             review_cost = int(j.get("cost") or 0)
             pre = bool(j.get("preflight"))
-            # پیش‌نمایش ✔/🟡/❌ (این‌ها ساخته می‌شوند / تقریبی / نمی‌توانم)
-            pv_lines = []
-            for p in (j.get("preview") or [])[:10]:
-                mark = "✔" if p.get("status") == "ok" else "🟡" if p.get("status") == "approx" else "❌"
-                pv_lines.append(mark + " " + str(p.get("text") or "")[:60])
-            preview_block = ("\n<b>این‌ها را می‌سازم:</b>\n" + "\n".join(pv_lines) + "\n\n") if pv_lines else ""
             detail = "\n".join(f"• {x.get('want','')}: {x.get('why','')}" + (f" ({x['upgrade']})" if pre and x.get("upgrade") else "") for x in gaps[:4])
-            approx = [x for x in gaps if x.get("kind") == "CATALOG_MISSING"]
-            if approx:
-                detail += "\n" + "\n".join("🟡 " + x.get("want", "") + ": در این ساخت ساخته نمی‌شود (هنوز در کاتالوگ نیست)" for x in approx[:3])
-            no_can = [x for x in gaps if x.get("kind") == "ENGINE_LIMIT"]
-            if no_can:
-                detail += "\n" + "\n".join("❌ " + x.get("want", "") + ": موتور این را پشتیبانی نمی‌کند" for x in no_can[:3])
             body = ("⚠️ <b>قبل از شروع ساخت، یک نکته مهم</b>\n\n"
-                    + preview_block
-                    + "بعد از تحلیل درخواستت مشخص شد بخشی از آن با امکانات فعلی ربات‌ساز دقیقاً قابل پیاده‌سازی نیست؛ جایگزین نزدیک ساخته می‌شود. هنوز ساخت شروع نشده و هیچ توکنی کم نشده.\n\n"
+                    "بعد از تحلیل درخواستت مشخص شد بخشی از آن با امکانات فعلی ربات‌ساز دقیقاً قابل پیاده‌سازی نیست؛ جایگزین نزدیک ساخته می‌شود. هنوز ساخت شروع نشده و هیچ توکنی کم نشده.\n\n"
                     + hx(detail) + "\n\n"
                     "می‌خوای با همین جایگزین‌ها ساخت رو ادامه بدم، یا درخواست رو لغو و اصلاح کنی؟ لغو رایگانه."
                     if pre else
                     "⚠️ <b>قبل از ساخت، یک نکته مهم</b>\n\n"
-                    + preview_block
-                    + "بررسی درخواست نشان داد بخشی از قابلیت‌هایی که خواستی با امکانات فعلی ربات‌ساز قابل پیاده‌سازی دقیق نیست. برای اینکه بدون اطلاع تو نسخه‌ی ناقص نسازیم، هنوز رباتی ذخیره نشده و هیچ توکنی کم نشده.\n\n"
+                    "بررسی درخواست نشان داد بخشی از قابلیت‌هایی که خواستی با امکانات فعلی ربات‌ساز قابل پیاده‌سازی دقیق نیست. برای اینکه بدون اطلاع تو نسخه‌ی ناقص نسازیم، هنوز رباتی ذخیره نشده و هیچ توکنی کم نشده.\n\n"
                     + hx(detail) + "\n\n"
                     f"💳 هزینه در صورت تأیید ساخت: {review_cost} توکن\n\n"
                     "می‌تونی نسخه‌ی نزدیک به درخواستت رو با آگاهی از این محدودیت‌ها بسازی، یا درخواست رو لغو کنی. لغو درخواست رایگانه.")
@@ -1079,38 +1035,6 @@ def mother_callback(cq):
         mk_put(uid, step="desc")
         ack()
         return mk_render(uid, chat)
-    # ── ویزارد دکمه‌ای بدون LLM (ا fallback در نبود مدل؛ ساخت هرگز گیر نمی‌کند) ──
-    if act == "wiz" and st.get("step") == "desc":
-        mk_put(uid, step="wiz1")
-        ack()
-        return mk_render(uid, chat)
-    if act == "wizx":
-        db.mstate.update_one({"_id": uid}, {"$set": {"step": "desc", "t": now()}, "$unset": {"wiz_feats": ""}})
-        ack()
-        return mk_render(uid, chat)
-    if act.startswith("wizt:"):
-        kind = act.split(":", 1)[1]
-        if kind not in ("shop", "game", "manage"):
-            return ack("انتخاب نامعتبر است.", True)
-        if kind == "game":
-            mk_put(uid, step="wizgame", wiz_feats=["game.dice", "game.guess", "game.coinbet", "game.quiz", "game.wheel"])
-            ack()
-            return mk_render(uid, chat)
-        return mk_wiz_build(uid, chat, kind)
-    if act.startswith("wtg:"):
-        fid = act[4:]
-        if fid not in ("game.dice", "game.guess", "game.coinbet", "game.quiz", "game.wheel"):
-            return ack("بازی نامعتبر است.", True)
-        sel = list(st.get("wiz_feats") or [])
-        if fid in sel:
-            sel = [x for x in sel if x != fid]
-        else:
-            sel = sel + [fid]
-        mk_put(uid, wiz_feats=sel)
-        ack()
-        return mk_render(uid, chat)
-    if act == "wizgo":
-        return mk_wiz_build(uid, chat, "game")
     if act == "ok":
         ack("ساخت شروع شد")
         return mk_build(uid, chat)
@@ -1118,42 +1042,6 @@ def mother_callback(cq):
         ack()
         return mk_activate(uid, chat)
     ack()
-
-
-def mk_wiz_build(uid, chat, kind):
-    """ساخت قطعی و بدون LLM از ویزارد دکمه‌ای («چه نوع رباتی؟ کدام بازی؟»).
-    فروشگاه/مدیریت = قالب‌های جامع؛ بازی = کامپایلر Spec. هزینه: صفر توکن؛ ساخت هرگز گیر نمی‌کند."""
-    st = mk_get(uid)
-    if not st or not st.get("token_enc"):
-        return mk_render(uid, chat, "ابتدا توکن ربات را بفرستید (مرحله ۱).")
-    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return mk_render(uid, chat, f"سقف ربات‌های شما {max_bots(uid)} عدد است؛ یکی را حذف کن یا اشتراک بگیر.")
-    try:
-        from ai import TEMPLATES, lint, sanitize
-        import catalog
-        if kind == "game":
-            feats = [f for f in (st.get("wiz_feats") or []) if f in catalog.CATALOG]
-            if not feats:
-                feats = ["game.dice", "game.guess", "game.quiz"]
-            spec = catalog.parse_spec(json.dumps({"name": "ربات بازی", "features": [{"type": f} for f in feats]}, ensure_ascii=False))
-            thinking, cfg, _ = catalog.compile_spec(spec)
-        else:
-            t = TEMPLATES[kind]
-            cfg = t["config"]
-            thinking = t["note"]
-        cfg = sanitize(cfg, strict=False, nodes_cap=limits_of(uid)["nodes"])
-        issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
-        if issues:
-            raise ValueError("؛ ".join(issues[:3]))
-        bot = new_bot_doc(uid, cfg, thinking)
-        if REF_ON == "create":
-            settle_referral(uid)
-        log.info("wizard build ok: kind=%s (%s nodes, 0 tokens)", kind, len(cfg["nodes"]))
-        mk_put(uid, step="activate", bot=str(bot["_id"]), cost=0)
-        return mk_activate(uid, chat)
-    except Exception as e:
-        log.exception("wizard build failed")
-        return mk_render(uid, chat, "ساخت سریع ناموفق بود: " + hx(str(e)[:200]) + "\nمی‌توانی توضیح متنی بنویسی تا با هوش مصنوعی ساخته شود.")
 
 
 # ───────────────────────── ساخت و ارتقا با هوش مصنوعی (کار پس‌زمینه) و فعال‌سازی ─────────────────────────
@@ -1182,65 +1070,78 @@ def _split_telegram_text(value, limit=3500):
 
 
 def report_gaps(uid, bot, prompt, items):
-    """گزارش دوگانه:
-    • برای کاربر: کوتاه و ساده (خواسته/چرا/راهکار) — در جریان خود کار.
-    • برای ادمین: دقیق (kind، شاهد/evidence، شدت، قابلیت پیشنهادی، معیار پذیرش) با شمارش تکرارها
-      تا فهرست کار توسعه ساخته شود. kind یکی از BUILD_DEFECT / ENGINE_LIMIT / CATALOG_MISSING است؛
-      BUILD_DEFECT هرگز محدودیت موتور نیست (نقص ساخت ما؛ در لاگ کیفیت هم ثبت می‌شود)."""
+    """ثبت و ارسال گزارش کامل نقص‌ها برای ادمین، با حفظ تمام متن درخواست کاربر.
+    هر مورد با طبقه‌بندی مستقل ثبت می‌شود: BUILD_DEFECT / ENGINE_LIMIT / CATALOG_MISSING."""
     if not items:
         return
     try:
+        import defects as _defects
         u = db.users.find_one({"_id": uid}) or {}
         who = f"{u.get('tg_name') or ''} {('@' + u['tg_user']) if u.get('tg_user') else ''}".strip() or "بدون نام"
         full_prompt = str(prompt or "")
-        docs = []
+        # تجمیع: مشکل‌های تکرارشوندهٔ همان feature+kind با شمارنده
+        agg = {}
         for x in items:
-            key = f"{str(x.get('kind') or 'UNCLASSIFIED')}|{str(x.get('want') or '')[:120]}"
-            docs.append({"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt, "key": key, "items": [x], "t": now()})
-        if docs:
-            try:
-                db.gaps.insert_many(docs)
-            except Exception:
-                for d in docs:
-                    db.gaps.insert_one(d)
+            k = _defects.aggregate_key(x) if isinstance(x, dict) else str(x)
+            agg[k] = agg.get(k, 0) + 1
+        gap_doc = {"uid": uid, "bot": str(bot["_id"]) if bot else "", "prompt": full_prompt, "items": items, "t": now(),
+                   "agg": agg}
+        gap_id = db.gaps.insert_one(gap_doc).inserted_id
+        # هر گزارش ENGINE_LIMIT/CATALOG_MISSING به نقشهٔ توسعه تبدیل و با شمارنده تجمیع می‌شود
+        try:
+            engine_map, catalog_map, build_map = _defects.roadmap_from_gaps(items)
+            for rm in engine_map:
+                key = "engine:%s" % rm.get("capability")
+                db.roadmap.update_one(
+                    {"_id": key},
+                    {"$set": {"kind": "ENGINE_LIMIT", "capability": rm.get("capability"), "title": rm.get("title"),
+                              "reason": rm.get("reason"), "missing": rm.get("missing_primitive"),
+                              "files": rm.get("files"), "api": rm.get("api_needed"), "deps": rm.get("engine_deps"),
+                              "impact": rm.get("impact_existing"), "plan": rm.get("plan"),
+                              "acceptance": rm.get("acceptance"), "last": full_prompt[:300], "t": now()},
+                     "$inc": {"count": 1},
+                     "$setOnInsert": {"created": now()}}, upsert=True)
+            for cm in catalog_map:
+                key = "catalog:%s" % cm.get("module")
+                db.roadmap.update_one(
+                    {"_id": key},
+                    {"$set": {"kind": "CATALOG_MISSING", "module": cm.get("module"), "want": cm.get("want"),
+                              "steps": cm.get("steps"), "last": full_prompt[:300], "t": now()},
+                     "$inc": {"count": 1},
+                     "$setOnInsert": {"created": now()}}, upsert=True)
+            # اولویت بر اساس تعداد درخواست‌های مشابه
+            for r in db.roadmap.find({}):
+                db.roadmap.update_one({"_id": r["_id"]}, {"$set": {"priority": _defects.roadmap_priority(r.get("count"))}})
+        except Exception:
+            log.exception("roadmap upsert failed")
         lines = [
-            "🚨 گزارش ساخت/محدودیت ربات‌ساز Azadi",
+            "🚨 گزارش نقص‌های ربات‌ساز هوشمند Azadi",
             f"کاربر: {who} (آیدی {uid})",
             f"ربات: {(bot or {}).get('name') or 'جدید'}" + (f" (@{bot['username']})" if bot and bot.get("username") else ""),
+            f"شناسه گزارش: {gap_id}",
             "",
             "📝 متن کامل درخواست کاربر:",
             full_prompt if full_prompt else "(متنی ثبت نشده است)",
             "",
-            "🔎 جزئیات موارد (برای فهرست کار توسعه):"
+            "🔎 جزئیات موارد (نوع / مرحله / شدت):"
         ]
         for i, x in enumerate(items, 1):
-            kind = str(x.get("kind") or "UNCLASSIFIED")
-            key = f"{kind}|{str(x.get('want') or '')[:120]}"
-            try:
-                repeats = db.gaps.count_documents({"key": key})
-            except Exception:
-                repeats = 1
-            lines += ["",
-                      f"{i}) نوع: {kind}" + (f" · تکرار: {repeats} بار" if repeats > 1 else ""),
-                      f"خواسته: {x.get('want') or '-'}",
-                      f"شاهد/دلیل (evidence): {(x.get('why') or x.get('evidence') or '-')[:500]}",
-                      f"شدت (severity): {x.get('severity') or ('high' if kind == 'ENGINE_LIMIT' else 'medium' if kind == 'BUILD_DEFECT' else 'low')}",
-                      f"قابلیت پیشنهادی: {x.get('feature') or '-'}",
-                      f"معیار پذیرش: {x.get('criterion') or '-'}",
-                      f"راهکار ارتقا: {x.get('upgrade') or '-'}"]
-            if kind == "CATALOG_MISSING":
-                lines.append("↑ موتور این قابلیت را می‌تواند؛ افزودن به کاتالوگ Spec آن را قطعی می‌کند.")
-            elif kind == "BUILD_DEFECT":
-                lines.append("↑ نقص ساخت خط تولید است، نه محدودیت موتور؛ در لاگ کیفیت (qclog) هم ثبت شد و باید با مدل قوی‌تر/اصلاح کامپایلر حل شود.")
+            kind = _defects.KIND_FA.get(x.get("kind"), "") if isinstance(x, dict) else ""
+            stage = ""
+            if isinstance(x, dict):
+                stage = _defects.DEFECTS_STAGE_FA.get(x.get("stage"), "")
+            head_extra = " · ".join(y for y in (kind, stage, ("شدت: " + x["severity"]) if isinstance(x, dict) and x.get("severity") else "") if y)
+            lines += ["", f"{i}) خواسته: {x.get('want') or '-'}" + (f"  [{head_extra}]" if head_extra else ""),
+                      f"چرا: {x.get('why') or x.get('evidence') or '-'}",
+                      f"راهکار: {x.get('upgrade') or '-'}"]
         report_text = "\n".join(lines)
         chunks = _split_telegram_text(report_text)
-        gap_id = str((docs[0].get("_id") or "")) if docs else ""
         kb = {"inline_keyboard": [[
             {"text": "✉️ پاسخ به کاربر", "callback_data": f"gap:reply:{uid}:{gap_id}"},
             {"text": "🚀 ارسال پیام آماده", "callback_data": f"gap:ready:{uid}:{gap_id}"}
         ], [
             {"text": "⏳ بعداً دوباره امتحان کن", "callback_data": f"gap:later:{uid}:{gap_id}"}
-        ]]} if re.fullmatch(r"[a-fA-F0-9]{24}", gap_id) else None
+        ]]}
         for admin in ADMIN_IDS:
             for idx, chunk in enumerate(chunks):
                 payload = {"chat_id": admin, "text": chunk}
@@ -1356,10 +1257,15 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
         try:
             thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         except PreflightReview as pr:
-            # قبل از تلف‌کردن زمان و توکن: محدودیت‌ها/پیش‌نمایش را همین حالا به کاربر بگو و تصمیمش را بپرس
+            # قبل از تلف‌کردن زمان و توکن: محدودیت‌ها را همین حالا به کاربر بگو و تصمیمش را بپرس
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
-                "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now(),
-                "preview": list(getattr(pr, "preview", None) or [])}})
+                "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now()}})
+            return
+        except WizardNeeded as wn:
+            # هیچ مدلی پاسخ معتبر نداد؛ مسیر ویزارد بدون هوش مصنوعی پیشنهاد می‌شود. توکنی کسر نمی‌شود.
+            db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
+                "status": "error", "wizard": True,
+                "error": "مدل هوش مصنوعی در دسترس نبود یا پاسخ معتبر نداد؛ ساخت از ویزارد دستی (بدون هوش مصنوعی) ادامه می‌یابد و هیچ توکنی کسر نشد. " + str(wn)[:200]}})
             return
         if BILLING == "fixed":
             cost = int(reserve)
@@ -1370,10 +1276,6 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             completion_tokens = int(build_usage.get("completion_tokens") or sum(x[1] for x in acc))
             cost = min(reserve, calc_cost(prompt_tokens, completion_tokens, uid=uid))
         gaps = list(getattr(_gap, "items", []) or [])
-        seen_gaps = [g for g in gaps if g.get("seen")]        # در پیش‌نمایش دیده و تأیید شده؛ فقط برای گزارش ادمین
-        gaps = [g for g in gaps if not g.get("seen")]
-        if seen_gaps:
-            report_gaps(uid, bot, prompt, seen_gaps)            # ثبت فهرست کار توسعه؛ ساخت ادامه می‌یابد
         if gaps and bot_id:
             # نسخهٔ موجود را با خروجی‌ای که ممیزی نتوانسته تأیید کند بازنویسی نکن.
             report_gaps(uid, bot, prompt, gaps)
@@ -1456,11 +1358,6 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             except Exception:
                 log.exception("failed to rollback bot/config after unsuccessful final save")
         log.exception("generate failed")
-        # نقص ساخت هرگز محدودیت موتور نیست؛ در لاگ کیفیت ثبت می‌شود تا با مدل‌های جایگزین/قوی‌تر بررسی شود
-        try:
-            _qc_log("BUILD_DEFECT", f"gen_job failed: {type(e).__name__}: {str(e)[:400]}")
-        except Exception:
-            pass
         # اگر مدل محدودیتی را گزارش کرده بود ولی مرحله‌ی بعدی خطا داد، گزارش را از دست نده.
         try:
             pending_gaps = list(getattr(_gap, "items", []) or [])
@@ -1515,8 +1412,6 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
                 "want": "ساخت کامل درخواست کاربر و تحویل ربات معتبر",
                 "why": why,
                 "upgrade": upgrade,
-                "kind": "BUILD_DEFECT", "severity": "medium", "feature": "—",
-                "criterion": "خروجی معتبر JSON/sanitize/lint و ذخیرهٔ موفق ربات؛ شکست بدون ربات ناقص و بدون کسر توکن.",
             }
             # گزارش فنی همیشه در انتهای گزارش می‌آید؛ حداکثر دو مورد محدودیت قبلی نیز حفظ می‌شود.
             pending_gaps = [g for g in pending_gaps if g.get("want") != technical_gap["want"]]
@@ -1524,8 +1419,7 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             report_gaps(uid, bot, prompt, pending_gaps)
         except Exception:
             log.exception("failed to deliver fallback gap report")
-        msg = ("ساخت کامل نشد و هیچ توکنی کسر نشد. گزارش خطا برای بررسی ثبت شد. لطفاً دوباره تلاش کن یا درخواستت را کوتاه‌تر و واضح‌تر بنویس. "
-               "اگر مدل هوش مصنوعی در دسترس نیست، در «ساخت ربات جدید» از دکمهٔ «انتخاب سریع (بدون AI)» استفاده کن؛ ساخت قطعی و رایگان است.")
+        msg = "ساخت کامل نشد و هیچ توکنی کسر نشد. گزارش خطا برای بررسی ثبت شد. لطفاً دوباره تلاش کن یا درخواستت را کوتاه‌تر و واضح‌تر بنویس."
         if DEBUG:
             msg += f"\n[{type(e).__name__}] {str(e)[:300]}"
         db.jobs.find_one_and_update({"_id": jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"status": "error", "error": msg}})

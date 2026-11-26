@@ -1,19 +1,14 @@
+# -*- coding: utf-8 -*-
 """
 ai.py — هوش مصنوعیِ ساخت ربات (وابسته به core)
 
 بخش‌ها:
-  • هوش مصنوعی: دستورالعمل طراحی (مسیر قدیمی/سفارشی) و پرامپت کوچکِ Spec
+  • هوش مصنوعی: دستورالعمل طراحی
   • متغیرها، شرط‌ها و اکشن‌ها
   • جدول داده‌ی رکوردی، اعتبارسنج و بازرس کانفیگ
   • تشخیص زبان، ارتباط با مدل و ساخت/ارتقای کانفیگ
   • برآورد هزینه‌ی ساخت
-  • قالب‌های آماده (۳ قالب جامع؛ ساخته‌شده با کامپایلر قطعی catalog.py)
-
-خط ساخت (نسخهٔ ۳.۷):
-  مسیر اصلی: LLM فقط یک Spec کوچک JSON از enum بسته انتخاب می‌کند (یک فراخوانی + یک تلاش مجدد؛
-  در نبود LLM روتر کلیدواژه‌ای) ← کامپایلر قطعی catalog.py Spec را به کانفیگ معتبر تبدیل می‌کند ←
-  sanitize/lint/ترمیم قطعی. ممیزی LLM حذف شده؛ تست پذیرش قابلیت‌ها روی موتور در tests/ اجرا می‌شود.
-  مسیر قدیمی (ماژول‌های planner + تسک‌های LLM) فقط fallback است.
+  • قالب‌های آماده (۵ قالب اصلی، دوزبانه)
 
 قرارداد: همه‌ی چیزهایی که مغز «ساخت و ارتقای کانفیگ» رو می‌سازن اینجاست؛ خروجی نهایی همیشه یک کانفیگ JSON
 اعتبارسنجی‌شده‌ست (sanitize/lint) و هیچ کد تولیدشده‌ای اجرا نمی‌شه.
@@ -24,8 +19,8 @@ ai.py — هوش مصنوعیِ ساخت ربات (وابسته به core)
 اگه چیزی تازه برای بقیه لازمه، همین‌جا اضافه کن و در فایلِ مصرف‌کننده import کن:
   ask_llm, BUILTINS, DICE_EMOJIS, enhance_prompt, EXT_API, EXT_API_DAILY, fmt_num, _gap, has_foreign,
   LANG_GUARD, lint, llm_post, MAX_HOPS, MAX_REC_VAL, MAX_RECORDS_SHARED, MAX_RECORDS_USER, _mnum,
-  MOD_LOCKS, PH_RE, _prog, Progress, REC_BUILTINS, reserve_cost, sanitize, scrub_foreign,
-  TEMPLATES, to_num, typical_cost, VAR_RE, spec_build
+  MOD_LOCKS, PH_RE, _PRIV_HOST, _prog, Progress, REC_BUILTINS, reserve_cost, sanitize, scrub_foreign,
+  TEMPLATES, to_num, typical_cost, VAR_RE
 """
 
 import itertools
@@ -978,6 +973,17 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
 
     nodes = {}
     for nid, (n, text) in valid.items():
+        # قانون ۲.۴: متغیرهای داخل متن بخش/دکمه/پیام پایان نیز باید تعریف شوند؛
+        # جاافتاده‌ها به‌صورت قطعی تعریف و با warn آشکار می‌شوند (نادیده گرفته نمی‌شوند)
+        _ph = [m.group(1) for m in PH_RE.finditer(text)]
+        _ph += [m.group(1) for m in PH_RE.finditer(str(n.get("done") or ""))]
+        for row in (n.get("buttons") or []):
+            for b in (row if isinstance(row, list) else [row]):
+                if isinstance(b, dict):
+                    _ph += [m.group(1) for m in PH_RE.finditer(str(b.get("text") or ""))]
+        for k in _ph:
+            if VAR_RE.match(k) and k not in BUILTINS and k not in gl:
+                used.add(k)
         rows = []
         for row in (n.get("buttons") or [])[:6]:
             r = []
@@ -1354,6 +1360,8 @@ def sanitize(cfg, strict=False, media=None, warns=None, nodes_cap=None):
             bad(f"نام متغیر «{k}» معتبر نیست (حروف انگلیسی کوچک، عدد و _ و نباید اسم متغیرهای آماده باشه)")
     for k in sorted(used):
         if k not in gl:
+            if k not in declared:
+                bad(f"متغیر «{k}» استفاده شده ولی تعریف نشده بود؛ به‌صورت قطعی با مقدار اولیه {'۰' if k in nums else 'خالی'} اضافه شد (نادیده گرفته نشد)")
             declared.setdefault(k, "0" if k in nums else "")
     for k in list(declared):
         if k in gl:
@@ -2895,39 +2903,6 @@ def _merge_gap_items(*groups, limit=3):
     return out
 
 
-TASK_PLAN_SYSTEM = """You are a senior technical planner for a Telegram bot builder. Convert the user's request into an execution plan of 3-7 SMALL, independently implementable tasks (each needs only a short JSON patch, roughly 3-6 nodes, because the workers are small models with limited output length). Return ONLY valid JSON: {\"tasks\":[{\"id\":\"foundation\",\"title\":\"...\",\"scope\":\"...\",\"acceptance\":[\"...\"],\"node_ids\":[\"start\"]}]}. For a new bot, the first task MUST have id foundation and define the start/menu/navigation skeleton. Later tasks add distinct capabilities, each with precise acceptance checks. Preserve every explicit user requirement across the tasks; don't invent features. If the request only references another bot by username, plan a conservative starter and say exact replication requires screenshots or a feature list. If this is an update to an existing config, preserve existing features and plan only the requested changes; foundation means verify the home/navigation structure, not rebuild the bot. Keep each scope compact and specific. Maximum 7 tasks including foundation. Do not generate the config yet. ALSO return a top-level key "limits": a list (normally EMPTY, max 4) of {"want":"what the user asked, one short Persian sentence","why":"exact reason the engine cannot do it exactly, Persian","alternative":"what will be built instead, Persian"}. Add an item ONLY when the user explicitly asked for something that the ENGINE LIMITS below make truly impossible (not just hard or large) and the build will therefore drop it or replace it with a weaker approximation. Never list things that can be built fully, vague wishes, or optional extras."""
-
-_TASK_PATCH_SUFFIX = r"""
-TASK PATCH MODE — this instruction overrides the earlier complete-config output requirement for THIS call only.
-Return the usual envelope {"thinking":"...","ideas":[...],"unsupported":[...],"config":{...}}, but config is an INCREMENTAL PATCH, not a full replacement config.
-Include only new/changed top-level fields. Put newly created nodes in config.nodes. If modifying an existing node, put the changed properties in config.update_nodes under that node id; never delete unrelated nodes. If the task creates a node whose id already exists, use a new unique id. Existing node IDs and navigation are listed in the user payload. Don't repeat or rewrite the entire current config. Never claim a feature is implemented if you only mention it in text. Keep every button/route target consistent with the provided task plan and existing node IDs. Use the exact task id in a top-level task_id field if possible. Output complete JSON, no markdown. The config patch may be incomplete by itself and will only be validated after all tasks are merged."""
-
-
-# A task-specific prompt avoids resending the 41k-character monolithic prompt on every task.
-# It preserves the engine contract but keeps each provider request small enough for free endpoints.
-TASK_PATCH_SYSTEM = r"""You are the implementation worker for a fixed, safe Telegram bot JSON engine. Implement ONLY the current task in the supplied task plan. You do not have access to the reference bot's private configuration; never claim you inspected it.
-
-Return one complete valid JSON object only, written COMPACTLY (single line, no indentation, short texts, "thinking" under 200 characters, at most 6 nodes in this patch) so it is never cut off: {"thinking":"...","ideas":[],"unsupported":[],"config":{...}}. The config is a PATCH, not the whole bot. Only report unsupported features that the engine truly cannot implement; do not add gaps merely because the task has not yet been done by other tasks. User-facing text and thinking must use the user's language.
-
-ROOT CONFIG: name (short display name), start (node ID), fallback (node ID), commands (command-name to node ID), vars (per-user defaults), globals (shared defaults), desk (staff numeric IDs and/or staff_usernames, ticket settings), join (forced channel membership), mod (group/channel moderation toolkit), group.triggers (group keyword/command triggers), games.list (supported built-in games), on_ref/ref_text (referrals), and nodes. Do not invent unsupported root keys or capabilities.
-
-NODE FIELDS: title, text, buttons, ask, fields, save, types, skip, silent, done, done_media, next, ai, ticket, tag, board, list, join, do, route, alt, photo, media, btnlist. `fields` is a sequential form; `save` and `types` align by index. Types: text, number, phone, email, photo, photo_optional. `photo_optional` requires `skip` label (for example «عکس ندارم») and must be a real form skip button, not an alert. `media`/`done_media` may only use exact IDs from the supplied media library. Never invent image URLs; only use `photo` if the user supplied a direct image URL.
-
-BUTTONS: rows of button objects. Each button must perform exactly one main operation: goto an existing node, url (https only), alert, copy, share, app, or pay if enabled. `do`/`join` may accompany only supported button types. Keep all goto/start/fallback/next/route/reminder/command targets valid. Every node should be reachable from start; provide a home/back route for nonterminal screens.
-
-LOGIC: variables are lowercase English letters/digits/underscore, <=20 chars, and cannot overwrite built-in read-only variables such as name, username, id, text, lang, date, time, refs, visits, ticket_no. Declare custom vars in `vars` with defaults. Supported action/event/game operators are listed below. Use only supported actions and actual engine behavior. Payment support is Telegram Stars only when enabled; never promise bank/card gateway payments, reading the contents of user photos/files, unsupported group/channel functions, inline mode, calls, or real-time multiplayer. For orders that need a human response, use a form/ask with ticket support and route messages to the configured owner/staff.
-
-PATCH CONTRACT: include only changed root keys. Add new nodes under config.nodes. For an existing node, send partial properties under config.update_nodes[node_id]; do not delete/replace unrelated nodes or rewrite the whole config. Use unique node IDs that do not collide with IDs in current_config_summary.node_ids. A patch is valid only if it makes a real config change or adds a genuinely new supported setting. Do not merely describe a feature in `thinking`; implement it in config. Use minimal changes, preserve all previously completed tasks, and keep existing config unchanged outside this task.
-
-The execution context may be delivered across consecutive user messages to satisfy provider per-message length limits; read all parts together. The original request may likewise arrive in labelled parts; combine them in order exactly. Implement only this task, but do not contradict the full request. Return valid JSON with no markdown.
-""" + "\n\nSUPPORTED ENGINE CAPABILITIES:\n" + _caps_mod.caps_ai_text() + "\n\n" + _TASK_PATCH_SUFFIX
-
-_ROOT_CONFIG_KEYS = {
-    "name", "start", "fallback", "commands", "nodes", "on_ref", "ref_text", "group", "vars", "globals",
-    "desk", "games", "growth", "channelpost", "rss", "inline", "webin", "digest", "join", "mod", "dbfields"
-}
-
-
 def _task_hash(value):
     try:
         raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -2936,436 +2911,56 @@ def _task_hash(value):
     return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()
 
 
-def _fallback_task_plan(prompt, current=None):
-    """Safe offline planner; keeps the complete source request in every generated task context."""
-    text = str(prompt or "").strip()
-    if current is not None:
-        return [{"id": "foundation", "title": "حفظ ساختار فعلی و آماده‌سازی تغییر", 
-                 "scope": "فقط تغییرات درخواستی کاربر را روی کانفیگ فعلی اعمال کن و هیچ قابلیت سالمی را حذف نکن. درخواست کامل: " + text,
-                 "acceptance": ["حفظ قابلیت‌های قبلی", "اعمال تمام تغییرات صریح"], "node_ids": []}]
-    # Split only at user-authored boundaries. Don't split a handle/URL or ordinary comma-separated phrase.
-    parts = [x.strip(" \t-*•") for x in re.split(r"\n+|(?<=[.!?؟؛])\s+", text) if x.strip(" \t-*•")]
-    if len(parts) <= 1:
-        return [{"id": "foundation", "title": "ساخت ربات پایه مطابق درخواست", "scope": text or "یک ربات پایهٔ کاربردی بساز.",
-                 "acceptance": ["منوی شروع قابل استفاده", "پیاده‌سازی درخواست در حد امکانات موتور"], "node_ids": ["start"]}]
-    tasks = [{"id": "foundation", "title": "منوی شروع و مسیرهای اصلی", 
-              "scope": "یک اسکلت ربات کاربردی بساز و مسیرهای منو را برای وظایف بعدی آماده کن. درخواست کامل: " + text,
-              "acceptance": ["گره شروع معتبر", "پیوند به قابلیت‌های درخواست‌شده"], "node_ids": ["start"]}]
-    for i, part in enumerate(parts[:3], 1):
-        tasks.append({"id": f"feature_{i}", "title": f"پیاده‌سازی بخش {i}", "scope": part,
-                      "acceptance": ["مسیر اجرایی واقعی برای این خواسته"], "node_ids": [f"feature_{i}"]})
-    return tasks[:4]
-
-
-def _normalize_task_plan(raw, prompt, current=None):
-    if not isinstance(raw, dict) or not isinstance(raw.get("tasks"), list):
-        raise ValueError("برنامهٔ وظایف ساخت معتبر نیست")
-    out, seen = [], set()
-    for i, item in enumerate(raw["tasks"][:12]):
-        if not isinstance(item, dict):
-            continue
-        tid = re.sub(r"[^a-z0-9_]", "_", str(item.get("id") or f"task_{i+1}").lower()).strip("_")[:24]
-        if not tid or not tid[0].isalpha() or tid in seen:
-            tid = f"task_{i+1}"
-        seen.add(tid)
-        title = str(item.get("title") or f"وظیفه {i+1}").strip()[:100]
-        scope = str(item.get("scope") or "").strip()[:1800]
-        if not scope:
-            continue
-        acceptance = [str(x).strip()[:180] for x in item.get("acceptance", [])[:5] if str(x).strip()] if isinstance(item.get("acceptance"), list) else []
-        node_ids = [re.sub(r"[^a-z0-9_]", "_", str(x).lower())[:32] for x in item.get("node_ids", [])[:8] if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{0,31}", str(x))] if isinstance(item.get("node_ids"), list) else []
-        out.append({"id": tid, "title": title, "scope": scope, "acceptance": acceptance, "node_ids": node_ids})
-    if not out:
-        raise ValueError("برنامه هیچ وظیفهٔ قابل اجرایی ندارد")
-    if current is None and out[0]["id"] != "foundation":
-        out.insert(0, {"id": "foundation", "title": "منوی شروع و اسکلت ربات",
-                       "scope": "منوی شروع و گره‌های پایه را بساز و برای وظایف برنامه‌ریزی‌شده مسیر قابل‌دسترسی فراهم کن. درخواست کامل کاربر: " + str(prompt or ""),
-                       "acceptance": ["گره شروع معتبر", "پیوند به وظایف بعدی"], "node_ids": ["start"]})
-    if current is not None and out[0]["id"] != "foundation":
-        out.insert(0, {"id": "foundation", "title": "حفظ کانفیگ و مسیریابی موجود",
-                       "scope": "کانفیگ فعلی را حفظ کن و فقط مسیر خانه/شروع را در صورت نیاز تنظیم کن؛ از بازسازی کامل خودداری کن. درخواست کامل: " + str(prompt or ""),
-                       "acceptance": ["عدم حذف قابلیت‌های موجود"], "node_ids": []})
-    if len(out) > 7:
-        tail = out[6:]
-        out = out[:6] + [{"id": "remaining_features", "title": "سایر قابلیت‌های درخواستی",
-                          "scope": "\n".join(f"{x['title']}: {x['scope']}" for x in tail)[:4000],
-                          "acceptance": [c for x in tail for c in x.get("acceptance", [])][:8],
-                          "node_ids": [n for x in tail for n in x.get("node_ids", [])][:8]}]
-    return out
-
-
-def _plan_build_tasks(prompt, current, acc):
-    cb = getattr(_prog, "cb", None)
-    if cb:
-        cb.stage("analyze", 5.0)
-    current_summary = _config_task_summary(current) if current else None
-    payload = {"user_request": str(prompt or "")[:MAX_PROMPT], "mode": "update existing bot" if current else "new bot",
-               "current_config_summary": current_summary}
-    try:
-        _plan_meta.limits = []
-        _lm = re.search(r"ENGINE LIMITS.*?(?=\nREASONING PROTOCOL)", SYSTEM_PROMPT, re.S)
-        _plan_system = TASK_PLAN_SYSTEM + ("\n\n" + _lm.group(0) if _lm else "")
-        txt, usage = llm_run([{"role": "system", "content": _plan_system},
-                              {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
-                             900, temperature=0.1, timeout=40, max_models=3, total_timeout=90)
-        _record_usage(acc, usage)
-        plan_json, _ = _loads_json_with_safe_repairs(txt)
-        _raw_limits = plan_json.get("limits") if isinstance(plan_json, dict) else None
-        _plan_meta.limits = [{"want": str(x.get("want") or "").strip()[:300], "why": str(x.get("why") or "").strip()[:500],
-                              "upgrade": ("جایگزین: " + str(x.get("alternative") or "").strip()[:400]) if x.get("alternative") else "",
-                              "kind": "ENGINE_LIMIT", "severity": "info", "feature": "—",
-                              "criterion": "خواستهٔ خارج از توان موتور؛ جایگزین نزدیک ساخته می‌شود."}
-                             for x in (_raw_limits if isinstance(_raw_limits, list) else [])[:4]
-                             if isinstance(x, dict) and str(x.get("want") or "").strip()]
-        return _normalize_task_plan(plan_json, prompt, current)
-    except Exception as exc:
-        _plan_meta.limits = []
-        log.warning("Task planning used the deterministic fallback: %s", str(exc)[:300])
-        if cb:
-            cb.rejected_models.clear()
-        return _fallback_task_plan(prompt, current)
-
-
-def _task_context_trim(value, depth=0):
-    """Bound nested current-config context before sending it to a model; the full config remains in the checkpoint."""
-    if depth >= 3:
-        if isinstance(value, (dict, list)):
-            return "[details omitted from model context; preserved in checkpoint]"
-        return str(value)[:80] if value is not None else None
-    if isinstance(value, str):
-        return value[:100]
-    if isinstance(value, dict):
-        items = list(value.items())[:12]
-        out = {str(k): _task_context_trim(v, depth + 1) for k, v in items}
-        if len(value) > len(items):
-            out["_omitted_keys"] = len(value) - len(items)
-        return out
-    if isinstance(value, list):
-        result = [_task_context_trim(v, depth + 1) for v in value[:6]]
-        if len(value) > len(result):
-            result.append(f"[{len(value) - len(result)} more items omitted; preserved in checkpoint]")
-        return result
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    return str(value)[:80]
-
-
-def _config_task_summary(cfg, target_node_ids=None):
-    if not isinstance(cfg, dict):
-        return None
-    nodes = cfg.get("nodes") if isinstance(cfg.get("nodes"), dict) else {}
-    all_ids = [str(x) for x in nodes.keys()][:MAX_NODES]
-    # Send every node ID so new routes don't collide, but detailed contents only for the most relevant nodes.
-    preferred = []
-    for nid in ([cfg.get("start"), cfg.get("fallback")] + list(target_node_ids or [])):
-        if isinstance(nid, str) and nid in nodes and nid not in preferred:
-            preferred.append(nid)
-    details_order = preferred + [nid for nid in all_ids if nid not in preferred]
-    slim_nodes = {}
-    for node_id in details_order[:4]:
-        node = nodes.get(node_id)
-        if not isinstance(node, dict):
-            continue
-        slim_nodes[node_id] = {
-            "title": str(node.get("title") or "")[:40], "text": str(node.get("text") or "")[:55],
-            "buttons": [[{"text": str(b.get("text") or "")[:16], "goto": str(b.get("goto") or "")[:20]}
-                          for b in row[:2] if isinstance(b, dict)]
-                        for row in (node.get("buttons") or [])[:2] if isinstance(row, list)],
-            "fields": [str(x)[:50] for x in node.get("fields", [])[:3]] if isinstance(node.get("fields"), list) else [],
-            "types": list(node.get("types") or [])[:3] if isinstance(node.get("types"), list) else [],
-            "save": list(node.get("save") or [])[:3] if isinstance(node.get("save"), list) else [],
-            "ask": bool(node.get("ask")), "next": str(node.get("next") or "")[:20],
-            "route": [{"goto": str(x.get("goto") or "")[:20], "when": ({"var": str((x.get("when") or {}).get("var") or "")[:16], "op": str((x.get("when") or {}).get("op") or "")[:8], "value": str((x.get("when") or {}).get("value") or "")[:24]} if isinstance(x.get("when"), dict) else None)}
-                      for x in (node.get("route") or [])[:2] if isinstance(x, dict)] if isinstance(node.get("route"), list) else [],
-            "do": [{"op": str(a.get("op") or "")[:12], "var": str(a.get("var") or "")[:12]}
-                   for a in node.get("do", [])[:2] if isinstance(a, dict)] if isinstance(node.get("do"), list) else [],
-        }
-    root = {k: v for k, v in cfg.items() if k not in ("nodes", "thinking", "ideas")}
-    root = _task_context_trim(root)
-    return {"root": root, "node_ids": all_ids, "node_details_omitted": max(0, len(all_ids) - len(slim_nodes)), "nodes": slim_nodes}
-
-
-def _merge_patch_value(old, new, path=""):
-    if isinstance(old, dict) and isinstance(new, dict):
-        out = copy.deepcopy(old)
-        for key, value in new.items():
-            out[key] = _merge_patch_value(out.get(key), value, f"{path}.{key}" if path else str(key))
-        return out
-    if isinstance(old, list) and isinstance(new, list) and path.endswith(".triggers"):
-        out = copy.deepcopy(old)
-        seen = {json.dumps(x, ensure_ascii=False, sort_keys=True, default=str) for x in out}
-        for value in new:
-            sig = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
-            if sig not in seen:
-                out.append(copy.deepcopy(value)); seen.add(sig)
-        return out
-    return copy.deepcopy(new)
-
-
-def _merge_config_patch(cfg, patch):
-    """Merge only explicit patch fields; existing nodes not mentioned by a task remain untouched."""
-    if not isinstance(cfg, dict) or not isinstance(patch, dict):
-        raise ValueError("پچ وظیفه، شیء تنظیمات معتبر نیست")
-    merged = copy.deepcopy(cfg)
-    for key, value in patch.items():
-        if key not in _ROOT_CONFIG_KEYS or key in ("nodes", "update_nodes"):
-            continue
-        if key in ("commands", "vars", "globals", "dbfields") and isinstance(value, dict):
-            merged[key] = _merge_patch_value(merged.get(key, {}), value, key)
-        elif key in ("group", "mod", "desk", "games", "growth", "channelpost", "rss", "inline", "webin", "digest", "join") and isinstance(value, dict):
-            merged[key] = _merge_patch_value(merged.get(key, {}), value, key)
-        else:
-            merged[key] = copy.deepcopy(value)
-    existing_nodes = merged.setdefault("nodes", {})
-    if not isinstance(existing_nodes, dict):
-        existing_nodes = merged["nodes"] = {}
-    for node_key in ("nodes", "update_nodes"):
-        changed_nodes = patch.get(node_key)
-        if not isinstance(changed_nodes, dict):
-            continue
-        for node_id, node_patch in changed_nodes.items():
-            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", str(node_id)) or not isinstance(node_patch, dict):
-                continue
-            node_id = str(node_id)
-            if node_id in existing_nodes:
-                existing_nodes[node_id] = _merge_patch_value(existing_nodes[node_id], node_patch, f"nodes.{node_id}")
-            else:
-                existing_nodes[node_id] = copy.deepcopy(node_patch)
-    if len(existing_nodes) > max(1, min(200, MAX_NODES)):
-        raise ValueError(f"تعداد گره‌ها از سقف مجاز موتور ({MAX_NODES}) بیشتر شد؛ وظیفه به checkpoint برنگشت")
-    return merged
-
-
-def _checkpoint_build_state(cb, prompt, base, plan, completed, cfg, thinking, ideas, gaps, phase, task_index, last_error=""):
-    if not cb or not getattr(cb, "jid", None):
-        return
-    try:
-        state = {
-            "version": 1, "request_hash": _task_hash(str(prompt or "")), "base_hash": _task_hash(base) if base is not None else "new",
-            "plan": copy.deepcopy(plan), "completed": list(completed), "cfg": copy.deepcopy(cfg),
-            "thinking": str(thinking or "")[:900], "ideas": list(ideas or [])[:3], "gaps": list(gaps or [])[:12],
-            "phase": str(phase), "task_index": int(task_index), "last_error": str(last_error or "")[:500],
-            "retry_counts": dict(getattr(cb, "task_retry_counts", {}) or {}), "updated": time.time()
-        }
-        result = db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"build_state": state, "t": _core_now()}})
-        if getattr(result, "matched_count", 1) == 0:
-            raise RuntimeError("job no longer accepts checkpoint updates; refusing to continue without durable state")
-    except Exception as exc:
-        log.exception("failed to persist task checkpoint; stopping build to protect progress")
-        raise RuntimeError(f"ذخیرهٔ checkpoint وظیفه در دیتابیس ناموفق بود؛ برای جلوگیری از گم‌شدن پیشرفت، ساخت متوقف شد: {type(exc).__name__}: {str(exc)[:300]}") from exc
-
-
-def _load_build_state(cb, prompt, current):
-    if not cb or not getattr(cb, "jid", None):
-        return None
-    try:
-        job = db.jobs.find_one({"_id": cb.jid}, {"build_state": 1}) or {}
-        state = job.get("build_state") or {}
-        if state.get("version") != 1 or state.get("request_hash") != _task_hash(str(prompt or "")):
-            return None
-        if state.get("base_hash") != (_task_hash(current) if current is not None else "new"):
-            return None
-        if not isinstance(state.get("plan"), list) or not isinstance(state.get("cfg"), dict):
-            return None
-        return state
-    except Exception:
-        log.exception("failed to load task checkpoint")
-        return None
-
-
-def _task_patch_call(prompt, task, plan, task_index, cfg, completed, lang, media_ids, acc, feedback=""):
-    """Generate one atomic config patch. Provider failures are failovered; malformed outputs switch model without restarting earlier tasks."""
-    cb = getattr(_prog, "cb", None)
-    if cb:
-        cb.last_model = None
-        cb.rejected_models.clear()
-        cb.soft_rejected.clear()
-        cb.set_task(task_index + 1, len(plan), task.get("title") or task.get("id"))
-    started = time.monotonic()
-    task_budget = max(20.0, min(300.0, float(_int("AI_TASK_BUDGET", 170))))
-    task_model_timeout = float(max(15, _int("AI_TASK_MODEL_TIMEOUT", 60)))
-    last_parse_error = ""
-    parse_history = []
-    parse_attempt_limit = max(3, min(5, len(_model_candidates())))
-    for parse_try in range(parse_attempt_limit):
-        remaining_task = task_budget - (time.monotonic() - started)
-        if remaining_task <= 3:
-            break
-        context = {
-            "original_user_request_parts_follow_in_next_messages": True,
-            "current_task": task,
-            "all_tasks": [{"id": x.get("id"), "title": x.get("title"), "node_ids": x.get("node_ids", [])} for x in plan],
-            "completed_tasks": completed,
-            "current_config_summary": _config_task_summary(cfg, task.get("node_ids")),
-            "patch_contract": {
-                "config": "partial config patch; omit unchanged values",
-                "nodes": "new nodes or complete replacements when a node id already exists",
-                "update_nodes": "partial property updates to existing nodes; do not include unrelated nodes",
-                "allowed_top_level_keys": sorted(_ROOT_CONFIG_KEYS),
-            },
-            "validation_feedback_from_previous_output": last_parse_error,
-            "additional_instruction": str(feedback or "")[:2200],
-            "language": "Persian" if lang == "fa" else "same as user request",
-        }
-        system = TASK_PATCH_SYSTEM
-        context_messages = [{"role": "user", "content": "EXECUTION CONTEXT (JSON):\n" + json.dumps(context, ensure_ascii=False, indent=2)}]
-        request_text = str(prompt or "")[:MAX_PROMPT]
-        request_cap = max(700, min(1900, _int("AI_MAX_SINGLE_MESSAGE_CHARS", 2200) - 200))
-        request_parts = []
-        remaining_text = request_text
-        while len(remaining_text) > request_cap:
-            cut_at = remaining_text.rfind("\n", 1, request_cap + 1)
-            if cut_at < request_cap * 0.55:
-                cut_at = remaining_text.rfind(" ", 1, request_cap + 1)
-            if cut_at < request_cap * 0.55:
-                cut_at = request_cap
-            else:
-                cut_at += 1
-            request_parts.append(remaining_text[:cut_at])
-            remaining_text = remaining_text[cut_at:]
-        if remaining_text or not request_parts:
-            request_parts.append(remaining_text)
-        request_messages = [{"role": "user", "content": f"ORIGINAL USER REQUEST — PART {i}/{len(request_parts)}. Read all request parts together, in order:\n{part}"}
-                            for i, part in enumerate(request_parts, 1)]
-        task_messages = [{"role": "system", "content": system}] + context_messages + request_messages
-        try:
-            text, usage = llm_run(
-                task_messages,
-                min(AI_MAX_TOKENS, max(2600, min(5200, AI_MAX_TOKENS))), temperature=0.18,
-                timeout=min(task_model_timeout, remaining_task, _job_remaining(task_model_timeout)), max_models=3,
-                total_timeout=min(task_model_timeout * 2, remaining_task, _job_remaining(task_model_timeout * 2)))
-            _record_usage(acc, usage)
-        except Exception as exc:
-            # Try unvisited providers in a second batch, but never restart completed tasks.
-            rejected = set(getattr(cb, "rejected_models", set()) or set()) if cb else set()
-            remaining_models = [m for m in _model_candidates() if m.casefold() not in rejected]
-            if remaining_models and (task_budget - (time.monotonic() - started)) > 3:
-                try:
-                    text, usage = llm_run(
-                        task_messages,
-                        min(AI_MAX_TOKENS, 5200), temperature=0.18,
-                        timeout=min(task_model_timeout, task_budget - (time.monotonic() - started), _job_remaining(task_model_timeout)),
-                        max_models=len(remaining_models),
-                        total_timeout=max(1.0, min(task_budget - (time.monotonic() - started), _job_remaining(task_model_timeout * 2))))
-                    _record_usage(acc, usage)
-                except Exception as second_exc:
-                    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(second_exc).__name__}: {str(second_exc)[:200]} || JSON: {' ; '.join(parse_history)[:500] or '-'}") from second_exc
-            else:
-                raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از امتحان مدل‌های در دسترس شکست خورد؛ checkpoint وظایف قبلی حفظ شد. {type(exc).__name__}: {str(exc)[:200]} || JSON: {' ; '.join(parse_history)[:500] or '-'}") from exc
-        try:
-            raw, repaired_json = _loads_json_with_safe_repairs(text)
-            if not isinstance(raw, dict):
-                raise ValueError("پاسخ وظیفه یک شیء JSON نبود")
-            patch = raw.get("config") if isinstance(raw.get("config"), dict) else raw.get("patch")
-            if not isinstance(patch, dict):
-                raise ValueError("پاسخ وظیفه فاقد config/patch بود")
-            has_patch = any(k in _ROOT_CONFIG_KEYS for k in patch) or isinstance(patch.get("update_nodes"), dict)
-            if not has_patch or not isinstance(patch.get("nodes", {}), dict):
-                raise ValueError("پچ وظیفه هیچ تغییر قابل‌اعمالی نداشت یا nodes نامعتبر بود")
-            proposed_cfg = _merge_config_patch(cfg, patch)
-            if _task_hash(proposed_cfg) == _task_hash(cfg):
-                raise ValueError("پچ JSON بود اما هیچ تغییر واقعی در کانفیگ نداد؛ وظیفه تکمیل‌شده محسوب نمی‌شود")
-            thinking = str(raw.get("thinking") or "").strip()[:900]
-            ideas = [str(x).strip()[:80] for x in raw.get("ideas", []) if str(x).strip()][:3] if isinstance(raw.get("ideas"), list) else []
-            gaps = _take_gaps(raw.get("unsupported"))
-            if cb and repaired_json:
-                log.info("JSON syntax repaired in task %s", task.get("id"))
-            if cb:
-                cb.last_model = None
-            return patch, thinking, ideas, gaps
-        except Exception as exc:
-            last_parse_error = f"Task {task.get('id')}: {type(exc).__name__}: {str(exc)[:450]}. Return a complete valid JSON config PATCH only; preserve all previous tasks and output only changed/new nodes and settings."
-            log.warning("Task patch rejected; switching model for task %s, attempt %s: %s", task.get("id"), parse_try + 1, str(exc)[:250])
-            parse_history.append(f"#{parse_try + 1} [{getattr(cb, 'last_model', None) or '?'}] {type(exc).__name__}: {str(exc)[:160]}")
-            if cb:
-                cb.reject_last_model()
-    raise RuntimeError(f"وظیفه «{task.get('title') or task.get('id')}» پس از چند خروجی نامعتبر تکمیل نشد؛ کارهای قبلی checkpoint شده‌اند. {last_parse_error[:500]}")
-
-
-def _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap):
-    """Normalize only once all task patches are merged; return cfg and structural warnings."""
-    cfg, renamed_vars = _repair_reserved_write_vars(copy.deepcopy(cfg))
-    warns = []
-    cfg = sanitize(cfg, media=media_ids, warns=warns, nodes_cap=nodes_cap)
-    auto_links = _repair_orphan_confirmation_nodes(cfg)
-    feature_changes, feature_warnings, requested_staff = _repair_explicit_requirements(prompt, cfg, lang)
-    warns.extend(feature_warnings)
-    if auto_links and not any("unreachable nodes" in item.lower() for item in lint(cfg)):
-        log.info("orphan confirmation nodes were repaired before final lint")
-    if lang == "fa":
-        cfg = scrub_deep(cfg)
-    return cfg, warns, feature_changes, requested_staff
-
-
-def _is_transient_task_failure(exc):
-    """Retry a task once only for likely transient transport/server failures; never loop on permanent quota/config errors."""
-    message = f"{type(exc).__name__}: {exc}".casefold()
-    permanent = (
-        "daily_free_quota_exhausted", "today's free token allowance", "allowance renews",
-        "provider_content_refusal", "content grounds", "refused this prompt", "content policy",
-        "model_not_found", "http 404", "http 401", "http 403", "unauthorized",
-        "invalid api key", "provider_message_length_limit", "limits the length of a single message",
-        "context_length_exceeded", "http 400",
-    )
-    if any(term in message for term in permanent):
-        return False
-    transient = (
-        "readtimeout", "connecttimeout", "timeout", "timed out", "connection reset",
-        "connection aborted", "temporarily unavailable", "remote end closed", "http 500",
-        "http 502", "http 503", "http 504", "bad gateway", "service unavailable",
-    )
-    return any(term in message for term in transient)
-
-
 # ───────────── بررسی قطعی (بدون مدل) پیش از ساخت: چیزهایی که موتور مطمئناً ندارد ─────────────
 _STATIC_LIMITS = [
     (r"(ممبر\s*گیر|عضو\s*گیر|ممبرگیر|سفارش\s*(?:دادن\s*)?(?:ممبر|عضو)|تبادل\s*(?:ممبر|عضو)|(?:ممبر|عضو)\s*(?:بگیر|بده|سفارش)|member\s*(?:adder|exchange|order))",
      "ساخت ربات ممبرگیر/تبادل عضو برای کانال‌ها و گروه‌های کاربران",
      "موتور فعلی فقط روی خود ربات و ابزار پایهٔ مدیریت گروه کار می‌کند؛ افزودن عضو به کانال/گروه دیگران، بررسی واقعی عضویت در کانال‌های دیگر و پیگیری لفت دادن آن‌ها پشتیبانی نمی‌شود.",
-     "سفارش عضو به‌صورت فرم و تیکت برای مالک، همراه با سکه، رفرال، گردونه و پنل مالک به‌صورت سیستم داخلی ربات"),
+     "سفارش عضو به‌صورت فرم و تیکت برای مالک، همراه با سکه، رفرال، گردونه و پنل مالک به‌صورت سیستم داخلی ربات", "members.inject"),
     (r"(لفت|لیو\s*داد|خروج\s*از\s*(?:کانال|گروه)|left\s+the\s+(?:channel|group))",
      "کسر امتیاز یا سکه هنگام خروج کاربر از کانال/گروه",
      "ربات‌ساز رویداد خروج کاربران از کانال‌های دیگران را دریافت نمی‌کند.",
-     "جایزهٔ عضویت بدون کسر بعدی، یا تأیید دستی توسط مالک"),
+     "جایزهٔ عضویت بدون کسر بعدی، یا تأیید دستی توسط مالک", "members.inject"),
     (r"(کانال|گروه)\s*های?\s*خصوصی|private\s*(?:channel|group)",
      "کار با کانال/گروه خصوصی دیگران",
      "ربات‌ساز به کانال‌ها و گروه‌های خصوصی دیگران دسترسی مدیریتی ندارد.",
-     "دریافت لینک دعوت از کاربر و ارسال سفارش به مالک"),
+     "دریافت لینک دعوت از کاربر و ارسال سفارش به مالک", "members.inject"),
     (r"(درگاه\s*(?:بانکی|پرداخت|زرین|پی)|زرین\s*پال|آیدی\s*پی|idpay|zarinpal|پرداخت\s*(?:آنلاین\s*)?(?:با\s*)?کارت|کارت\s*به\s*کارت)",
      "پرداخت با درگاه بانکی یا کارت‌به‌کارت خودکار",
      "فقط پرداخت با ستارهٔ تلگرام پشتیبانی می‌شود و تأیید خودکار پرداخت بانکی وجود ندارد.",
-     "پرداخت با ستارهٔ تلگرام، یا ثبت سفارش با تیکت و تأیید دستی مالک"),
+     "پرداخت با ستارهٔ تلگرام، یا ثبت سفارش با تیکت و تأیید دستی مالک", "pay.bank_gateway"),
     (r"(?:خودکار|اتوماتیک).{0,40}(?:منتشر|پست|ارسال).{0,25}کانال|(?:منتشر|پست|ارسال).{0,40}کانال.{0,15}(?:خودکار|اتوماتیک)|(?:آگهی|پست).{0,30}در\s*کانال.{0,10}منتشر",
      "انتشار خودکار آگهی یا پست کاربر در کانال",
      "موتور بعد از پر شدن فرم، پیام را خودکار در کانال نمی‌گذارد؛ فقط مالک با دستور /post پیام را در کانال منتشر می‌کند.",
-     "ثبت آگهی در فهرست داخل ربات + ارسال آگهی و عکس برای مالک تا با /post در کانال بگذارد"),
+     "ثبت آگهی در فهرست داخل ربات + ارسال آگهی و عکس برای مالک تا با /post در کانال بگذارد", "channel.auto_post"),
     (r"(پورسانت|کمیسیون|درصد\s*(?:از\s*)?(?:خرید|درآمد|سود)\s*(?:زیر\s*مجموعه|دعوت))",
      "پورسانت از خرید یا درآمد زیرمجموعه‌ها",
      "موتور موجودی یک کاربر را بر اثر عمل کاربر دیگر تغییر نمی‌دهد؛ فقط پاداش ثابت لحظهٔ دعوت (on_ref) پشتیبانی می‌شود.",
-     "پاداش ثابت برای هر دعوت یا تبدیل قطعه‌های پازل به سکه"),
+     "پاداش ثابت برای هر دعوت یا تبدیل قطعه‌های پازل به سکه", "referral.commission"),
     (r"(مالک|ادمین)\s*(?:می\s*?تون[هد]?|بتون[هد]?)\s*(?:به\s*)?(?:کاربر)?\s*(?:سکه|امتیاز|اعتبار)\s*(?:بده|اضافه)",
      "اضافه‌کردن دستی سکه به کاربر دلخواه توسط مالک",
      "اکشن‌های موتور فقط روی کیف خود کاربرِ در حال استفاده کار می‌کنند.",
-     "پرداخت با ستارهٔ تلگرام برای شارژ خودکار، یا ثبت درخواست با تیکت"),
+     "پرداخت با ستارهٔ تلگرام برای شارژ خودکار، یا ثبت درخواست با تیکت", "wallet.cross_user"),
     (r"(بازی\s*(?:آنلاین|لحظه\s*ای)\s*(?:دو\s*نفره|چند\s*نفره)|multiplayer|real[-\s]?time\s*game)",
      "بازی آنلاین لحظه‌ای چندنفره",
      "بازی‌های لحظه‌ای هم‌زمان پشتیبانی نمی‌شوند.",
-     "بازی تک‌نفره با سکه و رتبه‌بندی"),
-    (r"(تماس\s*صوتی|تماس\s*تصویری|voice\s*call|video\s*call|اینلاین\s*مود|inline\s*mode)",
-     "تماس صوتی/تصویری یا حالت اینلاین",
-     "این قابلیت‌ها در موتور ربات‌ساز نیست.",
-     "پاسخ متنی و ارجاع به پشتیبان"),
+     "بازی تک‌نفره با سکه و رتبه‌بندی", "game.realtime_multiplayer"),
+    (r"(تماس\s*صوتی|تماس\s*تصویری|voice\s*call|video\s*call)",
+     "تماس صوتی/تصویری",
+     "Bot API تلگرام تماس تلفنی برای ربات‌ها ارائه نمی‌کند.",
+     "گفتگوی متنی با دستیار هوشمند و ارجاع به پشتیبان", "voice.video_call"),
 ]
 
 
 def _static_limits(prompt):
+    """بررسی قطعی قبل از ساخت؛ هر مورد با طبقه‌بندی ENGINE_LIMIT و شناسهٔ قراردادی قابلیت.
+    جستجوی اینلاین از این فهرست حذف شد: موتور با _inline_answer و cfg.inline آن را پشتیبانی می‌کند (status=engine_only)."""
     text = str(prompt or "")
     out = []
-    for pat, want, why, alt in _STATIC_LIMITS:
+    for pat, want, why, alt, feat in _STATIC_LIMITS:
         if re.search(pat, text, re.I):
-            out.append({"want": want, "why": why, "upgrade": "جایگزین: " + alt,
-                        "kind": "ENGINE_LIMIT", "severity": "info",
-                        "feature": "—", "criterion": "این مورد خواستهٔ خارج از توان موتور است؛ جایگزین نزدیک ساخته می‌شود."})
+            out.append({"kind": "ENGINE_LIMIT", "feature": feat, "want": want, "why": why,
+                        "upgrade": "جایگزین: " + alt})
     return out[:4]
 
 
@@ -3403,361 +2998,267 @@ def _fix_structure_deterministically(cfg):
     return issues
 
 
-AI_MODULES = os.environ.get("AI_MODULES", "1").strip().lower() not in ("0", "false", "off", "no")
+# -*- coding: utf-8 -*-
+# خط ساخت ۳.۶: Spec → کامپایلر قطعی → تست پذیرش
+# نقش مدل زبانی فقط «درک درخواست و تولید Spec کوچک» است؛ کانفیگ ربات هرگز مستقیم توسط مدل تولید نمی‌شود.
+# ممیزی نهایی LLM وجود ندارد؛ تأیید نهایی با تست پذیرش روی موتور واقعی (engine_accept) انجام می‌شود.
 
 
-def _qc_log(kind, evidence, feature=""):
-    """لاگ کیفیت ساخت (BUILD_DEFECT و…): نقص ساخت هرگز محدودیت موتور نیست؛ جدا از گزارش کاربر ثبت می‌شود."""
-    try:
-        db.qclog.insert_one({"kind": str(kind)[:24], "evidence": str(evidence)[:800],
-                              "feature": str(feature or "")[:120], "t": _core_now()})
-    except Exception:
-        log.exception("qclog insert failed")
+class WizardNeeded(RuntimeError):
+    """هیچ مدلی پاسخ معتبر نداد؛ مسیر ویزارد بدون هوش مصنوعی باید اجرا شود. هیچ توکنی کسر نمی‌شود."""
 
 
-def spec_build(prompt, cb, nodes_cap, current=None, acc=None, media_ids=frozenset()):
-    """مسیر اصلی ساخت: Spec ← Compiler.
-    LLM فقط یک Spec کوچک JSON (۲۰ تا ۴۰ خط) از enum بسته انتخاب می‌کند (یک فراخوانی؛ یک تلاش مجدد).
-    کامپایلر قطعی (catalog.py) Spec را به کانفیگ معتبر موتور تبدیل می‌کند؛ اگر LLM در دسترس نبود یا
-    خروجی خراب بود، روتر کلیدواژه‌ای بدون LLM انتخاب را انجام می‌دهد. اگر هیچ قابلیتی انتخاب نشد،
-    None برمی‌گردد تا مسیر قدیمی (ماژول‌ها / تسک‌های LLM) اجرا شود.
-    پیش‌نمایش (✔/🟡/❌) پیش از ساخت با تأیید کاربر انجام می‌شود؛ لغو بدون کسر توکن است."""
-    if media_ids:
-        return None                       # رسانهٔ پیوست‌شده: درخواست سفارشی است؛ مسیر قدیمی
-    import planner
-    if current is not None and not planner.is_additive(prompt):
-        return None                       # ویرایش/تغییر ربات موجود: مسیر قدیمی
-    spec, feedback = None, ""
-    for _attempt in range(2):            # یک تلاش + یک تلاش مجدد با بازخورد خطا
+def _spec_current_summary(current):
+    """خلاصهٔ کوتاه پروژهٔ فعلی برای Spec ویرایش (intent=edit)."""
+    if not isinstance(current, dict):
+        return ""
+    nodes = current.get("nodes") or {}
+    titles = [str(n.get("title") or nid)[:24] for nid, n in list(nodes.items())[:14]]
+    return "نام: %s | بخش‌ها (%d): %s | متغیرها: %s" % (
+        str(current.get("name") or "")[:30], len(nodes), "، ".join(titles),
+        "، ".join(list((current.get("vars") or {}).keys())[:12]))
+
+
+def ask_spec(prompt, lang="fa", acc=None, current=None):
+    """یک فراخوانی مدل برای تولید Spec؛ اگر JSON/Schema نامعتبر بود فقط یک مدل جایگزین؛
+    اگر باز هم نامعتبر بود WizardNeeded (ویزارد بدون AI). خروجی مدل هرگز مستقیم وارد موتور نمی‌شود."""
+    import spec as _spec
+    cb = getattr(_prog, "cb", None)
+    msgs = _spec.spec_prompt(prompt, _spec_current_summary(current), lang)
+    last_err = None
+    for attempt in (0, 1):          # ۱) مدل ترجیحی  ۲) یک مدل جایگزین
         try:
-            user_msg = prompt[:2000] + ("" if current is None else
-                                        "\n\n(This is an ADD request to an existing bot; pick only features to ADD.)")
-            txt, usage = llm_post([{"role": "system", "content": _catalog_mod.spec_prompt()},
-                                   {"role": "user", "content": user_msg + feedback}],
-                                  700, temperature=0.2, timeout=60, model=AI_CHAT_MODEL)
-            _record_usage(acc, usage)
-            spec = _catalog_mod.parse_spec(txt)      # اعتبارسنجی سخت: enum بسته + پارامترها
-            break
-        except _catalog_mod.SpecError as e:
-            feedback = "\n\nYour previous output was invalid JSON spec (%s). Return ONLY the corrected JSON spec." % str(e)[:180]
+            if cb:
+                cb.stage("analyze", 14.0 + 4.0 * attempt)
+            txt, usage = llm_post(msgs, 1400, temperature=0.2, timeout=90,
+                                  max_models=1 if attempt == 0 else None)
+            if acc is not None:
+                _record_usage(acc, usage)
+            sp = _spec.parse_llm_spec(txt)          # JSON → Schema → Enum → پارامترها → وابستگی‌ها
+            if cb:
+                cb.stage("analyze", 24.0)
+            log.info("Spec produced by model: features=%s", [f.get("type") for f in sp["features"]])
+            return sp
+        except _spec.SpecError as e:
+            last_err = e
+            log.warning("Spec نامعتبر (تلاش %s): %s", attempt + 1, e.errors[:4])
             if cb:
                 cb.reject_last_model()
-            continue
-        except Exception as e:            # LLM در دسترس نیست / خرابی شبکه
-            log.warning("spec selection via LLM failed (%s); keyword fallback", str(e)[:160])
-            break
-    if spec is None:
-        spec = _catalog_mod.keyword_spec(prompt)
-    if not spec or not spec["features"]:
-        try:
-            db.unmatched.insert_one({"prompt": prompt[:1500], "update": current is not None, "t": _core_now()})
-        except Exception:
-            pass
-        return None
-
-    # پیش‌نمایش قبل از ساخت: ✔ ساخته می‌شود / 🟡 تقریبی / ❌ نمی‌توانم (ادامه یا لغو؛ لغو بدون کسر توکن)
-    preview = _catalog_mod.preview_spec(spec)
-    limits = _static_limits(prompt) if current is None else []
-    missing = _catalog_mod.catalog_missing(prompt, spec)
-    if (limits or missing) and cb and getattr(cb, "jid", None):
-        job = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
-        if not job.get("preflight_ok"):
-            pr = PreflightReview(limits + missing)
-            pr.preview = preview
-            raise pr
-
-    if cb:
-        cb.stage("analyze", 20.0)
-        cb.stage("generate", 62.0)
-    notes = []
-    thinking, cfg, ideas = _catalog_mod.compile_spec(spec, current=current, notes=notes)
-    warns = []
-    cfg = sanitize(cfg, strict=False, warns=warns, nodes_cap=nodes_cap)
-    issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
-    if current is not None:
-        base = set(lint(current))
-        issues = [x for x in issues if x not in base]
-    if warns or issues:
-        # نقص ساخت (BUILD_DEFECT): هرگز محدودیت موتور گزارش نمی‌شود؛ ترمیم قطعی + لاگ کیفیت؛
-        # اگر باز هم معتبر نشد، ساخت قطع و مسیر قدیمی (مدل‌های جایگزین) اجرا می‌شود.
-        _qc_log("BUILD_DEFECT", "؛ ".join(warns + issues)[:700], ",".join(f for f, _ in spec["features"]))
-        try:
-            repairs = _catalog_mod.repair_config(cfg)
-            cfg = sanitize(cfg, strict=False, nodes_cap=nodes_cap)
-            issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
-        except Exception:
-            log.exception("spec repair failed")
-            return None
-        if issues or repairs:
-            _qc_log("BUILD_DEFECT", "؛ ".join(repairs or issues)[:700], ",".join(f for f, _ in spec["features"]))
-        if issues:
-            log.warning("spec build rejected by validator, falling back: %s", issues[:3])
-            return None
-    for m in missing:
-        m["seen"] = True                  # کاربر در پیش‌نمایش دیده و تأیید کرده؛ فقط برای گزارش توسعه ثبت می‌شود
-    _gap.items = missing[:3]
-    if cb:
-        cb.stage("validate", 94.0)
-    log.info("spec build ok: %s (%s nodes)", [f for f, _ in spec["features"]], len(cfg["nodes"]))
-    return thinking, cfg, ideas
+        except ThinkLang:
+            raise
+        except Exception as e:                     # خطای ارائه‌دهنده/شبکه: فقط یک مدل جایگزین، نه حلقه
+            last_err = e
+            log.warning("مدل برای Spec پاسخ نداد (تلاش %s): %s: %s", attempt + 1, type(e).__name__, str(e)[:200])
+    raise WizardNeeded("پاسخ مدل‌ها برای برنامه‌ریزی معتبر نبود (%s)؛ مسیر ویزارد بدون هوش مصنوعی اجرا می‌شود."
+                       % (("؛ ".join(last_err.errors[:3])) if isinstance(last_err, _spec.SpecError) else (str(last_err)[:160] or "JSON نامعتبر")))
 
 
-def _module_build(prompt, cb, nodes_cap, current=None):
-    """مسیر سریع و قطعی: روتر + ماژول‌های آماده (بدون هوش مصنوعی). اگر مطمئن نبود None برمی‌گرداند تا مسیر قدیمی اجرا شود."""
+def _spec_checkpoint(cb, prompt, current, sp, phase, last_error=""):
+    """checkpoint مقاوم: Spec معتبر ذخیره می‌شود تا تعویض مدل/ادامهٔ کار از همان نقطه ممکن باشد."""
+    if not (cb and getattr(cb, "jid", None)):
+        return
     try:
-        import planner
-        pr = planner.plan_request(prompt)
-        if not pr.items or pr.confidence < 0.35:
-            try:
-                db.unmatched.insert_one({"prompt": prompt[:1500], "update": current is not None, "t": _core_now()})
-            except Exception:
-                pass
-            return None
-        if current is not None and not planner.is_additive(prompt):
-            return None
-        if cb:
-            cb.stage("analyze", 18.0)
-        if current is None:
-            thinking, cfg, ideas = planner.compile_plan(pr)
-        else:
-            thinking, cfg, ideas = planner.merge_plan(current, pr)
-        if cb:
-            cb.stage("generate", 62.0)
-        warns = []
-        cfg = sanitize(cfg, strict=False, warns=warns, nodes_cap=nodes_cap)
-        if current is not None and warns:
-            _bw = []
-            try:
-                sanitize(current, strict=False, warns=_bw, nodes_cap=nodes_cap)
-            except Exception:
-                pass
-            warns = [x for x in warns if x not in _bw]
-        issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
-        if current is not None:
-            base = set(lint(current))
-            issues = [x for x in issues if x not in base]
-        if warns or issues:
-            log.warning("module build rejected by validator, falling back to LLM: %s %s", warns[:3], issues[:3])
-            return None
-        if cb:
-            cb.stage("validate", 94.0)
-        tail = " برای افزودن قابلیت‌های دیگر، از «ویرایش با هوش مصنوعی» استفاده کن."
-        thinking = (thinking[:900 - len(tail)].rstrip() + tail)
-        log.info("module build ok: %s (%s nodes)", pr.ids, len(cfg["nodes"]))
-        return thinking, cfg, ideas
+        db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {
+            "build_state": {"version": 2, "spec": sp, "request_hash": _task_hash(prompt),
+                            "base_hash": _task_hash(current) if isinstance(current, dict) else "new",
+                            "phase": phase, "last_error": str(last_error or "")[:400], "t": _core_now()}}})
     except Exception:
-        log.exception("module build failed; falling back to LLM pipeline")
+        log.exception("spec checkpoint failed")
+
+
+def _load_spec_checkpoint(cb, prompt, current):
+    """بازیابی Spec ذخیره‌شدهٔ همین درخواست؛ اگر درخواست/پایه عوض شده باشد checkpoint بی‌اعتبار است."""
+    if not (cb and getattr(cb, "jid", None)):
+        return None
+    try:
+        j = db.jobs.find_one({"_id": cb.jid}, {"build_state": 1}) or {}
+        st = j.get("build_state") or {}
+        if (st.get("version") != 2 or not isinstance(st.get("spec"), dict)
+                or st.get("request_hash") != _task_hash(prompt)):
+            return None
+        base = _task_hash(current) if isinstance(current, dict) else "new"
+        if st.get("base_hash") != base:
+            return None
+        import spec as _spec
+        try:
+            return _spec.validate_spec(copy.deepcopy(st["spec"]))
+        except Exception:
+            return None
+    except Exception:
         return None
 
 
 def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
-    """Task-based builder: plan -> patch each capability -> persist every checkpoint -> normalize/lint/QA."""
+    """خط ساخت ۳.۶ (Spec → Compiler → Acceptance):
+    ۱) روتر قطعی رایگان یا یک فراخوانی مدل (۱+۱) → Spec اعتبارسنجی‌شده
+    ۲) کامپایلر قطعی → کانفیگ موتور
+    ۳) sanitize/lint (ترمیم قطعی داخلی)
+    ۴) تست پذیرش روی موتور واقعی (بدون LLM)
+    شکست هر مرحله = BUILD_DEFECT ثبت و عدم تحویل؛ محدودیت موتور = ENGINE_LIMIT؛ بدون ماژول = CATALOG_MISSING."""
+    import planner as _planner
+    import spec as _spec
+    import defects as _defects
+    import engine_accept
     acc = [] if acc is None else acc
     prompt = str(prompt or "")[:MAX_PROMPT]
     lang = detect_lang(prompt)
     guard = lang == "fa" and not has_foreign(prompt)
-    media_ids = {m["id"] for m in media_items if isinstance(m, dict) and m.get("id")}
     cb = getattr(_prog, "cb", None)
     if cb:
         cb.fa = lang == "fa"
     _gap.items = []
+    media_ids = {m["id"] for m in media_items if isinstance(m, dict) and m.get("id")}
 
-    state = _load_build_state(cb, prompt, current)
-    if state:
-        plan = state["plan"]
-        cfg = copy.deepcopy(state["cfg"])
-        completed = list(state.get("completed") or [])
-        thinking = str(state.get("thinking") or "")
-        ideas = list(state.get("ideas") or [])[:3]
-        carried_gaps = list(state.get("gaps") or [])
-        retry_counts = {str(k): int(v) for k, v in (state.get("retry_counts") or {}).items() if str(v).isdigit()}
+    # ── ۱) ادامه از checkpoint: Spec معتبر همین درخواست ──
+    sp = _load_spec_checkpoint(cb, prompt, current)
+    if sp is not None:
+        log.info("Resuming build from saved spec checkpoint: %s", [f.get("type") for f in sp["features"]])
         if cb:
-            cb.task_retry_counts = retry_counts
-        log.info("Resuming task build at checkpoint: %s/%s tasks done", len(completed), len(plan))
-        _gap.items = carried_gaps
+            cb.stage("analyze", 24.0)
     else:
-        if AI_MODULES:
-            _spec = spec_build(prompt, cb, nodes_cap, current, acc=acc,
-                               media_ids={m["id"] for m in media_items if isinstance(m, dict) and m.get("id")} or None)
-            if _spec:
-                return _spec
+        # ── ۲) پیش‌بررسی قطعی محدودیت‌های موتور (قبل از صرف توکن) ──
         _early = _static_limits(prompt) if current is None else []
         if _early and cb and getattr(cb, "jid", None):
             _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
             if not _job0.get("preflight_ok"):
                 raise PreflightReview(_early)
-        if AI_MODULES:
-            _fast = _module_build(prompt, cb, nodes_cap, current)
-            if _fast:
-                _gap.items = []
-                return _fast
-        plan = _plan_build_tasks(prompt, current, acc)
-        cfg = copy.deepcopy(current) if current is not None else {
-            "name": "ربات جدید" if lang == "fa" else "New bot", "start": "start", "fallback": "start",
-            "commands": {}, "nodes": {}
-        }
-        completed, thinking, ideas = [], "", []
-        retry_counts = {}
         if cb:
-            cb.task_retry_counts = retry_counts
-        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, [], "planned", 0)
-        _limits = list(getattr(_plan_meta, "limits", []) or [])
-        if _limits and cb and getattr(cb, "jid", None) and current is None:
-            _job = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
-            if not _job.get("preflight_ok"):
-                raise PreflightReview(_limits)
-
-    task_map = {str(t.get("id")): t for t in plan}
-    # Reconcile duplicate/corrupted task IDs defensively before execution.
-    for i, task in enumerate(plan):
-        if not task.get("id"):
-            task["id"] = f"task_{i+1}"
-        if not task.get("node_ids") and task.get("id") == "foundation":
-            task["node_ids"] = ["start"]
-    all_gaps = list(_gap.items or [])
-    for index, task in enumerate(plan):
-        tid = str(task.get("id"))
-        if tid in completed:
-            continue
-        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "task_running", index)
-        try:
-            task_feedback = ""
-            patch_result = None
-            for task_attempt in range(2):
-                try:
-                    patch_result = _task_patch_call(
-                        prompt, task, plan, index, cfg, completed, lang, media_ids, acc, feedback=task_feedback)
-                    break
-                except Exception as task_exc:
-                    retries_used = int((getattr(cb, "task_retry_counts", {}) or {}).get(tid, 0)) if cb else 0
-                    deadline_left = (getattr(cb, "deadline", time.monotonic()) - time.monotonic()) if cb else 0
-                    if (task_attempt == 0 and retries_used < 1 and _is_transient_task_failure(task_exc)
-                            and deadline_left > 25):
-                        retry_counts = dict(getattr(cb, "task_retry_counts", {}) or {}) if cb else {}
-                        retry_counts[tid] = retries_used + 1
-                        if cb:
-                            cb.task_retry_counts = retry_counts
-                            cb.stage("repair", max(float(cb.d.get("p") or 2), min(74.0, 10.0 + 66.0 * (index + 1) / max(1, len(plan)))))
-                        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
-                                                "task_transient_retry", index,
-                                                f"{type(task_exc).__name__}: {str(task_exc)[:400]}")
-                        task_feedback = (
-                            "The previous attempt for THIS task failed due to a transient provider/transport error. "
-                            "Continue from the supplied current config; do not redo completed tasks. Return only the missing incremental patch."
-                        )
-                        log.warning("Retrying only transiently failed task %s from the saved config; completed tasks remain untouched", tid)
-                        continue
-                    raise
-            if patch_result is None:
-                raise RuntimeError(f"وظیفهٔ {tid} نتیجه‌ای تولید نکرد")
-            patch, task_thinking, task_ideas, task_gaps = patch_result
-            cfg = _merge_config_patch(cfg, patch)
-            completed.append(tid)
-            if task_thinking and (not thinking or tid == "foundation"):
-                thinking = task_thinking
-            for idea in task_ideas:
-                if idea not in ideas and len(ideas) < 3:
-                    ideas.append(idea)
-            all_gaps = _merge_gap_items(all_gaps, task_gaps, limit=12)
-            _gap.items = all_gaps
-            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "task_done", index + 1)
+            cb.stage("analyze", 12.0)
+        # ── ۳) Spec: روتر قطعی (رایگان) وگرنه مدل (۱ فراخوانی + ۱ جایگزین) ──
+        pr = _planner.plan_request(prompt)
+        router_ok = bool(pr.items) and pr.confidence >= 0.35
+        if current is not None and not _planner.is_additive(prompt):
+            router_ok = False
+        if router_ok:
+            sp = _spec.spec_from_plan(pr)
             if cb:
-                cb.task_done(index + 1, len(plan), task.get("title") or tid)
-        except Exception as exc:
-            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps,
-                                    "task_failed", index, f"{type(exc).__name__}: {str(exc)[:500]}")
-            raise
+                cb.stage("analyze", 24.0)
+            log.info("router spec: %s (confidence %.2f — بدون فراخوانی مدل)", pr.ids, pr.confidence)
+        else:
+            sp = ask_spec(prompt, lang, acc, current)      # WizardNeeded در صورت شکست کامل
+        _spec_checkpoint(cb, prompt, current, sp, "spec_ready")
 
-    if not cfg.get("nodes"):
-        raise RuntimeError("همه وظایف ظاهراً پایان یافتند اما هیچ گره‌ای ساخته نشد؛ کانفیگ ذخیره نشد")
-
+    # ── ۴) کامپایلر قطعی ──
     if cb:
-        cb.stage("validate", 76.0)
-    cfg, warns, feature_changes, requested_staff = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
-    # One targeted structural repair task, if needed. Keep the normalized config checkpoint and repair only the reported problems.
-    structure_issues = _fix_structure_deterministically(cfg)
-    if structure_issues or warns:
-        repair_task = {"id": "repair_structure", "title": "اصلاح ساختار و مسیرهای اجرایی",
-                       "scope": "فقط این خطاهای اعتبارسنجی را اصلاح کن؛ قابلیت‌های سالم و همهٔ وظایف تکمیل‌شده را حفظ کن. مشکلات: " +
-                                json.dumps((structure_issues + ["validator warning: " + x for x in warns])[:10], ensure_ascii=False),
-                       "acceptance": ["lint بدون خطای مسیر", "حفظ همهٔ قابلیت‌های قبلی"], "node_ids": []}
-        _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps, "repair_structure", len(plan))
-        try:
-            patch, rthinking, rideas, rgaps = _task_patch_call(prompt, repair_task, plan + [repair_task], len(plan), cfg, completed, lang, media_ids, acc,
-                                                               feedback="Repair only the exact validator/lint findings. Do not redesign or regenerate the bot.")
-            cfg = _merge_config_patch(cfg, patch)
-            if rthinking:
-                thinking = rthinking
-            ideas = (ideas + [x for x in rideas if x not in ideas])[:3]
-            all_gaps = _merge_gap_items(all_gaps, rgaps, limit=12)
-            _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repair_structure_done", len(plan))
-        except Exception as exc:
-            _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
-                                    "repair_structure_failed", len(plan), f"{type(exc).__name__}: {str(exc)[:450]}")
-            all_gaps = _merge_gap_items(all_gaps, [{"want": "اصلاح خودکار مسیرهای ربات", "why": f"مدل نتوانست مشکلات مسیر را اصلاح کند ({type(exc).__name__}: {str(exc)[:160]}); بقیهٔ ربات کامل ساخته شده است.",
-                                                    "upgrade": "پس از ساخت، مسیرهای گزارش‌شده را در ویرایشگر دستی یا با یک درخواست کوتاه ویرایش اصلاح کن."}], limit=12)
-            log.warning("repair_structure failed; continuing with disclosed gap: %s", str(exc)[:200])
-        cfg, warns2, feature_changes2, requested_staff2 = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
-        warns = warns2
-        feature_changes.extend(feature_changes2)
-        requested_staff = list(dict.fromkeys(requested_staff + requested_staff2))
-        structure_issues = _fix_structure_deterministically(cfg)
-        structure_issues = [x for x in structure_issues if not x.startswith("variables that are read but never set")]
-        if structure_issues:
-            _checkpoint_build_state(cb, prompt, current, plan + [repair_task], completed, cfg, thinking, ideas, all_gaps,
-                                    "final_lint_failed", len(plan), "; ".join(structure_issues[:8]))
-            all_gaps = _merge_gap_items(all_gaps, [{"want": "اعتبارسنجی مسیرهای ربات", "why": x, "upgrade": "اصلاح مسیر در ویرایشگر و اجرای دوبارهٔ بررسی."} for x in structure_issues[:6]], limit=12)
-
-    for warning in warns:
-        all_gaps = _merge_gap_items(all_gaps, [{"want": "اعتبارسنجی کانفیگ نهایی", "why": str(warning)[:500],
-            "upgrade": "اصلاح خروجی همان وظیفه و اجرای مجدد sanitize/lint؛ تغییر خودکار نباید باعث حذف قابلیت درخواستی شود."}], limit=12)
-
-    # ممیزی LLM حذف شد؛ جایگزین قطعی: ترمیم ساختاری بدون مدل (اعلام متغیر، حذف یتیم، مسیر پیش‌فرض)
-    if cb:
-        cb.stage("audit", 82.0)
-    _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "pre_audit", len(plan))
-    qa_gaps = []
+        cb.stage("generate", 40.0)
+    feature_ids = [f["type"] for f in sp["features"]]
+    texts = sp.get("texts") or {}
     try:
-        repairs = _catalog_mod.repair_config(cfg)
-    except Exception:
-        log.exception("deterministic final repair failed")
-        repairs = []
-    if repairs:
-        _qc_log("BUILD_DEFECT", "؛ ".join(repairs)[:600], "مسیر تسک LLM")
-        cfg, warns_r, _fc, _st = _finalize_task_config(prompt, cfg, lang, media_ids, nodes_cap)
-        warns = warns_r or warns
-        _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, all_gaps, "repaired_deterministic", len(plan))
+        if current is None:
+            thinking, cfg, ideas = _spec.compile_spec(sp)
+        else:
+            thinking, cfg, ideas = _merge_spec_current(current, sp)
+    except Exception as exc:
+        raise RuntimeError("کامپایلر قطعی خروجی معتبر نساخت (%s: %s)؛ نقص داخلی ثبت شد و خروجی تحویل نمی‌شود."
+                           % (type(exc).__name__, str(exc)[:200]))
 
-    # مسیرهای بدون ورودی را قطعی وصل کن؛ فقط مشکل‌های واقعیِ باقی‌مانده به کاربر گزارش می‌شود (نه هشدارهای فنی).
-    _lint_want = "اعتبارسنجی مسیرهای ربات"
-    qa_gaps = [g for g in qa_gaps if g.get("want") != _lint_want]
-    all_gaps = [g for g in all_gaps if g.get("want") != _lint_want]
-    _left = [x for x in _fix_structure_deterministically(cfg) if not x.startswith("variables that are read but never set")]
-    if _left:
-        all_gaps = _merge_gap_items(all_gaps, [{"want": _lint_want, "why": x[:300], "upgrade": "اصلاح مسیر در ویرایشگر."} for x in _left[:2]], limit=12)
-    # Any validator normalization or remaining QA findings must be disclosed to the caller for approval.
-    all_gaps = _merge_gap_items(all_gaps, qa_gaps, limit=3)
+    # متن‌های سفارشی کاربر (welcome/success/fail) روی کانفیگ قطعی اعمال می‌شود
+    cfg, thinking = _apply_spec_texts(cfg, texts, thinking)
+
+    # ── ۵) sanitize + lint با ترمیم قطعی ──
+    if cb:
+        cb.stage("validate", 58.0)
+    warns = []
+    cfg, renamed_vars = _repair_reserved_write_vars(copy.deepcopy(cfg))
+    cfg = sanitize(cfg, strict=False, media=media_ids, warns=warns, nodes_cap=nodes_cap)
+    _repair_orphan_confirmation_nodes(cfg)
+    issues = _fix_structure_deterministically(cfg)
+    issues = [x for x in issues if not x.startswith("variables that are read but never set")]
+    if current is not None:
+        base = set(lint(current))
+        issues = [x for x in issues if x not in base]
+        warns = [w for w in warns if w not in _baseline_warns(current, nodes_cap)]
+    if issues:
+        # کامپایلر قطعی خروجی نامعتبر ساخته: BUILD_DEFECT — هرگز تحویل نمی‌شود
+        log.error("compiler produced invalid config: %s", issues[:4])
+        _report_build_defects(cb, prompt, feature_ids, "lint", issues)
+        raise RuntimeError("خطای داخلی خط ساخت (کامپایلر): %s — خروجی تحویل نشد و هزینه‌ای کسر نشد." % issues[0][:200])
+    if cb:
+        cb.stage("validate", 70.0)
+
+    # ── ۶) تست پذیرش روی موتور واقعی (بدون LLM) ──
+    if cb:
+        cb.stage("audit", 78.0)
+    acc_defects = engine_accept.run_acceptance(cfg, feature_ids)
+    if acc_defects:
+        log.error("acceptance test failed: %s", [d.get("evidence") for d in acc_defects][:4])
+        _report_build_defects(cb, prompt, feature_ids, "acceptance_test",
+                              [d.get("want", "") + " — " + d.get("evidence", "") for d in acc_defects], acc_defects)
+        raise RuntimeError("تست پذیرش خطا داد: %s — خروجی تحویل نشد و هزینه‌ای کسر نشد."
+                           % acc_defects[0].get("evidence", "")[:200])
+
+    # ── ۷) پاکسازی زبان و خروجی نهایی ──
     if guard:
         thinking = scrub_foreign(thinking) if thinking else ""
-        ideas = [scrub_foreign(x) for x in ideas]
-        ideas = [x for x in ideas if x]
+        ideas = [x for x in (scrub_foreign(x) for x in ideas) if x]
     if not thinking:
         thinking = FALLBACK_THINKING
-    if requested_staff:
-        manager_note = " برای دریافت پیام‌ها، " + ", ".join("@" + x for x in requested_staff) + " باید یک‌بار /start همین ربات را بزند؛ انتقال مالکیت BotFather انجام نمی‌شود." if lang == "fa" else \
-                       " For private notifications, " + ", ".join("@" + x for x in requested_staff) + " must open this bot and press /start once; BotFather ownership is not transferred."
-        if manager_note not in thinking:
-            thinking = (thinking[:max(0, 899-len(manager_note))].rstrip() + " " + manager_note).strip()[:900]
-    _gap.items = all_gaps[:3]
-    _checkpoint_build_state(cb, prompt, current, plan, completed, cfg, thinking, ideas, _gap.items, "complete_candidate", len(plan))
-    if cb:
-        cb.stage("validate", 94.0)
-    if current is None and not _gap.items:
-        try:
-            db.candidates.insert_one({"prompt": prompt[:1500], "cfg": cfg, "t": _core_now()})
-        except Exception:
-            pass
+    tail = " برای افزودن یا ویرایش، از دستیار استودیو استفاده کن."
+    thinking = (thinking[:900 - len(tail)].rstrip() + tail)
+    _spec_checkpoint(cb, prompt, current, sp, "compiled")
+    log.info("spec build ok: features=%s nodes=%d acceptance=PASS", feature_ids, len(cfg["nodes"]))
     return thinking, cfg, ideas
+
+
+def _baseline_warns(current, nodes_cap):
+    try:
+        w = []
+        sanitize(current, strict=False, warns=w, nodes_cap=nodes_cap)
+        return w
+    except Exception:
+        return []
+
+
+def _merge_spec_current(current, sp):
+    """اعمال Spec روی پروژهٔ موجود (intent=edit): افزودن قابلیت‌های جدید با merge_plan قطعی.
+    حذف/تخریب قابلیت‌های سالم قبلی ممنوع است؛ متن‌ها جداگانه اعمال می‌شوند."""
+    import planner as _planner
+    from modules import MODULES, clean_params
+    pr = _planner.PlanResult()
+    pr.items = [(f["type"], clean_params(MODULES[f["type"]], f.get("params") or {})) for f in sp["features"]
+                if f["type"] in MODULES]
+    if not pr.items:
+        raise ValueError("در Spec هیچ قابلیت قابل‌اعمالی نبود")
+    pr.name = sp.get("name") or "ربات من"
+    pr.emoji = bool(sp.get("emoji"))
+    pr.payments = bool(sp.get("payments"))
+    return _planner.merge_plan(current, pr)
+
+
+def _apply_spec_texts(cfg, texts, thinking):
+    """متن‌های سفارشی Spec (welcome/success/fail) روی کانفیگ قطعی اعمال می‌شود."""
+    if not texts:
+        return cfg, thinking
+    nodes = cfg.get("nodes") or {}
+    start = nodes.get(cfg.get("start") or "start")
+    if texts.get("welcome") and start is not None:
+        start["text"] = str(texts["welcome"])[:350]
+    extra = []
+    if texts.get("success"):
+        extra.append("متن موفقیت: " + str(texts["success"])[:80])
+    if texts.get("fail"):
+        extra.append("متن شکست: " + str(texts["fail"])[:80])
+    if extra:
+        thinking = (thinking + "\n" + "\n".join("• " + x for x in extra))[:900]
+    return cfg, thinking
+
+
+def _report_build_defects(cb, prompt, feature_ids, stage, messages, rich=None):
+    """ثبت BUILD_DEFECT برای گزارش ادمین (بدون تحویل خروجی)."""
+    import defects as _defects
+    items = []
+    for i, msg in enumerate(messages[:6]):
+        r = (rich or [])[i] if rich and i < len(rich) else {}
+        items.append(_defects.build_defect(
+            feature=r.get("feature") or (feature_ids[i % len(feature_ids)] if feature_ids else ""),
+            want=r.get("want") or "ساخت کانفیگ معتبر",
+            evidence=str(msg)[:400], stage=stage,
+            acceptance_criteria=r.get("acceptance_criteria") or []))
+    if rich:
+        _gap.items = [{k: r[k] for k in ("want", "why", "upgrade") if r.get(k)}
+                      for r in (rich or [])][:3]
+    if items:
+        log.error("BUILD_DEFECT %s: %s", stage, [i.get("evidence") for i in items][:3])
 
 
 def enhance_prompt(prompt):
@@ -3783,9 +3284,125 @@ def typical_cost():
     return GEN_COST if BILLING == "fixed" else calc_cost(est_tokens(SYSTEM_PROMPT) + 400, 2400)
 
 
-# ───────────────────────── قالب‌های آماده (۳ قالب جامع؛ ساخته‌شده با کامپایلر قطعی) ─────────────────────────
-# قالب‌ها دیگر دست‌نویس نیستند: فروشگاه/مدیریت از ماژول‌های تست‌شده و قالب بازی از کاتالوگ Spec ساخته می‌شوند؛
-# ساختار همیشه معتبر است (sanitize/lint بدون هشدار — تست در tests/test_catalog.py).
-import catalog as _catalog_mod
+# ───────────────────────── قالب‌های آماده (۳ قالب جامع، Spec-محور و قطعی) ─────────────────────────
+# هر قالب یک Spec از پیش تعیین‌شده است که با همان کامپایلر قطعی ساخته می‌شود؛
+# پس ساخت قالب همیشه معتبر است و بلافاصله در استودیو قابل ویرایش می‌شود.
+# قالب‌های اختصاصی Mini App (builder*.js) دست‌نخورده باقی می‌مانند.
 
-TEMPLATES = _catalog_mod.build_templates()
+def _tpl_spec(name, feats, texts=None, payments=False):
+    sp = {"version": 1, "intent": "create", "name": name, "emoji": True, "payments": payments,
+          "features": feats, "texts": texts or {}}
+    import spec as _spec
+    return _spec.validate_spec(sp)
+
+
+def _tpl_build(sp, note):
+    """قالب → (config, note). با کامپایلر قطعی + sanitize + تست پذیرش؛ خروجی هرگز ناقص نیست."""
+    import spec as _spec
+    import engine_accept
+    thinking, cfg, ideas = _spec.compile_spec(sp)
+    warns = []
+    cfg = sanitize(cfg, strict=False, warns=warns)
+    issues = _fix_structure_deterministically(cfg)
+    issues = [x for x in issues if not x.startswith("variables that are read but never set")]
+    if warns or issues:
+        raise RuntimeError("قالب از کامپایلر قطعی خروجی نامعتبر گرفت: %s %s" % (warns[:2], issues[:2]))
+    acc = engine_accept.run_acceptance(cfg, [f["type"] for f in sp["features"]])
+    if acc:
+        raise RuntimeError("تست پذیرش قالب شکست خورد: %s" % acc[0].get("evidence", "")[:200])
+    return cfg, note
+
+
+def _tpl_cached(tid, sp, icon, title, desc, feats, note):
+    """قالب‌ها یک بار در هر پروسه ساخته و کش می‌شوند (ساخت قطعی و بدون توکن)."""
+    key = "_tpl_cache_" + tid
+    if not hasattr(_tpl_cached, key) or getattr(_tpl_cached, key) is None:
+        cfg, _ = _tpl_build(_tpl_spec(sp["name"], sp["features"], sp.get("texts"), sp.get("payments", False)), sp["note"])
+        setattr(_tpl_cached, key, {"icon": icon, "title": title, "desc": desc, "feats": feats,
+                                   "note": sp["note"], "config": cfg})
+    return getattr(_tpl_cached, key)
+
+
+# ۱) فروشگاه و کسب‌وکار: معرفی، محصولات، سفارش، پیگیری، تیکت، سؤالات متداول، پنل مالک
+_SHOP_TPL = {
+    "name": "فروشگاه من",
+    "features": [
+        {"type": "start_menu", "params": {"name": "فروشگاه من", "welcome": "به فروشگاه ما خوش آمدی {name}! از منوی زیر شروع کن."}},
+        {"type": "shop", "params": {}},
+        {"type": "support", "params": {"text": "برای پیگیری سفارش یا سؤال، پیامت را بنویس تا سریع پاسخ بدهیم."}},
+        {"type": "faq", "params": {}},
+        {"type": "about", "params": {"text": "این فروشگاه با ارسال سریع و ضمانت اصالت کالا خدمت می‌کند. ساعت کاری: هر روز ۹ تا ۲۱."}},
+        {"type": "links", "params": {}},
+        {"type": "owner_panel", "params": {}},
+    ],
+    "texts": {"welcome": "<b>فروشگاه من</b>\n\nسلام {name} عزیز، خوش آمدی!\nاز منوی زیر شروع کن:"},
+    "note": "قالب فروشگاه با کامپایلر قطعی ساخته شد: فهرست محصولات، فرم سفارش (تیکت)، سفارش‌های من، پشتیبانی، سؤالات متداول و پنل مالک. نام محصولات و متن‌ها را از استودیو ویرایش کن.",
+}
+
+# ۲) بازی و اقتصاد سکه: کیف، هدیه ورود، روزانه، تاس، حدس، شرط‌بندی، کوییز، گردونه، رتبه‌بندی، دعوت، پنل مالک
+_GAME_TPL = {
+    "name": "بازی و سکه",
+    "features": [
+        {"type": "start_menu", "params": {"name": "بازی و سکه", "welcome": "سلام {name}! بازی کن، سکه جمع کن و در جدول برترین‌ها بالا بیا."}},
+        {"type": "wallet", "params": {"coin": "سکه", "start_bonus": 10}},
+        {"type": "daily", "params": {"amount": 2}},
+        {"type": "dice", "params": {}},
+        {"type": "guess", "params": {"max_num": 10, "reward": 5}},
+        {"type": "coinbet", "params": {"amounts": [5, 10, 20]}},
+        {"type": "quiz", "params": {}},
+        {"type": "wheel", "params": {"daily_ticket": True}},
+        {"type": "leaderboard", "params": {}},
+        {"type": "referral", "params": {"reward": 5}},
+        {"type": "owner_panel", "params": {}},
+    ],
+    "texts": {"welcome": "<b>بازی و سکه</b>\n\nسلام {name}! بازی کن، سکه جمع کن و در جدول برترین‌ها بالا بیا.\nموجودی تو: {coins} سکه"},
+    "note": "قالب بازی با کامپایلر قطعی ساخته شد: کیف سکه با هدیهٔ ورود، پاداش روزانه، تاس، حدس عدد، شرط‌بندی، کوییز، گردونه با بلیت روزانه، رتبه‌بندی، دعوت دوستان و پنل مالک.",
+}
+
+# ۳) مدیریت گروه و کانال + پشتیبانی: مدیریت کاربران، قوانین، جوین اجباری، تیکت و سؤالات متداول
+_GROUP_TPL = {
+    "name": "مدیریت گروه",
+    "features": [
+        {"type": "start_menu", "params": {"name": "مدیریت گروه", "welcome": "ربات مدیریت گروه و پشتیبانی. راهنما را بخوان و ربات را به گروه اضافه کن."}},
+        {"type": "group_manager", "params": {}},
+        {"type": "forced_join", "params": {}},
+        {"type": "support", "params": {}},
+        {"type": "faq", "params": {}},
+        {"type": "links", "params": {}},
+        {"type": "owner_panel", "params": {}},
+    ],
+    "texts": {"welcome": "<b>مدیریت گروه</b>\n\nربات را ادمین گروه کن تا کپچا، قفل لینک و ضد اسپم فعال شود."},
+    "note": "قالب مدیریت گروه با کامپایلر قطعی ساخته شد: کپچا و خوش‌آمد، قفل لینک/فوروارد، ضد اسپم و اخطار، دستورهای مدیریتی، پشتیبانی تیکت و سؤالات متداول. ربات باید در گروه ادمین شود.",
+}
+
+
+def _templates():
+    return {
+        "shop": _tpl_cached("shop", _SHOP_TPL, "bag", "فروشگاه و کسب‌وکار", "محصولات، سفارش، پیگیری، پشتیبانی و پنل مالک",
+                            ["فرم سفارش + تیکت", "سؤالات متداول", "پنل مالک"], _SHOP_TPL["note"]),
+        "game": _tpl_cached("game", _GAME_TPL, "medal", "بازی و اقتصاد سکه", "کیف سکه، ۶ بازی، رتبه‌بندی، دعوت و پنل مالک",
+                            ["کیف سکه و هدیه ورود", "تاس، حدس، شرط‌بندی، کوییز، گردونه", "رتبه‌بندی و دعوت"], _GAME_TPL["note"]),
+        "group": _tpl_cached("group", _GROUP_TPL, "shield", "مدیریت گروه و پشتیبانی", "کپچا، قفل‌ها، ضد اسپم، تیکت و سؤالات متداول",
+                             ["مدیریت گروه", "پشتیبانی تیکت", "سؤالات متداول"], _GROUP_TPL["note"]),
+    }
+
+
+TEMPLATES = {}
+
+
+def _templates_refresh():
+    """قالب‌ها در نخستین دسترسی ساخته می‌شوند؛ خطای ساخت قالب = BUILD_DEFECT و ثبت می‌شود."""
+    global TEMPLATES
+    try:
+        TEMPLATES = _templates()
+    except Exception as e:
+        import defects as _defects
+        import logging as _lg
+        _lg.getLogger("aibot").error("BUILD_DEFECT template: %s", str(e)[:300])
+        TEMPLATES = {}
+
+
+_templates_refresh()
+
+
+

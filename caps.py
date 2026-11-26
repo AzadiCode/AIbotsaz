@@ -8,7 +8,7 @@ caps.py — رجیستری قابلیت‌ها (منبع واحد همه‌ی چ
            CAPS_GAMES (بازی)، LIMITS (سقف پلن‌محور)، caps_public()، caps_ai_text()، limit_of()
 """
 
-BUILD = "3.7.1"
+BUILD = "3.6.0"
 
 # سقف پلن‌محور: هر کلید با perks اشتراک جمع یا مقایسه می‌شود. مقدار «free» پایه است.
 # nodes = بخش‌های ربات، blocks = بلوک‌های مینی‌اپ، tables = جدول داده، screens/گروه‌های دیگر در PLANS perks هستند.
@@ -137,11 +137,322 @@ def limit_of(plan_id, key):
     return (LIMITS.get(key) or {}).get(plan_id if plan_id in ("free", "premium", "pro") else "free") or 200
 
 
+# ───────────────────────── قرارداد قابلیت‌های موتور (BUILD 3.6.0) ─────────────────────────
+# مرجع استاندارد و متمرکز توانایی‌های واقعی موتور. هر قابلیت با:
+#   شناسه یکتا، وضعیت پشتیبانی، نسخهٔ معرفی، ورودی/خروجی، محدودیت، وابستگی،
+#   قابلیت‌های مرتبط، API/اکشن‌های موردنیاز، تست پذیرش و وضعیت سازگاری.
+#
+# status:
+#   ready       → ماژول کاتالوگ + تولیدکننده + تست پذیرش موجود است (ساخت خودکار ممکن)
+#   engine_only → موتور توانایی اجرا را دارد اما ماژول آماده در کاتالوگ نیست (CATALOG_MISSING)
+#   unsupported → موتور واقعاً پشتیبانی نمی‌کند (ENGINE_LIMIT) + نقشهٔ توسعه
+#
+# قانون: ثبت قابلیت به‌تنهایی به معنای آماده‌بودن نیست؛ ready فقط پس از پیاده‌سازی
+# و موفقیت تست پذیرش ثبت می‌شود (tests/test_modules.py + engine_accept).
+
+def _cap(cid, title, status, since, engine, inputs, outputs, limits, requires, related,
+         module="", acceptance=(), compat="سازگار با کانفیگ‌های قبلی؛ بدون تغییر کار می‌کنند.",
+         proposal=None):
+    return {"id": cid, "title": title, "status": status, "since": since, "module": module,
+            "engine": engine, "inputs": inputs, "outputs": outputs, "limits": limits,
+            "requires": requires, "related": related, "acceptance": list(acceptance),
+            "compat": compat, "proposal": proposal or {}}
+
+
+_A = ["random", "set", "add"]          # اکشن‌های پرکاربرد بازی‌ها
+
+CAPS_CONTRACT = {}
+
+
+def _reg_contract(c):
+    CAPS_CONTRACT[c["id"]] = c
+
+
+# ── قابلیت‌های آمادهٔ کاتالوگ (ready) ──
+_reg_contract(_cap("bot.start_menu", "منوی اصلی و نقطهٔ ورود", "ready", "3.6.0",
+                  {"nodes": ["start"], "buttons": ["goto"], "commands": True},
+                  {"name": "نام ربات", "welcome": "متن خوش‌آمد"},
+                  {"nodes": ["start"]}, ["—"], ["—"], ["wallet", "daily"],
+                  module="start_menu", acceptance=["tests/test_modules.py::start_menu"],
+                  compat="تغییر متن شروع اثر جانبی روی سایر بخش‌ها ندارد."))
+_reg_contract(_cap("wallet", "کیف پول و موجودی سکه", "ready", "3.5.0",
+                  {"actions": ["set", "add"], "vars": ["coins"], "placeholders": ["{coins}"]},
+                  {"coin": "نام واحد", "start_bonus": "عدد ≥ 0"},
+                  {"vars": ["coins"]}, ["سقف ۴۰ متغیر در هر ربات"], ["—"],
+                  ["daily", "referral", "game.dice", "game.guess", "game.coinbet", "game.wheel"],
+                  module="wallet", acceptance=["tests/test_modules.py::wallet", "engine_accept._s_wallet"],
+                  compat="متغیر coins مالکیت ماژول wallet است؛ سایر ماژول‌ها فقط می‌خوانند/می‌افزایند."))
+_reg_contract(_cap("daily", "پاداش روزانه", "ready", "3.5.0",
+                  {"actions": ["set", "add"], "conditions": ["==", "!="], "builtins": ["{date}"]},
+                  {"amount": "عدد > 0"}, {"vars": ["last_daily"]},
+                  ["فقط یک بار در هر روز تهران"], ["wallet"], ["wheel (بلیت روزانه)"],
+                  module="daily", acceptance=["tests/test_modules.py::daily", "engine_accept._s_daily"]))
+_reg_contract(_cap("game.dice", "بازی تاس", "ready", "3.6.0",
+                  {"actions": _A, "conditions": [">", "<="]},
+                  {"sides": "int 2..20"}, {"vars": ["dice_val", "dice_best"]},
+                  ["دامنهٔ ۲ تا ۲۰"], ["wallet"], ["game.guess", "game.coinbet"],
+                  module="dice", acceptance=["tests/test_modules.py::dice", "engine_accept._s_dice"]))
+_reg_contract(_cap("game.guess", "حدس عدد", "ready", "3.6.0",
+                  {"actions": _A, "conditions": ["==", "!="], "forms": ["fields", "save"]},
+                  {"max_num": "int 2..100", "rounds": "int 1..20", "reward": "num > 0"},
+                  {"vars": ["g_pick", "g_target", "g_score"]}, ["بیش از ۱۰ گزینه به فرم متنی می‌رود"],
+                  ["wallet"], ["game.quiz"],
+                  module="guess", acceptance=["tests/test_modules.py::guess", "engine_accept._s_guess"]))
+_reg_contract(_cap("game.coinbet", "شرط‌بندی داخلی با سکه", "ready", "3.6.0",
+                  {"actions": ["calc", "add", "random"], "conditions": ["<", ">=", "=="]},
+                  {"amounts": "فهرست اعداد مثبت"}, {"vars": ["bet_amt", "bet_back", "bet_res"]},
+                  ["شرط بیش از موجودی مجاز نیست؛ موجودی منفی نمی‌شود"], ["wallet"], ["game.dice"],
+                  module="coinbet", acceptance=["tests/test_modules.py::coinbet", "engine_accept._s_coinbet"]))
+_reg_contract(_cap("game.quiz", "کوییز و مسابقه", "ready", "3.5.0",
+                  {"actions": ["add", "set"], "buttons": ["goto + do"]},
+                  {"items": "سؤال + گزینه‌ها"}, {"vars": ["qscore"]},
+                  ["گزینهٔ درست فقط یک بار امتیاز می‌دهد"], ["—"], ["game.guess", "leaderboard"],
+                  module="quiz", acceptance=["tests/test_modules.py::quiz", "engine_accept._s_quiz"]))
+_reg_contract(_cap("game.wheel", "گردونهٔ شانس", "ready", "3.5.0",
+                  {"actions": ["random", "add", "calc", "set"], "conditions": ["==", ">=", "<"]},
+                  {"prizes": "فهرست جایزه‌ها", "per_joins": "int", "per_refs": "int", "daily_ticket": "bool"},
+                  {"vars": ["roll", "tk_used", "tk_left"]},
+                  ["حداکثر ۱۲ خانه؛ هر چرخش یک بلیت"], ["wallet"], ["daily", "referral", "sponsor"],
+                  module="wheel", acceptance=["tests/test_modules.py::wheel", "engine_accept._s_wheel"]))
+_reg_contract(_cap("leaderboard", "رتبه‌بندی", "ready", "3.6.0",
+                  {"nodes": ["board"], "db": ["uvars"]},
+                  {"var": "coins|qscore|g_score|refs|puzzle", "top": "int 3..50"},
+                  {"board_text": "متن جدول"}, ["کش ۴۵ ثانیه؛ اسکن BOARD_SCAN"],
+                  ["—"], ["wallet", "referral", "game.quiz"],
+                  module="leaderboard", acceptance=["tests/test_modules.py::leaderboard", "engine_accept._s_leaderboard"]))
+_reg_contract(_cap("referral", "دعوت دوستان", "ready", "3.5.0",
+                  {"events": ["on_ref"], "builtins": ["{refs}", "{ref_link}"]},
+                  {"reward": "num > 0"}, {"on_ref": ["add coins"]},
+                  ["پاداش فقط یک بار برای هر دعوت"], ["wallet"], ["leaderboard", "miner"],
+                  module="referral", acceptance=["tests/test_modules.py::referral"]))
+_reg_contract(_cap("economy.family", "اقتصاد کامل (ماینر/پازل/اسپانسر/فروش سکه)", "ready", "3.5.0",
+                  {"actions": ["set", "add", "calc"], "join": ["channels gate"], "pay": ["stars"]},
+                  {"packs, rewards, channels": "..."}, {"vars": ["joins", "puzzle", "tk_*"]},
+                  ["ربات باید ادمین کانال‌های پاداش باشد"], ["wallet", "referral"], ["game.wheel"],
+                  module="miner/sponsor/puzzle/coin_shop/member_orders",
+                  acceptance=["tests/test_modules.py (اقتصاد)"]))
+_reg_contract(_cap("shop.orders", "فروشگاه و ثبت سفارش", "ready", "3.5.0",
+                  {"forms": ["fields", "save", "ticket"], "db": ["db_add"], "desk": ["تیکت مالک"]},
+                  {"items": "محصولات"}, {"orders": "جدول سفارش‌ها"},
+                  ["پرداخت فقط با ستارهٔ تلگرام یا تیکت تأیید دستی"], ["—"], ["support.tickets", "pay.stars"],
+                  module="shop", acceptance=["tests/test_modules.py::shop"]))
+_reg_contract(_cap("support.tickets", "پشتیبانی و تیکت", "ready", "3.5.0",
+                  {"forms": ["ask", "ticket"], "desk": ["reply", "closed"]},
+                  {"text": "متن بالای فرم"}, {"tickets": "تیکت‌ها"},
+                  ["حداکثر MAX_STAFF پشتیبان"], ["—"], ["shop.orders"],
+                  module="support", acceptance=["tests/test_modules.py::support"]))
+_reg_contract(_cap("group.moderation", "مدیریت گروه و کانال", "ready", "3.5.0",
+                  {"mod": ["captcha", "lock", "flood", "warn"], "commands": ["/ban /mute /warn /pin"]},
+                  {"welcome": "text", "rules": "text"}, {"mod": "کانفیگ مدیریتی"},
+                  ["ربات باید ادمین گروه باشد"], ["—"], ["join.gate"],
+                  module="group_manager", acceptance=["tests/test_modules.py::group_manager"]))
+_reg_contract(_cap("join.gate", "جوین اجباری", "ready", "3.5.0",
+                  {"join": ["channels", "text"], "tg": ["getChatMember"]},
+                  {"channels": "کانال‌ها"}, {"join": "دروازهٔ عضویت"},
+                  ["ربات باید ادمین کانال‌ها باشد"], ["—"], ["group.moderation"],
+                  module="forced_join", acceptance=["tests/test_modules.py::forced_join"]))
+_reg_contract(_cap("ai.chat", "گفتگوی هوش مصنوعی", "ready", "3.5.0",
+                  {"nodes": ["ai"], "api": ["AI_CHAT_MODEL"]},
+                  {"prompt": "دستور دستیار", "daily": "سقف پیام"}, {"ai": "تنظیمات"},
+                  ["وابسته به در دسترس بودن مدل"], ["—"], ["—"],
+                  module="ai_assistant", acceptance=["tests/test_modules.py::ai_assistant"]))
+
+# ── موتور دارد، ماژول کاتالوگ ندارد (engine_only → CATALOG_MISSING) ──
+_reg_contract(_cap("games.center", "مرکز بازی ۹گانهٔ سمت سرور", "engine_only", "3.5.0",
+                  {"actions": ["game_play"], "games": ["quiz", "memory", "tap", "wheel", "word", "xo", "typing", "math", "puzzle"]},
+                  {"games.list": "بازی‌های فعال", "games.coin": "واحد"},
+                  {"games": "کانفیگ مرکز بازی"}, ["ضدتقلب سمت سرور"], ["wallet"], ["game.*"],
+                  acceptance=["ساخت دستی در استودیو با بلوک games"],
+                  compat="فعال‌سازی با config.games.on در sanitize موجود است."))
+_reg_contract(_cap("pay.stars", "پرداخت با ستارهٔ تلگرام", "engine_only", "3.5.0",
+                  {"buttons": ["pay"], "events": ["pay"]},
+                  {"stars": "قیمت"}, {"pay": "دکمهٔ پرداخت"},
+                  ["فقط XTR؛ بدون درگاه بانکی"], ["—"], ["shop.orders"],
+                  acceptance=["ساخت دستی دکمهٔ پرداخت در استودیو"]))
+_reg_contract(_cap("db.tables", "جدول‌های داده", "engine_only", "3.5.0",
+                  {"actions": ["db_add", "db_get", "db_set", "db_inc", "db_del"], "nodes": ["list"]},
+                  {"table": "نام جدول"}, {"tables": "داده‌ها"},
+                  ["سقف پلن‌محور LIMITS.tables"], ["—"], ["—"]))
+_reg_contract(_cap("inline.search", "جستجوی اینلاین از جدول", "engine_only", "3.5.0",
+                  {"events": ["inline_query"], "inline": ["table", "fields"]},
+                  {"table": "جدول منبع"}, {"inline": "پاسخ اینلاین"},
+                  ["فعال‌سازی inline در BotFather لازم است"], ["db.tables"], ["—"]))
+_reg_contract(_cap("webhook.in", "وب‌هوک ورودی", "engine_only", "3.5.0",
+                  {"webin": ["table", "notify"]}, {"url": "نشانی"}, {"رکورد رویداد"},
+                  ["هر رخداد یک رکورد"], ["db.tables"], ["—"]))
+_reg_contract(_cap("channelpost.flow", "پست کانال با تأیید مالک", "engine_only", "3.5.0",
+                  {"channelpost": ["chat", "approve", "post /post"]},
+                  {"chat": "کانال مقصد"}, {"channelpost": "کانفیگ"},
+                  ["انتشار نهایی با دستور /post مالک"], ["—"], ["rss.feed"]))
+_reg_contract(_cap("rss.feed", "خوراک RSS به کانال", "engine_only", "3.5.0",
+                  {"rss": ["url", "chat", "mins"]}, {"url": "منبع"}, {"rss": "کانفیگ"},
+                  ["بازهٔ حداقل ۱۰ دقیقه"], ["channelpost.flow"], ["—"]))
+_reg_contract(_cap("discount.codes", "کدهای تخفیف", "engine_only", "3.5.0",
+                  {"actions": ["disc"], "vars": ["code_off", "code_save", "code_err"]},
+                  {"price": "مبلغ"}, {"vars": "نتیجهٔ بررسی"},
+                  ["اعتبار و سقف مصرف در پنل مالک"], ["shop.orders"], ["—"]))
+_reg_contract(_cap("subscriptions", "اشتراک دوره‌ای", "engine_only", "3.5.0",
+                  {"actions": ["sub_add", "sub_del"], "conditions": ["sub"]},
+                  {"plan": "نام پلن", "days": "مدت"}, {"subs": "اشتراک کاربر"},
+                  ["بررسی sub_active در موتور"], ["—"], ["—"]))
+_reg_contract(_cap("reminders", "یادآور زمان‌دار", "engine_only", "3.5.0",
+                  {"actions": ["remind"], "events": ["timer"]},
+                  {"minutes": "مدت", "goto": "بخش هدف"}, {"sched": "کار زمان‌بندی"},
+                  ["حداکثر MAX_PENDING_REMIND همزمان"], ["—"], ["—"]))
+
+# ── موتور پشتیبانی نمی‌کند (unsupported → ENGINE_LIMIT + نقشهٔ توسعه) ──
+_reg_contract(_cap("pay.bank_gateway", "درگاه پرداخت بانکی", "unsupported", "—",
+                  {"pay": ["فقط XTR ستارهٔ تلگرام"]}, {"amount": "مبلغ"}, {},
+                  ["تأیید خودکار پرداخت بانکی وجود ندارد"], ["—"], ["pay.stars"],
+                  proposal={
+                      "reason": "موتور فقط Stars (XTR) تلگرام را با createInvoiceLink/answerPreCheckout پشتیبانی می‌کند؛ درگاه بانکی خارجی نیاز به callback امن، تأیید تراکنش و ledger تخصصی دارد.",
+                      "missing": ["پل پرداخت مستقیم (PaymentProvider)", "دروازهٔ webhook بانک", "تأیید دو‌مرحله‌ای سفارش"],
+                      "files": ["core.py (tg/createInvoiceLink)", "engine.py (act_pay)", "app.py (api_buy)"],
+                      "api": "Payment gateway callback + transaction ledger",
+                      "deps": ["wallet", "shop.orders"],
+                      "impact": "ربات‌های فعلی ستاره‌ای دست‌نخورده می‌مانند؛ تغییر فقط افزودنی است.",
+                      "plan": ["افزودن ماژول payments/bridge.py", "webhook /pay/cb با امضا", "تست پذیرش: سفارش تستی + refund"],
+                      "acceptance": ["پرداخت آزمایشی موفق/ناموفق", "بازگشت وجه در شکست", " سازگاری Stars"],
+                  }))
+_reg_contract(_cap("game.realtime_multiplayer", "بازی آنلاین لحظه‌ای چندنفره", "unsupported", "—",
+                  {"game_play": ["نوبتی محلی"]}, {"—": "—"}, {},
+                  ["حالت دوئل XO محلی موجود است؛ هم‌زمانی زنده نه"], ["—"], ["games.center"],
+                  proposal={
+                      "reason": "موتور رویدادمحور تک‌کاربره است؛ حالت Real-time نیاز به session هم‌زمان، همگام‌سازی state و websocket دارد.",
+                      "missing": ["Room/Session manager", "state sync", "پیام‌رسانی بین دو Env"],
+                      "files": ["engine.py (act_game_play)", "games.py (duel loop)"],
+                      "api": "Bot API هم‌زمان کافی نیست؛ نیاز به state سرور",
+                      "deps": ["games.center", "wallet"],
+                      "impact": "بدون تخریب؛ قابلیت جدید است.",
+                      "plan": ["مدل room در db", "join/move/leave events", "تست دوئل زنده XO"],
+                      "acceptance": ["دو کاربر آزمایشی هم‌زمان", "پایان بازی و اعطای جایزه یک‌بار"],
+                  }))
+_reg_contract(_cap("vision.photo_reading", "خواندن محتوای تصویر کاربر", "unsupported", "—",
+                  {"forms": ["photo (فایل ذخیره می‌شود)"]}, {"—": "—"}, {},
+                  ["عکس فقط ذخیره و برای مالک ارسال می‌شود؛ تحلیل محتوا نیست"], ["—"], ["ai.chat"],
+                  proposal={
+                      "reason": "موتور مدل چندوجهی ندارد و getFile فقط فایل را ذخیره می‌کند.",
+                      "missing": ["VLM provider", "pipeline عکس → متن", "سقف هزینه"],
+                      "files": ["engine.py (save_submission)", "ai.py (llm_post)"],
+                      "api": "Vision API",
+                      "deps": ["ai.chat"],
+                      "impact": "قابلیت جدید؛ ربات‌های فعلی بی‌تغییر.",
+                      "plan": ["اکشن vision_read", "صف پردازش", "تست تصویر نمونه"],
+                      "acceptance": ["متن استخراج‌شده درست", "خطا بدون کسر توکن"],
+                  }))
+_reg_contract(_cap("wallet.cross_user", "انتقال/اهدای سکه بین کاربران و توسط مالک", "unsupported", "—",
+                  {"add": ["فقط Env خود کاربر"]}, {"—": "—"}, {},
+                  ["اکشن‌ها فقط روی کیف کاربرِ جاری کار می‌کنند"], ["wallet"], ["referral"],
+                  proposal={
+                      "reason": "run_actions روی Env تک‌کاربر اجرا می‌شود؛ تغییر موجودی کاربر دیگر نیاز به تراکنش امن بین دو uvars دارد.",
+                      "missing": ["اکشن transfer(var, amount, to)", "قفل دو‌فازی تراکنش"],
+                      "files": ["engine.py (run_actions)", "core.py (db.uvars)"],
+                      "api": "—",
+                      "deps": ["wallet", "leaderboard"],
+                      "impact": "افزودنی؛ جلوگیری از منفی‌شدن موجودی الزامی است.",
+                      "plan": ["اکشن transfer با کسر+افزودن اتمیک", "تست هم‌زمانی", "ثبت در ledger ربات"],
+                      "acceptance": ["انتقال موفق", "موجودی منفی نمی‌شود", "دوباره‌شماری ندارد"],
+                  }))
+_reg_contract(_cap("channel.auto_post", "انتشار خودکار بدون تأیید مالک", "unsupported", "—",
+                  {"channelpost": ["approve=True"]}, {"—": "—"}, {},
+                  ["فعلاً انتشار نهایی با دستور /post مالک انجام می‌شود"], ["channelpost.flow"], ["—"],
+                  proposal={
+                      "reason": "جریان فعلی برای جلوگیری از انتشار محتوای تأییدنشده، دکمهٔ تأیید مالک دارد.",
+                      "missing": ["سیاست سانسور/قوانین محتوا", "صف انتشار خودکار"],
+                      "files": ["engine.py (_post_publish)"],
+                      "api": "—",
+                      "deps": ["channelpost.flow"],
+                      "impact": "تنها فعال‌سازی opt-in؛ ربات‌های فعلی با approve می‌مانند.",
+                      "plan": ["گزینهٔ approve=false در sanitize", "تست انتشار آزمایشی"],
+                      "acceptance": ["پست بدون تأیید منتشر شود", "به‌روزرسانی کانفیگ قدیمی ایمن باشد"],
+                  }))
+_reg_contract(_cap("referral.commission", "پورسانت از خرید زیرمجموعه", "unsupported", "—",
+                  {"on_ref": ["پاداش ثابت"]}, {"—": "—"}, {},
+                  ["تغییر موجودی کاربری بر اثر عمل کاربر دیگر پشتیبانی نمی‌شود"], ["wallet"], ["referral"],
+                  proposal={
+                      "reason": "وابسته به wallet.cross_user؛ موتور تراکنش بین‌کاربری ندارد.",
+                      "missing": ["رویداد purchase_referenced", "transfer"],
+                      "files": ["engine.py (run_actions)", "growth.py"],
+                      "api": "—",
+                      "deps": ["wallet.cross_user"],
+                      "impact": "افزودنی.",
+                      "plan": ["پس از transfer؛ hook روی pay موفق", "درصد پورسانت پارامتر ماژول"],
+                      "acceptance": ["پورسانت دقیق یک‌بار برای هر خرید"],
+                  }))
+_reg_contract(_cap("voice.video_call", "تماس صوتی/تصویری", "unsupported", "—",
+                  {}, {"—": "—"}, {},
+                  ["Bot API تماس برای ربات‌ها ارائه نمی‌شود"], ["—"], ["ai.chat"],
+                  proposal={
+                      "reason": "محدودیت پلتفرم تلگرام برای Bot API.",
+                      "missing": ["—"],
+                      "files": [],
+                      "api": "Telegram Bot API فاقد تماس",
+                      "deps": [],
+                      "impact": "—",
+                      "plan": ["در صورت عرضهٔ رسمی API، اکشن call اضافه شود"],
+                      "acceptance": ["—"],
+                  }))
+_reg_contract(_cap("members.inject", "افزودن خودکار عضو به کانال دیگران", "unsupported", "—",
+                  {}, {"—": "—"}, {},
+                  ["ربات‌ساز تبادل عضو و لفت‌شمارسی دیگران را اجرا نمی‌کند"], ["—"], ["economy.family"],
+                  proposal={
+                      "reason": "افزودن کاربر به کانال دیگر با Bot API ممکن نیست و بررسی خروج از کانال دیگران نیز رویداد ندارد؛ خطوط قرمز اسپم.",
+                      "missing": ["—"],
+                      "files": [],
+                      "api": "Telegram Bot API افزودن کاربر به chat دیگر را ندارد",
+                      "deps": [],
+                      "impact": "—",
+                      "plan": ["جایگزین فعلی: سفارش عضو به‌صورت تیکت مالک (ماژول member_orders)"],
+                      "acceptance": ["—"],
+                  }))
+
+
+def capability(cid):
+    """قرارداد یک قابلیت + تطبیق زنده با کاتالوگ (آماده بودن ماژول)."""
+    c = CAPS_CONTRACT.get(str(cid or ""))
+    if not c:
+        return {"id": str(cid or ""), "status": "unknown"}
+    out = dict(c)
+    if out.get("module"):
+        try:
+            import modules, modlib  # noqa: F401
+            out["catalog_ready"] = all(m in modules.MODULES for m in out["module"].split("/"))
+        except Exception:
+            out["catalog_ready"] = False
+    else:
+        out["catalog_ready"] = False
+    return out
+
+
+def caps_contract_public():
+    """فهرست قراردادها برای API و استودیو."""
+    return [capability(k) for k in sorted(CAPS_CONTRACT)]
+
+
+def caps_status_counts():
+    """شمارش وضعیت‌ها برای پایش سلامت کاتالوگ."""
+    out = {"ready": 0, "engine_only": 0, "unsupported": 0, "unknown": 0}
+    for k in CAPS_CONTRACT:
+        out[CAPS_CONTRACT[k]["status"]] = out.get(CAPS_CONTRACT[k]["status"], 0) + 1
+    return out
+
+
+def engine_roadmap_seed():
+    """نقشهٔ توسعهٔ اولیه از موارد unsupported (برای گزارش ENGINE_LIMIT)."""
+    out = []
+    for k in CAPS_CONTRACT:
+        c = CAPS_CONTRACT[k]
+        if c["status"] == "unsupported" and c.get("proposal"):
+            out.append({"capability": k, "title": c["title"], **c["proposal"]})
+    return out
+
+
 def caps_public():
     """آنچه رابط کاربری لازم دارد: رویدادها، شرط‌ها، کارها، دکمه‌ها، بلوک‌ها و بازی‌ها با برچسب فارسی"""
     return {"build": BUILD,
             "events": CAPS_EVENTS, "if": CAPS_IF, "do": CAPS_DO, "btns": CAPS_BTNS,
-            "blocks": CAPS_BLOCKS, "games": CAPS_GAMES, "limits": LIMITS}
+            "blocks": CAPS_BLOCKS, "games": CAPS_GAMES, "limits": LIMITS,
+            "contract": caps_contract_public(), "status_counts": caps_status_counts()}
 
 
 # پرامپت هوش مصنوعی از همین ساخته می‌شود تا AI قابلیت ناموجود نسازد.

@@ -352,97 +352,6 @@ def api_arch_apply(uid, bot_id):
     return jsonify(bot=public(bot2), cards=applied, wallet=wallet_info(uid))
 
 
-# ───────────────────────── دستیار استودیو: پچ قطعی روی کانفیگ فعلی ─────────────────────────
-def _assist_spec(bot, req):
-    """روتر کلیدواژه‌ای روی درخواست؛ فقط قابلیت‌های کاتالوگ. خروجی: Spec یا None."""
-    import catalog as _cat
-    spec = _cat.keyword_spec(req)
-    if not spec or not spec.get("features"):
-        return None
-    return spec
-
-
-@app.post("/api/bots/<bot_id>/assist")
-@authed
-def api_assist(uid, bot_id):
-    """پیش‌نمایش دستیار استودیو (رایگان و بدون LLM): قابلیت‌های کاتالوگ به کانفیگ فعلی اضافه می‌شوند.
-    خروجی mode=spec (قطعی/رایگان) یا mode=none (قابلیت آماده‌ای پیدا نشد؛ ویرایش با هوش مصنوعی)."""
-    import catalog as _cat
-    import copy
-    from ai import sanitize
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="ربات پیدا نشد"), 404
-    req = str((request.get_json(silent=True) or {}).get("request") or "").strip()[:1500]
-    if len(req) < 4:
-        return jsonify(error="چه چیزی اضافه یا عوض شود؟ کوتاه بنویس"), 400
-    if not rate_ok(f"assist:{uid}", 20, 60):
-        return jsonify(error="کمی آروم‌تر؛ چند لحظه بعد دوباره امتحان کن"), 429
-    spec = _assist_spec(bot, req)
-    if not spec:
-        return jsonify(mode="none")
-    current = bot["config"]
-    try:
-        cfg_new = _compile_patch(current, spec)
-    except Exception as e:
-        return jsonify(mode="none", reason=str(e)[:200])
-    preview = _cat.preview_spec(spec)
-    new_nodes = [nid for nid in cfg_new["nodes"] if nid not in (current.get("nodes") or {})]
-    titles = [(cfg_new["nodes"][nid].get("title") or nid) for nid in new_nodes[:8]]
-    w = []
-    try:
-        sanitize(copy.deepcopy(cfg_new), strict=False, warns=w, nodes_cap=limits_of(uid)["nodes"])
-    except Exception as e:
-        return jsonify(mode="none", reason=str(e)[:200])
-    return jsonify(mode="spec", free=True, spec={"name": spec["name"], "features": [{"type": f} for f, _ in spec["features"]]},
-                   preview=preview, new_nodes=titles, count=len(new_nodes), warns=w[:3])
-
-
-def _compile_patch(current, spec):
-    """کامپایل قطعی + ادغام با پیشوند در ربات موجود؛ کیف فقط اگر هنوز سکه‌ای در ربات نیست."""
-    import catalog as _cat
-    from ai import sanitize
-    _thinking, cfg, _ideas = _cat.compile_spec(spec, current=current)
-    return sanitize(cfg, strict=False)
-
-
-@app.post("/api/bots/<bot_id>/assist/apply")
-@authed
-def api_assist_apply(uid, bot_id):
-    """اعمال پچ قطعی دستیار: کانفیگ از سرور دوباره کامپایل و اعتبارسنجی می‌شود (ورودی کلاینت فقط
-    انتخاب قابلیت‌هاست)؛ نسخهٔ برگشت در versions ذخیره می‌شود. هزینه: صفر توکن."""
-    import catalog as _cat
-    from core import perks_of
-    bot = get_bot(bot_id, uid)
-    if not bot:
-        return jsonify(error="ربات پیدا نشد"), 404
-    raw = (request.get_json(silent=True) or {}).get("spec") or {}
-    if not isinstance(raw, dict) or not isinstance(raw.get("features"), list):
-        return jsonify(error="قابلیتی برای اعمال انتخاب نشده"), 400
-    try:
-        import json as _json
-        spec = _cat.parse_spec(_json.dumps({"name": raw.get("name") or "افزوده‌ها", "features": raw["features"][:12]}, ensure_ascii=False))
-    except _cat.SpecError as e:
-        return jsonify(error="انتخاب نامعتبر: " + str(e)[:160]), 400
-    if not spec["features"]:
-        return jsonify(error="قابلیتی برای اعمال انتخاب نشده"), 400
-    try:
-        cfg = _compile_patch(bot["config"], spec)
-    except Exception as e:
-        return jsonify(error="اعمال ممکن نشد: " + str(e)[:200]), 400
-    db.bots.update_one({"_id": bot["_id"], "owner": uid}, {
-        "$set": {"config": cfg, "name": cfg["name"], "thinking": "", "updated": now()},
-        "$push": {"versions": {"$each": [bot["config"]], "$slice": -(MAX_VERSIONS + perks_of(uid)["ver"])}}})
-    doc = db.bots.find_one({"_id": bot["_id"]})
-    try:
-        sync_commands(doc, cfg)
-    except Exception:
-        log.exception("sync_commands failed after assist apply")
-    names = "، ".join(_cat.CATALOG[f].fa for f, _ in spec["features"])
-    return jsonify(bot=public(doc), cards=["افزوده شد: " + names],
-                   note="اگر پشیمان شدی، با دکمهٔ «برگشت به نسخهٔ قبلی» همهٔ این تغییر برمی‌گردد.", wallet=wallet_info(uid))
-
-
 # ───────────────────────── ماموریت‌ها ─────────────────────────
 @app.post("/api/tasks/<tid>/claim")
 @authed
@@ -557,24 +466,106 @@ def api_modules(uid):
 
 
 @app.post("/api/plan")
-@authed
+@app.get("/api/plan")
 def api_plan(uid):
-    """پیش‌نمایش آنی (بدون توکن): درخواست چه قابلیت‌های کاتالوگ/ماژول‌هایی می‌سازد و کدام بخش‌ها از توان موتور بیرون است"""
+    """پیش‌نمایش آنی (بدون توکن): درخواست چه ماژول‌هایی می‌سازد و کدام بخش‌ها از توان موتور بیرون است"""
     from planner import plan_request
     from ai import _static_limits
     from modules import MODULES
-    import catalog as _cat
     d = request.get_json(silent=True) or {}
     prompt = str(d.get("prompt") or "")[:6000]
     pr = plan_request(prompt)
-    spec = _cat.keyword_spec(prompt)
-    spec_ids = [f for f, _ in ((spec or {}).get("features") or [])]
-    spec_fa = [(_cat.CATALOG[f].fa if f in _cat.CATALOG else f) for f in spec_ids]
-    return jsonify(modules=[{"id": i, "fa": MODULES[i].fa, "params": p} for i, p in pr.items],
-                   spec=spec_fa, name=(spec or {}).get("name") or pr.name,
-                   confidence=round(pr.confidence, 2),
-                   instant=bool((pr.items and pr.confidence >= 0.35) or spec_ids),
+    return jsonify(modules=[{"id": i, "fa": MODULES[i].fa, "params": p} for i, p in pr.items], name=pr.name,
+                   confidence=round(pr.confidence, 2), instant=bool(pr.items and pr.confidence >= 0.35),
                    limits=_static_limits(prompt))
+
+
+@app.post("/api/spec/preview")
+@authed
+def api_spec_preview(uid):
+    """پیش‌بررسی شفاف پیش از ساخت (بدون توکن): قابلیت‌های قابل اجرا ✔ / تقریبی 🟡 / غیرقابل اجرا ❌ / بدون ماژول 🧩
+    بدنه یا prompt است (روتر قطعی) یا features (خود کاربر)؛ خروجی قابل تأیید/لغو قبل از هر هزینه‌ای."""
+    import spec as _spec
+    import caps as _caps
+    from planner import plan_request
+    from ai import _static_limits
+    d = request.get_json(silent=True) or {}
+    prompt = str(d.get("prompt") or "")[:6000]
+    feats = d.get("features")
+    try:
+        if isinstance(feats, list) and feats:
+            sp = _spec.validate_spec({"version": 1, "intent": "create", "name": d.get("name") or "",
+                                      "features": feats, "texts": d.get("texts") or {}})
+        elif prompt:
+            pr = plan_request(prompt)
+            if pr.items and pr.confidence >= 0.35:
+                sp = _spec.spec_from_plan(pr)
+            else:
+                return jsonify(instant=False, modules=[], limits=_static_limits(prompt),
+                               message="روتر قطعی مطمئن نیست؛ درخواست را دقیق‌تر کن یا از ویزارد دستی استفاده کن.")
+        else:
+            return jsonify(error="prompt یا features لازم است"), 400
+        pv = _spec.preview_spec(sp)
+        return jsonify(instant=True, spec=sp, preview=pv,
+                       limits=[l for l in _static_limits(prompt or " ") if l.get("want") not in {x.get("want") for x in pv["engine_limit"]}])
+    except _spec.SpecError as e:
+        return jsonify(error="قابلیت یا پارامتر نامعتبر: " + "؛ ".join(e.errors[:3])), 400
+
+
+@app.post("/api/wizard/compile")
+@authed
+def api_wizard_compile(uid):
+    """ویزارد بدون هوش مصنوعی: انتخاب‌های کاربر مستقیماً به Spec استاندارد تبدیل و با کامپایلر قطعی ساخته می‌شوند.
+    هیچ LLM فراخوانی نمی‌شود؛ ساخت رایگان و قطعی است. خروجی فقط پس از sanitize/lint و تست پذیرش ذخیره می‌شود."""
+    import spec as _spec
+    import engine_accept
+    from modules import MODULES, catalog
+    import modlib  # noqa: F401
+    d = request.get_json(silent=True) or {}
+    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
+        return jsonify(error=f"به سقف {max_bots(uid)} ربات رسیدی؛ یکی را حذف کن یا اشتراکت را ارتقا بده", need_plan=True), 402
+    feats = d.get("features")
+    if not isinstance(feats, list) or not feats:
+        return jsonify(error="حداقل یک قابلیت انتخاب کن"), 400
+    body = {"version": 1, "intent": "create", "name": str(d.get("name") or "ربات من")[:30],
+            "emoji": bool(d.get("emoji")), "payments": bool(d.get("payments")),
+            "features": feats, "texts": d.get("texts") or {}}
+    try:
+        sp = _spec.validate_spec(body)
+    except _spec.SpecError as e:
+        return jsonify(error="؛ ".join(e.errors[:3])), 400
+    try:
+        thinking, cfg, ideas = _spec.compile_spec(sp)
+    except Exception as exc:
+        log.exception("wizard compile failed")
+        return jsonify(error=f"کامپایلر خروجی معتبر نساخت ({str(exc)[:120]})؛ هیچ چیزی ذخیره نشد"), 500
+    warns = []
+    cfg = sanitize(cfg, strict=False, warns=warns)
+    issues = [x for x in lint(cfg) if not x.startswith("variables that are read but never set")]
+    if warns or issues:
+        return jsonify(error="خطای داخلی خط ساخت (کامپایلر): " + (issues[0] if issues else warns[0])[:160]), 500
+    acc = engine_accept.run_acceptance(cfg, [f["type"] for f in sp["features"]])
+    if acc:
+        return jsonify(error="تست پذیرش شکست خورد: " + acc[0].get("evidence", "")[:160]), 500
+    bot = new_bot_doc(uid, cfg, "ساخت با ویزارد دستی (بدون هوش مصنوعی): " + "، ".join(MODULES[f["type"]].fa for f in sp["features"] if f["type"] in MODULES))
+    if REF_ON == "create":
+        settle_referral(uid)
+    return jsonify(bot=public(bot), wallet=wallet_info(uid), ideas=ideas[:3], catalog=catalog())
+
+
+@app.get("/api/roadmap")
+@authed
+def api_roadmap(uid):
+    """نقشهٔ توسعه (ادمین): هر گزارش ENGINE_LIMIT/CATALOG_MISSING با اولویت مبتنی بر تعداد درخواست."""
+    if uid not in ADMIN_IDS:
+        return jsonify(error="فقط ادمین"), 403
+    items = list(db.roadmap.find({}, {"_id": 1, "kind": 1, "capability": 1, "title": 1, "module": 1, "want": 1,
+                                     "reason": 1, "count": 1, "priority": 1, "plan": 1, "missing": 1, "files": 1,
+                                     "acceptance": 1, "last": 1, "t": 1}).sort("priority", -1))
+    for it in items:
+        it["id"] = str(it.pop("_id", ""))
+        it["t"] = aware(it.get("t")).isoformat() if it.get("t") else ""
+    return jsonify(items=items)
 
 
 @app.get("/api/jobs/<jid>")
@@ -595,10 +586,10 @@ def api_job(uid, jid):
         out.update(bot=public(b) if b else None, ideas=j.get("ideas", []), cost=j.get("cost", 0))
     elif j["status"] == "error":
         out["error"] = j.get("error", "ناموفق بود")
+        out["wizard"] = bool(j.get("wizard"))
         state = j.get("build_state") or {}
         can_resume = bool(j.get("kind") == "bot_build" and j.get("prompt")
-                          and state.get("version") == 1 and isinstance(state.get("plan"), list)
-                          and isinstance(state.get("cfg"), dict)
+                          and state.get("version") == 2 and isinstance(state.get("spec"), dict)
                           and state.get("request_hash") == _task_hash(j.get("prompt")))
         out["can_resume"] = can_resume
         if can_resume:
@@ -607,8 +598,6 @@ def api_job(uid, jid):
             out["build_phase"] = str(state.get("phase") or "")[:60]
     elif j["status"] == "review":
         out.update(gaps=j.get("gaps", []), cost=int(j.get("cost") or 0), prompt=j.get("prompt", ""), preflight=bool(j.get("preflight")))
-        if j.get("preview"):
-            out["preview"] = j["preview"]
     elif j["status"] == "cancelled":
         out["message"] = "درخواست لغو شد؛ توکنی کسر نشد."
     return jsonify(out)
@@ -623,8 +612,8 @@ def api_job_resume(uid, jid):
         return jsonify(error="کار ناموفق و قابل‌ادامه پیدا نشد؛ ممکن است قبلاً ادامه یافته باشد."), 409
     state = job.get("build_state") or {}
     prompt = str(job.get("prompt") or "")
-    if (state.get("version") != 1 or not prompt or not isinstance(state.get("plan"), list)
-            or not isinstance(state.get("cfg"), dict) or state.get("request_hash") != _task_hash(prompt)):
+    if (state.get("version") != 2 or not prompt or not isinstance(state.get("spec"), dict)
+            or state.get("request_hash") != _task_hash(prompt)):
         return jsonify(error="checkpoint معتبر برای ادامه وجود ندارد. درخواست جدید بساز؛ برای این شکست هزینه‌ای کسر نشده است."), 409
     bot_id = job.get("bot_id")
     current = None
@@ -752,37 +741,6 @@ def api_template_create(uid, tid):
     if REF_ON == "create":
         settle_referral(uid)
     return jsonify(bot=public(bot), wallet=wallet_info(uid), cost=cost)
-
-
-@app.post("/api/bots/new")
-@authed
-def api_bot_new(uid):
-    """ساخت دستی رباتِ خالی در استودیو — بدون هوش مصنوعی و بدون مصرف توکن.
-    کاربر از همین اول استودیو را کامل می‌بیند و اسکلت ربات (شروع + پاسخ پیش‌فرض) را می‌گیرد
-    تا مسیرها را خودش دستی بسازد؛ ارتقای هوشمند هم جداگانه از پنل «ساخت با هوش مصنوعی» در دسترس است."""
-    ensure_user(uid)
-    if db.bots.count_documents({"owner": uid}) >= max_bots(uid):
-        return jsonify(error=f"حداکثر {max_bots(uid)} ربات می‌تونی داشته باشی. با خرید اشتراک Premium یا Pro، سقفت بیشتر می‌شه."), 400
-    name = str((request.get_json(silent=True) or {}).get("name") or "").strip()[:40] or "ربات من"
-    skeleton = {
-        "name": name, "start": "start", "fallback": "fallback",
-        "nodes": {
-            "start": {"title": "شروع", "text": "سلام! به ربات من خوش اومدی. از دکمه‌های زیر انتخاب کن.",
-                      "buttons": [[{"text": "درباره ربات", "goto": "about"}]]},
-            "about": {"title": "درباره", "text": "این بخش را از استودیو ویرایش کن؛ هر بخش یک پیام از ربات است.",
-                      "buttons": [[{"text": "بازگشت به شروع", "goto": "start"}]]},
-            "fallback": {"title": "متوجه نشدم", "text": "متوجه پیامت نشدم؛ لطفاً از دکمه‌های زیر استفاده کن.", "buttons": []},
-        },
-    }
-    try:
-        cfg = sanitize(skeleton, strict=True, nodes_cap=limits_of(uid)["nodes"])
-    except ValueError as e:
-        return jsonify(error=str(e)), 400
-    bot = new_bot_doc(uid, cfg, "")
-    if REF_ON == "create":
-        settle_referral(uid)
-    log.info("manual bot created: uid=%s bot=%s", uid, bot["_id"])
-    return jsonify(bot=public(bot), wallet=wallet_info(uid), cost=0)
 
 
 @app.post("/api/bots/<bot_id>/undo")

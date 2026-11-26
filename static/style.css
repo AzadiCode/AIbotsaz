@@ -246,6 +246,13 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .daily.done .dt b{color:var(--ink)}
 
 /* ── فهرست گروهی ── */
+.tplgrid{display:flex;flex-direction:column;gap:12px}
+.tplc{background:var(--sf);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.tplc .tplt{display:flex;align-items:center;gap:12px}
+.tplc .gt{flex:1;min-width:0;line-height:1.65}.tplc .gt b{display:block;font-size:15px}.tplc .gt span{display:block;font-size:12.5px;color:var(--mut)}
+.tplc .chips{padding:0}
+.tplc .tplf{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tplc .tplf .b{width:auto;min-height:38px;padding:0 18px;font-size:14px}
 .group{background:var(--sf);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .gi{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid var(--line2);cursor:pointer;transition:background .15s}
 .gi:first-child{border-top:0}
@@ -269,6 +276,9 @@ select{appearance:none;-webkit-appearance:none;padding-left:36px;
 .empty p{margin:2px 0 14px}
 .panel{background:var(--sf);border:1px solid var(--line);border-radius:16px;padding:16px}
 .panel>h2{margin-bottom:4px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.steps div{padding:10px 8px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line);text-align:center;font-size:12px;line-height:1.65;color:var(--mut)}
+.steps .n{display:block;color:var(--ac);font-size:17px}
 
 /* ── تب‌های درونی ── */
 .tabs{display:flex;border-bottom:1px solid var(--line);margin:8px 0 18px;overflow-x:auto;scrollbar-width:none}
@@ -348,7 +358,7 @@ html.st-lock,html.st-lock body{overflow:hidden;height:100%}
 .st-title .tt{flex:1;min-width:0}
 .st-title b{display:block;font-size:14px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-title small{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.st-bar .b.sm{min-height:36px;padding:0 12px;font-size:12.5px;white-space:nowrap;flex:none}
+.st-bar .b.sm{min-height:36px;padding:0 12px;font-size:12.5px}
 .st-canvas{position:relative;flex:1;overflow:hidden;touch-action:none;cursor:grab;background:var(--bg)}
 .st-canvas.panning{cursor:grabbing}
 .st-world{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
@@ -1064,6 +1074,24 @@ html.st-moving .studio .wire .w-line,html.st-moving .studio .stc-card.start::aft
 .simside{flex:1;min-width:0;padding:4px 0 4px 16px;overflow-y:auto}
 .simside .sub{margin-top:14px}
 @media (max-width:760px){.simbody{flex-direction:column;padding:8px}.simphone{flex:1 1 auto;width:100%}.simside{padding:10px 2px}}
+/* کارت‌های نقشه در صفحه‌ی ساخت */
+.bpg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.bpg{grid-template-columns:1fr}}
+.bpc{display:flex;flex-direction:column;gap:8px;background:var(--sf);border-radius:18px;box-shadow:inset 0 0 0 1px var(--line2);padding:14px;min-height:44px;transition:box-shadow .15s,transform .15s;text-align:right}
+.bpc:active{transform:scale(.98);box-shadow:inset 0 0 0 1.5px var(--ac)}
+.bpc .bpi{width:38px;height:38px;border-radius:12px;background:var(--acs);color:var(--ac);display:grid;place-items:center}
+.bpc .bpi svg{width:20px;height:20px}
+.bpc .bpt b{font-size:14px;display:block;line-height:1.6}
+.bpc .bpt span{font-size:12px;color:var(--mut);line-height:1.7;display:block}
+.bpc .bpf{display:flex;flex-wrap:wrap;gap:5px}
+.bpc .bpf .chip{font-size:10.5px}
+/* کارت «چی ساخته شد؟» */
+.made{background:var(--sf);border-radius:18px;box-shadow:inset 0 0 0 1.5px var(--ok);padding:14px;margin:0 0 10px}
+.made h2{color:var(--ok)}
+.made .vdl{color:var(--ink)}
+.made .steps2{margin:8px 0 0;font-size:12.5px;color:var(--mut);line-height:2}
+.archopt{display:block;width:100%;background:var(--sf);border-radius:12px;box-shadow:inset 0 0 0 1px var(--line2);padding:10px 12px;font-size:13.5px;margin:0 0 6px;text-align:right}
+.archopt.on{box-shadow:inset 0 0 0 1.5px var(--ac);color:var(--ac)}
 /* نوار مصرف در حساب */
 .lims{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:6px}
 .lim{font-size:12px;color:var(--mut)}
@@ -1515,7 +1543,16 @@ button{max-width:100%}
 .ubc-f small{font-size:11px}.ubc-f small.bad{color:var(--bad)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
-.cstage{display:none}
+/* ── صفحهٔ ساخت: یک باکس یکپارچه (ایده + پیش‌نمایش + دکمهٔ ساخت) که تا لبهٔ پایین صفحه می‌رسد؛ عنوان بخش بعدی کمی بیرون می‌زند ── */
+.cstage{display:flex;flex-direction:column;height:calc(100vh - 62px);height:calc(100dvh - 62px);min-height:440px;padding-bottom:0;margin-bottom:26px}
+.console.big{flex:1;display:flex;flex-direction:column;min-height:0;border-radius:22px}
+.console.big .chead{padding:16px 18px 0;display:flex;flex-direction:column;gap:2px}
+.console.big .chead b{font-size:16px;font-weight:800;line-height:1.5}
+.console.big .chead span{font-size:12px;color:var(--mut);line-height:1.7}
+.console.big textarea{flex:1 1 auto;min-height:96px;resize:none;font-size:15.5px;padding:10px 18px 6px}
+.console.big .chips{padding:0 12px 10px}
+.livebox{flex:none;margin:0 12px 10px;display:block}
+.livebox>.lq{margin:0}
 .lqi{padding:12px 14px;border-radius:16px;background:var(--sf2);border:1px dashed color-mix(in srgb,var(--ac) 30%,var(--line));display:flex;flex-direction:column;gap:10px}
 .lqih{display:flex;align-items:center;gap:10px}
 .lqih .rb{width:24px;height:24px;color:var(--ac);opacity:.75}
@@ -1563,108 +1600,27 @@ button{max-width:100%}
 .ubacct p{margin:10px 0;font-size:12.5px;line-height:1.8;color:var(--mut)}
 .ubacct-s{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .ubacct-s b{display:block;font-size:14px}.ubacct-s small{color:var(--mut);font-size:10px}
-/* ── دستیار استودیو: پچ قطعی روی کانفیگ فعلی (رایگان) ── */
-.st-assist{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:6px 10px;background:color-mix(in srgb,var(--sf) 82%,transparent);border:1px solid var(--line);border-radius:14px}
-.st-assist .ib{flex:0 0 auto;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;color:var(--ac)}
-.st-assist .ib svg{width:18px;height:18px}
-.st-assist input{flex:1 1 auto;min-width:0;background:transparent;border:none;outline:none;color:inherit;font:inherit;padding:4px 0}
-.st-assist input::placeholder{opacity:.55}
 
-/* ═════════════════ پنل کشویی «ساخت با هوش مصنوعی» ═════════════════
-   شیت پایینی جمع‌وجور: بوم استودیو پشت آن دیده می‌شود؛ با اسکریمِ کم‌رنگ می‌توان هم‌زمان
-   نقشه را تماشا کرد و اگر لازم شد پنل را بست و دستی به استودیو رفت. */
-.aid-scrim{position:fixed;inset:0;z-index:44;background:rgba(2,8,12,.34);opacity:0;pointer-events:none;transition:opacity .26s}
-.aid-scrim.on{opacity:1;pointer-events:auto}
-.aidraw{position:fixed;left:0;right:0;bottom:0;z-index:45;max-width:560px;margin:0 auto;display:none;flex-direction:column;
-  max-height:78dvh;padding:6px 14px calc(10px + env(safe-area-inset-bottom));
-  background:var(--sf);border:1px solid var(--line);border-bottom:0;border-radius:22px 22px 0 0;
-  box-shadow:0 -18px 44px rgba(0,0,0,.4);overflow-y:auto;overscroll-behavior:contain;
-  transform:translateY(104%);transition:transform .3s cubic-bezier(.2,.8,.2,1)}
-.aidraw.on{display:flex}
-.aidraw.show{transform:translateY(0)}
-.aidraw > *{flex-shrink:0}          /* فشرده‌شدن فرزندان ممنوع: پنل اسکرول می‌شود، نه اینکه متن‌ها له شوند */
-.aid-h{display:flex;align-items:center;gap:10px;margin:6px 0 10px}
-.aid-h .ib.ai{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:12px;background:var(--toks);color:var(--tok)}
-.aid-h .ib.ai svg{width:19px;height:19px}
-.aid-h .gt{flex:1;min-width:0;line-height:1.6}
-.aid-h .gt b{display:block;font-size:14.5px}
-.aid-h .gt span{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.aid-h .iconb{flex:none;width:32px;height:32px}
-.aid-seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 10px;background:var(--sf2);border-radius:13px;padding:4px}
-.aid-seg button{min-height:34px;padding:4px 8px;border-radius:10px;font-size:12px;font-weight:600;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s,color .15s}
-.aid-seg button.on{background:var(--sf);color:var(--ac);box-shadow:0 1px 4px rgba(0,0,0,.18)}
-.aid-seg button:disabled{opacity:.4}
-.aid-console textarea{min-height:72px}
-.aid-chips{padding:0 0 10px}
-.aid-ideas{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 10px}
-.aid-live{flex:none;margin:0 0 6px}
-.aid-live .lqi{padding:9px 12px}
-.aid-foot{position:sticky;bottom:calc(-10px - env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;padding:10px 2px 2px;margin-top:auto;
-  border-top:1px dashed var(--line);background:linear-gradient(to top,var(--sf) 72%,transparent)}
-.aid-foot .b{width:auto;min-width:118px;min-height:40px;font-size:14px;border-radius:12px;padding:0 16px}
-.aid-foot .b svg{width:16px;height:16px}
-.aid-tphead{margin:10px 0 0}
-.aid-tphead h2{font-size:13.5px}
-.aid-tpls{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding-bottom:4px}
-.aid-tpl{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"i t" "c c" "f f";align-items:center;text-align:right;gap:4px 10px;
-  padding:11px 12px;border-radius:14px;background:var(--sf2);box-shadow:inset 0 0 0 1px var(--line);transition:box-shadow .15s,transform .15s}
-.aid-tpl:active{transform:scale(.985);box-shadow:inset 0 0 0 1.5px var(--ac)}
-.aid-tpl .ib{grid-area:i;width:34px;height:34px;border-radius:11px;background:var(--acs);color:var(--ac);display:grid;place-items:center}
-.aid-tpl .ib svg{width:17px;height:17px}
-.aid-tpl .gt{grid-area:t;min-width:0;line-height:1.55}
-.aid-tpl .gt b{display:block;font-size:13px}
-.aid-tpl .gt span{display:block;font-size:11px;color:var(--mut)}
-.aid-tpl .xcost{grid-area:c;justify-self:start;font-size:10.5px;color:var(--tok)}
-.aid-tpl .xf{grid-area:f;display:flex;gap:4px;flex-wrap:nowrap;overflow:hidden}
-.aid-tpl .xf .chip{font-size:10px;white-space:nowrap}
-/* نوار شناور پیشرفت، وقتی پنل وسط ساخت بسته شده باشد */
-.aidpill{position:fixed;bottom:calc(14px + env(safe-area-inset-bottom));left:14px;z-index:46;display:flex;align-items:center;gap:8px;
-  padding:9px 14px;border-radius:99px;font-size:12px;font-weight:700;color:var(--tok);
-  background:var(--sf);border:1px solid color-mix(in srgb,var(--tok) 45%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3)}
-.aidpill[hidden]{display:none}
-.aidpill svg{width:14px;height:14px;animation:rbSpin 1.2s linear infinite}
-.aidpill:active{transform:scale(.96)}
-
-/* ═════════════════ داک: دکمه‌ی مجزای «ساخت با AI» ═════════════════ */
-.dsep{height:1px;width:26px;margin:2px auto;background:var(--line);display:block}
-.dn.build{height:auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 6px;border-radius:14px;
-  color:var(--acx);background:linear-gradient(145deg,var(--ac),color-mix(in srgb,var(--ac) 70%,#000));
-  box-shadow:0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 6px 16px color-mix(in srgb,var(--ac) 30%,transparent)}
-.dn.build span{font-size:8.5px;font-weight:800;letter-spacing:.2px;line-height:1}
-.dn.build svg{width:18px;height:18px}
-.dn.build:active{transform:scale(.93)}
-.dock:not(.open) .dn.build{transform:none}
-
-/* ═════════════════ استودیو: نوار بالا و حالت خالی ═════════════════ */
-.st-title.static{cursor:default}
-.st-title.static:active{background:transparent}
-.iconb.ai{color:var(--tok)}
-.iconb.ai svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--tok) 55%,transparent))}
-.st-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
-  padding:18px 20px calc(70px + env(safe-area-inset-bottom));text-align:center;overflow-y:auto;
-  background:
-    radial-gradient(420px 260px at 50% 34%,color-mix(in srgb,var(--ac) 7%,transparent),transparent),
-    repeating-linear-gradient(0deg,color-mix(in srgb,var(--line) 32%,transparent) 0 1px,transparent 1px 44px),
-    repeating-linear-gradient(90deg,color-mix(in srgb,var(--line) 32%,transparent) 0 1px,transparent 1px 44px)}
-.st-empty .ste-ic{display:grid;place-items:center;width:74px;height:74px;border-radius:24px;margin-bottom:14px;color:var(--ac);
-  background:var(--sf);border:1px solid var(--line);box-shadow:0 10px 26px rgba(0,0,0,.22)}
-.st-empty .ste-ic svg{width:38px;height:38px}
-.st-empty h2{font-size:17px;font-weight:800;line-height:1.6}
-.st-empty p{max-width:330px;margin:6px 0 16px;font-size:12.5px;line-height:1.9;color:var(--mut)}
-.st-empty .ste-btns{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px}
-.st-empty .ste-btns .b{width:100%;min-height:44px;font-size:13.5px}
-.st-empty .ste-btns .b svg{width:16px;height:16px}
-.ste-tpl{margin-top:18px;width:100%;max-width:330px}
-.ste-tplcap{display:block;font-size:11px;color:var(--mut);margin-bottom:8px}
-.ste-tpls{display:flex;gap:7px}
-.ste-tplb{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:13px;
-  font-size:11px;font-weight:700;color:var(--ink);background:var(--sf);box-shadow:inset 0 0 0 1px var(--line);text-align:center}
-.ste-tplb:active{box-shadow:inset 0 0 0 1.5px var(--ac);color:var(--ac)}
-.ste-tplb .ib{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:var(--acs);color:var(--ac)}
-.ste-tplb .ib svg{width:15px;height:15px}
-.ste-tplb small{font-weight:500;color:var(--mut);font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-@media (prefers-reduced-motion:reduce){.aidraw{transition:none}.aid-scrim{transition:none}}
-/* نوار استودیو در عرض‌های کم: دو آیکن که جایگزین دارند (برگشت نسخه در «نسخه‌ها» و دکتر در «بیشتر») پنهان می‌شوند تا نوار نلغزد */
-@media (max-width:430px){
-  .st-bar .iconb[data-a="undo"], .st-bar .iconb[data-a="dropen"]{display:none}
+/* ═════════ پنل کشویی دستیار هوش مصنوعی در استودیو (BUILD 3.6.0) ═════════ */
+.aiwrap{position:fixed;top:calc(60px + env(safe-area-inset-top));bottom:calc(68px + env(safe-area-inset-bottom));inset-inline-start:12px;width:min(420px,calc(100vw - 24px));z-index:220;
+  background:var(--bg2,#16181f);border:1px solid var(--ln,#2a2d3a);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);
+  display:flex;flex-direction:column;transform:translateX(-115%) scale(.98);opacity:0;pointer-events:none;transition:transform .28s cubic-bezier(.2,.9,.3,1),opacity .2s}
+[dir="rtl"] .aiwrap{transform:translateX(-115%)}
+.aiwrap.on{transform:none;opacity:1;pointer-events:auto}
+.aiwrap .aih{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--ln,#2a2d3a);font-weight:700}
+.aiwrap .aih .iconb{border:0;background:none;color:inherit;cursor:pointer;font:inherit}
+.aiwrap .aib{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;flex:1}
+.aiwrap textarea{min-height:88px;border-radius:12px;border:1px solid var(--ln,#2a2d3a);background:var(--bg,#0f1115);color:inherit;padding:10px 12px;font:inherit;resize:vertical}
+.aiwrap .aip-out{display:flex;flex-direction:column;gap:6px}
+.aiwrap .aip-out .sub{margin-top:6px}
+.aiwrap .aip-ok{background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.25);border-radius:10px;padding:8px 10px;font-size:12px}
+.aiwrap .aip-no{background:rgba(204,53,71,.07);border:1px solid rgba(204,53,71,.25);border-radius:10px;padding:8px 10px;font-size:12px;display:flex;flex-direction:column;gap:3px}
+.aiwrap .aip-no small{opacity:.75}
+.aiwrap .aip-prog{background:rgba(90,160,255,.08);border:1px solid rgba(90,160,255,.25);border-radius:10px;padding:10px 12px;font-size:12px;display:flex;align-items:center;gap:8px}
+.aiwrap .aip-mod{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--ln,#2a2d3a);border-radius:10px;cursor:pointer}
+.aiwrap .aip-mod input{margin-top:3px}
+.aiwrap .aip-mod b{font-size:13px}
+.aiwrap .aip-mod small{display:block;opacity:.7;font-size:11px}
+@media (max-width:720px){
+  .aiwrap{inset-inline:8px;width:auto;bottom:calc(76px + env(safe-area-inset-bottom));top:auto;max-height:62vh}
 }

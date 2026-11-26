@@ -14,6 +14,8 @@ from modules import (Module, P, register, _btn, _group, _h, _clean_text, fmt, _n
 _NOT = lambda var, val: {"var": var, "op": "!=", "value": str(val)}    # noqa: E731
 _EQ = lambda var, val: {"var": var, "op": "==", "value": str(val)}     # noqa: E731
 _GE = lambda var, val: {"var": var, "op": ">=", "value": str(val)}     # noqa: E731
+_GT = lambda var, val: {"var": var, "op": ">", "value": str(val)}      # noqa: E731
+_LE = lambda var, val: {"var": var, "op": "<=", "value": str(val)}     # noqa: E731
 _LT = lambda var, val: {"var": var, "op": "<", "value": str(val)}      # noqa: E731
 _ADD = lambda var, val: {"op": "add", "var": var, "value": str(val)}   # noqa: E731
 _SET = lambda var, val: {"op": "set", "var": var, "value": str(val)}   # noqa: E731
@@ -21,6 +23,130 @@ _SET = lambda var, val: {"op": "set", "var": var, "value": str(val)}   # noqa: E
 
 def _again(b, to, text="دوباره"):
     return [_btn(text, goto=to)]
+
+
+# ═════════════════════════════ بازی‌های داخلی ═════════════════════════════
+def c_dice(b, p):
+    """بازی تاس: مقدار تصادفی با اکشن واقعی موتور، ثبت نتیجه در متغیر، نمایش و اجرای مجدد."""
+    sides = p["sides"]
+    b.var("coins", "0") if "wallet" in b.have_or_planned() else None
+    b.var("dice_val", "0")
+    b.var("dice_best", "0")
+    lo, hi = 1, sides
+    b.node("dice", f"<b>{b.E('🎲')}تاس</b>\n\nبا هر بار پرتاب، عددی بین ۱ تا {sides} می‌آید.\nآخرین پرتاب تو: {{dice_val}}\nبهترین پرتاب: {{dice_best}}",
+           [[_btn("پرت کن", goto="dice_roll")], b.back()], title="بازی تاس")
+    # اکشن واقعی موتور: random 1-6 → متغیر؛ سپس مقایسه با بهترین رکورد
+    b.node("dice_roll", "در حال پرتاب تاس…", [], title="پرتاب تاس",
+           do=[{"op": "random", "var": "dice_val", "value": f"{lo}-{hi}"}],
+           route=[{"when": {"var": "dice_val", "op": ">", "value": "{dice_best}"}, "goto": "dice_newbest"},
+                  {"when": _LE("dice_val", "{dice_best}"), "goto": "dice_show"}])
+    b.node("dice_newbest", f"{b.E('🎲')}عددت {{dice_val}} آمد و رکورد جدید شد!\nبهترین پرتاب: {{dice_best}}",
+           [_again(b, "dice", "یک بار دیگر"), b.back()], title="رکورد جدید",
+           do=[_SET("dice_best", "{dice_val}")])
+    b.node("dice_show", f"{b.E('🎲')}عددت {{dice_val}} آمد.\nبهترین پرتاب: {{dice_best}}",
+           [_again(b, "dice", "یک بار دیگر"), b.back()], title="نتیجه تاس")
+    b.menu_add(28, f"{b.E('🎲')}بازی تاس", "dice")
+    b.cmd("dice", "dice")
+
+
+def c_guess(b, p):
+    """حدس عدد: تولید عدد هدف، دریافت انتخاب کاربر، مقایسهٔ واقعی با شرط موتور، ثبت امتیاز و تکرار دور."""
+    hi = p["max_num"]
+    rounds = p["rounds"]
+    reward = fmt(p["reward"])
+    picks = list(range(1, hi + 1))
+    btn_rows = []
+    for i in range(0, min(len(picks), 10), 5):
+        btn_rows.append([_btn(str(x), goto="guess_roll", do=[_SET("g_pick", x)]) for x in picks[i:i + 5]])
+    b.var("g_pick", "0")
+    b.var("g_target", "0")
+    b.var("g_score", "0")
+    b.node("guess", f"<b>{b.E('🎯')}حدس عدد</b>\n\nعددی بین ۱ تا {hi} انتخاب کن؛ اگر به عدد مخفی خوردی، {reward} {_h(b.coin)} می‌گیری.\nامتیاز تو: {{g_score}}",
+           btn_rows if hi <= 10 else [[_btn("حدس خود را بفرست", goto="guess_form")], b.back()], title="حدس عدد")
+    if hi > 10:
+        b.node("guess_form", "عدد حدست را بنویس:", [], title="عدد حدس",
+               fields=[f"یک عدد بین ۱ تا {hi}"], save=["g_pick"], next="guess_roll")
+    # هدف تصادفی با اکشن واقعی؛ مقایسه با شرط معتبر موتور ({g_pick} == {g_target})
+    b.node("guess_roll", "در حال مقایسهٔ حدس تو…", [], title="بررسی حدس",
+           do=[{"op": "random", "var": "g_target", "value": f"1-{hi}"}],
+           route=[{"when": _EQ("g_pick", "{g_target}"), "goto": "guess_win"},
+                  {"when": _NOT("g_pick", "{g_target}"), "goto": "guess_miss"}])
+    b.node("guess_win", f"{b.E('🎉')}درست حدس زدی! عدد مخفی {{g_target}} بود.\n{reward} {_h(b.coin)} به کیفت اضافه شد.\nامتیاز: {{g_score}}",
+           [_again(b, "guess", "دور بعد"), b.back()], title="حدس درست",
+           do=[_ADD("g_score", 1), _ADD("coins", reward)])
+    b.node("guess_miss", f"{b.E('💭')}اشتباه بود؛ عدد مخفی {{g_target}} بود و تو {{g_pick}} را انتخاب کردی.\nامتیاز: {{g_score}}",
+           [_again(b, "guess", "دوباره"), b.back()], title="حدس اشتباه")
+    b.menu_add(29, f"{b.E('🎯')}حدس عدد", "guess")
+    b.cmd("guess", "guess")
+
+
+def c_coinbet(b, p):
+    """شرط‌بندی داخلی با سکه: بررسی موجودی، جلوگیری از شرط بیشتر از موجودی، کسر/افزودن صحیح، بدون منفی‌شدن."""
+    amounts = [x for x in p["amounts"] if isinstance(x, (int, float)) and x > 0][:6] or [5]
+    amt = fmt(amounts[0])
+    b.var("coins", "0")
+    b.var("bet_amt", "0")
+    b.var("bet_back", "0")
+    b.var("bet_res", "0")
+    btns = []
+    for x in amounts:
+        btns.append(_btn(f"شرط {fmt(x)}", goto="bet_check", do=[_SET("bet_amt", fmt(x))]))
+    b.node("bet", f"<b>{b.E('🎲')}شرط‌بندی با {_h(b.coin)}</b>\n\nموجودی تو: {{coins}} {_h(b.coin)}\nاگر برنده شوی، دو برابر شرطت را می‌گیری؛ اگر باختی، شرطت کسر می‌شود.",
+           _group(btns, 2) + [b.back()], title="شرط‌بندی")
+    # مسیر امن موتور: اول شرط موجودی (route)، بعد اجرای کسر (do در گرهٔ بعدی)
+    b.node("bet_check", "بررسی موجودی…", [], title="بررسی موجودی",
+           route=[{"when": _LT("coins", "{bet_amt}"), "goto": "bet_no"},
+                  {"when": _GE("coins", "{bet_amt}"), "goto": "bet_go"}])
+    b.node("bet_no", f"{b.E('🚫')}موجودی برای این شرط کافی نیست.\nموجودی تو: {{coins}} {_h(b.coin)}",
+           [[_btn("شرط‌بندی", goto="bet")], b.back()], title="موجودی کم")
+    # کسر فقط همین‌جا و یک‌بار انجام می‌شود؛ سپس نتیجهٔ تصادفی واقعی موتور
+    b.node("bet_go", "تاس شرط در حال چرخش…", [], title="چرخش شرط",
+           do=[{"op": "calc", "var": "bet_back", "value": "{bet_amt} * 2"},
+               {"op": "add", "var": "coins", "value": "-{bet_amt}"},
+               {"op": "random", "var": "bet_res", "value": "1-2"}],
+           route=[{"when": _EQ("bet_res", 1), "goto": "bet_win"},
+                  {"when": _EQ("bet_res", 2), "goto": "bet_lose"}])
+    b.node("bet_win", f"{b.E('🎉')}برنده شدی! {fmt(2)} برابر شرطت بازگشت.\nموجودی: {{coins}} {_h(b.coin)}",
+           [_again(b, "bet", "شرط بعد"), b.back()], title="برد شرط",
+           do=[_ADD("coins", "{bet_back}")])
+    b.node("bet_lose", f"{b.E('🥲')}باختی و شرطت کسر شد.\nموجودی: {{coins}} {_h(b.coin)}",
+           [_again(b, "bet", "شرط بعد"), b.back()], title="باخت شرط")
+    b.menu_add(31, f"{b.E('🎲')}شرط‌بندی", "bet")
+    b.cmd("bet", "bet")
+
+
+def c_leaderboard(b, p):
+    """رتبه‌بندی عمومی بر اساس متغیر معتبر با board واقعی موتور (db.uvars) و ثبت اطلاعات واقعی کاربران.
+    انتخاب قطعی متغیر: فقط متغیری که در همین ربات واقعاً نوشته می‌شود؛ در غیر این صورت دعوت‌ها (refs)."""
+    plans = b.shared.get("plans", {}) or {}
+    var = p["var"]
+    # نوشته‌های واقعی سکه: قابلیت‌هایی که coins را افزایش می‌دهند (هدیهٔ ورود wallet هم از طریق start_routes)
+    coin_writers = {"daily", "referral", "wheel", "sponsor", "miner", "puzzle", "coinbet", "guess"} & set(plans)
+    has_coins = bool(coin_writers or b.start_routes)
+    if var == "coins" and not has_coins:
+        var = "refs"
+    elif var == "qscore" and "quiz" not in plans:
+        var = "coins" if has_coins else "refs"
+    elif var == "g_score" and "guess" not in plans:
+        var = "coins" if has_coins else "refs"
+    elif var == "puzzle" and "wheel" not in plans:
+        var = "coins" if has_coins else "refs"
+    if var != p["var"]:
+        b.notes.append("متغیر رتبه‌بندی «%s» در این ربات نوشته نمی‌شود؛ جدول بر اساس «%s» نمایش داده می‌شود." % (p["var"], var))
+    top = p["top"]
+    label = p["label"] or "جدول برترین‌ها"
+    b.node("board", f"<b>{b.E('🏆')}{_h(label)}</b>", [[_btn("به‌روزرسانی", goto="board")], b.back()],
+           title="رتبه‌بندی", board={"var": var, "top": top, "label": label})
+    b.menu_add(38, f"{b.E('🏆')}رتبه‌بندی", "board")
+    b.cmd("top", "board")
+
+
+def c_start_menu(b, p):
+    """منوی اصلی و نقطهٔ ورود: نام، متن خوش‌آمد و ترتیب گزینه‌ها."""
+    if p.get("welcome"):
+        b.start_text = f"<b>{_h(p['name'] if p.get('name') else b.name)}</b>\n\n{_h(p['welcome'], 350)}"
+    if p.get("name"):
+        b.name = _clean_text(p["name"], 30) or b.name
 
 
 # ═════════════════════════════ اقتصاد سکه ═════════════════════════════
@@ -210,8 +336,6 @@ def c_member_orders(b, p):
     b.var("ord_link", "")
     packs = p["packs"]
     rows, btns = [], []
-    for i, (qty, price) in enumerate(packs, 1):
-        pass
     for i, row in enumerate(packs, 1):
         qty, price = int(row[0]), _num(row[1])
         lab = f"{qty} عضو ({fmt(price)} {b.coin})"
@@ -278,6 +402,23 @@ def c_owner(b, p):
 
 # ───────────────────────── تعریف و ثبت ─────────────────────────
 def _reg():
+    register(Module("start_menu", "منوی اصلی و متن شروع", "نام ربات، متن خوش‌آمد و نقطهٔ ورود", c_start_menu,
+                    [P("name", "نام نمایشی ربات", "text", "", max=30), P("welcome", "متن خوش‌آمد", "text", "", max=350)],
+                    [(r"منوی اصلی|متن (شروع|خوش ?آمد)|صفحه شروع|start menu|بخش شروع", 0.6)], (), 1, "عمومی"))
+    register(Module("dice", "بازی تاس", "پرتاب تاس با عدد تصادفی واقعی، رکورد بهترین پرتاب و اجرای مجدد", c_dice,
+                    [P("sides", "تعداد وجه تاس", "int", 6, min=2, max=20)],
+                    [(r"تاس|دایس|dice|پرتاب تاس|بازی تاس", 1.5)], ("wallet",), 28, "بازی"))
+    register(Module("guess", "حدس عدد", "انتخاب عدد، تولید عدد مخفی و مقایسهٔ واقعی با شرط موتور", c_guess,
+                    [P("max_num", "بزرگ‌ترین عدد", "int", 10, min=2, max=100), P("rounds", "تعداد دور", "int", 3, min=1, max=20),
+                     P("reward", "پاداش حدس درست (سکه)", "num", 5, min=0.01, max=100000)],
+                    [(r"حدس (عدد|بازی)|guess|عدد مخفی|بازی حدس", 1.5)], ("wallet",), 29, "بازی"))
+    register(Module("coinbet", "شرط‌بندی با سکه", "شرط داخلی با بررسی موجودی، کسر و افزیش صحیح سکه", c_coinbet,
+                    [P("amounts", "مبالغ شرط (کمma separated)", "list", [5, 10, 20], n=6)],
+                    [(r"شرط ?بندی|قمار|بیت|bet|coin ?bet", 1.5)], ("wallet",), 31, "بازی"))
+    register(Module("leaderboard", "رتبه‌بندی", "جدول برترین‌ها بر اساس سکه/امتیاز/دعوت با board واقعی موتور", c_leaderboard,
+                    [P("var", "متغیر رتبه‌بندی", "text", "coins", max=12), P("top", "تعداد نفرات برتر", "int", 10, min=3, max=50),
+                     P("label", "عنوان جدول", "text", "جدول برترین‌ها", max=40)],
+                    [(r"رتبه ?بندی|جدول برترین|لیدربورد|leaderboard|برترین (ها|کاربران)", 1.2)], (), 38, "عمومی"))
     register(Module("wallet", "کیف سکه", "واحد پول ربات با موجودی هر کاربر و هدیهٔ اولین ورود", c_wallet,
                     [P("coin", "نام واحد پول", "text", "سکه", max=20), P("emoji", "ایموجی واحد پول", "text", "💰", max=4),
                      P("start_bonus", "هدیهٔ اولین ورود", "num", 0, min=0, max=100000)],
