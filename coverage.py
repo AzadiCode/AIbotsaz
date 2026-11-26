@@ -131,13 +131,22 @@ def _module_relevance(mid, text):
         return 0.0, []
     trig, hits = _trigger_score(mod, text)
     req_tokens = _tokens(text)
+    aliases = tuple(getattr(mod, "aliases", ()) or ())
+    alias_hits = []
+    normalized_text = normalize_text(text).casefold()
+    for alias in aliases:
+        normalized_alias = normalize_text(alias).casefold()
+        # Phrase aliases are explicit descriptions of behavior already implemented by
+        # this module. They cover natural paraphrases without matching broad words.
+        if normalized_alias and normalized_alias in normalized_text:
+            alias_hits.append(alias)
     desc_tokens = _tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc)))
-    hit_tokens = _tokens(" ".join(hits))
+    hit_tokens = _tokens(" ".join(hits + alias_hits))
     overlap = req_tokens & desc_tokens
-    score = trig + min(len(overlap), 3) * 0.35
-    if normalize_text(mod.fa) and normalize_text(mod.fa) in normalize_text(text):
+    score = trig + min(len(overlap), 3) * 0.35 + (1.75 if alias_hits else 0.0)
+    if normalize_text(mod.fa) and normalize_text(mod.fa) in normalized_text:
         score += 1.0
-    return score, hits + sorted(overlap)
+    return score, hits + alias_hits + sorted(overlap)
 
 
 def _module_match(mid, text, minimum=0.75):
@@ -147,11 +156,14 @@ def _module_match(mid, text, minimum=0.75):
         return False, score, hits
     mod = MODULES.get(mid)
     req_terms = _tokens(text)
+    # Do not pool every alias into one synthetic description: that would let a
+    # combined requirement pass by borrowing half its words from unrelated aliases.
+    # Only an alias that actually matched the full phrase is admitted as evidence.
     supported_terms = _tokens(" ".join((mod.id, mod.fa, mod.title, mod.desc, *hits))) if mod else set()
     def explained(term):
         return any(term == known or term.startswith(known) or known.startswith(term) for known in supported_terms)
     unexplained = {term for term in req_terms if not explained(term)}
-    if req_terms and len(unexplained) / max(1, len(req_terms)) >= 0.25:
+    if req_terms and len(unexplained) / max(1, len(req_terms)) >= 0.20:
         return False, score, hits
     return True, score, hits
 

@@ -401,7 +401,8 @@ def spec_prompt(prompt_text, current_summary="", lang="fa"):
     lines = ["-" * 60]
     for m in catalog():
         ps = ", ".join(f"{s['k']}({s['kind']}, پیش‌فرض={str(s['default'])[:60]})" for s in m["params"]) or "بدون پارامتر"
-        lines.append(f"type={m['id']} | نام={m['fa']} | شرح رفتار واقعی={m['desc']} | دسته={m['cat']} | وابستگی={','.join(m['requires']) or 'هیچ'} | پارامترها={ps}")
+        aliases = "، ".join(m.get("aliases") or []) or "—"
+        lines.append(f"type={m['id']} | نام={m['fa']} | شرح رفتار واقعی={m['desc']} | عبارت‌های معادل درخواست={aliases} | دسته={m['cat']} | وابستگی={','.join(m['requires']) or 'هیچ'} | پارامترها={ps}")
     cats = "\n".join(lines)
     engine_only = [f"{c.get('id')} | {c.get('title')} | status={c.get('status')} | limits={'; '.join(map(str, c.get('limits') or []))[:180]}"
                    for c in CAPS_CONTRACT.values() if c.get("status") in ("engine_only", "unsupported")]

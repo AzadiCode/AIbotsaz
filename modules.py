@@ -285,7 +285,7 @@ class Builder:
 # ───────────────────────── ثبت ماژول‌ها ─────────────────────────
 class Module:
     def __init__(self, mid, fa, desc, compile_fn, params=None, triggers=None, requires=(), prio=50,
-                 cat="عمومی", extract=None, title=""):
+                 cat="عمومی", extract=None, title="", aliases=None):
         self.id, self.fa, self.desc = mid, fa, desc
         self.compile = compile_fn
         self.params = params or []
@@ -295,6 +295,8 @@ class Module:
         self.cat = cat
         self.extract = extract                # extract(text, ctx) → پارامترهای استخراج‌شده از متن درخواست
         self.title = title or fa
+        # Natural-language aliases describe existing behavior; they do not add capabilities.
+        self.aliases = tuple(str(x).strip() for x in (aliases or ()) if str(x).strip())
 
 
 MODULES = {}
@@ -311,6 +313,7 @@ def catalog():
     """فهرست عمومی ماژول‌ها برای رابط کاربری و روتر هوش مصنوعی"""
     out = []
     for m in sorted(MODULES.values(), key=lambda x: x.prio):
-        out.append({"id": m.id, "fa": m.fa, "desc": m.desc, "cat": m.cat, "requires": list(m.requires),
+        out.append({"id": m.id, "fa": m.fa, "desc": m.desc, "aliases": list(getattr(m, "aliases", ())),
+                    "cat": m.cat, "requires": list(m.requires),
                     "params": [{k: v for k, v in s.items() if k in ("k", "fa", "kind", "default")} for s in m.params]})
     return out

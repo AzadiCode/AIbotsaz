@@ -29,6 +29,26 @@ class RequirementQualityTests(unittest.TestCase):
         hits = cov.catalog_candidates("مدیریت گروه در محیط گروه")
         self.assertIn("group_manager", [x["id"] for x in hits])
 
+
+    def test_exact_production_report_wording_recovers_existing_group_module(self):
+        sp = {"features": [], "requirements": [
+            {"id": "r1", "want": "اجرای دستورات مدیریتی و نظارتی در گروه", "part": "محیط گروه",
+             "status": "catalog_missing", "features": []},
+            {"id": "r2", "want": "انجام تنظیمات ربات از طریق پیام خصوصی (PV)", "part": "پیوی",
+             "status": "catalog_missing", "features": []},
+        ]}
+        recovered = cov.reconcile_spec(sp, "یه ربات مدیریت گروه بساز که در گروه کار کنه و در پیویش هم تنظیماتشو بشه تنجام داد")
+        self.assertEqual(recovered, ["group_manager"])
+        self.assertEqual([r["status"] for r in sp["requirements"]], ["covered", "covered"])
+        self.assertEqual([r["features"] for r in sp["requirements"]], [["group_manager"], ["group_manager"]])
+        self.assertEqual(cov.unmet_items(sp), [])
+        self.assertEqual(len([f for f in sp["features"] if f["type"] == "group_manager"]), 1)
+
+    def test_group_aliases_do_not_make_generic_private_settings_a_group_request(self):
+        req = {"id": "r1", "want": "تنظیمات حساب شخصی از طریق پیام خصوصی", "part": "پیوی",
+               "status": "catalog_missing", "features": []}
+        self.assertNotIn("group_manager", [x["id"] for x in cov.catalog_candidates(req["want"])])
+
     def test_unrelated_module_does_not_cover_group_management(self):
         req = {"id": "r1", "want": "مدیریت گروه در محیط گروه", "features": ["about"]}
         self.assertFalse(cov._served_by(req, {"about"}))
