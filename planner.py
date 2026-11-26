@@ -243,7 +243,7 @@ def is_additive(prompt):
     return not _EDIT_RX.search(t)
 
 
-_STOP_RX = re.compile(r"\b(ربات|بساز|بسازید|درست|کنید|کن|بده|بذار|میخوام|می ?خوام|میخواهم|با|و|برای|که|را|رو|یه|یک|داشته|باشه|باشد|هم|همچنین|قابل|چه|چی|هر|از|به|در|تا|های|ها|خیلی|خوب|قشنگ|زیبا|کامل|دارای|دارنده)\b")
+_STOP_RX = re.compile(r"\b(ربات|بساز|بسازید|درست|کنید|کن|بده|بذار|اضافه|افزودن|افزوده|ایجاد|قرار|کردن|فعال|میخوام|می ?خوام|میخواهم|با|و|برای|که|را|رو|یه|یک|داشته|باشه|باشد|هم|همچنین|قابل|چه|چی|هر|از|به|در|تا|های|ها|جدید|بخش|قسمت|خیلی|خوب|قشنگ|زیبا|کامل|دارای|دارنده)\b")
 
 
 def _rest_coverage(t, matched_chosen):
@@ -259,7 +259,8 @@ def _rest_coverage(t, matched_chosen):
             mwords.update(x for x in re.split(r"[\s،,]+", kw) if len(x) >= 3)
     if not mwords:
         return 0.0
-    hit = sum(1 for w in words if any(mw in w or w in mw for mw in mwords))
+    # Exact/prefix token matching avoids false coverage from arbitrary substrings.
+    hit = sum(1 for w in words if any(w == mw or w.startswith(mw) or mw.startswith(w) for mw in mwords))
     return hit / len(words)
 
 

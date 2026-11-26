@@ -586,7 +586,7 @@ def api_job(uid, jid):
         out["error"] = j.get("error", "ناموفق بود")
         state = j.get("build_state") or {}
         can_resume = bool(j.get("kind") == "bot_build" and j.get("prompt")
-                          and state.get("version") == 2 and isinstance(state.get("spec"), dict)
+                          and state.get("version") == 3 and isinstance(state.get("spec"), dict)
                           and state.get("request_hash") == _task_hash(j.get("prompt")))
         out["can_resume"] = can_resume
         if can_resume:
@@ -609,7 +609,7 @@ def api_job_resume(uid, jid):
         return jsonify(error="کار ناموفق و قابل‌ادامه پیدا نشد؛ ممکن است قبلاً ادامه یافته باشد."), 409
     state = job.get("build_state") or {}
     prompt = str(job.get("prompt") or "")
-    if (state.get("version") != 2 or not prompt or not isinstance(state.get("spec"), dict)
+    if (state.get("version") != 3 or not prompt or not isinstance(state.get("spec"), dict)
             or state.get("request_hash") != _task_hash(prompt)):
         return jsonify(error="checkpoint معتبر برای ادامه وجود ندارد. درخواست جدید بساز؛ برای این شکست هزینه‌ای کسر نشده است."), 409
     bot_id = job.get("bot_id")

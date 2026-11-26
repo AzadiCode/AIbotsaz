@@ -58,11 +58,11 @@ def engine_limit(want, evidence, upgrade, feature=""):
     return defect("ENGINE_LIMIT", feature, want, evidence, "high", "compile", "", (), upgrade)
 
 
-def catalog_missing(feature, want, evidence="موتور این قابلیت را اجرا می‌کند اما ماژول آمادهٔ آن هنوز در کاتالوگ نیست."):
+def catalog_missing(feature, want, evidence="ماژول منطبق در کاتالوگ پیدا نشد؛ پشتیبانی واقعی موتور هنوز اثبات نشده است."):
     """قابلیت با ماژول آماده؛ با ENGINE_LIMIT اشتباه گرفته نشود."""
     return defect("CATALOG_MISSING", feature, want, evidence, "low", "spec", feature,
                   ("پیاده‌سازی تولیدکنندهٔ قطعی", "ثبت در کاتالوگ", "تست پذیرش"),
-                  "این قابلیت در نقشهٔ توسعهٔ کاتالوگ قرار می‌گیرد؛ فعلاً ساخت دستی در استودیو پشتیبانی می‌شود.")
+                  "ابتدا قرارداد و توان واقعی موتور بررسی شود؛ سپس مشخص شود فقط تولیدکنندهٔ کاتالوگ لازم است یا خود موتور نیز باید توسعه پیدا کند.")
 
 
 def aggregate_key(d):
@@ -108,7 +108,7 @@ def user_summary(defects):
         if k == "ENGINE_LIMIT":
             lines.append(("❌", f"{d.get('want') or ''} — موتور پشتیبانی نمی‌کند. {d.get('upgrade') or ''}"))
         elif k == "CATALOG_MISSING":
-            lines.append(("🧩", f"{d.get('want') or ''} — موتور آن را اجرا می‌کند ولی ماژول آماده هنوز ساخته نشده؛ در استودیو دستی قابل ساخت است."))
+            lines.append(("🧩", f"{d.get('want') or ''} — ماژول آماده و منطبق در کاتالوگ پیدا نشد؛ امکان اجرای کامل آن هنوز تأیید نشده است."))
         elif k == "BUILD_DEFECT":
             lines.append(("⚠️", "یک نقص داخلی در خط ساخت ثبت شد و خروجی تحویل داده نشد؛ هزینه‌ای کسر نشد."))
     return lines
@@ -169,7 +169,7 @@ def catalog_path(d):
             "سناریوی تست پذیرش در engine_accept._SCENARIOS",
             "ثبت در tests/test_modules.py؛ فعال‌سازی status=ready فقط پس از PASS",
         ],
-        "note": "موتور توانایی اجرا را دارد؛ فقط تولیدکنندهٔ آماده ساخته شود. کامپایلر و ai.py تغییری نمی‌خواهند.",
+        "note": "پیش از افزودن ماژول، باید قرارداد caps و رفتار واقعی engine بررسی شود؛ اگر primitiveهای موتور کافی باشند، فقط تولیدکننده لازم است وگرنه ابتدا موتور باید توسعه یابد.",
     }
 
 

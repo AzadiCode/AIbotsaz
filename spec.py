@@ -143,7 +143,7 @@ def _salvage_requirement_rows(reqs, salvaged):
     return rows
 
 
-def validate_spec(obj):
+def validate_spec(obj, require_requirements=False, expected_intent=None):
     """
     JSON خام → Spec اعتبارسنجی‌شده.
     مراحل: ساختار → نسخه/نیت → نام → قابلیت‌ها (Enum + پارامترها) → وابستگی‌ها → متن‌ها.
@@ -165,11 +165,20 @@ def validate_spec(obj):
         obj = {k: v for k, v in obj.items() if k in ("version", "intent", "name", "emoji", "payments", "features", "texts", "requirements")}
 
     # 2) نسخه و نیت (اصلاح قطعی بی‌صدا؛ نه رد)
-    if int(obj.get("version") or 0) != SPEC_VERSION:
+    try:
+        incoming_version = int(obj.get("version") or 0)
+    except (TypeError, ValueError):
+        errors.append("version باید عدد معتبر باشد")
+        incoming_version = SPEC_VERSION
+    if incoming_version != SPEC_VERSION:
+        # The schema is intentionally backward-compatible for older Spec versions.
         obj["version"] = SPEC_VERSION
     intent = str(obj.get("intent") or "create").strip().lower()
     if intent not in ("create", "edit"):
-        intent = "create"
+        errors.append("intent باید create یا edit باشد")
+        intent = expected_intent or "create"
+    if expected_intent in ("create", "edit") and intent != expected_intent:
+        errors.append(f"intent با وضعیت درخواست هماهنگ نیست؛ مقدار مورد انتظار {expected_intent} است")
     obj["intent"] = intent
 
     # 3) نام ربات
@@ -178,12 +187,10 @@ def validate_spec(obj):
 
     # 4) قابلیت‌ها: Enum + پارامترها
     feats = obj.get("features")
-    if not isinstance(feats, list) or not feats:
-        raise SpecError("حداقل یک قابلیت لازم است",
-                        ["features خالی یا نامعتبر است — حداقل یک قابلیت واقعی از کاتالوگ در features لازم است"])
+    if not isinstance(feats, list):
+        raise SpecError("فهرست قابلیت‌ها نامعتبر است", ["features باید فهرست JSON باشد"])
     if len(feats) > 12:
-        errors.append("حداکثر ۱۲ قابلیت در یک ساخت")
-        feats = feats[:12]
+        raise SpecError("تعداد قابلیت‌های Spec بیش از حد است", ["حداکثر ۱۲ قابلیت در یک ساخت مجاز است؛ هیچ قابلیتی نباید بی‌صدا حذف شود"])
     out_feats, seen, salvaged = [], [], []
     for f in feats:
         if not isinstance(f, dict):
@@ -193,40 +200,59 @@ def validate_spec(obj):
         if not t:
             # ترمیم قطعی: قابلیت خارج از کاتالوگ کل Spec را نمی‌شکند؛ خواستهٔ آن صادقانه catalog_missing می‌شود.
             # (ریشهٔ واقعی «هیچ مدلی پاسخ معتبری نداد»: مدل قابلیتی می‌ساخت که در کاتالوگ نیست و کل خروجی رد می‌شد)
+            raw_unknown_type = str(f.get("type") or "؟").strip()
+            raw_unknown_req = [str(x).strip() for x in (f.get("req") if isinstance(f.get("req"), list) else [])
+                               if str(x).strip()]
+            if len(raw_unknown_type) > 40 or any(len(x) > 20 for x in raw_unknown_req) or len(raw_unknown_req) > 6:
+                errors.append("شناسه یا تعداد پیوندهای قابلیت ناشناخته از محدوده مجاز خارج است؛ هیچ مقداری بی‌صدا کوتاه یا حذف نمی‌شود")
+                continue
             salvaged.append({
-                "type": str(f.get("type") or "؟").strip()[:40],
+                "type": raw_unknown_type,
                 "note": _clean_text(f.get("note") or "", 300),
-                "req": [str(x).strip()[:20] for x in (f.get("req") if isinstance(f.get("req"), list) else [])
-                        if str(x).strip()][:6],
+                "req": raw_unknown_req,
             })
             continue
         mod = MODULES[t]
         allowed = _allowed_param_keys(mod)
-        params = f.get("params") if isinstance(f.get("params"), dict) else {}
-        if not isinstance(params, dict):
-            params = {}
+        raw_params = f.get("params", {})
+        if raw_params is None:
+            raw_params = {}
+        if not isinstance(raw_params, dict):
             errors.append(f"پارامترهای {t} باید شیء JSON باشد")
+            params = {}
+        else:
+            params = raw_params
         extra = set(params) - allowed
         if extra:
-            # ترمیم قطعی بی‌صدا: کلیدهای ناشناختهٔ پارامتر همان‌جا رد می‌شوند؛ شکاندن کل Spec کارکرد ندارد
+            # Unknown optional keys from weaker LLMs are dropped deterministically;
+            # they must never reach the compiler, but should not invalidate an otherwise
+            # complete and valid Spec. Requirement coverage still decides whether intent is met.
             params = {k: v for k, v in params.items() if k in allowed}
         # نیازمندی‌های متصل به این قابلیت (ردیابی تا خروجی) + note صادقانهٔ مدل حفظ می‌شود
-        f_reqs = f.get("req") if isinstance(f.get("req"), list) else []
-        f_reqs = [str(x).strip()[:20] for x in f_reqs if str(x).strip()][:6]
+        raw_f_reqs = f.get("req") if isinstance(f.get("req"), list) else []
+        f_reqs = [str(x).strip() for x in raw_f_reqs if str(x).strip()]
+        if any(len(x) > 20 for x in f_reqs):
+            errors.append(f"شناسه نیازمندی متصل به قابلیت {t} بیش از ۲۰ نویسه است")
+        if len(f_reqs) > 6:
+            errors.append(f"تعداد نیازمندی‌های متصل به قابلیت {t} بیش از ۶ است؛ هیچ پیوندی بی‌صدا حذف نمی‌شود")
         f_note = _clean_text(f.get("note") or "", 300)
         out_feats.append({"type": t, "params": params, "req": f_reqs, "note": f_note})
         if t in seen and t not in ("start_menu",):
-            # ترمیم قطعی (نه خطا): قابلیت تکراری از مدل/روتر فقط بار اول نگه داشته می‌شود.
-            # نیازمندی‌های نمونهٔ تکراری به نمونهٔ نگه‌داشته‌شده منتقل می‌شوند تا پوشش گم نشود.
             dup = out_feats.pop()
             kept = next(x for x in out_feats if x["type"] == t)
+            if params != kept.get("params"):
+                errors.append(f"قابلیت {t} دوبار با تنظیمات متفاوت درخواست شده، اما کامپایلر فعلی فقط یک نمونه از این ماژول را پشتیبانی می‌کند")
             kept["req"] = list(dict.fromkeys(kept["req"] + dup["req"]))[:6]
         seen.append(t)
     if not out_feats:
-        if salvaged:
-            errors.append("هیچ قابلیت واقعی کاتالوگ در features انتخاب نشده — برای ساخت، حداقل یک قابلیت از کاتالوگ لازم است؛ "
-                          "خواسته‌های خارج از کاتالوگ باید در requirements با status=catalog_missing ثبت شوند، نه در features")
-        raise SpecError("هیچ قابلیت معتبری در Spec نبود", errors)
+        # A requirement-complete Spec may legitimately contain no ready modules when
+        # every requested behavior is unavailable. Let coverage/preflight report this
+        # honestly; do not discard the model's gap explanation at the schema stage.
+        raw_requirements = obj.get("requirements")
+        if not (require_requirements and isinstance(raw_requirements, list) and raw_requirements):
+            if salvaged:
+                errors.append("هیچ قابلیت آماده‌ای انتخاب نشده؛ خواسته‌های پشتیبانی‌نشده باید به‌صورت نیازمندی مستقل ثبت شوند")
+            raise SpecError("هیچ قابلیت آماده و قابل کامپایل در Spec نبود", errors)
 
     # 5) وابستگی‌ها: قابلیت‌های لازم خودکار و بی‌صدا اضافه می‌شوند (رفع قطعی، نه خطا)
     chosen = [f["type"] for f in out_feats]
@@ -246,10 +272,21 @@ def validate_spec(obj):
         errors += req_errs
     else:
         reqs = None
+        if require_requirements:
+            errors.append("Spec مدل باید requirements کامل داشته باشد؛ حذف نیازمندی‌های درخواست مجاز نیست")
     # پیوندهای req به نیازمندی ناموجود: ترمیم قطعی بی‌صدا (حذف پیوند)؛ شکاندن کل Spec کارکرد ندارد
     if reqs is not None:
         valid_rids = {x["id"] for x in reqs}
+        for r in reqs:
+            normalized = []
+            for raw_id in r.get("features") or []:
+                canon = _feature_type(raw_id)
+                normalized.append(canon or raw_id)
+            r["features"] = list(dict.fromkeys(normalized))
         for f in out_feats:
+            unknown_links = [rid for rid in f["req"] if rid not in valid_rids]
+            if unknown_links:
+                errors.append(f"قابلیت {f['type']} به شناسه نیازمندی ناموجود وصل شده: {', '.join(unknown_links[:4])}")
             f["req"] = [rid for rid in f["req"] if rid in valid_rids]
     selected = {f["type"] for f in out_feats}
     backref = {}
@@ -358,47 +395,61 @@ def preview_spec(spec):
 
 # ───────────────────────── تولید Spec با مدل (یک فراخوانی) ─────────────────────────
 def spec_prompt(prompt_text, current_summary="", lang="fa"):
-    """پرامپت کوچک و قراردادی: مدل نخست درخواست را به نیازمندی‌های مشخص تبدیل می‌کند و
-    بعد هر نیازمندی را به یک قابلیت واقعی کاتالوگ وصل می‌کند؛ هیچ خواسته‌ای حذف یا با منوی عمومی جایگزین نمی‌شود."""
+    """Build a requirement-complete prompt against the actual registered catalog."""
     from modules import catalog
-    import caps as _caps
+    from caps import CAPS_CONTRACT
     lines = ["-" * 60]
     for m in catalog():
-        ps = ", ".join(f"{s['k']}({s['kind']})" for s in m["params"]) or "بدون پارامتر"
-        lines.append(f"type={m['id']} | {m['fa']} | نیازها: {','.join(m['requires']) or 'هیچ'} | پارامترها: {ps}")
+        ps = ", ".join(f"{s['k']}({s['kind']}, پیش‌فرض={str(s['default'])[:60]})" for s in m["params"]) or "بدون پارامتر"
+        lines.append(f"type={m['id']} | نام={m['fa']} | شرح رفتار واقعی={m['desc']} | دسته={m['cat']} | وابستگی={','.join(m['requires']) or 'هیچ'} | پارامترها={ps}")
     cats = "\n".join(lines)
-    ask = ("فقط و فقط همین قابلیت‌ها از کاتالوگ قابل انتخاب‌اند. قابلیت خارج از کاتالوگ انتخاب ممنوع.\n"
-           "هیچ خواستهٔ مستقل کاربر را حذف نکن و هیچ خواستهٔ اصلی را با قابلیت عمومی (منوی شروع، درباره ما، لینک، پشتیبانی، سؤالات متداول) جایگزین نکن.\n"
-           "اگر بخشی از درخواست با کاتالوگ قابل اجرا نیست، آن را در requirements با status=catalog_missing یا engine_limit صادقانه ثبت کن\n"
-           "(نه اینکه بی‌صدا حذفش کنی یا جایگزین عمومی بسازی). قابلیت‌های عمومی را فقط وقتی انتخاب کن که کاربر واقعاً همان را خواسته باشد.")
-    cur = f"\nوضعیت پروژهٔ فعلی (فقط برای intent=edit):\n{current_summary[:900]}\n" if current_summary else ""
+    engine_only = [f"{c.get('id')} | {c.get('title')} | status={c.get('status')} | limits={'; '.join(map(str, c.get('limits') or []))[:180]}"
+                   for c in CAPS_CONTRACT.values() if c.get("status") in ("engine_only", "unsupported")]
+    engine_knowledge = "\n".join(engine_only[:40]) or "—"
+    editing = bool(current_summary)
+    intent = "edit" if editing else "create"
+    ask = (
+        "فقط قابلیت‌های ثبت‌شده در کاتالوگ زیر قابل انتخاب‌اند. قابلیت خارج از کاتالوگ را در features جعل نکن.\n"
+        "درخواست را به کوچک‌ترین نیازمندی‌های مستقل و قابل مشاهده برای کاربر تفکیک کن؛ هر رفتار، مقصد، شرط، ورودی و خروجی خواسته‌شده باید ردیف جداگانه داشته باشد.\n"
+        "فیلد part فقط محل قرارگیری/اجرای قابلیت (مثلاً منوی شروع یا پیوی) است و به‌تنهایی یک قابلیت نیست؛ انتخاب ماژول باید از روی want انجام شود.\n"
+        "هر نیازمندی باید دقیقاً به قابلیت‌هایی متصل شود که شرح رفتار واقعی آن‌ها همان نیازمندی را اجرا می‌کند. شباهت کلی موضوع کافی نیست.\n"
+        "قابلیت عمومی مانند منوی شروع، درباره ما، لینک، پشتیبانی و FAQ را فقط وقتی انتخاب کن که کاربر همان قابلیت را خواسته باشد؛ هرگز آن را جایگزین رفتار تخصصی نکن.\n"
+        "اگر قابلیت موجود در کاتالوگ دقیقاً مرتبط است، آن را انتخاب کن؛ حتی اگر نام کاربر با نام ماژول متفاوت باشد. اگر هیچ ماژول مرتبطی نیست، catalog_missing ثبت کن. ENGINE_LIMIT فقط وقتی مجاز است که در اطلاعات توانایی موتور، عدم پشتیبانی صریح ثبت شده باشد.\n"
+        "برای status=covered، دست‌کم یک feature مرتبط لازم است و همان feature باید با req به شناسه نیازمندی وصل شود. برای catalog_missing/engine_limit، features خالی باشد.\n"
+    )
+    if editing:
+        ask += ("این درخواست ویرایش/توسعهٔ ربات موجود است، نه ساخت دوبارهٔ آن. فقط قابلیت‌هایی را در features بیاور که همین درخواست می‌خواهد اضافه یا توسعه دهد؛ ")
+        ask += ("قابلیت‌های موجود در خلاصه، زمینه و محدودیت نام‌گذاری هستند و نباید دوباره بی‌دلیل تولید شوند. شناسه‌ها و رفتارهای موجود را حفظ کن.\n")
+    cur = f"\nوضعیت ساختاری ربات فعلی (مرجع الزامی برای intent=edit):\n{current_summary[:6000]}\n" if editing else ""
     sys_part = (
-        "تو برنامه‌ریز ربات‌ساز هستی. کارت: درخواست کاربر را بخوان، خواسته‌های مستقل را استخراج کن و یک Spec JSON بساز. "
-        + ask +
-        "\n\nکاتالوگ قابلیت‌ها:\n" + cats +
-        "\n\nقالب خروجی (فقط JSON، بدون هیچ متن دیگری):\n"
-        '{"version": 1, "intent": "create", "name": "نام کوتاه ربات", "emoji": false, "payments": false,\n'
-        ' "requirements": [{"id": "r1", "want": "رفتاری که کاربر دقیقاً می‌خواهد", "part": "بخش ربات",'
-        ' "status": "covered", "features": ["شناسهٔ قابلیت مسئول"]},\n'
-        '   {"id": "r2", "want": "...", "part": "...", "status": "catalog_missing|engine_limit", "features": [], "why": "دلیل صادقانه", "upgrade": "راهکار"}],\n'
-        ' "features": [{"type": "شناسه از کاتالوگ", "params": {"کلید": مقدار}, "req": ["r1"], "note": "توضیح کوتاه اختیاری"}],\n'
-        ' "texts": {"welcome": "متن خوش‌آمد", "success": "متن موفقیت", "fail": "متن شکست"}}\n'
-        "قوانین:\n"
-        "1) هر خواستهٔ مستقل کاربر یک ردیف جداگانه در requirements دارد؛ هیچ خواسته‌ای حذف نمی‌شود.\n"
-        "2) هر feature فقط به reqهایی وصل می‌شود (کلید req) که واقعاً همان را اجرا می‌کند؛ قابلیت بدون req فقط برای وابستگی اجباری کاتالوگ (مثل کیف برای بازی سکه‌ای) مجاز است.\n"
-        "3) status=covered یعنی قابلیت انتخابی همان رفتار را واقعاً اجرا می‌کند؛ اگر مطمئن نیستی، صادقانه catalog_missing بزن و دلیل بیاور.\n"
-        "4) params فقط کلیدهای همان قابلیت. مقادیر متن فارسی ساده. عدد برای پارامتر عددی.\n"
-        "5) ویژگی‌های وابسته خودکار اضافه می‌شوند؛ لازم نیست تکرار کنی مگر کاربر خواسته باشد."
+        "تو معمار و برنامه‌ریز ربات تلگرام هستی. فقط Spec JSON معتبر تولید کن؛ کد یا کانفیگ موتور ننویس.\n" + ask +
+        "\nکاتالوگ ماژول‌های آماده و قابل تولید:\n" + cats +
+        "\n\nدانش قراردادی موتور درباره توانایی‌های بدون ماژول آماده:\n" + engine_knowledge +
+        "\nقاعده وضعیت: ready یعنی ماژول آماده؛ engine_only یعنی موتور primitive دارد اما ماژول آماده ندارد (catalog_missing)؛ unsupported فقط یعنی موتور صریحاً پشتیبانی نمی‌کند (engine_limit).\n"
+        "\nقالب خروجی (فقط JSON):\n" +
+        '{"version":1,"intent":"' + intent + '","name":"نام کوتاه ربات","emoji":false,"payments":false,'
+        '"requirements":[{"id":"r1","want":"رفتار دقیق موردنظر کاربر","part":"محل/بخش","status":"covered","features":["شناسه واقعی قابلیت"]}],'
+        '"features":[{"type":"شناسه واقعی کاتالوگ","params":{},"req":["r1"],"note":""}],'
+        '"texts":{}}\n'
+        "قوانین اجباری:\n"
+        "1) تعداد requirements با تعداد خواسته‌های مستقل کاربر برابر باشد؛ هیچ خواسته‌ای حذف، ادغام مبهم یا خلاصه نشود.\n"
+        "2) `want` باید رفتار قابل اجرا را توصیف کند، نه نام کلی مثل «ربات حرفه‌ای».\n"
+        "3) اگر یک جمله چند کار مستقل می‌خواهد، آن را به چند requirement تفکیک کن.\n"
+        "4) هر feature فقط به requirementهایی وصل شود که واقعاً همان feature اجرا می‌کند.\n"
+        "5) برای هر قابلیت، پارامترهای لازم را از متن درخواست استخراج کن؛ مقدار ساختگی یا محتوای نمونه را به‌عنوان داده واقعی کاربر نساز.\n"
+        "6) بخش/منوی عمومی یا قالب پیش‌فرض را برای پرکردن خروجی اضافه نکن، مگر برای شروع فنی لازم باشد؛ شروع فنی نباید به‌عنوان پوشش نیازمندی شمرده شود.\n"
+        "7) قابلیت موجود را به اشتباه catalog_missing اعلام نکن؛ ابتدا شناسه‌ها، نام فارسی، شرح و رفتار کاتالوگ را تطبیق بده.\n"
+        "8) برای هر بخش ناموجود، دلیل مشخص و راهکار واقعی بده؛ از عبارت‌های کلی خودداری کن.\n"
         + cur
     )
-    user_part = f"درخواست کاربر:\n{prompt_text[:6000]}"
+    user_part = f"درخواست کاربر (متن کامل و مرجع اصلی):\n{str(prompt_text or '')[:6000]}"
     return [{"role": "system", "content": sys_part}, {"role": "user", "content": user_part}]
 
 
-def parse_llm_spec(text):
-    """پاسخ مدل → Spec اعتبارسنجی‌شده. خطا: SpecError."""
+def parse_llm_spec(text, require_requirements=False, expected_intent=None):
+    """پاسخ مدل → Spec اعتبارسنجی‌شده. در مسیر AI، requirements و intent اجباری‌اند."""
     from ai import _extract_json_object
     raw = _extract_json_object(str(text or ""))
     if not raw:
         raise SpecError("پاسخ مدل JSON نداشت")
-    return validate_spec(raw)
+    return validate_spec(raw, require_requirements=require_requirements, expected_intent=expected_intent)

@@ -348,8 +348,37 @@ def _s_leaderboard(cfg, bot_id):
     return out
 
 
+def _s_group_manager(cfg, bot_id):
+    """قرارداد قطعی ماژول مدیر گروه و اتصال مسیرهای واقعی پردازش گروه."""
+    out = []
+    mod = cfg.get("mod") or {}
+    required = ("captcha", "lock", "flood", "warns", "clean")
+    missing = [k for k in required if k not in mod]
+    if missing:
+        out.append(defects.build_defect("group_manager", "تولید تنظیمات پایه مدیریت گروه",
+                                        "کلیدهای کانفیگ مدیریتی تولید نشدند: " + ", ".join(missing),
+                                        stage="acceptance_test"))
+    for name in ("mod_group", "mod_command", "mod_join", "mod_captcha_cb", "mod_kick",
+                 "mod_restrict", "_group_settings_callback", "_group_settings_message",
+                 "_group_settings_list", "_group_settings_values", "_group_settings_authorized",
+                 "_group_settings_required_permission", "group_mod_config", "sync_commands"):
+        if not callable(getattr(engine, name, None)):
+            out.append(defects.build_defect("group_manager", f"اتصال هندلر {name}",
+                                            "هندلر اجرایی مدیریت گروه در موتور موجود نیست",
+                                            stage="acceptance_test"))
+    if "group_manager" not in __import__("modules").MODULES:
+        out.append(defects.build_defect("group_manager", "ثبت ماژول مدیریت گروه",
+                                        "ماژول در کاتالوگ ثبت نشده", stage="acceptance_test"))
+    if "my_chat_member" not in engine.allowed_updates(cfg):
+        out.append(defects.build_defect("group_manager", "دریافت رخداد عضویت/ارتقای ربات در گروه",
+                                        "my_chat_member در allowed_updates فعال نیست",
+                                        stage="acceptance_test"))
+    return out
+
+
 _SCENARIOS = {"dice": _s_dice, "guess": _s_guess, "coinbet": _s_coinbet, "quiz": _s_quiz,
-              "wheel": _s_wheel, "daily": _s_daily, "wallet": _s_wallet, "leaderboard": _s_leaderboard}
+              "wheel": _s_wheel, "daily": _s_daily, "wallet": _s_wallet,
+              "leaderboard": _s_leaderboard, "group_manager": _s_group_manager}
 
 
 # ───────────────────────── نقطهٔ ورود ─────────────────────────

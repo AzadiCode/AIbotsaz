@@ -3020,20 +3020,87 @@ def _fix_structure_deterministically(cfg):
 # ممیزی نهایی LLM وجود ندارد؛ تأیید نهایی با تست پذیرش روی موتور واقعی (engine_accept) انجام می‌شود.
 
 
-def _spec_current_summary(current):
-    """خلاصهٔ کوتاه پروژهٔ فعلی برای Spec ویرایش (intent=edit).
-    منوی شروع هم داخل خلاصه می‌آید تا مدل بداند کاربر «کدام بخش» را می‌خواهد و چه قابلیتی از قبل هست؛
-    این خلاصه فقط برای انتخاب قابلیت است؛ ساخت/ادغام همچنان با کامپایلر قطعی انجام می‌شود."""
+def _spec_current_summary(current, request=""):
+    """Compact, request-aware index of the existing bot for safe edit planning.
+
+    Include the full identifier index (within a safe cap) and detail the nodes most
+    relevant to the current request. This avoids planning against only the first few
+    nodes of a larger bot.
+    """
     if not isinstance(current, dict):
         return ""
     nodes = current.get("nodes") or {}
-    start = nodes.get(current.get("start") or "start") or {}
-    menu = [str(b.get("text") or "")[:20] for row in (start.get("buttons") or []) for b in row][:10]
-    titles = [str(n.get("title") or nid)[:24] for nid, n in list(nodes.items())[:14]]
-    return "نام: %s | بخش‌ها (%d): %s | منوی شروع: %s | متغیرها: %s" % (
-        str(current.get("name") or "")[:30], len(nodes), "، ".join(titles),
-        "، ".join(menu) or "—",
-        "، ".join(list((current.get("vars") or {}).keys())[:12]))
+    if not isinstance(nodes, dict):
+        nodes = {}
+    from modules import normalize_text
+    req_words = {x for x in re.findall(r"[a-zA-Z0-9_]+|[\u0600-\u06FF]+", normalize_text(request).casefold()) if len(x) >= 3}
+
+    def node_text(nid, node):
+        if not isinstance(node, dict):
+            return str(nid)
+        pieces = [str(nid), str(node.get("title") or ""), str(node.get("text") or "")]
+        for row in (node.get("buttons") or [])[:8]:
+            for button in (row or [])[:4]:
+                if isinstance(button, dict):
+                    pieces.extend((str(button.get("text") or ""), str(button.get("goto") or "")))
+        return " ".join(pieces)
+
+    scored = []
+    for index, (nid, node) in enumerate(nodes.items()):
+        words = {x for x in re.findall(r"[a-zA-Z0-9_]+|[\u0600-\u06FF]+", node_text(nid, node).casefold()) if len(x) >= 3}
+        scored.append((len(req_words & words), index, nid, node))
+    relevant = [x for x in scored if x[0] > 0]
+    relevant.sort(key=lambda x: (-x[0], x[1]))
+    details = relevant[:16] if relevant else scored[:10]
+
+    node_index = []
+    for _, _, nid, node in scored[:120]:
+        title = str(node.get("title") or "")[:24] if isinstance(node, dict) else ""
+        node_index.append([str(nid)[:40], title])
+
+    summary = {
+        "name": str(current.get("name") or "")[:30],
+        "start": current.get("start") or "start",
+        "fallback": current.get("fallback"),
+        "node_count": len(nodes),
+        "node_index": node_index,
+        "node_index_truncated": max(0, len(nodes) - len(node_index)),
+        "relevant_nodes": [],
+        "vars": list((current.get("vars") or {}).keys())[:50],
+        "globals": list((current.get("globals") or {}).keys())[:30],
+        "commands": list((current.get("commands") or {}).keys())[:30],
+        "configured_sections": [k for k in ("mod", "group", "join", "desk", "channel", "rss", "games") if current.get(k)],
+    }
+    for _, _, nid, node in details:
+        if not isinstance(node, dict):
+            continue
+        buttons = []
+        for row in (node.get("buttons") or [])[:6]:
+            for b in (row or [])[:3]:
+                if isinstance(b, dict):
+                    buttons.append({"text": str(b.get("text") or "")[:24], "goto": b.get("goto"),
+                                    "action": [a.get("op") for a in (b.get("do") or []) if isinstance(a, dict)][:3]})
+        summary["relevant_nodes"].append({
+            "id": nid, "title": str(node.get("title") or "")[:30],
+            "text": re.sub(r"\s+", " ", str(node.get("text") or ""))[:120],
+            "buttons": buttons[:8], "fields": [str(x)[:35] for x in (node.get("fields") or [])[:6]],
+            "actions": [a.get("op") for a in (node.get("do") or []) if isinstance(a, dict)][:6],
+            "next": node.get("next"), "routes": len(node.get("route") or []),
+        })
+    # Keep the context compact without slicing through JSON and losing the structure.
+    packed = json.dumps(summary, ensure_ascii=False, separators=(",", ":"))
+    while len(packed) > 6000 and summary["relevant_nodes"]:
+        summary["relevant_nodes"].pop()
+        packed = json.dumps(summary, ensure_ascii=False, separators=(",", ":"))
+    while len(packed) > 6000 and len(summary["node_index"]) > 40:
+        summary["node_index"].pop()
+        summary["node_index_truncated"] = max(0, len(nodes) - len(summary["node_index"]))
+        packed = json.dumps(summary, ensure_ascii=False, separators=(",", ":"))
+    for key in ("vars", "globals", "commands"):
+        while len(packed) > 6000 and summary[key]:
+            summary[key].pop()
+            packed = json.dumps(summary, ensure_ascii=False, separators=(",", ":"))
+    return packed
 
 
 def ask_spec(prompt, lang="fa", acc=None, current=None):
@@ -3043,7 +3110,7 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
     برای کل فاز؛ این بودجه باید برای تولید JSON کامل با مدل‌های رایگان کافی باشد."""
     import spec as _spec
     cb = getattr(_prog, "cb", None)
-    msgs = _spec.spec_prompt(prompt, _spec_current_summary(current), lang)
+    msgs = _spec.spec_prompt(prompt, _spec_current_summary(current, prompt), lang)
     spec_timeout = max(30, _int("AI_SPEC_TIMEOUT", 150))
     spec_total = max(spec_timeout, _int("AI_SPEC_TOTAL_TIMEOUT", 420))
     last_err = None
@@ -3056,7 +3123,31 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
                                   total_timeout=spec_total)
             if acc is not None:
                 _record_usage(acc, usage)
-            sp = _spec.parse_llm_spec(txt)          # JSON → Schema → Enum → پارامترها → نیازمندی‌ها
+            sp = _spec.parse_llm_spec(txt, require_requirements=True,
+                                      expected_intent="edit" if current is not None else "create")  # مدل حق تغییر نوع عملیات یا حذف نیازمندی را ندارد
+            import coverage as _coverage
+            recovered = _coverage.reconcile_spec(sp, prompt)
+            if recovered:
+                log.warning("Spec catalog reconciliation recovered registered modules: %s", recovered)
+            # A parseable Spec can still be semantically mis-mapped (e.g. one row
+            # combines a supported behavior with an unrelated private setting). Give
+            # the model exactly one bounded correction opportunity before preflight.
+            _planning_gaps = _coverage.unmet_items(sp, prompt)
+            _planning_defects = [d for d in _planning_gaps if d.get("kind") == "BUILD_DEFECT"]
+            if _planning_defects and attempt == 0:
+                last_err = _spec.SpecError("پوشش معنایی Spec ناقص یا مبهم است", [
+                    f"نیازمندی: {d.get('want', '')} | علت: {d.get('evidence', '')}"
+                    for d in _planning_defects[:4]])
+                if cb:
+                    cb.reject_last_model()
+                msgs = msgs + [{"role": "user", "content":
+                    "Spec از نظر JSON معتبر بود، اما نگاشت معنایی این نیازمندی‌ها قابل قبول نیست: "
+                    + "؛ ".join(last_err.errors[:4])
+                    + "\nدر پاسخ اصلاحی، هر رفتار مستقل را در یک requirement جدا قرار بده؛ محل قرارگیری را فقط در part بنویس؛ "
+                    "قابلیت عمومی را جای رفتار تخصصی قرار نده؛ قابلیت دقیقاً مرتبط را از کاتالوگ انتخاب و feature.req را به همان شناسه وصل کن. "
+                    "اگر یک بخش واقعاً ماژول آماده ندارد، فقط همان بخش را catalog_missing ثبت کن. درخواست اصلی را حذف یا ساده‌سازی نکن و فقط JSON کامل بده."}]
+                log.warning("Spec semantic coverage needs one correction attempt: %s", last_err.errors[:3])
+                continue
             _salv = [r for r in (sp.get("requirements") or []) if r.get("source") == "salvage"]
             if _salv:
                 log.warning("Spec salvage: %d قابلیت خارج از کاتالوگ به catalog_missing تبدیل شد: %s",
@@ -3078,9 +3169,10 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
                     "\nاصلاح دقیق و الزامی: "
                     "۱) features فقط با شناسه‌های واقعی کاتالوگ (همان فهرست بالا)؛ قابلیتی که در کاتالوگ نیست را هرگز در features ننویس — "
                     "آن خواسته را در requirements با status=catalog_missing و دلیل صادقانه ثبت کن. "
-                    "۲) features هیچ‌وقت خالی یا حذف‌شده نیست؛ برای هر بخش قابل‌اجرا حداقل یک قابلیت واقعی کاتالوگ انتخاب کن. "
-                    "۳) هر نیازمندی covered باید با کلید req به شناسهٔ واقعی یکی از همان features وصل باشد. "
-                    "همان درخواست را دوباره و فقط به‌صورت JSON بده."}]
+                    "۲) هیچ خواسته‌ای را با start_menu/about/support یا قابلیت عمومی دیگری جایگزین نکن. "
+                    "۳) هر نیازمندی covered باید با features و req به یک ماژول واقعاً مرتبط وصل باشد؛ اگر ماژول متناظر در کاتالوگ هست حتماً آن را انتخاب کن. "
+                    "۴) اگر یک نیازمندی مستقل قابل اجرا نیست، همان نیازمندی را صادقانه catalog_missing یا در صورت وجود اثبات قطعی engine_limit ثبت کن. "
+                    "همان درخواست کامل را دوباره و فقط به‌صورت JSON بده."}]
         except ThinkLang:
             raise
         except Exception as e:                     # خطای ارائه‌دهنده/شبکه: فقط مدل‌های جایگزین، نه حلقه
@@ -3098,7 +3190,7 @@ def _spec_checkpoint(cb, prompt, current, sp, phase, last_error="", coverage=Non
     if not (cb and getattr(cb, "jid", None)):
         return
     try:
-        st = {"version": 2, "spec": sp, "request_hash": _task_hash(prompt),
+        st = {"version": 3, "spec": sp, "request_hash": _task_hash(prompt),
               "base_hash": _task_hash(current) if isinstance(current, dict) else "new",
               "phase": phase, "last_error": str(last_error or "")[:400], "t": _core_now()}
         if coverage:
@@ -3115,7 +3207,7 @@ def _load_spec_checkpoint(cb, prompt, current):
     try:
         j = db.jobs.find_one({"_id": cb.jid}, {"build_state": 1}) or {}
         st = j.get("build_state") or {}
-        if (st.get("version") != 2 or not isinstance(st.get("spec"), dict)
+        if (st.get("version") != 3 or not isinstance(st.get("spec"), dict)
                 or st.get("request_hash") != _task_hash(prompt)):
             return None
         base = _task_hash(current) if isinstance(current, dict) else "new"
@@ -3186,8 +3278,12 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         # (خواستهٔ نیمه‌منطبق)، روتر نباید شورت‌سیکت کند؛ درک کامل با مدل انجام می‌شود تا
         # هیچ خواسته‌ای بی‌صدا گم نشود (ریشهٔ ربات‌های ناقص).
         _partial = [i for i, s in (pr.scores or {}).items() if 0 < s < 1.0 and i not in pr.ids]
-        router_ok = bool(pr.items) and pr.confidence >= 0.35 and not _partial \
-            and getattr(pr, "rest_ratio", 1.0) >= 0.4
+        # A keyword router may short-circuit only when it explains most of the request.
+        # Mixed requests must go through requirement extraction instead of silently losing clauses.
+        # Regex routing is only safe for nearly fully explained requests. A lower threshold
+        # lets one recognized keyword hide secondary requirements and causes generic builds.
+        router_ok = bool(pr.items) and pr.confidence >= 0.50 and not _partial \
+            and getattr(pr, "rest_ratio", 1.0) >= 0.95
         if current is not None and not _planner.is_additive(prompt):
             router_ok = False
         if router_ok:
@@ -3199,14 +3295,30 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
             sp = ask_spec(prompt, lang, acc, current)      # در شکست کامل، خطای صریح با علت واقعی
         _spec_checkpoint(cb, prompt, current, sp, "spec_ready")
 
-        # ── ۳.۵) کنترل پوشش نیازمندی‌ها (قبل از کامپایل): خواستهٔ اجرا‌نشده قبل از ساخت اعلام و تصمیم با کاربر است ──
-        import coverage as _cov
-        _unmet = _cov.unmet_items(sp, prompt)
-        if _unmet and not _accepted_unmet(cb, [u.get("want") or "" for u in _unmet]):
-            log.info("coverage gate: %d unmet requirement(s): %s", len(_unmet), [u.get("kind") for u in _unmet])
-            raise PreflightReview(_unmet)
-        if _unmet:
-            log.info("coverage gate: user previously accepted these limitations; continuing")
+    # Reconcile checkpoints as well as fresh Specs; this is generic catalog matching,
+    # not a feature-specific hardcode or a new capability.
+    import coverage as _cov
+    recovered = _cov.reconcile_spec(sp, prompt)
+    if recovered:
+        log.warning("Recovered catalog modules before coverage gate: %s", recovered)
+        _spec_checkpoint(cb, prompt, current, sp, "spec_reconciled")
+
+    # ── کنترل پوشش نیازمندی‌ها: هیچ خواستهٔ اصلی با بخش عمومی جایگزین نمی‌شود ──
+    _unmet = _cov.unmet_items(sp, prompt)
+    if _unmet and not _accepted_unmet(cb, [u.get("want") or "" for u in _unmet]):
+        log.info("coverage gate: %d unmet requirement(s): %s", len(_unmet), [u.get("kind") for u in _unmet])
+        raise PreflightReview(_unmet)
+    if _unmet:
+        log.info("coverage gate: user previously accepted these limitations; continuing")
+
+    # Never deliver an empty/general shell when none of the user's actual requirements
+    # maps to a meaningful registered capability. A technical start node is not coverage.
+    covered_requirements = _cov.covered_requirements(sp)
+    if sp.get("requirements") and not covered_requirements:
+        # Even if the user accepts a limitation, never produce an unrelated shell.
+        # Partial builds are allowed only when at least one real requirement is covered.
+        raise PreflightReview(_unmet or [{"kind": "CATALOG_MISSING", "want": prompt,
+            "why": "هیچ‌یک از نیازمندی‌های اصلی با قابلیت واقعی و مرتبط پوشش داده نشده است؛ ساخت خروجی عمومی یا نامرتبط ممنوع است."}])
 
     # ── ۴) کامپایلر قطعی ──
     if cb:

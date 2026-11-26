@@ -26,6 +26,7 @@ engine.py — موتور اجرای ربات‌های ساخته‌شده (وا�
 """
 
 import html as _html
+import copy
 import re, time, hashlib, random, threading, json
 from urllib.parse import quote, urlparse
 from datetime import datetime, timedelta
@@ -1410,7 +1411,8 @@ def mod_command(bot, bot_id, token, cfg, mod, msg, cmd, args, admin):
             cur.append(args[0])
         elif cmd == "unlock" and args[0] in cur:
             cur.remove(args[0])
-        db.bots.update_one({"_id": bot["_id"]}, {"$set": {"config.mod.lock": cur}})
+        db.groups.update_one({"_id": f"{bot_id}:{chat}"},
+                             {"$set": {"bot": bot_id, "chat": chat, "mod_settings.lock": cur}}, upsert=True)
         say(("قفل «%s» فعال شد." if cmd == "lock" else "قفل «%s» برداشته شد.") % MOD_LOCKS[args[0]])
 
 
@@ -1424,14 +1426,329 @@ def _glog(bot_id, chat, user, msg):
         pass
 
 
+
+def group_mod_config(bot_id, chat_id, cfg):
+    """تنظیمات مؤثر مدیریت برای یک گروه؛ تنظیمات گروه بر پیش‌فرض ربات اولویت دارد."""
+    base = copy.deepcopy((cfg or {}).get("mod") or {})
+    try:
+        doc = db.groups.find_one({"_id": f"{bot_id}:{chat_id}"}, {"mod_settings": 1}) or {}
+        saved = doc.get("mod_settings") or {}
+    except Exception:
+        log.exception("group settings load failed")
+        saved = {}
+    if "captcha_on" in saved:
+        if saved.get("captcha_on"):
+            cp = copy.deepcopy(base.get("captcha") or {"mins": 3})
+            cp["on"] = True
+            base["captcha"] = cp
+        else:
+            base["captcha"] = None
+    elif isinstance(base.get("captcha"), dict) and not base["captcha"].get("on", True):
+        base["captcha"] = None
+    if "flood_on" in saved:
+        base["flood"] = (base.get("flood") or {"n": 6, "secs": 8}) if saved.get("flood_on") else None
+    if isinstance(saved.get("lock"), list):
+        base["lock"] = list(dict.fromkeys(x for x in saved["lock"] if x in MOD_LOCKS))
+    if "report" in saved:
+        base["report"] = bool(saved.get("report"))
+    if "clean_join" in saved or "clean_leave" in saved:
+        clean = set(base.get("clean") or [])
+        for key, value in (("join", saved.get("clean_join")), ("leave", saved.get("clean_leave"))):
+            if value is True:
+                clean.add(key)
+            elif value is False:
+                clean.discard(key)
+        base["clean"] = sorted(clean)
+    for key in ("welcome", "rules"):
+        if isinstance(saved.get(key), str):
+            base[key] = saved[key]
+    return base
+
+
+def _group_settings_authorized(token, chat_id, uid):
+    """فقط مدیر/سازندهٔ واقعی همان گروه مجاز به تنظیمات خصوصی آن است؛ خود ربات نیز باید ادمین باشد."""
+    try:
+        me = tg(token, "getMe")
+        bot_uid = (me.get("result") or {}).get("id") if me.get("ok") else None
+        if not bot_uid:
+            return False, "هویت ربات از تلگرام قابل تأیید نیست."
+        bot_member = tg(token, "getChatMember", chat_id=chat_id, user_id=bot_uid)
+        bot_status = (bot_member.get("result") or {}).get("status") if bot_member.get("ok") else ""
+        if bot_status not in ("administrator", "creator"):
+            return False, "ابتدا ربات را در گروه ادمین کن تا تنظیمات مدیریت فعال شوند."
+        member = tg(token, "getChatMember", chat_id=chat_id, user_id=uid)
+        status = (member.get("result") or {}).get("status") if member.get("ok") else ""
+        if status not in ("administrator", "creator"):
+            return False, "فقط مدیران همان گروه می‌توانند تنظیمات آن را تغییر دهند."
+        return True, ""
+    except Exception:
+        log.exception("group settings permission check failed")
+        return False, "بررسی دسترسی مدیر گروه فعلاً ممکن نیست؛ دوباره تلاش کن."
+
+
+def _group_settings_required_permission(token, chat_id, key):
+    """هنگام روشن‌کردن گزینه، تمام مجوزهای واقعی تلگرام را پیش از ذخیره بررسی می‌کند."""
+    required = {
+        "captcha": (("can_restrict_members",), "برای کپچا، ربات باید مجوز محدودکردن اعضا داشته باشد."),
+        "flood": (("can_delete_messages", "can_restrict_members"),
+                  "برای ضداسپم، ربات باید مجوز حذف پیام‌ها و محدودکردن اعضا داشته باشد."),
+        "link": (("can_delete_messages", "can_restrict_members"),
+                 "برای قفل لینک، ربات باید مجوز حذف پیام‌ها و محدودکردن کاربران را داشته باشد."),
+        "forward": (("can_delete_messages", "can_restrict_members"),
+                    "برای قفل فوروارد، ربات باید مجوز حذف پیام‌ها و محدودکردن کاربران را داشته باشد."),
+        "join_clean": (("can_delete_messages",), "برای حذف پیام ورود، ربات باید مجوز حذف پیام‌ها داشته باشد."),
+        "leave_clean": (("can_delete_messages",), "برای حذف پیام خروج، ربات باید مجوز حذف پیام‌ها داشته باشد."),
+    }
+    item = required.get(key)
+    if not item:
+        return ""
+    try:
+        me = tg(token, "getMe")
+        bot_uid = (me.get("result") or {}).get("id") if me.get("ok") else None
+        if not bot_uid:
+            return "مجوزهای ربات از تلگرام قابل بررسی نیستند؛ دوباره تلاش کن."
+        member = tg(token, "getChatMember", chat_id=chat_id, user_id=bot_uid)
+        data = member.get("result") or {}
+        if not member.get("ok"):
+            return "دریافت مجوزهای ربات از تلگرام ناموفق بود؛ دسترسی ربات را بررسی کن."
+        if data.get("status") == "creator":
+            return ""
+        missing = [permission for permission in item[0] if data.get(permission) is not True]
+        return item[1] if missing else ""
+    except Exception:
+        log.exception("group settings bot permission check failed")
+        return "بررسی مجوزهای ربات ناموفق بود؛ دوباره تلاش کن."
+
+
+def _group_settings_values(bot_id, chat_id, cfg):
+    mod = (cfg or {}).get("mod") or {}
+    doc = db.groups.find_one({"_id": f"{bot_id}:{chat_id}"}) or {}
+    saved = doc.get("mod_settings") or {}
+    eff = group_mod_config(bot_id, chat_id, cfg)
+    locks = set(eff.get("lock") or [])
+    clean = set(eff.get("clean") or [])
+    return doc, {
+        "captcha": bool(eff.get("captcha") and eff.get("captcha", {}).get("on", True)),
+        "flood": bool(eff.get("flood")),
+        "link": "link" in locks, "forward": "forward" in locks,
+        "report": bool(eff.get("report")), "join_clean": "join" in clean,
+        "leave_clean": "leave" in clean,
+        "welcome": eff.get("welcome") or "", "rules": eff.get("rules") or "",
+    }, saved
+
+
+def _group_settings_markup(chat_id, values):
+    def button(key, label):
+        return {"text": f"{'✅' if values[key] else 'خاموش'} {label}", "callback_data": f"gs:t:{chat_id}:{key}"}
+    return {"inline_keyboard": [
+        [button("captcha", "کپچا"), button("flood", "ضداسپم")],
+        [button("link", "قفل لینک"), button("forward", "قفل فوروارد")],
+        [button("join_clean", "حذف پیام ورود"), button("leave_clean", "حذف پیام خروج")],
+        [button("report", "گزارش به مدیران")],
+        [{"text": "ویرایش پیام خوش‌آمد", "callback_data": f"gs:e:{chat_id}:welcome"},
+         {"text": "ویرایش قوانین", "callback_data": f"gs:e:{chat_id}:rules"}],
+        [{"text": "انتخاب گروه دیگر", "callback_data": "gs:list"}],
+    ]}
+
+
+def _group_settings_show(token, bot_id, user_chat, chat_id, cfg, message_id=None):
+    doc, values, _saved = _group_settings_values(bot_id, chat_id, cfg)
+    title = _html.escape(str(doc.get("title") or chat_id))
+    text = (f"<b>تنظیمات مدیریت گروه</b>\n{title}\n\n"
+            "وضعیت گزینه‌ها را از دکمه‌های زیر تغییر بده. این تنظیمات فقط برای همین گروه ذخیره می‌شوند.")
+    markup = _group_settings_markup(chat_id, values)
+    if message_id:
+        r = tg_html(token, "editMessageText", chat_id=user_chat, message_id=message_id,
+                    text=text, reply_markup=markup, disable_web_page_preview=True)
+        if not r.get("ok"):
+            tg_html(token, "sendMessage", chat_id=user_chat, text=text, reply_markup=markup)
+    else:
+        tg_html(token, "sendMessage", chat_id=user_chat, text=text, reply_markup=markup)
+
+
+def _group_settings_list(token, bot_id, user_chat, uid, cfg, message_id=None):
+    # فهرست فقط باید گروه‌هایی را نشان دهد که خود کاربر مدیر آن‌هاست؛
+    # نمایش نام/شناسه گروه‌های دیگر کاربران در PV مجاز نیست.
+    candidates = list(db.groups.find({"bot": bot_id, "type": {"$in": ["group", "supergroup"]}}).sort("title", 1).limit(100))
+    groups = []
+    for group in candidates:
+        try:
+            chat_id = int(group.get("chat"))
+            member = tg(token, "getChatMember", chat_id=chat_id, user_id=uid)
+            status = (member.get("result") or {}).get("status") if member.get("ok") else ""
+        except Exception:
+            log.exception("group settings list membership check failed")
+            continue
+        # فقط نام گروه‌هایی نمایش داده شود که کاربر در همان گروه مدیر/سازنده است.
+        # دسترسی ربات نیز هنگام بازکردن صفحه و پیش از هر تغییر دوباره بررسی می‌شود.
+        if status in ("administrator", "creator"):
+            groups.append(group)
+        if len(groups) >= 30:
+            break
+    rows = [[{"text": (str(g.get("title") or g.get("chat"))[:45]),
+              "callback_data": f"gs:o:{int(g['chat'])}"}] for g in groups]
+    if not rows:
+        body = "گروهی که هم ربات و هم شما در آن دسترسی مدیر داشته باشید پیدا نشد. ابتدا ربات را به گروه اضافه و ادمین کن؛ سپس از حساب مدیر همان گروه /groups را بفرست."
+        if message_id:
+            tg(token, "editMessageText", chat_id=user_chat, message_id=message_id, text=body)
+        else:
+            tg(token, "sendMessage", chat_id=user_chat, text=body)
+        return
+    body = "<b>گروه‌های متصل</b>\nگروهی را برای تنظیمات انتخاب کن:"
+    markup = {"inline_keyboard": rows}
+    if message_id:
+        tg_html(token, "editMessageText", chat_id=user_chat, message_id=message_id, text=body, reply_markup=markup)
+    else:
+        tg_html(token, "sendMessage", chat_id=user_chat, text=body, reply_markup=markup)
+
+
+def _group_settings_callback(bot, bot_id, token, cfg, cq):
+    data = str(cq.get("data") or "")
+    msg = cq.get("message") or {}
+    user = cq.get("from") or {}
+    user_chat = (msg.get("chat") or {}).get("id")
+    uid = user.get("id")
+    mid = msg.get("message_id")
+    ans = lambda **kw: tg(token, "answerCallbackQuery", callback_query_id=cq["id"], **kw)
+    if not user_chat or not uid or (msg.get("chat") or {}).get("type") != "private" or int(user_chat) != int(uid):
+        return ans(text="این تنظیمات فقط در گفت‌وگوی خصوصی قابل استفاده است.", show_alert=True)
+    if data == "gs:list":
+        ans()
+        return _group_settings_list(token, bot_id, user_chat, uid, cfg, mid)
+    parts = data.split(":")
+    if len(parts) < 3:
+        return ans(text="گزینه نامعتبر است.", show_alert=True)
+    try:
+        chat_id = int(parts[2])
+    except (TypeError, ValueError):
+        return ans(text="شناسه گروه نامعتبر است.", show_alert=True)
+    doc = db.groups.find_one({"_id": f"{bot_id}:{chat_id}", "bot": bot_id})
+    if not doc or doc.get("type") not in ("group", "supergroup"):
+        return ans(text="این گروه دیگر به ربات متصل نیست.", show_alert=True)
+    allowed, reason = _group_settings_authorized(token, chat_id, uid)
+    if not allowed:
+        return ans(text=reason, show_alert=True)
+    if parts[1] == "o":
+        ans()
+        return _group_settings_show(token, bot_id, user_chat, chat_id, cfg, mid)
+    if parts[1] == "t" and len(parts) == 4:
+        key = parts[3]
+        _doc, values, saved = _group_settings_values(bot_id, chat_id, cfg)
+        if key in ("captcha", "flood", "link", "forward", "report", "join_clean", "leave_clean"):
+            current = bool(values[key])
+            turning_on = not current
+            field = {"captcha": "captcha_on", "flood": "flood_on", "report": "report",
+                     "join_clean": "clean_join", "leave_clean": "clean_leave"}.get(key)
+            if key in ("link", "forward"):
+                locks = set(saved.get("lock", (cfg.get("mod") or {}).get("lock") or []))
+                if current:
+                    locks.discard(key)
+                else:
+                    locks.add(key)
+                value = sorted(locks)
+                field = "lock"
+            else:
+                value = not current
+            if turning_on:
+                permission_error = _group_settings_required_permission(token, chat_id, key)
+                if permission_error:
+                    return ans(text=permission_error, show_alert=True)
+            db.groups.update_one({"_id": f"{bot_id}:{chat_id}"},
+                                 {"$set": {f"mod_settings.{field}": value,
+                                           "bot": bot_id, "chat": chat_id}}, upsert=True)
+            ans(text="تنظیم ذخیره شد.")
+            return _group_settings_show(token, bot_id, user_chat, chat_id, cfg, mid)
+    if parts[1] == "e" and len(parts) == 4 and parts[3] in ("welcome", "rules"):
+        field = parts[3]
+        state_id = f"gset:{bot_id}:{uid}"
+        db.states.replace_one({"_id": state_id}, {"_id": state_id,
+            "gset": {"chat": chat_id, "field": field}, "t": now()}, upsert=True)
+        ans()
+        label = "پیام خوش‌آمد" if field == "welcome" else "قوانین گروه"
+        tg(token, "sendMessage", chat_id=user_chat,
+           text=f"متن جدید {label} را بفرست. برای لغو /cancel را ارسال کن.")
+        return
+    return ans(text="این گزینه شناخته نشد.", show_alert=True)
+
+
+def _group_settings_message(bot, bot_id, token, cfg, msg, text):
+    user = msg.get("from") or {}
+    uid, user_chat = user.get("id"), msg.get("chat", {}).get("id")
+    state_id = f"gset:{bot_id}:{uid}"
+    state = db.states.find_one({"_id": state_id}) if uid else None
+    if state and isinstance(state.get("gset"), dict):
+        gs = state["gset"]
+        # حالت ویرایش نباید برای همیشه فعال بماند و پیام‌های عادی بعدی را ببلعد.
+        try:
+            started = state.get("t")
+            current = now()
+            if isinstance(started, datetime) and started.tzinfo is None:
+                current = naive(current)  # MongoDB پیش‌فرض datetimeهای UTC را بدون tzinfo برمی‌گرداند.
+            if not isinstance(started, datetime) or (current - started).total_seconds() > 15 * 60:
+                db.states.delete_one({"_id": state_id})
+                tg(token, "sendMessage", chat_id=user_chat,
+                   text="مهلت ویرایش تنظیمات تمام شد؛ برای شروع دوباره از /groups استفاده کن.")
+                return True
+        except Exception:
+            db.states.delete_one({"_id": state_id})
+            return True
+        if text.strip().lower() in ("/cancel", "cancel", "لغو"):
+            db.states.delete_one({"_id": state_id})
+            tg(token, "sendMessage", chat_id=user_chat, text="ویرایش لغو شد.")
+            return True
+        try:
+            chat_id, field = int(gs.get("chat")), gs.get("field")
+        except (TypeError, ValueError):
+            db.states.delete_one({"_id": state_id})
+            return True
+        doc = db.groups.find_one({"_id": f"{bot_id}:{chat_id}", "bot": bot_id})
+        allowed, reason = _group_settings_authorized(token, chat_id, uid) if doc else (False, "گروه دیگر متصل نیست.")
+        if not allowed:
+            db.states.delete_one({"_id": state_id})
+            tg(token, "sendMessage", chat_id=user_chat, text=reason)
+            return True
+        if field not in ("welcome", "rules"):
+            db.states.delete_one({"_id": state_id})
+            return True
+        value = str(text or "").strip()
+        if value.startswith("/"):
+            tg(token, "sendMessage", chat_id=user_chat, text="برای لغو /cancel را بفرست؛ متن تنظیم را بدون دستور شروع‌شونده با / ارسال کن.")
+            return True
+        if not value:
+            tg(token, "sendMessage", chat_id=user_chat, text="متن خالی پذیرفته نیست؛ متن را دوباره بفرست یا /cancel کن.")
+            return True
+        max_length = 500 if field == "rules" else 300
+        if len(value) > max_length:
+            tg(token, "sendMessage", chat_id=user_chat,
+               text=f"متن بیش از حد طولانی است؛ حداکثر {max_length} نویسه مجاز است. متن را کوتاه‌تر بفرست یا /cancel کن.")
+            return True
+        value = _html.escape(value)
+        db.groups.update_one({"_id": f"{bot_id}:{chat_id}"},
+                             {"$set": {f"mod_settings.{field}": value}}, upsert=True)
+        db.states.delete_one({"_id": state_id})
+        tg(token, "sendMessage", chat_id=user_chat, text="تنظیمات این گروه ذخیره شد.")
+        _group_settings_show(token, bot_id, user_chat, chat_id, cfg)
+        return True
+    command = text.strip().split(maxsplit=1)[0].split("@")[0].lower() if text.strip() else ""
+    if command in ("/groups", "/group_settings"):
+        if not cfg.get("mod"):
+            tg(token, "sendMessage", chat_id=user_chat, text="مدیریت گروه برای این ربات فعال نیست.")
+            return True
+        _group_settings_list(token, bot_id, user_chat, uid, cfg)
+        return True
+    return False
+
 def mod_group(bot, bot_id, token, cfg, msg):
-    mod, chat, user = cfg["mod"], msg["chat"]["id"], msg.get("from") or {}
+    chat = msg["chat"]["id"]
+    mod, user = group_mod_config(bot_id, chat, cfg), msg.get("from") or {}
     uid = user.get("id", 0)
     if (bot_id, chat) not in MOD_SEEN:
         if len(MOD_SEEN) > 20000:
             MOD_SEEN.clear()
         MOD_SEEN.add((bot_id, chat))
-        db.groups.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"bot": bot_id, "chat": chat, "title": str(msg["chat"].get("title") or "")[:80], "t": now()}}, upsert=True)
+        db.groups.update_one({"_id": f"{bot_id}:{chat}"}, {"$set": {"bot": bot_id, "chat": chat,
+                         "title": str(msg["chat"].get("title") or "")[:80],
+                         "type": msg["chat"].get("type") or "supergroup", "t": now()}}, upsert=True)
     clean = mod.get("clean") or []
     if msg.get("new_chat_members"):
         if "join" in clean:
@@ -1724,7 +2041,7 @@ def mod_join(bot, bot_id, token, mod, msg, u):
     chat = msg["chat"]["id"]
     title = plain_html(msg["chat"].get("title") or "")
     cp = mod.get("captcha")
-    if cp:
+    if cp and cp.get("on", True):
         r = tg(token, "restrictChatMember", chat_id=chat, user_id=u["id"], permissions=MOD_NOPERM)
         if r.get("ok"):
             kb = {"inline_keyboard": [[{"text": "من ربات نیستم ✅", "callback_data": f"cp:{u['id']}"}]]}
@@ -1738,9 +2055,9 @@ def mod_join(bot, bot_id, token, mod, msg, u):
 
 
 def mod_captcha_cb(bot, bot_id, token, cfg, cq):
-    mod = cfg.get("mod") or {}
     m = cq.get("message") or {}
     chat, uid = (m.get("chat") or {}).get("id"), cq["from"]["id"]
+    mod = group_mod_config(bot_id, chat, cfg)
     ans = lambda **kw: tg(token, "answerCallbackQuery", callback_query_id=cq["id"], **kw)
     try:
         target = int(str(cq.get("data", ""))[3:])
@@ -2686,10 +3003,15 @@ def sync_commands(bot, cfg):
         tg(token, "setMyCommands", commands=base)
         try:
             staff_cmds = base + [{"command": "tickets", "description": "تیکت‌های باز"}]
+            if cfg.get("mod"):
+                staff_cmds.append({"command": "groups", "description": "تنظیمات گروه‌های متصل"})
             owner_cmds = staff_cmds + ([{"command": "payments", "description": "آخرین پرداخت‌ها"}] if has_pay(cfg) else [])
             for sid in staff_ids(bot):
                 tg(token, "setMyCommands", commands=owner_cmds if sid == bot["owner"] else staff_cmds,
                    scope={"type": "chat", "chat_id": sid})
+            if cfg.get("mod"):
+                tg(token, "setMyCommands", commands=base + [{"command": "groups", "description": "تنظیمات گروه‌های متصل"}],
+                   scope={"type": "all_private_chats"})
             ensure_webhook(bot, cfg)
             if cfg.get("mod"):
                 tg(token, "setMyCommands", commands=MOD_CMDS_ADMIN, scope={"type": "all_chat_administrators"})
@@ -2784,12 +3106,17 @@ def sub_hook(bot_id):
                     staff_commands = ([{"command": "start", "description": "شروع"}]
                                       + [{"command": c, "description": c} for c in cfg["commands"]]
                                       + [{"command": "tickets", "description": "تیکت‌های باز"}])
+                    if cfg.get("mod"):
+                        staff_commands.append({"command": "groups", "description": "تنظیمات گروه‌های متصل"})
                     tg(token, "setMyCommands", commands=staff_commands,
                        scope={"type": "chat", "chat_id": actor["id"]})
                 except Exception:
                     log.exception("initial username staff command scope failed")
         if cq:
             data, user, m = cq.get("data", ""), cq.get("from", {}), cq.get("message") or {}
+            if str(data).startswith("gs:"):
+                _group_settings_callback(bot, bot_id, token, cfg, cq)
+                return "ok"
             chat_id = (m.get("chat") or {}).get("id")
             if not chat_id:
                 tg(token, "answerCallbackQuery", callback_query_id=cq["id"])
@@ -2922,6 +3249,8 @@ def sub_hook(bot_id):
         text = (msg.get("text") or "").strip()
         env = Env(bot, token, chat_id, user, text=text)
         env.is_new = is_new
+        if cfg.get("mod") and _group_settings_message(bot, bot_id, token, cfg, msg, text):
+            return "ok"
         if msg.get("successful_payment"):                           # پرداخت موفق همیشه پردازش می‌شه (حتی بدون عضویت اجباری)
             if str((msg.get("successful_payment") or {}).get("invoice_payload") or "").startswith("ap|"):
                 app_paid(env, msg)                                  # پرداخت بلوک pay مینی‌اپ

@@ -245,7 +245,19 @@ _reg_contract(_cap("group.moderation", "مدیریت گروه و کانال", "r
                   {"mod": ["captcha", "lock", "flood", "warn"], "commands": ["/ban /mute /warn /pin"]},
                   {"welcome": "text", "rules": "text"}, {"mod": "کانفیگ مدیریتی"},
                   ["ربات باید ادمین گروه باشد"], ["—"], ["join.gate"],
-                  module="group_manager", acceptance=["tests/test_modules.py::group_manager"]))
+                  module="group_manager", acceptance=["tests/test_modules.py::test_group_manager", "engine_accept.run_acceptance:group_manager"]))
+_reg_contract(_cap("group.settings.private", "تنظیمات خصوصی گروه", "ready", "3.6.2",
+                  {"commands": ["/groups", "/group_settings"],
+                   "telegram_api": ["getMe", "getChatMember"],
+                   "storage": ["db.groups.mod_settings"]},
+                  {"group": "شناسه گروهی که مدیر آن است", "settings": ["captcha", "flood", "lock", "report", "welcome", "rules"]},
+                  {"private_menu": "انتخاب گروه و تنظیمات مستقل هر گروه"},
+                  ["ربات باید ادمین گروه و کاربر باید مدیر همان گروه باشد"], ["—"], ["group.moderation"],
+                  module="group_manager", acceptance=["tests/test_group_settings.py::test_group_settings_are_isolated",
+                  "tests/test_group_settings.py::test_group_settings_authorization_contract",
+                  "tests/test_group_settings.py::test_group_list_only_exposes_authorized_groups",
+                  "tests/test_group_settings.py::test_group_settings_edit_accepts_mongo_utc_naive_timestamp",
+                  "engine_accept.run_acceptance:group_manager"]))
 _reg_contract(_cap("join.gate", "جوین اجباری", "ready", "3.5.0",
                   {"join": ["channels", "text"], "tg": ["getChatMember"]},
                   {"channels": "کانال‌ها"}, {"join": "دروازهٔ عضویت"},

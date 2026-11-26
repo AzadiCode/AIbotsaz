@@ -210,7 +210,7 @@ def _():
     sp = _spec.validate_spec({"version": 1, "intent": "create", "name": "x", "features": [{"type": "dice"}]})
     JID = "job_ck"
     core.db.jobs.insert_one({"_id": JID, "uid": "u1", "status": "error", "build_state": {
-        "version": 2, "spec": sp, "request_hash": ai._task_hash("یک درخواست ثابت"),
+        "version": 3, "spec": sp, "request_hash": ai._task_hash("یک درخواست ثابت"),
         "base_hash": "new", "phase": "spec_ready"}, "prompt": "یک درخواست ثابت", "t": core.now()})
 
     class _CB:
@@ -230,7 +230,7 @@ def _():
                               "features": [{"type": "quiz"}]})
     JID2 = "job_resume"
     core.db.jobs.insert_one({"_id": JID2, "uid": "u1", "status": "running", "build_state": {
-        "version": 2, "spec": sp, "request_hash": ai._task_hash("ادامه درخواست"),
+        "version": 3, "spec": sp, "request_hash": ai._task_hash("ادامه درخواست"),
         "base_hash": "new", "phase": "spec_ready"}, "prompt": "ادامه درخواست", "t": core.now()})
 
     class _CB:
