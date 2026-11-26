@@ -958,16 +958,20 @@ def mother_callback(cq):
             # تأیید قبل از ساخت: همان برنامهٔ ذخیره‌شده ادامه پیدا می‌کند (برنامه‌ریزی دوباره انجام نمی‌شود)
             st2 = mk_get(uid) or {}
             prompt2 = job.get("prompt") or st2.get("prompt") or ""
-            reserve = reserve_cost(prompt2, None, uid)
+            bot_id2 = job.get("bot_id") or None
+            bot2 = db.bots.find_one({"_id": ObjectId(bot_id2), "owner": uid}) if bot_id2 else None
+            reserve = reserve_cost(prompt2, bot2["config"] if bot2 else None, uid)
             if balance(uid) < reserve:
                 return ack(f"موجودی کافی نیست؛ برای ساخت تا سقف {reserve} توکن لازم است.", True)
             changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
-                {"$set": {"status": "running", "preflight_ok": True, "t": now()}, "$unset": {"error": ""}})
+                {"$set": {"status": "running", "preflight_ok": True,
+                          "accepted_gaps": [str(x.get("want") or "") for x in (job.get("gaps") or []) if isinstance(x, dict)],
+                          "t": now()}, "$unset": {"error": ""}})
             if not changed:
                 return ack("این درخواست قبلاً پردازش شده است.", True)
             mk_put(uid, step="building", job=jid)
             ack("ساخت شروع شد.")
-            threading.Thread(target=gen_job, args=(jid, uid, None, prompt2, reserve), daemon=True).start()
+            threading.Thread(target=gen_job, args=(jid, uid, bot_id2, prompt2, reserve), daemon=True).start()
             mk_show(uid, chat, mk_progress_text({"prog": {"p": 2, "st": "analyze"}}, 0))
             threading.Thread(target=mk_watch, args=(uid, chat, jid), daemon=True).start()
             return None
@@ -1258,6 +1262,10 @@ def gen_job(jid, uid, bot_id, prompt, reserve):
             thinking, cfg, ideas = ask_llm(prompt, bot["config"] if bot else None, media_list(uid), acc, nodes_cap=limits_of(uid)["nodes"])
         except PreflightReview as pr:
             # قبل از تلف‌کردن زمان و توکن: محدودیت‌ها را همین حالا به کاربر بگو و تصمیمش را بپرس
+            try:
+                report_gaps(uid, bot, prompt, list(pr.limits or []))
+            except Exception:
+                log.exception("preflight gap report failed")
             db.jobs.find_one_and_update({"_id": jid, "status": "running"}, {"$set": {
                 "status": "review", "preflight": True, "gaps": pr.limits, "prompt": prompt, "cost": 0, "t_review": now()}})
             return

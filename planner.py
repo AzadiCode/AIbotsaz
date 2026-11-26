@@ -21,6 +21,8 @@ class PlanResult:
         self.emoji = False
         self.payments = False
         self.scores = {}
+        self.matched = {}        # module_id → کلیدواژه‌های واقعاً منطبق در درخواست (ردپای نیازمندی برای coverage)
+        self.rest_ratio = 1.0    # سهم توضیح‌شدن درخواست با قابلیت‌های انتخاب‌شده (۱ = کامل)
         self.confidence = 0.0
 
     @property
@@ -156,14 +158,20 @@ def plan_request(prompt, name=None, emoji=None, payments=False):
     t = normalize_text(prompt)
     pr = PlanResult()
     scores = {}
+    matched = {}
     for mid, m in MODULES.items():
         s = 0.0
         for rx, w in m.triggers:
             n = len(re.findall(rx, t, flags=re.I))
             if n:
                 s += w * min(n, 3) / (1 if n == 1 else 1.6)
+                mm = re.search(rx, t, flags=re.I)
+                if mm:
+                    matched.setdefault(mid, []).append(mm.group(0)[:40])
         if s:
             scores[mid] = s
+    pr.scores = scores
+    pr.matched = matched
     chosen = {i for i, s in scores.items() if s >= 1.0}
     # وابستگی‌ها
     changed = True
@@ -177,7 +185,6 @@ def plan_request(prompt, name=None, emoji=None, payments=False):
     # کیف تنها بدون قابلیتی که از آن استفاده کند بی‌معنی است
     if chosen == {"wallet"}:
         chosen = set()
-    pr.scores = scores
     ordered = sorted(chosen, key=lambda i: MODULES[i].prio)
     ex = _extract(t, set(ordered))
     for i in ordered:
@@ -189,6 +196,7 @@ def plan_request(prompt, name=None, emoji=None, payments=False):
     if "wheel" in plans and "sponsor" in plans and plans["wheel"]["per_joins"] == 0:
         plans["wheel"]["per_joins"] = 40 if re.search(r"هر\s*40\s*(کانال|جوین)", t) else 10
     pr.name = _clean_text(name, 30) if name else _bot_name(t, ordered)
+    pr.rest_ratio = _rest_coverage(t, {i: matched.get(i) or [] for i in ordered})
     pr.emoji = bool(emoji) if emoji is not None else (bool(re.search(r"ایموجی", t)) and not re.search(r"بدون ایموجی|ایموجی نذار|ایموجی نداشته", t))
     pr.payments = bool(payments or re.search(r"ستاره|stars|پرداخت (آنی|درون)", t))
     pr.confidence = min(1.0, sum(min(scores.get(i, 0.6), 2.0) for i in ordered if i != "wallet") / 2.0) if ordered else 0.0
@@ -233,6 +241,26 @@ _EDIT_RX = re.compile(r"(حذف|پاک|عوض|تغییر|ویرایش|اصلاح
 def is_additive(prompt):
     t = normalize_text(prompt)
     return not _EDIT_RX.search(t)
+
+
+_STOP_RX = re.compile(r"\b(ربات|بساز|بسازید|درست|کنید|کن|بده|بذار|میخوام|می ?خوام|میخواهم|با|و|برای|که|را|رو|یه|یک|داشته|باشه|باشد|هم|همچنین|قابل|چه|چی|هر|از|به|در|تا|های|ها|خیلی|خوب|قشنگ|زیبا|کامل|دارای|دارنده)\b")
+
+
+def _rest_coverage(t, matched_chosen):
+    """سهم کلمات معنادار درخواست که با کلیدواژه‌های قابلیت‌های «واقعاً انتخاب‌شده» توضیح داده می‌شود.
+    کم بودن این نسبت یعنی درخواست خواسته‌هایی دارد که روتر ندیده؛ در آن حالت فهم کامل باید با مدل انجام شود
+    (تصمیم برنامه‌ریز بر پایهٔ ساختار نیازمندی‌ها، نه فقط امتیاز چند کلیدواژه)."""
+    words = [w for w in _STOP_RX.sub(" ", t).split() if len(w) >= 3]
+    if len(words) <= 1:
+        return 1.0                      # درخواست کوتاه: همان یکی ملاک است
+    mwords = set()
+    for kws in (matched_chosen or {}).values():
+        for kw in kws:
+            mwords.update(x for x in re.split(r"[\s،,]+", kw) if len(x) >= 3)
+    if not mwords:
+        return 0.0
+    hit = sum(1 for w in words if any(mw in w or w in mw for mw in mwords))
+    return hit / len(words)
 
 
 def _unique_id(base, taken):

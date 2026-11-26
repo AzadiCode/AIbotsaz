@@ -3025,30 +3025,36 @@ def _spec_current_summary(current):
 
 
 def ask_spec(prompt, lang="fa", acc=None, current=None):
-    """یک فراخوانی مدل برای تولید Spec؛ اگر JSON/Schema نامعتبر بود فقط یک مدل جایگزین؛
+    """یک فراخوانی مدل برای تولید Spec؛ اگر JSON/Schema/پوشش نامعتبر بود یک تلاش جایگزین با بازخورد خطاها؛
     اگر باز هم نامعتبر بود WizardNeeded (ویزارد بدون AI). خروجی مدل هرگز مستقیم وارد موتور نمی‌شود."""
     import spec as _spec
     cb = getattr(_prog, "cb", None)
     msgs = _spec.spec_prompt(prompt, _spec_current_summary(current), lang)
     last_err = None
-    for attempt in (0, 1):          # ۱) مدل ترجیحی  ۲) یک مدل جایگزین
+    for attempt in (0, 1):          # ۱) مدل ترجیحی  ۲) یک مدل جایگزین (با بازخورد خطاهای قبلی)
         try:
             if cb:
                 cb.stage("analyze", 14.0 + 4.0 * attempt)
-            txt, usage = llm_post(msgs, 1400, temperature=0.2, timeout=90,
+            txt, usage = llm_post(msgs, 2000, temperature=0.2, timeout=90,
                                   max_models=1 if attempt == 0 else None)
             if acc is not None:
                 _record_usage(acc, usage)
-            sp = _spec.parse_llm_spec(txt)          # JSON → Schema → Enum → پارامترها → وابستگی‌ها
+            sp = _spec.parse_llm_spec(txt)          # JSON → Schema → Enum → پارامترها → نیازمندی‌ها
             if cb:
                 cb.stage("analyze", 24.0)
-            log.info("Spec produced by model: features=%s", [f.get("type") for f in sp["features"]])
+            log.info("Spec produced by model: features=%s requirements=%d",
+                     [f.get("type") for f in sp["features"]], len(sp.get("requirements") or []))
             return sp
         except _spec.SpecError as e:
             last_err = e
             log.warning("Spec نامعتبر (تلاش %s): %s", attempt + 1, e.errors[:4])
             if cb:
                 cb.reject_last_model()
+            if attempt == 0:
+                # تلاش جایگزین کنترل‌شده: همان قرارداد + بازخورد دقیق خطاها؛ نیازمندی‌های حذف‌شده دوباره خواسته می‌شود
+                msgs = msgs + [{"role": "user", "content":
+                    "پاسخ قبلی این ایرادها را داشت: " + "؛ ".join(e.errors[:4]) +
+                    "\nهمان درخواست را دوباره و فقط به‌صورت JSON بده؛ همهٔ خواسته‌های کاربر در requirements باشند و هر covered به یک قابلیت انتخابی وصل شود."}]
         except ThinkLang:
             raise
         except Exception as e:                     # خطای ارائه‌دهنده/شبکه: فقط یک مدل جایگزین، نه حلقه
@@ -3058,15 +3064,17 @@ def ask_spec(prompt, lang="fa", acc=None, current=None):
                        % (("؛ ".join(last_err.errors[:3])) if isinstance(last_err, _spec.SpecError) else (str(last_err)[:160] or "JSON نامعتبر")))
 
 
-def _spec_checkpoint(cb, prompt, current, sp, phase, last_error=""):
+def _spec_checkpoint(cb, prompt, current, sp, phase, last_error="", coverage=None):
     """checkpoint مقاوم: Spec معتبر ذخیره می‌شود تا تعویض مدل/ادامهٔ کار از همان نقطه ممکن باشد."""
     if not (cb and getattr(cb, "jid", None)):
         return
     try:
-        db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {
-            "build_state": {"version": 2, "spec": sp, "request_hash": _task_hash(prompt),
-                            "base_hash": _task_hash(current) if isinstance(current, dict) else "new",
-                            "phase": phase, "last_error": str(last_error or "")[:400], "t": _core_now()}}})
+        st = {"version": 2, "spec": sp, "request_hash": _task_hash(prompt),
+              "base_hash": _task_hash(current) if isinstance(current, dict) else "new",
+              "phase": phase, "last_error": str(last_error or "")[:400], "t": _core_now()}
+        if coverage:
+            st["coverage"] = coverage
+        db.jobs.update_one({"_id": cb.jid, "status": {"$in": ["running", "saving"]}}, {"$set": {"build_state": st}})
     except Exception:
         log.exception("spec checkpoint failed")
 
@@ -3091,6 +3099,20 @@ def _load_spec_checkpoint(cb, prompt, current):
             return None
     except Exception:
         return None
+
+
+def _accepted_unmet(cb, wants):
+    """آیا کاربر همین محدودیت‌ها را در مرحلهٔ بررسی صریحاً پذیرفته است؟ (ادامهٔ همان درخواست پس از تأیید review)"""
+    if not (cb and getattr(cb, "jid", None)) or not wants:
+        return False
+    try:
+        j = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1, "accepted_gaps": 1}) or {}
+        if not j.get("preflight_ok"):
+            return False
+        acc = {str(x or "") for x in (j.get("accepted_gaps") or [])}
+        return all(w in acc for w in wants)
+    except Exception:
+        return False
 
 
 def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
@@ -3121,17 +3143,22 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         if cb:
             cb.stage("analyze", 24.0)
     else:
-        # ── ۲) پیش‌بررسی قطعی محدودیت‌های موتور (قبل از صرف توکن) ──
-        _early = _static_limits(prompt) if current is None else []
+        # ── ۲) پیش‌بررسی قطعی محدودیت‌های موتور (قبل از صرف توکن)؛ برای ساخت و ارتقا هر دو ──
+        _early = _static_limits(prompt)
         if _early and cb and getattr(cb, "jid", None):
             _job0 = db.jobs.find_one({"_id": cb.jid}, {"preflight_ok": 1}) or {}
             if not _job0.get("preflight_ok"):
                 raise PreflightReview(_early)
         if cb:
             cb.stage("analyze", 12.0)
-        # ── ۳) Spec: روتر قطعی (رایگان) وگرنه مدل (۱ فراخوانی + ۱ جایگزین) ──
+        # ── ۳) Spec: روتر قطعی (رایگان) وگرنه مدل (۱ فراخوانی + ۱ جایگزین با بازخورد) ──
         pr = _planner.plan_request(prompt)
-        router_ok = bool(pr.items) and pr.confidence >= 0.35
+        # دروازهٔ فهم: اگر درخواست، کلیدواژه‌هایی دارد که امتیازشان زیر آستانهٔ انتخاب است
+        # (خواستهٔ نیمه‌منطبق)، روتر نباید شورت‌سیکت کند؛ درک کامل با مدل انجام می‌شود تا
+        # هیچ خواسته‌ای بی‌صدا گم نشود (ریشهٔ ربات‌های ناقص).
+        _partial = [i for i, s in (pr.scores or {}).items() if 0 < s < 1.0 and i not in pr.ids]
+        router_ok = bool(pr.items) and pr.confidence >= 0.35 and not _partial \
+            and getattr(pr, "rest_ratio", 1.0) >= 0.4
         if current is not None and not _planner.is_additive(prompt):
             router_ok = False
         if router_ok:
@@ -3142,6 +3169,15 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         else:
             sp = ask_spec(prompt, lang, acc, current)      # WizardNeeded در صورت شکست کامل
         _spec_checkpoint(cb, prompt, current, sp, "spec_ready")
+
+        # ── ۳.۵) کنترل پوشش نیازمندی‌ها (قبل از کامپایل): خواستهٔ اجرا‌نشده قبل از ساخت اعلام و تصمیم با کاربر است ──
+        import coverage as _cov
+        _unmet = _cov.unmet_items(sp, prompt)
+        if _unmet and not _accepted_unmet(cb, [u.get("want") or "" for u in _unmet]):
+            log.info("coverage gate: %d unmet requirement(s): %s", len(_unmet), [u.get("kind") for u in _unmet])
+            raise PreflightReview(_unmet)
+        if _unmet:
+            log.info("coverage gate: user previously accepted these limitations; continuing")
 
     # ── ۴) کامپایلر قطعی ──
     if cb:
@@ -3192,16 +3228,22 @@ def ask_llm(prompt, current=None, media_items=(), acc=None, nodes_cap=None):
         raise RuntimeError("تست پذیرش خطا داد: %s — خروجی تحویل نشد و هزینه‌ای کسر نشد."
                            % acc_defects[0].get("evidence", "")[:200])
 
-    # ── ۷) پاکسازی زبان و خروجی نهایی ──
+    # ── ۷) پاکسازی زبان، گزارش پوشش و خروجی نهایی ──
     if guard:
         thinking = scrub_foreign(thinking) if thinking else ""
         ideas = [x for x in (scrub_foreign(x) for x in ideas) if x]
     if not thinking:
         thinking = FALLBACK_THINKING
+    # گزارش پوشش نیازمندی‌ها: هر خواستهٔ کاربر با شواهد قطعی (کامپایل + تست پذیرش موتور) تا خروجی ردیابی می‌شود
+    import coverage as _cov
+    cov = _cov.coverage_report(sp)
+    if cov:
+        thinking = _cov.coverage_thinking(thinking, cov)
     tail = " برای افزودن یا ویرایش، از دستیار استودیو استفاده کن."
     thinking = (thinking[:900 - len(tail)].rstrip() + tail)
-    _spec_checkpoint(cb, prompt, current, sp, "compiled")
-    log.info("spec build ok: features=%s nodes=%d acceptance=PASS", feature_ids, len(cfg["nodes"]))
+    _spec_checkpoint(cb, prompt, current, sp, "compiled", coverage=cov)
+    log.info("spec build ok: features=%s nodes=%d acceptance=PASS coverage=%s/%s",
+             feature_ids, len(cfg["nodes"]), (cov or {}).get("covered"), (cov or {}).get("total"))
     return thinking, cfg, ideas
 
 

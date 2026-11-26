@@ -475,8 +475,12 @@ def api_plan(uid):
     d = request.get_json(silent=True) or {}
     prompt = str(d.get("prompt") or "")[:6000]
     pr = plan_request(prompt)
+    # هم‌ساخت با دروازهٔ فهم ask_llm: خواستهٔ نیمه‌منطبق یا ناتوضیح = ساخت آنی نیست؛ درک کامل با مدل انجام می‌شود
+    partial = [i for i, s in (pr.scores or {}).items() if 0 < s < 1.0 and i not in pr.ids]
     return jsonify(modules=[{"id": i, "fa": MODULES[i].fa, "params": p} for i, p in pr.items], name=pr.name,
-                   confidence=round(pr.confidence, 2), instant=bool(pr.items and pr.confidence >= 0.35),
+                   confidence=round(pr.confidence, 2),
+                   instant=bool(pr.items and pr.confidence >= 0.35 and not partial
+                                and getattr(pr, "rest_ratio", 1.0) >= 0.4),
                    limits=_static_limits(prompt))
 
 
@@ -498,7 +502,8 @@ def api_spec_preview(uid):
                                       "features": feats, "texts": d.get("texts") or {}})
         elif prompt:
             pr = plan_request(prompt)
-            if pr.items and pr.confidence >= 0.35:
+            partial = [i for i, s in (pr.scores or {}).items() if 0 < s < 1.0 and i not in pr.ids]
+            if pr.items and pr.confidence >= 0.35 and not partial and getattr(pr, "rest_ratio", 1.0) >= 0.4:
                 sp = _spec.spec_from_plan(pr)
             else:
                 return jsonify(instant=False, modules=[], limits=_static_limits(prompt),
@@ -664,7 +669,9 @@ def api_job_review(uid, jid):
         if not hold(uid, reserve):
             return jsonify(error=f"موجودی کافی نیست؛ برای ساخت تا سقف {reserve} توکن لازم است.", need=reserve, wallet=wallet_info(uid)), 402
         changed = db.jobs.find_one_and_update({"_id": jid, "uid": uid, "status": "review"},
-                                              {"$set": {"status": "running", "preflight_ok": True, "t": now()}, "$unset": {"error": ""}})
+                                              {"$set": {"status": "running", "preflight_ok": True,
+                                                        "accepted_gaps": [str(x.get("want") or "") for x in (job.get("gaps") or []) if isinstance(x, dict)],
+                                                        "t": now()}, "$unset": {"error": ""}})
         if not changed:
             return jsonify(error="این درخواست قبلاً پردازش شده است."), 409
         threading.Thread(target=gen_job, args=(jid, uid, job.get("bot_id"), prompt, reserve), daemon=True).start()
